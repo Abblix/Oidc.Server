@@ -35,13 +35,13 @@ public class TenantRequestAddressTests
         var context = new DefaultHttpContext { RequestServices = provider };
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("auth.example.com");
-        context.Request.PathBase = "/t/globex";
+        context.Request.PathBase = "/tenants/globex";
         context.Request.Path = "/connect/token";
         if (underTenant)
         {
             context.Features.Set(new TenantContext
             {
-                Tenant = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/t/globex" },
+                Tenant = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
             });
         }
 
@@ -58,7 +58,7 @@ public class TenantRequestAddressTests
     /// </summary>
     [Fact]
     public void UnderATenant_TheRequestAddressCarriesThePathBase()
-        => Assert.Equal("https://auth.example.com/t/globex/connect/token", RequestUriOf(Request(underTenant: true)));
+        => Assert.Equal("https://auth.example.com/tenants/globex/connect/token", RequestUriOf(Request(underTenant: true)));
 
     [Fact]
     public void WithoutATenant_TheRequestAddressIsWhatItAlwaysWas()
@@ -70,10 +70,10 @@ public class TenantRequestAddressTests
     /// slash. Without tenants both resolve as they always did.
     /// </summary>
     [Theory]
-    [InlineData(true, "/Auth/Login", "https://auth.example.com/t/globex/Auth/Login")]
-    [InlineData(true, "connect/token", "https://auth.example.com/t/globex/connect/token")]
+    [InlineData(true, "/Auth/Login", "https://auth.example.com/tenants/globex/Auth/Login")]
+    [InlineData(true, "connect/token", "https://auth.example.com/tenants/globex/connect/token")]
     [InlineData(false, "/Auth/Login", "https://auth.example.com/Auth/Login")]
-    [InlineData(false, "connect/token", "https://auth.example.com/t/connect/token")]
+    [InlineData(false, "connect/token", "https://auth.example.com/tenants/connect/token")]
     public void ARelativeAddress_IsTheTenants_OnlyUnderATenant(bool underTenant, string path, string expected)
         => Assert.Equal(new Uri(expected), Request(underTenant).Request.ResolveInteractionUri(path));
 
@@ -82,14 +82,19 @@ public class TenantRequestAddressTests
     [InlineData(false)]
     public void AnApplicationRelativeAddress_IsTheApplicationBases_EitherWay(bool underTenant)
         => Assert.Equal(
-            new Uri("https://auth.example.com/t/globex/Auth/Login"),
+            new Uri("https://auth.example.com/tenants/globex/Auth/Login"),
             Request(underTenant).Request.ResolveInteractionUri("~/Auth/Login"));
 
+    /// <summary>
+    /// An address naming another host stays there, whether it names it with a scheme, without one
+    /// (<c>//host/path</c>), or in a form a browser accepts though it is not strictly well formed.
+    /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void AnAbsoluteAddress_IsKept_EitherWay(bool underTenant)
-        => Assert.Equal(
-            new Uri("https://login.example.org/Auth/Login"),
-            Request(underTenant).Request.ResolveInteractionUri("https://login.example.org/Auth/Login"));
+    [InlineData(true, "https://login.example.org/Auth/Login", "https://login.example.org/Auth/Login")]
+    [InlineData(false, "https://login.example.org/Auth/Login", "https://login.example.org/Auth/Login")]
+    [InlineData(true, "//login.example.org/Auth/Login", "https://login.example.org/Auth/Login")]
+    [InlineData(false, "//login.example.org/Auth/Login", "https://login.example.org/Auth/Login")]
+    [InlineData(true, "https://login.example.org/Auth/Log in", "https://login.example.org/Auth/Log%20in")]
+    public void AnAddressOnAnotherHost_StaysThere_EitherWay(bool underTenant, string path, string expected)
+        => Assert.Equal(new Uri(expected), Request(underTenant).Request.ResolveInteractionUri(path));
 }

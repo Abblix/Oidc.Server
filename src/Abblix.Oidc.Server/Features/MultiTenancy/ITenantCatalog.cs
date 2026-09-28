@@ -11,7 +11,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Finds the tenants a deployment serves, by identifier and by host name.
+/// Finds the tenants a deployment serves.
 /// </summary>
 /// <remarks>
 /// Asked on every request, so an implementation answers from memory where it can.
@@ -25,8 +25,8 @@ public interface ITenantCatalog
     ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The tenant bound to <paramref name="host"/>, compared as <see cref="TenantHost.Normalize"/> leaves it, or
-    /// null when no tenant is bound to it.
+    /// The tenant served at <paramref name="host"/> and <paramref name="path"/>: the one whose issuer names that
+    /// host and, among those, the longest whole-segment start of the path; null when no issuer covers it.
     /// </summary>
-    ValueTask<TenantDefinition?> FindByHostAsync(string host, CancellationToken cancellationToken);
+    ValueTask<TenantDefinition?> FindByAddressAsync(string host, string path, CancellationToken cancellationToken);
 }

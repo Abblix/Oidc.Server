@@ -48,12 +48,24 @@ public static class HttpRequestExtensions
 #pragma warning restore ABXMT001
 
 #pragma warning disable S1075 // The separator joining the tenant's base and a path, not a location of its own.
-        if (underTenant && !Uri.IsWellFormedUriString(path, UriKind.Absolute))
+        if (underTenant && IsPathOnThisHost(path))
             return new Uri(appUrl + '/' + path.TrimStart('/'), UriKind.Absolute);
 #pragma warning restore S1075
 
         return new Uri(new Uri(appUrl, UriKind.Absolute), path);
     }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> names a place on the request's own host: a rooted path, or one with no
+    /// scheme. A network-path reference (<c>//host/x</c>) and an absolute address name another host.
+    /// </summary>
+    /// <remarks>
+    /// A rooted path is decided before parsing, since on Unix <see cref="Uri.TryCreate(string, UriKind, out Uri)"/>
+    /// reads <c>/login</c> as an absolute file address.
+    /// </remarks>
+    private static bool IsPathOnThisHost(string path)
+        => !path.StartsWith("//", StringComparison.Ordinal) &&
+           (path.StartsWith('/') || !Uri.TryCreate(path, UriKind.Absolute, out _));
 
     private static string GetFullUrl(this HttpRequest request, PathString path)
         => request.Scheme + Uri.SchemeDelimiter + request.Host + path;

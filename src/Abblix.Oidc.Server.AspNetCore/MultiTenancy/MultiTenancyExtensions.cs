@@ -54,9 +54,10 @@ public static class MultiTenancyExtensions
     /// Resolves each request to its tenant, and routes it after that.
     /// </summary>
     /// <remarks>
-    /// Routing is added right after resolution, because a tenant named in the path moves into the path base and
-    /// the route has to be matched on what is left: a web application that routes on its own would otherwise
-    /// match the endpoints against the full path and answer every tenant 404. So call this BEFORE any
+    /// Routing is added right after resolution, because the path of a tenant's issuer moves into the path base
+    /// and the route has to be matched on what is left: a web application that routes on its own would otherwise
+    /// match the endpoints against the full path and answer every tenant served under a path 404. So call this
+    /// BEFORE any
     /// <c>UseRouting</c> of the host's - a call placed after one is refused, since a route matched there, a
     /// fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
     /// cookie then takes the tenant's path and does not reach another tenant on the same host.
@@ -67,7 +68,7 @@ public static class MultiTenancyExtensions
         {
             throw new InvalidOperationException(
                 $"{nameof(UseMultiTenancy)}() must come before UseRouting(): routing already ran here, so a route " +
-                "would be matched against the full path before the tenant named in it is resolved.");
+                "would be matched against the full path before the tenant it is addressed to is resolved.");
         }
 
         return app.UseMiddleware<TenantResolutionMiddleware>().UseRouting();

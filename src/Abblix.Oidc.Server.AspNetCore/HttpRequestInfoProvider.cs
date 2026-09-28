@@ -24,9 +24,9 @@ public class HttpRequestInfoProvider(IHttpContextAccessor httpContextAccessor) :
 
     /// <inheritdoc />
     /// <remarks>
-    /// A request resolved to a tenant by its path had the tenant's segments moved into the path base, and the
-    /// endpoints discovery advertises for that tenant carry them; so its address, which a DPoP proof and a client
-    /// assertion are checked against, carries them too. Every other request keeps the address it always had.
+    /// A request resolved to a tenant had the path of the tenant's issuer moved into the path base, and the
+    /// endpoints discovery advertises for that tenant carry it; so its address, which a DPoP proof and a client
+    /// assertion are checked against, carries it too. Every other request keeps the address it always had.
     /// </remarks>
 #pragma warning disable ABXMT001 // Reading whether a tenant was resolved changes nothing for a host without them.
     public string RequestUri => MultiTenancy.TenantRequirement.CurrentTenant(Request.HttpContext) is null

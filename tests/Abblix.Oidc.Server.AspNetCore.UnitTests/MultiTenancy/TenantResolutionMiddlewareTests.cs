@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Moq;
 using Xunit;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -25,27 +24,29 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 /// </summary>
 public class TenantResolutionMiddlewareTests
 {
-    private const string BoundHost = "acme.example.com";
+    private const string OwnHost = "acme.example.com";
     private const string SharedHost = "auth.example.com";
+    private const string MountedHost = "idp.example.com";
 
-    private readonly MultiTenancyOptions _options = new()
+    private static readonly MultiTenancyOptions Declared = new()
     {
         Tenants =
         [
-            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com", Hosts = [BoundHost, "münchen.example.com"] },
-            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/t/globex" },
+            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" },
+            new TenantDefinition { Id = "muenchen", Issuer = "https://münchen.example.com/" },
+            new TenantDefinition { Id = "shared", Issuer = "https://auth.example.com" },
+            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
+            new TenantDefinition { Id = "globex-eu", Issuer = "https://auth.example.com/tenants/globex/eu/" },
+            new TenantDefinition { Id = "initech", Issuer = "https://idp.example.com/idp/initech" },
         ],
     };
 
     /// <summary>What the rest of the pipeline saw, recorded while it ran.</summary>
     private sealed record Seen(string? TenantId, string PathBase, string Path);
 
-    private async Task<(HttpContext Context, Seen? Seen)> RunAsync(
+    private static async Task<(HttpContext Context, Seen? Seen)> RunAsync(
         string host, string path, string pathBase = "", Exception? thrownDownstream = null)
     {
-        var monitor = new Mock<IOptionsMonitor<MultiTenancyOptions>>();
-        monitor.SetupGet(m => m.CurrentValue).Returns(_options);
-
         Seen? seen = null;
         var middleware = new TenantResolutionMiddleware(
             context =>
@@ -56,8 +57,7 @@ public class TenantResolutionMiddlewareTests
                     context.Request.Path.Value ?? string.Empty);
                 return thrownDownstream is null ? Task.CompletedTask : Task.FromException(thrownDownstream);
             },
-            new OptionsTenantCatalog(monitor.Object),
-            monitor.Object);
+            new OptionsTenantCatalog(Options.Create(Declared)));
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Host = new HostString(host);
@@ -77,46 +77,40 @@ public class TenantResolutionMiddlewareTests
     }
 
     [Fact]
-    public async Task AHostBoundToATenant_ResolvesToIt_AndLeavesThePathAlone()
+    public async Task ATenantServingAWholeHost_IsResolvedThere_WithThePathLeftAlone()
     {
-        var (_, seen) = await RunAsync(BoundHost, "/connect/token");
+        var (context, seen) = await RunAsync(OwnHost, "/connect/token");
 
         Assert.Equal(new Seen("acme", string.Empty, "/connect/token"), seen);
+        Assert.True(TenantResolutionMiddleware.HasRun(context));
     }
 
     /// <summary>
-    /// A request can spell one host several ways, and a binding missed by any of them would let a path choose
-    /// another tenant on that host.
+    /// A request can spell one host several ways, and an issuer compared as written would be missed by all but
+    /// one of them.
     /// </summary>
     [Theory]
-    [InlineData("ACME.example.com")]
-    [InlineData("acme.example.com.")]
-    [InlineData("xn--mnchen-3ya.example.com")]
-    public async Task AnotherSpellingOfABoundHost_ResolvesToTheSameTenant_AndStillBindsIt(string host)
+    [InlineData("ACME.example.com", "acme")]
+    [InlineData("acme.example.com.", "acme")]
+    [InlineData("xn--mnchen-3ya.example.com", "muenchen")]
+    [InlineData("münchen.example.com", "muenchen")]
+    public async Task AnotherSpellingOfTheIssuersHost_ResolvesToTheSameTenant(string host, string tenantId)
     {
-        var (_, seen) = await RunAsync(host, "/t/globex/connect/token");
+        var (_, seen) = await RunAsync(host, "/connect/token");
 
-        Assert.Equal(new Seen("acme", string.Empty, "/t/globex/connect/token"), seen);
+        Assert.Equal(new Seen(tenantId, string.Empty, "/connect/token"), seen);
     }
 
     [Fact]
-    public async Task APathNamingATenant_ResolvesToIt_WithTheTenantMovedIntoThePathBase()
+    public async Task ARequestUnderAnIssuersPath_ResolvesToIt_WithThatPathMovedIntoThePathBase()
     {
-        var (context, seen) = await RunAsync(SharedHost, "/t/globex/connect/token");
+        var (context, seen) = await RunAsync(SharedHost, "/tenants/globex/connect/token");
 
-        Assert.Equal(new Seen("globex", "/t/globex", "/connect/token"), seen);
+        Assert.Equal(new Seen("globex", "/tenants/globex", "/connect/token"), seen);
 
         // And the request is handed back as it came, for whatever runs after this pipeline returns.
         Assert.Equal(string.Empty, context.Request.PathBase.Value ?? string.Empty);
-        Assert.Equal("/t/globex/connect/token", context.Request.Path.Value);
-    }
-
-    [Fact]
-    public async Task APathNamingATenant_UnderAnApplicationPathBase_AppendsTheTenantToIt()
-    {
-        var (_, seen) = await RunAsync(SharedHost, "/t/globex/connect/token", pathBase: "/idp");
-
-        Assert.Equal(new Seen("globex", "/idp/t/globex", "/connect/token"), seen);
+        Assert.Equal("/tenants/globex/connect/token", context.Request.Path.Value);
     }
 
     [Fact]
@@ -124,79 +118,101 @@ public class TenantResolutionMiddlewareTests
     {
         var failure = new InvalidOperationException("downstream");
 
-        var (context, _) = await RunAsync(SharedHost, "/t/globex/connect/token", thrownDownstream: failure);
+        var (context, _) = await RunAsync(SharedHost, "/tenants/globex/connect/token", thrownDownstream: failure);
 
         Assert.Equal(string.Empty, context.Request.PathBase.Value ?? string.Empty);
-        Assert.Equal("/t/globex/connect/token", context.Request.Path.Value);
+        Assert.Equal("/tenants/globex/connect/token", context.Request.Path.Value);
     }
 
-    [Fact]
-    public async Task APathNamingOnlyTheTenant_ResolvesToIt_WithAnEmptyPath()
-    {
-        var (_, seen) = await RunAsync(SharedHost, "/t/globex");
-
-        Assert.Equal(new Seen("globex", "/t/globex", string.Empty), seen);
-    }
-
-    /// <summary>
-    /// A host bound to a tenant decides it, so a path naming another tenant on that host is not followed:
-    /// otherwise one request could be resolved two ways.
-    /// </summary>
-    [Fact]
-    public async Task APathNamingAnotherTenantOnABoundHost_IsNotFollowed()
-    {
-        var (_, seen) = await RunAsync(BoundHost, "/t/globex/connect/token");
-
-        Assert.Equal(new Seen("acme", string.Empty, "/t/globex/connect/token"), seen);
-    }
-
-    /// <summary>
-    /// A tenant bound to hosts is served only there, where its issuer is: reached by path on another host, its
-    /// discovery document would name an issuer that is not the address it was fetched from.
-    /// </summary>
-    [Fact]
-    public async Task APathNamingATenantBoundToHosts_IsAnswered404()
-    {
-        var (context, seen) = await RunAsync(SharedHost, "/t/acme/connect/token");
-
-        Assert.Null(seen);
-        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-    }
-
-    [Fact]
-    public async Task APathNamingAnUndeclaredTenant_IsAnswered404_BeforeAnyEndpoint()
-    {
-        var (context, seen) = await RunAsync(SharedHost, "/t/initech/connect/token");
-
-        Assert.Null(seen);
-        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-    }
-
-    /// <summary>
-    /// The segment is compared exactly: a browser compares cookie paths exactly too, so a tenant reached through
-    /// <c>/T/</c> would never be sent the cookie set under <c>/t/</c>.
-    /// </summary>
     [Theory]
-    [InlineData("/connect/token")]
-    [InlineData("/t")]
-    [InlineData("/t/")]
-    [InlineData("/t//connect/token")]
-    [InlineData("/T/globex/connect/token")]
-    [InlineData("/tenants/globex")]
-    public async Task ARequestNamingNoTenant_PassesThroughWithoutOne(string path)
+    [InlineData("/tenants/globex", "globex", "/tenants/globex", "")]
+    [InlineData("/tenants/globex/.well-known/openid-configuration", "globex", "/tenants/globex", "/.well-known/openid-configuration")]
+    [InlineData("/tenants/globex/eu/connect/token", "globex-eu", "/tenants/globex/eu", "/connect/token")]
+    [InlineData("/tenants/globex/eu", "globex-eu", "/tenants/globex/eu", "")]
+    public async Task TheLongestIssuerPathStartingTheRequest_Wins(
+        string path, string tenantId, string pathBase, string rest)
     {
         var (_, seen) = await RunAsync(SharedHost, path);
 
-        Assert.Equal(new Seen(null, string.Empty, path), seen);
+        Assert.Equal(new Seen(tenantId, pathBase, rest), seen);
+    }
+
+    /// <summary>
+    /// An issuer path covers only whole segments, spelled exactly: a browser compares cookie paths exactly too,
+    /// so a tenant reached through <c>/Tenants/</c> would never be sent the cookie set under <c>/tenants/</c>.
+    /// A path only the issuer at the root of the host covers belongs to that tenant - a well-known path too,
+    /// unless the inserted form names an issuer exactly: anything longer is some other address under the suffix.
+    /// </summary>
+    [Theory]
+    [InlineData("/connect/token")]
+    [InlineData("/tenants/globex2/connect/token")]
+    [InlineData("/tenants/globexeu")]
+    [InlineData("/Tenants/globex/connect/token")]
+    [InlineData("/tenants")]
+    [InlineData("/.well-known/oauth-authorization-server/tenants/globex/extra")]
+    [InlineData("/.well-known/oauth-authorization-server/tenants/initech")]
+    [InlineData("/.well-known/oauth-authorization-server")]
+    [InlineData("/.well-known/oauth-authorization-server/")]
+    public async Task APathOnlyTheRootIssuerCovers_BelongsToTheTenantAtTheRootOfTheHost(string path)
+    {
+        var (_, seen) = await RunAsync(SharedHost, path);
+
+        Assert.Equal(new Seen("shared", string.Empty, path), seen);
     }
 
     [Fact]
-    public async Task WithPathResolutionOff_APathNamingATenant_IsNotFollowed()
+    public async Task AHostNoIssuerNames_PassesThroughWithoutATenant()
     {
-        _options.PathSegment = null;
+        var (context, seen) = await RunAsync("other.example.com", "/tenants/globex/connect/token");
 
-        var (_, seen) = await RunAsync(SharedHost, "/t/globex/connect/token");
+        Assert.Equal(new Seen(null, string.Empty, "/tenants/globex/connect/token"), seen);
+        Assert.True(TenantResolutionMiddleware.HasRun(context));
+    }
 
-        Assert.Equal(new Seen(null, string.Empty, "/t/globex/connect/token"), seen);
+    [Fact]
+    public async Task UnderAnApplicationPathBase_TheIssuersPathExtendsIt()
+    {
+        var (_, seen) = await RunAsync(MountedHost, "/initech/connect/token", pathBase: "/idp");
+
+        Assert.Equal(new Seen("initech", "/idp/initech", "/connect/token"), seen);
+    }
+
+    /// <summary>
+    /// An issuer above the path base the application is mounted under names addresses this server is not
+    /// reached at, so it resolves nothing there.
+    /// </summary>
+    [Fact]
+    public async Task AnIssuerAboveTheApplicationPathBase_ResolvesNothing()
+    {
+        var (_, seen) = await RunAsync(SharedHost, "/connect/token", pathBase: "/idp");
+
+        Assert.Equal(new Seen(null, "/idp", "/connect/token"), seen);
+    }
+
+    /// <summary>
+    /// RFC 8414 section 3.1 inserts the well-known suffix between the host and the issuer's path.
+    /// </summary>
+    [Theory]
+    [InlineData("/.well-known/oauth-authorization-server/tenants/globex", "globex", "/tenants/globex", "/.well-known/oauth-authorization-server")]
+    [InlineData("/.well-known/openid-configuration/tenants/globex/eu", "globex-eu", "/tenants/globex/eu", "/.well-known/openid-configuration")]
+    public async Task TheInsertedWellKnownForm_ReachesTheIssuersMetadata_AndIsHandedBackAsItCame(
+        string path, string tenantId, string pathBase, string rest)
+    {
+        var (context, seen) = await RunAsync(SharedHost, path);
+
+        Assert.Equal(new Seen(tenantId, pathBase, rest), seen);
+        Assert.Equal(string.Empty, context.Request.PathBase.Value ?? string.Empty);
+        Assert.Equal(path, context.Request.Path.Value);
+    }
+
+    /// <summary>
+    /// RFC 8414 places the inserted form at the root of the host; under a path base it is an ordinary path.
+    /// </summary>
+    [Fact]
+    public async Task TheInsertedWellKnownForm_IsNotReadUnderAPathBase()
+    {
+        var (_, seen) = await RunAsync(MountedHost, "/.well-known/oauth-authorization-server/idp/initech", pathBase: "/idp");
+
+        Assert.Equal(new Seen(null, "/idp", "/.well-known/oauth-authorization-server/idp/initech"), seen);
     }
 }

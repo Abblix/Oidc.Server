@@ -11,31 +11,25 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// A tenant this deployment serves: its issuer, and the host names that reach it.
+/// A tenant this deployment serves.
 /// </summary>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantDefinition
 {
     /// <summary>
-    /// The identifier the tenant is registered under. It is also the path segment that names the tenant when
-    /// requests reach it by path, so it is made of URL-unreserved characters only.
+    /// The identifier the tenant is registered under.
     /// </summary>
     public required string Id { get; init; }
 
     /// <summary>
     /// The tenant's issuer identifier, as it appears in every token the tenant issues and in its discovery
-    /// document.
+    /// document - and the address the tenant is served at.
     /// </summary>
     /// <remarks>
-    /// Declared rather than derived from the request, so a tenant has one issuer whichever host or path reached
-    /// it, and a request cannot make up another one by what it puts in its Host header.
+    /// A request belongs to the tenant whose issuer names its host and the longest start of its path, so a
+    /// tenant has one address, and OpenID Connect Discovery 1.0 section 4.3 - the issuer is the address the
+    /// discovery document was fetched from - holds by construction: <c>https://acme.example.com</c> serves a
+    /// whole host, <c>https://auth.example.com/tenants/acme</c> a path on a shared one.
     /// </remarks>
     public required string Issuer { get; init; }
-
-    /// <summary>
-    /// The host names whose requests belong to this tenant, without a port, compared without regard to case or
-    /// a trailing dot. A host listed here is bound to the tenant, and a path naming another tenant on it is not
-    /// followed.
-    /// </summary>
-    public IReadOnlyList<string> Hosts { get; init; } = [];
 }

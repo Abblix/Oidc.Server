@@ -15,47 +15,38 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The tenants declared in <see cref="MultiTenancyOptions.Tenants"/>.
 /// </summary>
 /// <remarks>
-/// Asked on every request, static files included, so the lookups are built once per value of the options
-/// rather than normalizing every declared host each time.
+/// Asked on every request, static files included, so the lookups are built once. Tenants that come and go while
+/// the server runs belong to a tenant store, not to options.
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class OptionsTenantCatalog(IOptionsMonitor<MultiTenancyOptions> options) : ITenantCatalog
+public sealed class OptionsTenantCatalog(IOptions<MultiTenancyOptions> options) : ITenantCatalog
 {
-    /// <summary>The tenants of one options value, by id and by normalized host.</summary>
-    private sealed record Index(
-        MultiTenancyOptions Source,
-        Dictionary<string, TenantDefinition> ById,
-        Dictionary<string, TenantDefinition> ByHost);
+    /// <summary>A tenant and where it is served.</summary>
+    private sealed record Served(TenantAddress Address, TenantDefinition Tenant);
 
-    private volatile Index? _index;
+    private readonly Lazy<Dictionary<string, TenantDefinition>> _byId = new(() =>
+        options.Value.Tenants
+            .DistinctBy(tenant => tenant.Id, StringComparer.Ordinal)
+            .ToDictionary(tenant => tenant.Id, StringComparer.Ordinal));
+
+    /// <summary>
+    /// The tenants of each host, the longest issuer path first, so the first one covering a path is the match.
+    /// </summary>
+    private readonly Lazy<ILookup<string, Served>> _byHost = new(() =>
+        options.Value.Tenants
+            .Select(tenant => new Served(TenantAddress.Of(tenant.Issuer), tenant))
+            .OrderByDescending(served => served.Address.Path.Length)
+            .ToLookup(served => served.Address.Host, StringComparer.Ordinal));
 
     /// <inheritdoc />
     public ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
-        => ValueTask.FromResult(Current().ById.GetValueOrDefault(tenantId));
+        => ValueTask.FromResult(_byId.Value.GetValueOrDefault(tenantId));
 
     /// <inheritdoc />
-    public ValueTask<TenantDefinition?> FindByHostAsync(string host, CancellationToken cancellationToken)
-        => ValueTask.FromResult(Current().ByHost.GetValueOrDefault(TenantHost.Normalize(host)));
-
-    private Index Current()
-    {
-        var source = options.CurrentValue;
-        var index = _index;
-        if (index is not null && ReferenceEquals(index.Source, source))
-            return index;
-
-        // A duplicate id or host is refused at startup, so the first declaration is the only one there is.
-        var byId = new Dictionary<string, TenantDefinition>(StringComparer.Ordinal);
-        var byHost = new Dictionary<string, TenantDefinition>(StringComparer.Ordinal);
-        foreach (var tenant in source.Tenants)
-        {
-            byId.TryAdd(tenant.Id, tenant);
-            foreach (var host in tenant.Hosts)
-                byHost.TryAdd(TenantHost.Normalize(host), tenant);
-        }
-
-        index = new Index(source, byId, byHost);
-        _index = index;
-        return index;
-    }
+    public ValueTask<TenantDefinition?> FindByAddressAsync(
+        string host,
+        string path,
+        CancellationToken cancellationToken)
+        => ValueTask.FromResult(_byHost.Value[TenantHost.Normalize(host)]
+            .FirstOrDefault(served => served.Address.Covers(path))?.Tenant);
 }
