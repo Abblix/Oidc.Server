@@ -20,10 +20,10 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 
 /// <summary>
-/// Resource-server-side enforcement of RFC 9449 DPoP at the UserInfo endpoint. Mirrors the
-/// shape of <see cref="Endpoints.Token.Validation.DPoPTokenEndpointValidator"/> so the
-/// branching logic stays symmetric across endpoints; differences are limited to the
-/// trigger (<c>cnf.jkt</c> on the inbound access token) and the error envelope (typed
+/// Resource-server-side enforcement of RFC 9449 DPoP at the UserInfo endpoint. What it shares with the token
+/// endpoint is shared code: the proof is judged by <see cref="IProofValidator"/> and the nonce by
+/// <see cref="DPoPNonceValidator"/>. What differs is its own: the trigger (<c>cnf.jkt</c> on the inbound
+/// access token, which is also the key the proof must match) and the error envelope (typed
 /// <see cref="InvalidDPoPProofError"/> / <see cref="UseDPoPNonceError"/> so the response
 /// formatter can emit the section 7.1 <c>WWW-Authenticate: DPoP</c> challenge).
 /// </summary>

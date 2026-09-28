@@ -73,8 +73,8 @@ public partial class DeviceCodeGrantHandler(
         // already run out (RFC 8628 section 3.2).
         var now = timeProvider.GetUtcNow();
 
-        // The token goes no further: nothing before the claim waits on anything, and nothing after it may
-        // give up, so no step of the decision has a use for it.
+        // The token goes no further: the storage this decision reads before the claim takes none, and
+        // nothing after the claim may give up, so no step of it has a use for the token.
         return await DecideAsync(request.DeviceCode, clientInfo, deviceRequest, now);
     }
 

@@ -9,28 +9,25 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
 /// Holds a token request to the key or certificate its grant was bound to: the dpop_jkt committed at the
-/// authorization request (RFC 9449 section 10), the certificate a certificate-bound grant was issued to
-/// (RFC 8705 section 4), and the sender-constrained token a security profile demands.
+/// authorization request (RFC 9449 section 10) and the certificate a certificate-bound grant was issued to
+/// (RFC 8705 section 4).
 /// </summary>
 /// <remarks>
 /// Runs AFTER <see cref="AuthorizationGrantValidator"/>, since every check here reads the grant it resolves,
-/// and after <see cref="DPoPTokenEndpointValidator"/>, whose validated proof key it compares. A refusal here
-/// can therefore come after a device code or a backchannel authentication request has been spent, and is
-/// meant to: it says the request is not the one the grant was bound to, which no retry of it cures.
+/// and after <see cref="DPoPTokenEndpointValidator"/>, whose validated proof key it compares. The grants spent
+/// while they are resolved - a device code, a backchannel authentication request - are not bound to a key or
+/// a certificate by this library, so nothing here refuses one of them after it is gone unless a host bound it
+/// itself. For a grant that is bound, a refusal says the request is not the one the grant was bound to.
 /// </remarks>
-public partial class DPoPBindingValidator(
-    ILogger<DPoPBindingValidator> logger,
-    IOptionsMonitor<OidcOptions> options) : ITokenContextValidator
+public partial class DPoPBindingValidator(ILogger<DPoPBindingValidator> logger) : ITokenContextValidator
 {
     /// <inheritdoc/>
     public Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
@@ -42,7 +39,7 @@ public partial class DPoPBindingValidator(
 
         return Task.FromResult(context.ProofKeyThumbprint is { } presented
             ? ValidatePresentedKey(committed, presented)
-            : ValidateMissingProof(context, committed));
+            : ValidateMissingProof(committed));
     }
 
     /// <summary>
@@ -86,40 +83,20 @@ public partial class DPoPBindingValidator(
     }
 
     /// <summary>
-    /// Decides whether a request that carried no DPoP proof is acceptable for this grant: rejected when a
-    /// sender-constraining security profile is unmet, or when the authorization request committed a dpop_jkt
-    /// (RFC 9449 section 10); otherwise a Bearer token is allowed.
+    /// RFC 9449 section 10: a request that carried no DPoP proof is refused when the authorization request
+    /// committed a dpop_jkt.
     /// </summary>
-    private OidcError? ValidateMissingProof(TokenValidationContext context, string? committed)
+    private OidcError? ValidateMissingProof(string? committed)
     {
-        // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by either a
-        // DPoP proof or a certificate-bound token over mutual TLS (RFC 8705 section 3). With the proof absent, the
-        // requirement is met only when the token will be certificate-bound. In any other case neither
-        // mechanism applies and the profile is not satisfied. The profile tightens, and the granular
-        // RequireDPoP toggle cannot weaken it.
-        if (SecurityProfileRequirements
-                .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
-                .RequireSenderConstrainedTokens &&
-            !WillIssueCertificateBoundToken(context))
-        {
-            LogProofRequiredButMissing("security profile");
-            return new OidcError(
-                ErrorCodes.InvalidDPoPProof,
-                "The security profile requires a sender-constrained token: " +
-                "present a DPoP proof or authenticate with mutual TLS.");
-        }
+        if (committed is null)
+            return null;
 
-        if (committed is not null)
-        {
-            // RFC 9449 section 10: the authorization request committed to a proof-of-possession key via the dpop_jkt
-            // parameter, so presenting the auth code without the proof is the very attack the carry-over closes.
-            LogProofRequiredButMissing("section 10 dpop_jkt carry-over");
-            return new OidcError(
-                ErrorCodes.InvalidDPoPProof,
-                "Authorization request committed to a DPoP key but no proof was presented.");
-        }
-
-        return null;
+        // The authorization request committed to a proof-of-possession key via the dpop_jkt parameter, so
+        // presenting the auth code without the proof is the very attack the carry-over closes.
+        LogProofRequiredButMissing("section 10 dpop_jkt carry-over");
+        return new OidcError(
+            ErrorCodes.InvalidDPoPProof,
+            "Authorization request committed to a DPoP key but no proof was presented.");
     }
 
     /// <summary>
@@ -132,23 +109,4 @@ public partial class DPoPBindingValidator(
         => clientInfo.TokenEndpointAuthMethod
             is ClientAuthenticationMethods.TlsClientAuth
             or ClientAuthenticationMethods.SelfSignedTlsClientAuth;
-
-    /// <summary>
-    /// Whether the access token about to be issued will be certificate-bound (RFC 8705 section 3), and
-    /// therefore sender-constrained via mutual TLS rather than DPoP. Mirrors the binding decision in
-    /// TokenAuthorizationContextEvaluator: a binding the grant already carries (e.g. on refresh), or a
-    /// certificate presented by a client that authenticates with mTLS or has opted into
-    /// certificate-bound tokens. Used to credit the mTLS mechanism when a security profile requires a
-    /// sender-constrained token but the client presents no DPoP proof.
-    /// </summary>
-    private static bool WillIssueCertificateBoundToken(TokenValidationContext context)
-    {
-        return context switch
-        {
-            { AuthorizedGrant.Context.CertificateSha256Thumbprint: not null } => true,
-            { ClientRequest.ClientCertificate: null } => false,
-            _ => AuthenticatesByMutualTls(context.ClientInfo) ||
-                 context.ClientInfo.TlsClientCertificateBoundAccessTokens,
-        };
-    }
 }

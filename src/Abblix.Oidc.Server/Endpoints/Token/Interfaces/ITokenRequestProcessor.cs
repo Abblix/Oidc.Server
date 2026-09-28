@@ -28,9 +28,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// authorization code is taken as processing starts, and a rotated refresh token is marked used while it runs. None of
 /// that can be undone - RFC 6749 section 4.1.2 forbids a second use of a code - so abandoning past it would destroy the
 /// grant and issue nothing. The grants that spend nothing, such as client credentials, lose nothing by finishing
-/// either, since issuing is local work. Once reached, issuance runs to completion and a response nobody waits for is
-/// discarded. An implementation that calls something taking a token passes
-/// <see cref="System.Threading.CancellationToken.None"/> for the same reason.
+/// either: whatever issuing costs, even a signature made remotely, nothing is given up by completing it. Once reached,
+/// issuance runs to completion and a response nobody waits for is discarded. An implementation that calls something
+/// taking a token passes <see cref="System.Threading.CancellationToken.None"/> for the same reason.
 /// </para>
 /// </remarks>
 public interface ITokenRequestProcessor

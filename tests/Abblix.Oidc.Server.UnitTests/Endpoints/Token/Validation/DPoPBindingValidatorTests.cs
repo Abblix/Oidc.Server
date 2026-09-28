@@ -14,7 +14,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -24,7 +23,6 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using Moq;
 
@@ -34,7 +32,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
 /// <summary>
 /// Unit tests for <see cref="DPoPBindingValidator"/>: the request against the key or certificate its grant was
-/// bound to, and the sender-constrained token a security profile demands. The proof itself is validated by
+/// bound to. The proof itself, and the sender-constrained token a security profile demands, are judged by
 /// <see cref="DPoPTokenEndpointValidator"/>, so each context here carries the proof key that step would have
 /// left, or none when no proof was presented.
 /// </summary>
@@ -44,83 +42,7 @@ public class DPoPBindingValidatorTests
 
     private static readonly DateTimeOffset IssuedAt = new(2026, 5, 8, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly OidcOptions _opts = new();
-    private readonly DPoPBindingValidator _validator;
-
-    public DPoPBindingValidatorTests()
-    {
-        var options = new Mock<IOptionsMonitor<OidcOptions>>(MockBehavior.Strict);
-        options.SetupGet(o => o.CurrentValue).Returns(_opts);
-
-        _validator = new DPoPBindingValidator(Mock.Of<ILogger<DPoPBindingValidator>>(), options.Object);
-    }
-
-    /// <summary>
-    /// A FAPI 2.0 client requires a sender-constrained token even when its per-client RequireDPoP flag
-    /// is unset: the profile mandates DPoP and the granular toggle cannot weaken it. A missing proof
-    /// is therefore rejected.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_MissingProofFapi2Client_ReturnsInvalidDPoPProof()
-    {
-        var context = CreateContext(presentedThumbprint: null, securityProfile: ClientSecurityProfile.Fapi2);
-
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
-
-        AssertInvalidProof(error);
-    }
-
-    /// <summary>
-    /// A FAPI 2.0 client that sender-constrains via mutual TLS (a certificate-bound token, RFC 8705
-    /// section 3) satisfies the profile without a DPoP proof: the missing proof is accepted because the
-    /// issued token will be certificate-bound. FAPI 2.0 permits either mechanism.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_MissingProofFapi2ClientWithCertificateBoundToken_ReturnsNull()
-    {
-        using var certificate = CreateCertificate();
-        var context = CreateContext(
-            presentedThumbprint: null,
-            securityProfile: ClientSecurityProfile.Fapi2,
-            clientCertificate: certificate,
-            tlsClientCertificateBoundAccessTokens: true);
-
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
-
-        Assert.Null(error);
-    }
-
-    /// <summary>
-    /// A client that states no profile inherits the server-wide DefaultSecurityProfile=FAPI 2.0, which
-    /// requires sender-constraining, so a missing proof is rejected.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_MissingProofGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
-    {
-        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
-        var context = CreateContext(presentedThumbprint: null, securityProfile: null);
-
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
-
-        AssertInvalidProof(error);
-    }
-
-    /// <summary>
-    /// A client selecting None under a server-wide FAPI 2.0 default is still held to it, so a missing
-    /// proof is refused rather than treated as opportunistic. The profile demands a
-    /// sender-constrained token of every client the deployment serves, and a registration naming a
-    /// profile that demands nothing adds nothing to that.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_MissingProofExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
-    {
-        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
-        var context = CreateContext(presentedThumbprint: null, securityProfile: ClientSecurityProfile.None);
-
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
-
-        AssertInvalidProof(error);
-    }
+    private readonly DPoPBindingValidator _validator = new(Mock.Of<ILogger<DPoPBindingValidator>>());
 
     [Fact]
     public async Task ValidateAsync_MissingProofNothingBound_ReturnsNull()
@@ -228,9 +150,7 @@ public class DPoPBindingValidatorTests
     private static TokenValidationContext CreateContext(
         string? presentedThumbprint,
         string? committedThumbprint = null,
-        ClientSecurityProfile? securityProfile = null,
         X509Certificate2? clientCertificate = null,
-        bool tlsClientCertificateBoundAccessTokens = false,
         string? committedCertThumbprint = null,
         string? tokenEndpointAuthMethod = null)
     {
@@ -245,8 +165,6 @@ public class DPoPBindingValidatorTests
         {
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
-                SecurityProfile = securityProfile,
-                TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
                 TokenEndpointAuthMethod = tokenEndpointAuthMethod!,
             },
             AuthorizedGrant = new AuthorizedGrant(authSession, authContext),

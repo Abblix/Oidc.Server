@@ -38,12 +38,12 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
 /// <summary>
-/// Unit tests for <see cref="DPoPTokenEndpointValidator"/> covering the proof it validates without the grant:
-/// mandatory vs opportunistic DPoP for a missing proof, the proof-validation failure path, and the RFC 9449
-/// section 8 nonce challenge-response loop. The comparison with what the grant was bound to is
-/// <see cref="DPoPBindingValidatorTests"/>'s, and the proof's own JWT structural / signature / claim-binding
-/// checks are <see cref="ProofValidatorTests"/>'; this test mocks <see cref="IProofValidator"/>
-/// to focus on the wiring between proof, nonce, and confirmation-stash decisions.
+/// Unit tests for <see cref="DPoPTokenEndpointValidator"/> covering the proof it validates without the grant: mandatory
+/// vs opportunistic DPoP for a missing proof, the sender constraint a security profile demands, the proof-validation
+/// failure path, and the RFC 9449 section 8 nonce challenge-response loop. The comparison with what the grant was bound
+/// to is <see cref="DPoPBindingValidatorTests"/>'s, and the proof's own JWT structural / signature / claim-binding
+/// checks are <see cref="ProofValidatorTests"/>'; this test mocks <see cref="IProofValidator"/> to focus on the wiring
+/// between proof, nonce, and confirmation-stash decisions.
 /// </summary>
 public class DPoPTokenEndpointValidatorTests
 {
@@ -104,6 +104,97 @@ public class DPoPTokenEndpointValidatorTests
             clientRequiresDPoP: true,
             clientCertificate: certificate,
             tlsClientCertificateBoundAccessTokens: true);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A FAPI 2.0 client requires a sender-constrained token even when its per-client RequireDPoP flag
+    /// is unset: the profile mandates DPoP and the granular toggle cannot weaken it. A missing proof
+    /// is therefore rejected, and before the grant is resolved.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2Client_ReturnsInvalidDPoPProof()
+    {
+        var context = CreateContext(
+            proofJwt: null, clientRequiresDPoP: false, securityProfile: ClientSecurityProfile.Fapi2);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A FAPI 2.0 client that sender-constrains via mutual TLS (a certificate-bound token, RFC 8705
+    /// section 3) satisfies the profile without a DPoP proof: the missing proof is accepted because the
+    /// issued token will be certificate-bound. FAPI 2.0 permits either mechanism.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2ClientWithCertificateBoundToken_ReturnsNull()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            clientCertificate: certificate,
+            tlsClientCertificateBoundAccessTokens: true,
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Null(context.ProofKeyThumbprint);
+    }
+
+    /// <summary>
+    /// A certificate alone is not a sender constraint: a client registered neither for mutual-TLS
+    /// authentication nor for certificate-bound tokens gets a Bearer token whatever it presents, so the
+    /// profile refuses it the same as a client presenting nothing.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2ClientWithUnboundCertificate_ReturnsInvalidDPoPProof()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            clientCertificate: certificate,
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A client that states no profile inherits the server-wide DefaultSecurityProfile=FAPI 2.0, which
+    /// requires sender-constraining, so a missing proof is rejected.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// A client selecting None under a server-wide FAPI 2.0 default is still held to it, so a missing
+    /// proof is refused rather than treated as opportunistic. The profile demands a
+    /// sender-constrained token of every client the deployment serves, and a registration naming a
+    /// profile that demands nothing adds nothing to that.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
+    {
+        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        var context = CreateContext(
+            proofJwt: null, clientRequiresDPoP: false, securityProfile: ClientSecurityProfile.None);
 
         var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
@@ -206,7 +297,8 @@ public class DPoPTokenEndpointValidatorTests
         string? proofJwt,
         bool clientRequiresDPoP,
         X509Certificate2? clientCertificate = null,
-        bool tlsClientCertificateBoundAccessTokens = false)
+        bool tlsClientCertificateBoundAccessTokens = false,
+        ClientSecurityProfile? securityProfile = null)
     {
         var clientRequest = new ClientRequest { DPoPProof = proofJwt, ClientCertificate = clientCertificate };
         return new TokenValidationContext(new TokenRequest(), clientRequest)
@@ -214,6 +306,7 @@ public class DPoPTokenEndpointValidatorTests
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequireDPoP = clientRequiresDPoP,
+                SecurityProfile = securityProfile,
                 TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
             },
         };

@@ -62,6 +62,25 @@ public partial class DPoPTokenEndpointValidator(
                 "DPoP proof is required for this client.");
         }
 
+        // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by a DPoP proof or
+        // a certificate-bound token over mutual TLS (RFC 8705 section 3). Without a proof the requirement is met
+        // only when the token will be certificate-bound, and that is decided by the client's registration and
+        // the certificate on this request, never by the grant: a token is bound to a certificate only for a
+        // client registered to bind it. So the answer is given here, before a device code or a backchannel
+        // authentication request is spent. The profile tightens, and the granular RequireDPoP toggle cannot
+        // weaken it.
+        if (SecurityProfileRequirements
+                .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
+                .RequireSenderConstrainedTokens &&
+            !WillIssueCertificateBoundToken(context))
+        {
+            LogProofRequiredButMissing("security profile");
+            return new OidcError(
+                ErrorCodes.InvalidDPoPProof,
+                "The security profile requires a sender-constrained token: " +
+                "present a DPoP proof or authenticate with mutual TLS.");
+        }
+
         return null;
     }
 
@@ -94,4 +113,19 @@ public partial class DPoPTokenEndpointValidator(
         context.ProofKeyThumbprint = proof.ProofKeyThumbprint;
         return null;
     }
+
+    /// <summary>
+    /// Whether the access token about to be issued will be certificate-bound (RFC 8705 section 3), and
+    /// therefore sender-constrained via mutual TLS rather than DPoP: a certificate is presented by a client
+    /// that authenticates with mTLS or has registered for certificate-bound tokens. The binding decision in
+    /// TokenAuthorizationContextEvaluator also keeps a grant already bound to a certificate bound; such a grant
+    /// was issued to a client registered as above, so the two part only for a registration changed since, and
+    /// then the profile is held to the registration as it stands.
+    /// </summary>
+    private static bool WillIssueCertificateBoundToken(TokenValidationContext context)
+        => context.ClientRequest.ClientCertificate is not null &&
+           (context.ClientInfo.TokenEndpointAuthMethod
+                is ClientAuthenticationMethods.TlsClientAuth
+                or ClientAuthenticationMethods.SelfSignedTlsClientAuth ||
+            context.ClientInfo.TlsClientCertificateBoundAccessTokens);
 }
