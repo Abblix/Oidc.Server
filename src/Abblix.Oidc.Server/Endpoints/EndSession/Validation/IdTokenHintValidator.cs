@@ -8,8 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -22,9 +20,13 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// <c>ClientId</c> from the token's audience when the request omitted it, or asserts that
 /// an explicitly supplied <c>client_id</c> matches that audience.
 /// </summary>
-public class IdTokenHintValidator(
-    IIdTokenHintParser hintParser,
-    IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
+/// <remarks>
+/// A client taken from the audience is not checked for registration here: <see cref="ClientValidator"/>
+/// answers that for every request, and it reads the client this step sets, so it has to follow this one in
+/// the family. A host that removes it or moves it ahead of this step passes an unregistered audience through
+/// validation, and a step it inserts right after this one reads a client nobody has checked yet.
+/// </remarks>
+public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IEndSessionContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
@@ -55,20 +57,6 @@ public class IdTokenHintValidator(
                     return new OidcError(
                         ErrorCodes.InvalidRequest,
                         "The audience in the id token hint is missing or have multiple values.");
-                }
-
-                // The client named in the audience has to exist, or the hint identifies a session belonging to
-                // nobody. The shared validator used to establish this while resolving the audience; it now
-                // accepts only the issuer, so the ID token's own rule is enforced here.
-                var audienceClient = await clientInfoProvider
-                    .TryFindClientAsync(context.ClientId)
-                    .WithLicenseCheck();
-
-                if (audienceClient == null)
-                {
-                    return new OidcError(
-                        ErrorCodes.InvalidRequest,
-                        "The id token hint names a client that is not registered");
                 }
             }
             else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
