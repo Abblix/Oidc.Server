@@ -160,8 +160,9 @@ public class ModelBinderRefusalTests
     }
 
     /// <summary>
-    /// And the ordinary case, so the refusal above means something: a well-formed header binds to its scheme
-    /// and parameter.
+    /// And the ordinary case, so the refusal in
+    /// <see cref="The_authorization_header_binder_refuses_a_value_the_grammar_rejects"/> means something: a
+    /// well-formed header binds to its scheme and parameter.
     /// </summary>
     [Fact]
     public async Task The_authorization_header_binder_binds_a_well_formed_header()

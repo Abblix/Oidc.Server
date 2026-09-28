@@ -84,8 +84,9 @@ public class ClientAssertionMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same assertion from a client naming nothing authenticates, without which the case
-    /// above would be satisfied by a pass refusing every assertion dated ahead at all.
+    /// And the same assertion from a client naming nothing authenticates, without which
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnForwardWindow"/> would be satisfied by a pass refusing every
+    /// assertion dated ahead at all.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsForwardWindow()
@@ -113,7 +114,8 @@ public class ClientAssertionMayTightenItselfTests
 
     /// <summary>
     /// And the same expired assertion from a client naming nothing authenticates, which is what
-    /// makes the case above a statement about the profile rather than about expiry.
+    /// makes <see cref="AClientNamingFapi2_IsHeldToItsOwnExpiry"/> a statement about the profile rather than
+    /// about expiry.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsExpiryTolerance()
@@ -167,8 +169,11 @@ public class ClientAssertionMayTightenItselfTests
     }
 
     /// <summary>
-    /// And an assertion inside the tighter window authenticates the FAPI client too, or the cases
-    /// above would be satisfied by a pass refusing every assertion from a client naming a profile.
+    /// And an assertion inside the tighter window authenticates the FAPI client too, or
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnForwardWindow"/>,
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnExpiry"/> and
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> would be satisfied by a pass refusing every
+    /// assertion from a client naming a profile.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsAnAssertionInsideItsOwnWindow()
@@ -182,7 +187,8 @@ public class ClientAssertionMayTightenItselfTests
 
     /// <summary>
     /// The forward direction accepts an <c>nbf</c> inside the tighter window, without which the
-    /// refusal above would be satisfied by a clause refusing on the mere presence of the claim.
+    /// refusal in <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> would be satisfied by a clause
+    /// refusing on the mere presence of the claim.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsANotBeforeInsideItsOwnWindow()

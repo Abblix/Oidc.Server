@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// - Licenses added in one test persist and affect subsequent tests
 /// - Known clients/issuers accumulate across all tests in the test run
 /// - Tests use unique GUIDs to minimize interference but cannot be fully isolated
-/// - Test assertions account for accumulated state from previous tests
+/// - Test assertions account for state accumulated by tests that ran earlier
 ///
 /// This is an inherent limitation of testing static classes with mutable state.
 /// The tests verify correct behavior but are not completely independent.

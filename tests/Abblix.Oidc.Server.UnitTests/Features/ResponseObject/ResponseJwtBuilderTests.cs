@@ -180,7 +180,8 @@ public class ResponseJwtBuilderTests
     /// raise it.
     /// </summary>
     /// <remarks>
-    /// The case above pins the value the specification names, which a client registering only
+    /// <see cref="BuildAsync_WithEncryptionAlgorithmButNoEnc_DefaultsToA128CbcHs256"/> pins the value the
+    /// specification names, which a client registering only
     /// <c>authorization_encrypted_response_alg</c> is entitled to. This one pins that the value is reachable
     /// at all: without it the setting could be read from nowhere and every test would still pass, because the
     /// default it happens to carry is the same constant the code used to hold.

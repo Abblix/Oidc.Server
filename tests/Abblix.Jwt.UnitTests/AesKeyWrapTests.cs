@@ -31,7 +31,7 @@ public class AesKeyWrapTests
 	}
 
 	/// <summary>
-	/// The 128-bit KEK of the RFC 3394 section 4.1 vector, shared with the negative tests below.
+	/// The 128-bit KEK of the RFC 3394 section 4.1 vector, shared with the negative tests in this class.
 	/// </summary>
 	private const string KeyEncryptionKey128Hex = "000102030405060708090A0B0C0D0E0F";
 

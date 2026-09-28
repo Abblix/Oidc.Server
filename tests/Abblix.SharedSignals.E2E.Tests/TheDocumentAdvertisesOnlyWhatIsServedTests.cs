@@ -71,7 +71,8 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
     /// row is that seam. The addresses are asserted rather than their presence because the composed text
     /// is what a receiver caches, and a presence check passes over an address assembled wrongly.
     /// <para>
-    /// Nothing is mapped here, so this row says nothing about which source wins. That is the row below.
+    /// Nothing is mapped here, so this row says nothing about which source wins. That is
+    /// <see cref="AMappedTransmitterWhoseHostNamesAGateway_AdvertisesTheGateway"/>.
     /// </para>
     /// </remarks>
     [Fact]
@@ -100,9 +101,11 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
     /// <remarks>
     /// This is the deployment the option exists for, and the only place the precedence between the two
     /// sources is visible in what a receiver actually reads. Reversing it - the mapping winning over the
-    /// host - publishes the internal addresses to the outside world, which no row above would notice:
-    /// the one that maps nothing has no mapped address to lose to, and the one that names no source has
-    /// no host address to be overridden.
+    /// host - publishes the internal addresses to the outside world, which neither
+    /// <see cref="ADocumentMappedAlone_NamesWhatTheHostSaidIsServed"/> nor
+    /// <see cref="ADocumentMappedAlone_NamesNoManagementEndpoint"/> would notice: the one that maps nothing
+    /// has no mapped address to lose to, and the one that names no source has no host address to be
+    /// overridden.
     /// </remarks>
     [Fact]
     public async Task AMappedTransmitterWhoseHostNamesAGateway_AdvertisesTheGateway()
@@ -123,7 +126,8 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
     /// API still advertises it.
     /// </summary>
     /// <remarks>
-    /// Without this row, suppressing the members unconditionally would pass the row above, and the
+    /// Without this row, suppressing the members unconditionally would pass
+    /// <see cref="ADocumentMappedAlone_NamesNoManagementEndpoint"/>, and the
     /// document of an ordinary deployment would stop naming addresses that work.
     /// </remarks>
     [Fact]

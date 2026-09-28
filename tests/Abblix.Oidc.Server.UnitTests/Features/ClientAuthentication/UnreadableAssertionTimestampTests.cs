@@ -69,8 +69,9 @@ public class UnreadableAssertionTimestampTests
     }
 
     /// <summary>
-    /// And the same assertion with readable dates authenticates, or the case above would be
-    /// satisfied by an authenticator refusing everything.
+    /// And the same assertion with readable dates authenticates, or
+    /// <see cref="AnAssertionWithATimestampOutsideTheRepresentableRange_IsRefused"/> would be satisfied by an
+    /// authenticator refusing everything.
     /// </summary>
     [Fact]
     public async Task AnAssertionWithReadableTimestamps_Authenticates()

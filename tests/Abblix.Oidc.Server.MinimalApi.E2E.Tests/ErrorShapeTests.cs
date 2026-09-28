@@ -102,8 +102,9 @@ public sealed class ErrorShapeTests(TestFactory factory) : IClassFixture<TestFac
         request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        // The control for the test above: without it, a read endpoint broken into refusing everything would
-        // satisfy the 401 assertion and read as proof that the challenge works.
+        // The control for Reading_a_client_with_someone_elses_token_answers_401_and_a_bearer_challenge: without
+        // it, a read endpoint broken into refusing everything would satisfy the 401 assertion and read as proof
+        // that the challenge works.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.False(response.Headers.Contains(HeaderNames.WWWAuthenticate));
     }

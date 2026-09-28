@@ -155,7 +155,8 @@ public class RsaSignerTests
     }
 
     /// <summary>
-    /// The control. Without it, a signer that refused everything would pass the test above.
+    /// The control. Without it, a signer that refused everything would pass
+    /// <see cref="Sign_KeyBelowTheFloor_IsRefused"/>.
     /// </summary>
     [Theory]
     [MemberData(nameof(Algorithms))]

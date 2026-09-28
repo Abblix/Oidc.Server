@@ -363,10 +363,11 @@ public sealed class CaepInteropProfileDispatchTests
     /// deployment ever holds.
     /// </summary>
     /// <remarks>
-    /// Every row above constructs the dispatcher by hand, so all of them would pass over a policy the
-    /// container never injects - a registration nobody resolves reads exactly like a working feature. This
-    /// row resolves it the way a host does, and its twin asserts the optional dependency stays optional:
-    /// a container with nothing registered must still produce a dispatcher.
+    /// Every other test here that dispatches builds the dispatcher by hand, so all of them would pass over
+    /// a policy the container never injects - a registration nobody resolves reads exactly like a working
+    /// feature. The row that registers the policy resolves it the way a host does, and the row that
+    /// registers none asserts the optional dependency stays optional: a container with nothing registered
+    /// must still produce a dispatcher.
     /// </remarks>
     [Theory]
     [InlineData(true)]

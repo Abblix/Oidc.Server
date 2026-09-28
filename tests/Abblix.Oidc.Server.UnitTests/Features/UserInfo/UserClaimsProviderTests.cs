@@ -28,8 +28,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.UserInfo;
 /// Authorization Server MUST NOT generate an error when Claims are not returned, whether they are Essential or
 /// Voluntary, unless otherwise specified in the description of the specific claim". Essential states what the
 /// relying party tells the end user about releasing a claim; it is not a condition the host's provider has to
-/// satisfy, so nothing here may read it - which is why the rows below drive it through all three of its values
-/// and expect the same answer from each.
+/// satisfy, so nothing here may read it - which is why the rows of
+/// <see cref="AClaimTheProviderDidNotReturn_CostsTheResponseNothing"/> and
+/// <see cref="AnAcrRequest_CostsTheResponseNothingHere"/> drive it through all three of its values and expect
+/// the same answer from each.
 /// </summary>
 /// <remarks>
 /// The claims carrying a description of their own are answered elsewhere, every one of them: a <c>sub</c> the

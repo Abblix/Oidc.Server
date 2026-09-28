@@ -123,7 +123,8 @@ public class StreamAddressAtRegistrationTests
 
     /// <summary>The control for the update: the same call over https goes through.</summary>
     /// <remarks>
-    /// Without it the refusal above is satisfied by an update path that refuses every delivery it is
+    /// Without it the refusal in <see cref="AnUpdateOntoACleartextAddress_IsRefused"/> is satisfied by an
+    /// update path that refuses every delivery it is
     /// given, which is a check that cannot fail rather than a check.
     /// </remarks>
     [Fact]
@@ -236,7 +237,8 @@ public class StreamAddressAtRegistrationTests
 
     /// <summary>The control: delivery still asks the whole question, resolution included.</summary>
     /// <remarks>
-    /// Without it the case above is satisfied by a policy that stopped resolving at all, which would
+    /// Without it <see cref="ARegistration_DoesNotResolveTheName"/> is satisfied by a policy that stopped
+    /// resolving at all, which would
     /// remove the check that keeps a public name resolving to a private address out of the network.
     /// </remarks>
     [Fact]

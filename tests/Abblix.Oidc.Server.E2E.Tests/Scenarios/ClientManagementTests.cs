@@ -46,7 +46,10 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// The property that matters here is not the response shape but who is allowed through. A registration access
 /// token is bound to one client, and a server that accepts one client's token against another's registration
 /// lets any registrant read a competitor's secret, point its redirect URIs at an attacker, or delete it
-/// outright. Every test below is written around that boundary rather than around the formatter behind it.
+/// outright. <see cref="One_clients_token_does_not_open_anothers_registration"/>,
+/// <see cref="One_clients_token_cannot_rewrite_anothers_registration"/> and
+/// <see cref="One_clients_token_cannot_delete_anothers_registration"/> are written around that boundary
+/// rather than around the formatter behind it.
 /// </remarks>
 public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
@@ -252,10 +255,10 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         // And that it names the member it refused. Asserting the status alone left the one refusal this
         // change WROTE unmeasured while it hardened the naming of fourteen it did not: putting
-        // redirect_uris in that message passed both suites. The whole-token form is copied from the theory
-        // below so the two rows cannot drift apart - not because this member sits in a containment
-        // pair, which it does not: no member name contains it and it contains none, so a plain
-        // Contains would catch the same plant.
+        // redirect_uris in that message passed both suites. The whole-token form is copied from
+        // No_uri_member_accepts_a_relative_value so the two cannot drift apart - not because this member
+        // sits in a containment pair, which it does not: no member name contains it and it contains none,
+        // so a plain Contains would catch the same plant.
         var body = await ReadJsonAsync(response);
         var description = body[DescriptionMember]!.GetValue<string>();
         Assert.True(
@@ -348,11 +351,11 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, so
         // with containment a redirect_uris refusal LABELLED post_logout_redirect_uris passed the
         // UNIT theory - and passed here too, but for an unrelated reason rather than for that one.
-        // One direction only - the reverse never passed, because the longer name is not
-        // contained in the shorter - and saying "for each other" would send the next reader looking
-        // for a second pair that does not exist. Measured, this
-        // row still cannot see that particular pair - RedirectUrisValidator is registered earlier and
-        // answers a relative redirect_uris in its own words, so the mislabel never reaches the client.
+        // One direction only - the reverse never passed, because the longer name is not contained in the
+        // shorter - and saying "for each other" would send the next reader looking for a second pair that
+        // does not exist. Measured, this row still cannot see that particular pair - RedirectUrisValidator
+        // is registered earlier and answers a relative redirect_uris in its own words, so the mislabel
+        // never reaches the client.
         // The unit theory is what catches it, by asking the validator directly.
         var body = await ReadJsonAsync(response);
         var description = body[DescriptionMember]!.GetValue<string>();
@@ -725,7 +728,8 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
                 MediaTypeNames.Application.Json),
         };
 
-        // What separates this case from the boundary theory above, which strips the header on purpose.
+        // What separates this case from A_body_at_the_boundary_is_decided_by_one_byte, which strips the
+        // header on purpose.
         Assert.NotNull(request.Content.Headers.ContentLength);
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);

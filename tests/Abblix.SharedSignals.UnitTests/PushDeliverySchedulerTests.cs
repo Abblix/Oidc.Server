@@ -61,7 +61,7 @@ public class PushDeliverySchedulerTests
     }
 
     /// <summary>
-    /// One stream, one queued event, and a transmitter wired the way the tests below need it.
+    /// One stream, one queued event, and a transmitter wired the way the tests in this class need it.
     /// </summary>
     private static ServiceProvider NewTransmitter(
         HttpMessageHandler origin,

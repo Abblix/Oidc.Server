@@ -455,8 +455,9 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The control for the pair above: once BOTH roles have a successor past the window, the unrestricted key
-    /// does leave. Without this the tests would hold equally for a ring that never retires anything.
+    /// The control for <see cref="AKeyNamingNoRole_OutlivesASuccessorInOneRoleOnly"/>: once BOTH roles have a
+    /// successor past the window, the unrestricted key does leave. Without this that test would hold equally for
+    /// a ring that never retires anything.
     /// </summary>
     [Fact]
     public async Task AKeyNamingNoRole_RetiresOnceBothRolesMovedOn()
@@ -537,7 +538,8 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The control for the test above, and the reason adoption dates the key backwards: once the propagation
+    /// The control for <see cref="AnAdoptedKeyProduces_WhileTheKeyMintedBesideItIsStillAnnounced"/>, and the
+    /// reason adoption dates the key backwards: once the propagation
     /// window has passed, the minted key takes over and the adopted one merely stays published.
     /// </summary>
     [Fact]
@@ -603,7 +605,7 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The builder call reaches the ring. Everything above constructs the ring directly, which proves the
+    /// The builder call reaches the ring. The other adoption tests construct the ring directly, which proves the
     /// behavior and nothing about the wiring - and a registration method that quietly reaches nobody reads
     /// exactly like one that works.
     /// </summary>

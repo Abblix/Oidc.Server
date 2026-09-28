@@ -222,8 +222,9 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// The same arm one over: RemoveAsync's index cleanup does not take the caller's outcome away
-    /// either, and its PRIMARY removal still does.
+    /// The arm <see cref="TryRemoveAsync_WhenTheIndexCleanupFails_StillTellsTheCallerItTookTheCode"/>
+    /// drives, on RemoveAsync: its index cleanup does not take the caller's outcome away either, and its
+    /// PRIMARY removal still does.
     /// </summary>
     /// <remarks>
     /// The token endpoint calls this from its expired and denied arms and then answers with a grant
@@ -259,10 +260,11 @@ public class DeviceAuthorizationStorageTests
     /// The discard path reports under its OWN event, because what an operator must do differs.
     /// </summary>
     /// <remarks>
-    /// Its sibling says the code was claimed and the caller was told it took it. Neither is true
-    /// here - nothing was issued, nobody was told anything, and the request is removed on the next
-    /// line - so borrowing that message would send somebody looking for an issuance that never
-    /// happened. The row asserts the ID rather than the wording, because the id is what a filter is
+    /// The claim path's event,
+    /// <see cref="LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim"/>, says the code was
+    /// claimed and the caller was told it took it. Neither is true here - nothing was issued, nobody was told anything,
+    /// and the request is removed on the next line - so borrowing that message would send somebody looking for an
+    /// issuance that never happened. The row asserts the ID rather than the wording, because the id is what a filter is
     /// built on and what a renumbering would silently break.
     /// </remarks>
     [Fact]
@@ -376,8 +378,8 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// A cache that fails one key's removal and passes everything else through, so the row above measures
-    /// the composition rather than a mocked answer.
+    /// A cache that fails one key's removal and passes everything else through, so the rows driving it
+    /// measure the composition rather than a mocked answer.
     /// </summary>
     private sealed class FailOnRemove(IDistributedCache inner, string failingKey) : IDistributedCache
     {

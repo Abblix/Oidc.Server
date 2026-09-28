@@ -130,7 +130,8 @@ public class ConfiguredReplayCacheTests
 
     /// <summary>
     /// And a deployment naming a LONGER one is not cut down to the profile's window, without which
-    /// the case above would be satisfied by ignoring the setting entirely.
+    /// <see cref="AShorterConfiguredWindow_DoesNotShortenTheRetention"/> would be satisfied by ignoring the
+    /// setting entirely.
     /// </summary>
     [Fact]
     public async Task ALongerConfiguredWindow_IsHonoured()
@@ -144,7 +145,8 @@ public class ConfiguredReplayCacheTests
 
     /// <summary>
     /// Setting nothing leaves the profile's window, which is what the bearer grant resolves to as
-    /// well. Without this case both cases above could be satisfied by a class that always adds the
+    /// well. Without this case both <see cref="AShorterConfiguredWindow_DoesNotShortenTheRetention"/> and
+    /// <see cref="ALongerConfiguredWindow_IsHonoured"/> could be satisfied by a class that always adds the
     /// configured value and treats its absence as zero.
     /// </summary>
     [Fact]

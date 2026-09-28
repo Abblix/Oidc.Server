@@ -183,8 +183,8 @@ public class AddPairwiseSubjectIdentifiersTests
 
     /// <summary>The control: a usable key starts, and the container hands out what was judged.</summary>
     /// <remarks>
-    /// Without it the cases above are satisfied by a validator that refuses everything, and by a wiring that
-    /// registers nothing at all.
+    /// Without it the rows of <see cref="SettingsBoundByTheHost_AreJudgedWhenItStarts"/> are satisfied by a
+    /// validator that refuses everything, and by a wiring that registers nothing at all.
     /// </remarks>
     [Fact]
     public void SettingsBoundByTheHost_AreWhatTheContainerHandsOut()

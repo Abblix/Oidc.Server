@@ -266,8 +266,8 @@ public class BackChannelAuthenticationRequestProcessorTests
     /// A hint naming the end user who approved is accepted.
     /// </summary>
     /// <remarks>
-    /// The control for the case above: without it the same assertions would hold over a processor that
-    /// refused every request carrying a hint at all.
+    /// The control for <see cref="AHintNamingSomebodyElse_IsRefusedBeforeAnythingIsStored"/>: without it the
+    /// same assertions would hold over a processor that refused every request carrying a hint at all.
     /// </remarks>
     [Fact]
     public async Task AHintNamingTheEndUserWhoApproved_IsAccepted()
@@ -322,7 +322,8 @@ public class BackChannelAuthenticationRequestProcessorTests
     /// A <c>claims</c> request naming the end user the host reaches is accepted.
     /// </summary>
     /// <remarks>
-    /// The control: without it the case above would hold over a processor that refused every request
+    /// The control: without it <see cref="AClaimsRequestNamingSomebodyElse_IsRefused"/> would hold over a
+    /// processor that refused every request
     /// carrying a claims parameter at all.
     /// </remarks>
     [Fact]

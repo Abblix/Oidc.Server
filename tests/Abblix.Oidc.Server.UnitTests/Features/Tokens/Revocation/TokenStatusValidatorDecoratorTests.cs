@@ -43,7 +43,7 @@ public class TokenStatusValidatorDecoratorTests
     private const string SectorIdentifier = "https://sector.example.com/uris.json";
 
     // A cutoff names a principal in this server's namespace, so it applies only to tokens this server
-    // issued. Every payload below therefore has to say who issued it.
+    // issued. Every payload in this class therefore has to say who issued it.
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private static readonly ISubjectTypeConverter SubjectConverter =
@@ -465,8 +465,9 @@ public class TokenStatusValidatorDecoratorTests
     /// A client the store no longer knows leaves the subject unresolvable, and the token is refused.
     /// </summary>
     /// <remarks>
-    /// Separate from the case above because the two fail at different steps and only one of them involves
-    /// the converter at all - a lookup returning nothing would otherwise read as "not pairwise, carry on".
+    /// Separate from <see cref="ValidateAsync_PairwisePseudonymThatCannotBeOpened_IsRefused"/> because the two
+    /// fail at different steps and only one of them involves the converter at all - a lookup returning nothing would
+    /// otherwise read as "not pairwise, carry on".
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_TokenNamingAClientThatIsGone_IsRefused()

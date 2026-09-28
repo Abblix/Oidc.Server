@@ -231,7 +231,8 @@ public class SigningAlgorithmPolicyTests
     /// An algorithm failure that is NOT a policy refusal does not offer the way out of one.
     /// </summary>
     /// <remarks>
-    /// The negative control for the row below, and the reason it exists: the core reports four
+    /// The negative control for <see cref="AnAlgorithmOutsideTheSet_IsRefusedAsAPolicyDecision"/>, and the
+    /// reason it exists: the core reports four
     /// different failures under one category - a missing <c>alg</c>, one outside the RFC 7518
     /// taxonomy, the allowlist refusal, and an unsigned token where signatures are required - so a
     /// consumer that reads the category and appends "widen your allowlist" says it to all four.

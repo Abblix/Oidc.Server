@@ -34,8 +34,8 @@ public class IdTokenHintValidatorTests
     {
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
 
-        // The audience client resolves by default: these cases are about the hint's own rules, and the
-        // registration check has its own case below.
+        // The audience client resolves by default: these cases are about the hint's own rules, not about
+        // the check that the audience names a registered client.
         _clientInfoProvider = new Mock<IClientInfoProvider>();
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
@@ -193,10 +193,11 @@ public class IdTokenHintValidatorTests
     /// did: removing the type check entirely left it green, because the request then failed further down for
     /// an unrelated reason.
     /// <para>
-    /// The last two cases are the ones that pin the design. Both are permitted elsewhere - one is what a
-    /// client assertion is, the other what a request object is - and both must still be refused here, which
-    /// works only because the catalog names every type and each position states its own exceptions. Drop
-    /// either from the catalog to spare its own position, and it starts passing as an ID token too.
+    /// The client-authentication and request-object rows are the ones that pin the design. Both are permitted
+    /// elsewhere - one is what a client assertion is, the other what a request object is - and both must still
+    /// be refused here, which works only because the catalog names every type and each position states its own
+    /// exceptions. Drop either from the catalog to spare its own position, and it starts passing as an ID token
+    /// too.
     /// </para>
     /// </remarks>
     [Theory]

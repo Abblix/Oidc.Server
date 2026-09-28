@@ -377,11 +377,12 @@ public class BackChannelAuthenticationValidatorTests
     [InlineData(BackchannelTokenDeliveryModes.Ping, null, null, "is required if")]
     [InlineData(BackchannelTokenDeliveryModes.Push, null, null, "is required if")]
     [InlineData("carrier-pigeon", null, null, "delivery mode is not supported")]
-    // The ORDER, which nothing held. These TWO rows are the whole of it: the orderings differ only
+    // The ORDER, which nothing held. The TWO rows pairing an http:// endpoint with poll and with an
+    // unsupported mode are the whole of it: the orderings differ only
     // where the scheme check would fire AND an arm would fire, which is poll with a bad endpoint
     // and an unsupported mode with a bad endpoint. The ping-or-push arm requires a null endpoint,
     // so the scheme check can never fire beside it, and the algorithm check sits below both either
-    // way. With the scheme check moved back above the arms, exactly these two read "HTTPS scheme"
+    // way. With the scheme check moved back above the arms, exactly those two read "HTTPS scheme"
     // instead and nothing else in any suite moves.
     //
     // A client wrong about its MODE has two things wrong with it, and which one it is told about is
@@ -438,7 +439,8 @@ public class BackChannelAuthenticationValidatorTests
     /// removing it turns seventeen unit rows red across two files and sixty-four E2E rows across two
     /// SUITES - the MinimalApi one carries eleven of them. The number has been wrong twice for two
     /// different reasons: it once counted only the suites that happened to be open, and it said
-    /// sixteen until the row below was added, which fails under the same plant. A count is valid for
+    /// sixteen until <see cref="ValidateAsync_NoDeliveryMode_IsNotJudgedOnItsCibaSigningAlgorithm"/> was
+    /// added, which fails under the same plant. A count is valid for
     /// the state it measured, and an edit in the same commit can invalidate it. This row is the one
     /// that says WHY in a sentence, rather than the only one that speaks.
     /// </remarks>
@@ -454,7 +456,8 @@ public class BackChannelAuthenticationValidatorTests
     /// A registration naming no delivery mode is not judged on its CIBA signing algorithm either.
     /// </summary>
     /// <remarks>
-    /// The row above pins where the null-mode exit sits relative to the switch. This one pins the other
+    /// <see cref="ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode"/> pins where the null-mode exit
+    /// sits relative to the switch. This one pins the other
     /// side of it - the algorithm check below - and without it that position was free: moving the exit
     /// beneath the algorithm check left every suite green. A boundary a value can cross in either
     /// direction needs a row on each side, and the exit had one.

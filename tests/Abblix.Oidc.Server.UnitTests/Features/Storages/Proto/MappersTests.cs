@@ -428,7 +428,8 @@ public class MappersTests
     public void AuthorizationContextMapper_NewWireBytes_PreserveBothAuthorizationDetailsAndActor()
     {
         // FORWARD COMPAT proof: a context populated with both new fields serialises and
-        // re-parses byte-exactly. Together with the previous test, this pins the wire shape
+        // re-parses byte-exactly. Together with
+        // AuthorizationContextMapper_PreUpgradeWireBytes_DeserializeWithNullNewFields, this pins the wire shape
         // both with the new fields present and absent.
         const string adWire = """[{"type":"payment_initiation","actions":["initiate"]}]""";
         const string actorWire = """{"sub":"svc-actor"}""";

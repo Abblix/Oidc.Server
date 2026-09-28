@@ -164,7 +164,8 @@ public class UserCodeVerificationServiceTests
         // A request carrying nothing is judged strictly rather than skipped, so every type in the grant
         // escapes. Pinned on its own because the strict reading is a decision and its opposite is one
         // early return away: skipping a null baseline would let a host attach any authority at all to a
-        // device that asked for none, which is the wider version of the case above rather than a
+        // device that asked for none, which is the wider version of
+        // Approve_WithATypeTheRequestNeverAskedFor_RefusesAndLeavesTheRequestPending rather than a
         // different one.
         //
         // CIBA takes the opposite reading deliberately, for a reason that does not hold here: its stored

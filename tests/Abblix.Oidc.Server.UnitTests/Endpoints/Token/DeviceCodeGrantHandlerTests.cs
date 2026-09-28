@@ -190,9 +190,9 @@ public class DeviceCodeGrantHandlerTests
     /// A stored grant that stays inside what the device asked for is redeemed.
     /// </summary>
     /// <remarks>
-    /// The control for the refusal above. Without it the same assertions would hold over a handler that
-    /// refused every request carrying <c>authorization_details</c> at all, which is the shape a guard
-    /// written slightly too wide takes.
+    /// The control for <see cref="AuthorizedGrantWideningTheRequest_IsRefusedWhenTheCodeIsRedeemed"/>.
+    /// Without it the same assertions would hold over a handler that refused every request carrying
+    /// <c>authorization_details</c> at all, which is the shape a guard written slightly too wide takes.
     /// </remarks>
     [Fact]
     public async Task AuthorizedGrantInsideTheRequest_IsRedeemed()
@@ -535,7 +535,8 @@ public class DeviceCodeGrantHandlerTests
     /// A poll one tick BEFORE the expiry is still pending.
     /// </summary>
     /// <remarks>
-    /// The control on the row above, and measured rather than assumed: a handler calling EVERY code
+    /// The control on <see cref="PolledAtExactlyItsExpiry_TheCodeIsExpiredAndSoSaysTheRecord"/>, and measured
+    /// rather than assumed: a handler calling EVERY code
     /// expired is already killed by nineteen other rows in this file, so that is not what this one buys.
     /// What it alone catches is the boundary shifted one tick EARLY - planted, and it is the only row in
     /// the suite that dies. The fifteen-minute rows cannot see a tick.

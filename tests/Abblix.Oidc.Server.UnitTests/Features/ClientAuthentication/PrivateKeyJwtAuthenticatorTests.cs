@@ -80,10 +80,10 @@ public class PrivateKeyJwtAuthenticatorTests
     /// <summary>
     /// A JWT made for some other purpose is not proof of who the client is. RFC 8725 Section 3.11 calls this
     /// token confusion, and the sharpest case is an access token the client legitimately holds, presented as
-    /// its credential. The last two cases are the reason the refusal is not limited to what this server
-    /// issues: the client signs its own assertion, so a credential or a security event it signed elsewhere is
-    /// equally within reach. Everything else about the assertion below is valid - issuer, subject, jti and
-    /// expiry all check out - so the type is the only thing standing between the two meanings.
+    /// its credential. The verifiable-credential and security-event rows are the reason the refusal is not
+    /// limited to what this server issues: the client signs its own assertion, so a credential or a security
+    /// event it signed elsewhere is equally within reach. Everything else about the assertion below is valid - issuer,
+    /// subject, jti and expiry all check out - so the type is the only thing standing between the two meanings.
     /// </summary>
     [Theory]
     [InlineData(JsonWebTokenTypes.AccessToken)]
@@ -589,7 +589,8 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// The issuer alone is accepted, which is what keeps the refusal above from being a check that
+    /// The issuer alone is accepted, which is what keeps the refusal in
+    /// <see cref="Fapi2AssertionAudienceIsNotTheIssuer_ShouldReturnNull"/> from being a check that
     /// refuses every assertion.
     /// </summary>
     [Fact]
@@ -645,8 +646,10 @@ public class PrivateKeyJwtAuthenticatorTests
 
     /// <summary>
     /// Without the profile the wider reading stands, so an assertion naming the token endpoint keeps
-    /// working. This is what makes the three cases above statements about the profile rather than
-    /// about the authenticator.
+    /// working. This is what makes <see cref="Fapi2AssertionAudienceIsNotTheIssuer_ShouldReturnNull"/>,
+    /// <see cref="Fapi2AssertionAudienceIsTheIssuer_ShouldAuthenticate"/> and
+    /// <see cref="Fapi2AssertionAudienceCarriesTheIssuerAmongOthers_ShouldReturnNull"/> statements about the
+    /// profile rather than about the authenticator.
     /// </summary>
     [Fact]
     public async Task NoProfileAssertionAudienceIsTheTokenEndpoint_ShouldAuthenticate()

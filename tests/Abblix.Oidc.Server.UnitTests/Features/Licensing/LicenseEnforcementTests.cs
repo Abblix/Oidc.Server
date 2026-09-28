@@ -100,10 +100,11 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void An_installation_running_before_a_licence_is_supplied_serves_one_issuer_and_refuses_the_second()
     {
-        // The one limit the free tier has. Its sibling below pins the client half of the same fallback, and
-        // that asymmetry is how this went missing: every other test reaching CheckIssuer either runs under the
-        // assembly license, and so is refused on the whitelist before anything is counted, or supplies a
-        // license of its own carrying the limit. None of them asks the fallback what it allows, so the
+        // The one limit the free tier has. Its sibling
+        // An_installation_running_before_a_licence_is_supplied_still_serves_every_client pins the client half
+        // of the same fallback, and that asymmetry is how this went missing: every other test reaching CheckIssuer
+        // either runs under the assembly license, and so is refused on the whitelist before anything is counted, or
+        // supplies a license of its own carrying the limit. None of them asks the fallback what it allows, so the
         // constant could be deleted outright with the whole suite still green - measured, not assumed.
         ArrangeInstallationWithNoLicence();
 
@@ -119,10 +120,11 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void The_refusal_past_the_issuer_limit_is_recorded()
     {
-        // The refusal is covered by the test above; this covers the record of it, which an operator's
-        // alerting is built on. It went untested for a mechanical reason worth stating: the throttle window
-        // is process-wide and fifteen minutes long, so whichever test reached the limit first consumed the
-        // only record any test could observe, and every later one found the decision taken in silence.
+        // The refusal is covered by An_issuer_beyond_the_licensed_count_is_refused_every_time; this covers
+        // the record of it, which an operator's alerting is built on. It went untested for a mechanical reason worth
+        // stating: the throttle window is process-wide and fifteen minutes long, so whichever test reached the limit
+        // first consumed the only record any test could observe, and every later one found the decision taken in
+        // silence.
         //
         // On a license of its own rather than on the unlicensed fallback, so that this test and the fallback
         // test fail for different reasons: removing the fallback's limit must not be able to take this one
@@ -156,8 +158,10 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// </summary>
     /// <remarks>
     /// The assembly installs its license before the first test runs, so reaching the state a deployment
-    /// starts in means removing it. That state is the subject of the two tests below rather than a
-    /// convenience for them: it is the only state in which the fallback is ever consulted.
+    /// starts in means removing it. That state is the subject of
+    /// <see cref="An_installation_running_before_a_licence_is_supplied_serves_one_issuer_and_refuses_the_second"/>
+    /// and <see cref="An_installation_running_before_a_licence_is_supplied_still_serves_every_client"/> rather
+    /// than a convenience for them: it is the only state in which the fallback is ever consulted.
     /// </remarks>
     private static void ArrangeInstallationWithNoLicence() => TestLicense.ClearChecker();
 

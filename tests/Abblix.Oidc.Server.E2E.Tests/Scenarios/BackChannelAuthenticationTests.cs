@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// a separate device, then polls the token endpoint for the result. Nothing in the flow carries a
 /// redirect_uri, a browser session or a user-present code, so the guarantees a normal authorization-code
 /// flow gets for free from the user agent have to be enforced by the server on its own. That is where the
-/// tests below sit.
+/// tests in this class sit.
 ///
 /// The host already opts into the endpoint, but no test drove it. The files elsewhere in the suite that
 /// mention "backchannel" are about back-channel logout, an unrelated feature.

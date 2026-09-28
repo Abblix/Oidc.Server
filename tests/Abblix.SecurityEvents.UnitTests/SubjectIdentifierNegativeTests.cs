@@ -93,7 +93,7 @@ public class SubjectIdentifierNegativeTests
     [Fact]
     public void EmptyRequiredMember_IsRejected_OnConstructionToo()
     {
-        // The wire tests above originate in the same constructors these calls hit directly; the
+        // The wire tests in this class originate in the same constructors these calls hit directly; the
         // difference is only the label at the boundary - ArgumentException in code, JsonException
         // once the converter translates it for a deserializing caller.
         Assert.Throws<ArgumentException>(() => new EmailSubject(""));

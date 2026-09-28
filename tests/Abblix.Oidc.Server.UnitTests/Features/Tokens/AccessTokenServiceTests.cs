@@ -798,8 +798,9 @@ public class AccessTokenServiceTests
     ///
     /// It pins the default and nothing about the predicate: the mutation that drops every located entry
     /// leaves this green, because a service built without the flag never reaches the filter. What
-    /// discriminates the predicate is the pair of tests above, and saying so here is the point - a control
-    /// that is trusted for a guarantee it does not give is worse than none.
+    /// discriminates the predicate is <see cref="CreateAccessToken_ForOneResource_KeepsOnlyTheDetailsAddressedToIt"/>
+    /// and <see cref="CreateAccessToken_WhenEveryDetailNamesAnotherResource_OmitsTheClaim"/>, and saying so
+    /// here is the point - a control that is trusted for a guarantee it does not give is worse than none.
     /// </remarks>
     [Fact]
     public async Task CreateAccessToken_WithoutTheSwitch_KeepsEveryDetail()

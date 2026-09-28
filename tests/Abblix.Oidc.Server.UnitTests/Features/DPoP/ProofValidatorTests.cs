@@ -172,7 +172,7 @@ public class ProofValidatorTests
     /// the core writes it where the branch is known.
     /// <para>
     /// <c>invalid_jwk</c> survives for the case this validator establishes ITSELF - private key material
-    /// in the <c>jwk</c> - which is the row below.
+    /// in the <c>jwk</c> - which is <see cref="ValidateAsync_JwkContainsPrivateKeyMaterial_ReturnsInvalidJwk"/>.
     /// </para>
     /// </remarks>
     [Fact]

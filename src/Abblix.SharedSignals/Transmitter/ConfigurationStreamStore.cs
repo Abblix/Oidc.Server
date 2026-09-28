@@ -314,7 +314,8 @@ public sealed class ConfigurationStreamStore : IStreamStore
         {
             // Poll delivery exists here and this stream still got no address, which leaves the
             // identifier: whoever mints the address could not carry this one into it and said so on the
-            // way past. Separated from the case below because the two are fixed differently - one by
+            // way past. Separated from the refusal for a transmitter offering no poll delivery at all
+            // because the two are fixed differently - one by
             // configuring an address for the transmitter, this one by renaming the stream - and a single
             // message would send the operator to the wrong half.
             throw new InvalidOperationException(

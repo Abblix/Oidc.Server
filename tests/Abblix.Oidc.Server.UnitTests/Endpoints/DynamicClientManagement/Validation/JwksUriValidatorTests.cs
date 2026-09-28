@@ -115,7 +115,9 @@ public class JwksUriValidatorTests
     }
 
     /// <summary>
-    /// The control on the rows above: the two <c>host:port</c> values really do reach the validator as
+    /// The control on the <c>host:port</c> rows of
+    /// <see cref="ValidateAsync_WithAValueThePolicyRefuses_ReturnsInvalidClientMetadata"/>: the two
+    /// <c>host:port</c> values really do reach the validator as
     /// ABSOLUTE URIs, so their refusal comes from the policy and not from relativeness.
     /// </summary>
     [Theory]

@@ -147,7 +147,8 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// Once the host opts into Implicit Flow, the same registration that was rejected above
+    /// Once the host opts into Implicit Flow, the same registration that was rejected in
+    /// <see cref="HandleAsync_TokenResponseType_WithoutEnableImplicitFlow_RejectsAtRegistration"/>
     /// must now succeed. Locks the symmetric «opt-in surface flows through to
     /// registration-time gating» contract.
     /// </summary>
@@ -191,7 +192,8 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// Symmetric to the above: with the host opted into ROPC, the password grant is
+    /// Symmetric to <see cref="HandleAsync_PasswordGrant_WithoutEnablePasswordGrant_RejectsAtRegistration"/>:
+    /// with the host opted into ROPC, the password grant is
     /// supported and registration succeeds end-to-end through the full handler pipeline.
     /// </summary>
     [Fact]
@@ -281,7 +283,8 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// The counterpart of the case above: a registration request that explicitly opts out still opts out,
+    /// The counterpart of <see cref="HandleAsync_PkceRequiredOmitted_StoredClientStillRequiresPkce"/>: a
+    /// registration request that explicitly opts out still opts out,
     /// so the nullable default restores the server's own value without taking the choice away from a client
     /// that states one.
     /// </summary>

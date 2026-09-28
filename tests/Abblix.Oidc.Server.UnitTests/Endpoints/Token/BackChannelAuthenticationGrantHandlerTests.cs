@@ -298,7 +298,8 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// A grant of a requested type whose CONTENT the per-type validator refuses is not redeemed.
     /// </summary>
     /// <remarks>
-    /// The type comparison above structurally cannot see this: the type was asked for, so a raised amount
+    /// The type comparison <see cref="AuthenticatedRequest_WhoseGrantWidensTheRequest_ReturnsAccessDenied"/>
+    /// drives structurally cannot see this: the type was asked for, so a raised amount
     /// or a widened set of accounts inside the entry passes it. RFC 9396 section 6.1 leaves that to the
     /// definition of the type, which is what the per-type validator is.
     ///
@@ -1389,8 +1390,9 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// A request that named the end user who authenticated is answered normally.
     /// </summary>
     /// <remarks>
-    /// The control for the case above: without it the same assertions would hold over a handler that refused
-    /// every request carrying a name at all.
+    /// The control for <see cref="AuthorizeAsync_WhenAuthenticatedUserIsNotTheOneRequested_ReturnsAccessDenied"/>:
+    /// without it the same assertions would hold over a handler that refused every request carrying a name
+    /// at all.
     /// </remarks>
     [Fact]
     public async Task AuthorizeAsync_WhenAuthenticatedUserIsTheOneRequested_ReturnsTheGrant()
@@ -1517,7 +1519,9 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// and against what the request required when it was read.
     /// </summary>
     /// <remarks>
-    /// The same window the subject comparison above is driven through: a host replacing what is stored
+    /// The same window the subject comparison is driven through in
+    /// <see cref="AuthorizeAsync_WhenTheStoredRequestChangesBeforeItIsConsumed_ReturnsAccessDenied"/>: a host
+    /// replacing what is stored
     /// between the handler's read and the processor's removal. The consumed copy carries no requirement at
     /// all, so a yardstick taken from it would accept anything.
     /// </remarks>
