@@ -25,8 +25,6 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 {
     private const string TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange";
-    private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
-    private const string IdTokenType = "urn:ietf:params:oauth:token-type:id_token";
 
     private const string PaymentInitiationWireJson =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
@@ -46,7 +44,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
             ["subject_token"] = subjectToken,
-            ["subject_token_type"] = AccessTokenType,
+            ["subject_token_type"] = TokenExchangeTokenTypes.AccessToken,
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
@@ -84,9 +82,9 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
             ["subject_token"] = subjectToken,
-            ["subject_token_type"] = AccessTokenType,
+            ["subject_token_type"] = TokenExchangeTokenTypes.AccessToken,
             ["actor_token"] = actorToken,
-            ["actor_token_type"] = AccessTokenType,
+            ["actor_token_type"] = TokenExchangeTokenTypes.AccessToken,
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
@@ -117,8 +115,8 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
             ["token_endpoint_auth_method"] = "client_secret_post",
             ["token_exchange_subject_token_types"] = new JsonArray
             {
-                "urn:ietf:params:oauth:token-type:access_token",
-                "urn:ietf:params:oauth:token-type:id_token",
+                TokenExchangeTokenTypes.AccessToken,
+                TokenExchangeTokenTypes.IdToken,
             },
         };
         var registered = await RegisterClientAsync(client, discovery, requested);
@@ -126,8 +124,8 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var echoed = registered["token_exchange_subject_token_types"] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Equal(2, echoed!.Count);
-        Assert.Equal("urn:ietf:params:oauth:token-type:access_token", echoed[0]!.GetValue<string>());
-        Assert.Equal("urn:ietf:params:oauth:token-type:id_token", echoed[1]!.GetValue<string>());
+        Assert.Equal(TokenExchangeTokenTypes.AccessToken, echoed[0]!.GetValue<string>());
+        Assert.Equal(TokenExchangeTokenTypes.IdToken, echoed[1]!.GetValue<string>());
     }
 
     [Fact]
@@ -155,7 +153,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
             ["subject_token"] = idToken,
-            ["subject_token_type"] = IdTokenType,
+            ["subject_token_type"] = TokenExchangeTokenTypes.IdToken,
             // Client B presents client A's id_token. Same shared secret across pre-seeded clients.
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,

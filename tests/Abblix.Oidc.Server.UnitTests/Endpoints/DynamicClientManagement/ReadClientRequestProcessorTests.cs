@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -54,7 +55,7 @@ public class ReadClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
             RequireDPoP = true,
             AuthorizationDetailsTypes = ["payment_initiation"],
-            TokenExchangeAllowedSubjectTokenTypes = ["urn:ietf:params:oauth:token-type:access_token"],
+            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
             TokenExchangeAllowedAudiences = ["https://api.example.com"],
         };
         var request = new ValidClientRequest(new ClientRequest(), client);
@@ -67,7 +68,7 @@ public class ReadClientRequestProcessorTests
         Assert.True(response.DpopBoundAccessTokens);
         Assert.Equal(["payment_initiation"], response.AuthorizationDetailsTypes!);
         Assert.Equal(
-            ["urn:ietf:params:oauth:token-type:access_token"],
+            [TokenExchangeTokenTypes.AccessToken],
             response.TokenExchangeSubjectTokenTypes!);
         Assert.Equal(["https://api.example.com"], response.TokenExchangeAudiences!);
     }

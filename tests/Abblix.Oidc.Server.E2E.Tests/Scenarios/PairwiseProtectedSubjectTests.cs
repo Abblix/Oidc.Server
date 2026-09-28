@@ -50,7 +50,6 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
 {
     private const string PairwiseClientId = "e2e-pairwise";
     private const string RealSubject = "e2e-subject";
-    private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
 
     [Fact]
     public async Task PairwiseClient_AccessMatchesIdToken_HidesRealSubject_AndUserInfoRecoversUser()
@@ -143,7 +142,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
             ["subject_token"] = subjectToken,
-            ["subject_token_type"] = AccessTokenType,
+            ["subject_token_type"] = TokenExchangeTokenTypes.AccessToken,
             [AuthorizationRequest.Parameters.ClientId] = PairwiseClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });

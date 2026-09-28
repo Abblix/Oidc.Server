@@ -75,7 +75,7 @@ public class TokenHandlerTests
             new EncodedJsonWebToken(jwt, "access_token_jwt"),
             TokenTypes.Bearer,
             TimeSpan.FromHours(1),
-            new Uri("urn:ietf:params:oauth:token-type:access_token"));
+            TokenTypeIdentifiers.AccessToken);
     }
 
     /// <summary>

@@ -47,19 +47,28 @@ public class LogEventUniquenessTests
     }
 
     /// <summary>
-    /// The count is asserted so the walk itself cannot quietly stop finding anything.
+    /// The walk reaches the events at both ends of the declarations and finds more than a handful, so the
+    /// uniqueness check above runs over the real set rather than over whatever a broken walk leaves.
     /// </summary>
     /// <remarks>
-    /// A uniqueness check over an empty set passes, and a walk that stops descending - a class nested one
-    /// level deeper than it expected, a field kind it does not recognize - reports exactly that. The number
-    /// is the instrument's own pulse rather than a fact about the product, so it is meant to be edited
-    /// whenever an event is added; what it refuses is the edit nobody made.
+    /// A uniqueness check over an empty set passes, and so does one over a set a walk stopped short of. The
+    /// first and the last event declared are named rather than counted: a count has to be edited with every
+    /// event added, and an edit made to turn a test green is made without looking at why it was red.
     /// </remarks>
     [Fact]
-    public void TheWalkFindsEveryDeclaredEvent()
+    public void TheWalkReachesTheDeclaredEvents()
     {
-        Assert.Equal(170, EventIds().Count);
+        var found = EventIds();
+
+        Assert.Contains(found, entry => entry.Id == LogEvents.Endpoints.JwtBearer.MissingAssertion);
+        Assert.Contains(found, entry => entry.Id == LogEvents.RateLimiting.ThrottledClientAuthenticator.SourceRefused);
+        Assert.True(found.Count > MinimumDeclaredEvents, $"The walk found only {found.Count} events");
     }
+
+    /// <summary>
+    /// Far below the events declared, and far above what a walk that stopped at the first group finds.
+    /// </summary>
+    private const int MinimumDeclaredEvents = 100;
 
     private static IReadOnlyList<(int Id, string Name)> EventIds()
     {
