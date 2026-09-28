@@ -77,6 +77,114 @@ public class AuthenticationCompletionRouterTests
         clients.Verify(c => c.TryFindClientAsync(AnotherClient), Times.Never);
     }
 
+    /// <summary>
+    /// A denial is routed by the stored request's client to that client's delivery mode, which leaves the
+    /// request denied for a poll client.
+    /// </summary>
+    [Fact]
+    public async Task DenyAsync_RoutesByTheStoredClient()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        var stored = RequestFor(RequestingClient);
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(stored);
+        storage
+            .Setup(s => s.UpdateAsync(AuthReqId, stored, It.IsAny<TimeSpan>()))
+            .Returns(Task.CompletedTask);
+
+        var router = RouterOver(storage, BackchannelTokenDeliveryModes.Poll);
+
+        await router.DenyAsync(AuthReqId, TimeSpan.FromMinutes(5));
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, stored.Status);
+        storage.Verify(s => s.UpdateAsync(AuthReqId, stored, It.IsAny<TimeSpan>()), Times.Once);
+    }
+
+    /// <summary>
+    /// With nothing stored there is nothing to deny, and the caller is told so rather than left believing
+    /// the end user's refusal reached anybody.
+    /// </summary>
+    [Fact]
+    public async Task DenyAsync_WhenNothingIsStored_Refuses()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
+    }
+
+    /// <summary>
+    /// A stored request whose client is no longer registered cannot be denied, and the caller is told so:
+    /// the request would otherwise stay pending while the host believed the refusal had gone through.
+    /// </summary>
+    [Fact]
+    public async Task DenyAsync_WhenTheClientIsUnknown_Refuses()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
+
+        storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A completion for a stored request whose client is no longer registered is refused, as a denial is:
+    /// the host must not believe the end user's approval reached anybody.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAsync_WhenTheClientIsUnknown_Refuses()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
+                .CompleteAsync(AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5)));
+    }
+
+    /// <summary>
+    /// With nothing stored, a completion is refused as not pending even when the host's copy names a client
+    /// nobody registered: that is the refusal whose remedy exists, since registering the client would still
+    /// leave nothing to answer.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAsync_WhenNothingIsStored_RefusesAsNotPendingBeforeLookingForTheClient()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
+                .CompleteAsync(AuthReqId, RequestFor("typo-client"), TimeSpan.FromMinutes(5)));
+
+        Assert.Contains("the stored record is not there", refusal.Message, StringComparison.Ordinal);
+    }
+
+    private static AuthenticationCompletionRouter RouterOver(Mock<IBackChannelRequestStorage> storage, string mode)
+    {
+        var clients = new Mock<IClientInfoProvider>();
+        clients.Setup(c => c.TryFindClientAsync(RequestingClient)).ReturnsAsync(new ClientInfo(RequestingClient)
+        {
+            BackChannelTokenDeliveryMode = mode,
+        });
+
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<AuthenticationCompletionHandler>(
+            BackchannelTokenDeliveryModes.Poll,
+            new PollModeCompletionHandler(
+                NullLogger<PollModeCompletionHandler>.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
+
+        return new AuthenticationCompletionRouter(
+            NullLogger<AuthenticationCompletionRouter>.Instance,
+            clients.Object,
+            services.BuildServiceProvider(),
+            storage.Object);
+    }
+
     private static BackChannelAuthenticationRequest RequestFor(string clientId) =>
         new(
             new AuthorizedGrant(

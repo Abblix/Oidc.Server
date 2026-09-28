@@ -282,12 +282,14 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     }
 
     [Fact]
-    public async Task A_push_grant_the_per_type_validator_refuses_delivers_nothing()
+    public async Task A_push_grant_the_per_type_validator_refuses_delivers_an_error_and_no_tokens()
     {
         // The per-type gate for push exists because a push client is never judged at the token endpoint,
         // where the other two modes are. A gate that refuses and delivers anyway, or that lets a grant the
         // validator rejected through, is invisible to a unit test whose fixture could not be delivered to
-        // in the first place. Here a token either arrives or it does not.
+        // in the first place. Here a token either arrives or it does not - and what does arrive is the error
+        // CIBA Core 1.0 section 12 has a push client told, so it is not left waiting for the request to
+        // expire.
         //
         // The narrowing is one a host got WRONG rather than a malicious one: the entry keeps the type it
         // asked for and loses the amount, which is the shape the type comparison structurally cannot see
@@ -301,8 +303,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
 
         // What the request ASKED for has to be on it. With nothing requested, the type comparison one
-        // step earlier refuses first, removes the request and delivers nothing - the identical observable
-        // state, reached without the per-type validator ever being asked, and this rules that out.
+        // step earlier refuses first, removes the request and delivers the same error - the identical
+        // observable state, reached without the per-type validator ever being asked, and this rules that out.
         //
         // It rules out only that. The same comparison also refuses a granted type absent from a non-empty
         // baseline, and no assertion here separates the two refusals: they differ in the log line and in
@@ -312,7 +314,10 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
         await CompleteAsync(host, authRequestId, DetailWithoutAmount);
 
-        Assert.Empty(deliveries.Received);
+        var delivered = Assert.Single(deliveries.Received);
+        Assert.Equal(ErrorCodes.AccessDenied, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]!.GetValue<string>());
+        Assert.Equal(authRequestId, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.AuthReqId]!.GetValue<string>());
+        Assert.False(delivered.Payload.ContainsKey(BackChannelPushNotificationRequest.Parameters.AccessToken));
 
         // And the request does not sit there afterwards. A push client never polls, so a refused request
         // left in storage is an orphan nobody reads until it expires.

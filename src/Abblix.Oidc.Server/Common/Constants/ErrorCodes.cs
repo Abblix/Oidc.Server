@@ -146,6 +146,13 @@ public static class ErrorCodes
 	public const string AccessDenied = "access_denied";
 
 	/// <summary>
+	/// The OpenID Provider met an unexpected condition that kept it from completing a decoupled
+	/// authentication, for a reason other than access_denied or expired_token (OpenID Connect CIBA Core 1.0
+	/// section 12, the push error payload).
+	/// </summary>
+	public const string TransactionFailed = "transaction_failed";
+
+	/// <summary>
 	/// The authorization server does not support obtaining a response using this method.
 	/// </summary>
 	public const string UnsupportedResponseType = "unsupported_response_type";

@@ -39,7 +39,6 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     private readonly IAuthenticationCompletionHandler _completion;
 ///     private readonly ISessionIdGenerator _sessionIdGenerator;
 ///     private readonly IMyPushNotificationService _pushService;
-///     private readonly IBackChannelLongPollingService? _longPolling;
 ///     private readonly TimeProvider _clock;
 ///
 ///     public async Task&lt;Result&lt;AuthSession, OidcError&gt;&gt; InitiateAuthenticationAsync(
@@ -82,9 +81,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         // record, so it is init-only and a `with` expression is how it is replaced; the copy carries
 ///         // every other member unchanged.
 ///         //
-///         // Nothing needs to touch Status ON THIS PATH - the denial below is a different one, and it
-///         // never calls CompleteAsync. A host that does set it on its own copy changes nothing
-///         // either way: completion reads the STORED record and writes whatever it decides itself.
+///         // Nothing needs to touch Status - the denial below goes through DenyAsync. A host that does
+///         // set it on its own copy changes nothing either way: completion reads the STORED record and
+///         // writes whatever it decides itself.
 ///         var authenticated = storedRequest with
 ///         {
 ///             AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context),
@@ -101,18 +100,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     // Called when user denies on their device
 ///     public async Task OnUserDeniedAsync(string authReqId)
 ///     {
-///         var storedRequest = await _storage.TryGetAsync(authReqId);
-///         if (storedRequest == null) return;
-///
-///         storedRequest.Status = BackChannelAuthenticationStatus.Denied;
-///         await _storage.UpdateAsync(authReqId, storedRequest, TimeSpan.FromMinutes(5));
-///
-///         // Writing the status is not telling anybody. A poll-mode client waiting on a long poll is
-///         // woken by IBackChannelLongPollingService, which nothing in the library calls for a status
-///         // the host wrote itself - so without this the user's refusal answers only when the waiter's
-///         // window runs out. Inject the notifier where the deployment registered one.
-///         if (_longPolling != null)
-///             await _longPolling.NotifyStatusChangeAsync(authReqId, storedRequest.Status);
+///         // Denial tells the client the way its delivery mode learns anything: a poll client reads
+///         // access_denied (and a long poll is woken), a ping client is told to come and read it, a push
+///         // client is sent the error. Writing Denied into storage directly would reach none of them.
+///         await _completion.DenyAsync(authReqId, TimeSpan.FromMinutes(5));
 ///     }
 /// }
 /// </code>
@@ -138,9 +129,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
 ///     them directly via <see cref="INotificationDeliveryService"/> to the client's
 ///     <c>client_notification_endpoint</c>. This is the only mode where the tokens exist before the
-///     client asks for them, and the request is removed once they are delivered, because a push client
-///     never comes to the token endpoint. CIBA Core 1.0 does not require that removal - it says nothing
-///     about what the OP keeps - so it is this library's choice.
+///     client asks for them. The request is taken from storage before they are minted, so it is gone
+///     whatever the delivery does, because a push client never comes to the token endpoint. CIBA Core 1.0
+///     does not require that removal - it says nothing about what the OP keeps - so it is this library's
+///     choice.
 ///   </item>
 /// </list>
 ///

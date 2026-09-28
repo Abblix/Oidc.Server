@@ -46,10 +46,9 @@ public interface INotificationDeliveryService
     /// <c>true</c> if the client endpoint accepted the notification (2xx response); <c>false</c> if
     /// delivery failed (non-success status or transport error).
     /// <para>
-    /// On <c>false</c> push keeps the stored record, and it is not a resumable delivery. The tokens were
-    /// minted and are gone; nothing retries them. The record reads Authenticated, written before the
-    /// mint, so a LATER completion of the same request is refused - the recovery is to ask the end user,
-    /// not to resend from what is left.
+    /// On <c>false</c> nothing is resumable. The tokens were minted and are gone; nothing retries them. Push
+    /// took the request before minting, so a LATER completion of the same request is refused - the recovery
+    /// is to ask the end user.
     /// </para>
     /// </returns>
     Task<bool> SendAsync(
