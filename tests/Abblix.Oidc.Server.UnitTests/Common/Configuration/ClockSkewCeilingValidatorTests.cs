@@ -36,8 +36,9 @@ public class ClockSkewCeilingValidatorTests
             });
 
     /// <summary>
-    /// Both ends of the permitted range and the default pass, so the refusals below cannot be
-    /// satisfied by a guard that refuses everything.
+    /// Both ends of the permitted range and the default pass, so the refusals in
+    /// <see cref="AboveTheCeiling_Fails"/>, <see cref="TheLibraryDefault_SetExplicitly_Fails"/> and
+    /// <see cref="Negative_Fails"/> cannot be satisfied by a guard that refuses everything.
     /// </summary>
     [Theory]
     [InlineData(0)]
@@ -180,8 +181,9 @@ public class ClockSkewCeilingValidatorTests
     /// The ceiling is applied where the tolerance is resolved, so a value above it comes back cut
     /// down rather than traveling onward beside a bound somebody must remember to pass. This is the
     /// case that would go on passing if the bound were dropped from the resolution: the startup
-    /// guard below refuses such a value only for the SERVER's own profile, while a client carrying a
-    /// profile of its own reaches this path with a value nothing refused.
+    /// guard <see cref="ClockSkewCeilingValidator"/> refuses such a value only for the SERVER's own
+    /// profile, while a client carrying a profile of its own reaches this path with a value nothing
+    /// refused.
     /// </summary>
     [Fact]
     public void AValueAboveTheCeiling_ComesBackBounded()
@@ -212,8 +214,9 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
-    /// A value under the ceiling is not cut down to it, which is what keeps the first case from
-    /// being satisfied by a resolution that answers the ceiling whatever it is asked.
+    /// A value under the ceiling is not cut down to it, which is what keeps
+    /// <see cref="AValueAboveTheCeiling_ComesBackBounded"/> from being satisfied by a resolution that
+    /// answers the ceiling whatever it is asked.
     /// </summary>
     [Fact]
     public void AValueUnderTheCeiling_IsKept()

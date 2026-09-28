@@ -33,7 +33,7 @@ public class IntrospectionRequestProcessorTests
     public IntrospectionRequestProcessorTests()
     {
         // Neither is reached for a caller that is the token's own client, nor for one that is not pairwise,
-        // which is every case here except the pseudonym one below.
+        // which is every case in this class: none of them introduces a pairwise caller.
         _clientInfoProvider = new Mock<IClientInfoProvider>();
         _subjectTypeConverter = new Mock<ISubjectTypeConverter>();
 

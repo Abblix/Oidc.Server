@@ -65,7 +65,7 @@ public class CallerRateLimitOptionsValidatorTests
 
     /// <summary>
     /// The budget counting failed authentications is checked by the same validator, and its own refusal is
-    /// reached only when the budget above is sound - so it needs cases of its own or both its branches ship
+    /// reached only when the caller budget is sound - so it needs cases of its own or both its branches ship
     /// unexercised.
     /// </summary>
     [Theory]
@@ -105,8 +105,8 @@ public class CallerRateLimitOptionsValidatorTests
     }
 
     /// <summary>
-    /// Off is the default for that budget, which is the opposite of the one above, and nothing about an unset
-    /// limit may refuse a start.
+    /// Off is the default for that budget, which is the opposite of the caller budget's, and nothing about an
+    /// unset limit may refuse a start.
     /// </summary>
     [Fact]
     public void The_default_failure_budget_is_off_and_accepted()

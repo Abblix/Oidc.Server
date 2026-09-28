@@ -55,8 +55,8 @@ public class SecurityProfileTests
     /// held to that bundle.
     /// </summary>
     /// <remarks>
-    /// The two rows whose client names no profile keep the case from being satisfied by a resolution
-    /// that answers the strictest bundle whatever it is asked, and the row whose client names Fapi2
+    /// The row whose client and deployment both name no profile keeps the case from being satisfied by a
+    /// resolution that answers the strictest bundle whatever it is asked, and the row whose client names Fapi2
     /// under a deployment naming none by one that answers the deployment's.
     /// </remarks>
     [Theory]

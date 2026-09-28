@@ -108,8 +108,10 @@ public sealed class CustodianFailureShapeTests
     }
 
     /// <summary>
-    /// The control. Without it every row above passes on a server that refuses everything, which is exactly the
-    /// change somebody might make while trying to satisfy them.
+    /// The control. Without it <see cref="AnUnavailableCustodianAnswers503WithRetryAfter"/>,
+    /// <see cref="ACustodianFailureThatWillNotClearAnswers500"/> and
+    /// <see cref="NeitherAnswerCarriesTheExceptionText"/> pass on a server that refuses everything, which is
+    /// exactly the change somebody might make while trying to satisfy them.
     /// </summary>
     [Fact]
     public async Task AHealthyProviderStillPublishesItsKeys()

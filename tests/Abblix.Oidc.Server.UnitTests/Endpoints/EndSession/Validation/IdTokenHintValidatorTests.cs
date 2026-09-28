@@ -34,8 +34,8 @@ public class IdTokenHintValidatorTests
     {
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
 
-        // The audience client resolves by default: these cases are about the hint's own rules, and the
-        // registration check has its own case below.
+        // The audience client resolves by default: these cases are about the hint's own rules, not about
+        // the check that the audience names a registered client.
         _clientInfoProvider = new Mock<IClientInfoProvider>();
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))

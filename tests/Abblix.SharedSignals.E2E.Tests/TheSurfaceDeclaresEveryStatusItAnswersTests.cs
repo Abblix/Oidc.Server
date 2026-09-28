@@ -87,7 +87,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         var answered = await DriveEveryOutcomeAsync();
 
         // A route that answered nothing would satisfy "declared covers answered" while proving no part
-        // of it, so the drive is required to have reached every route in the table below before
+        // of it, so the drive is required to have reached every route MappedRoutes lists before
         // anything is judged. No count is written here: the table is what says how many there are, and
         // a number beside it is a second place to keep in step.
         var routes = MappedRoutes();
@@ -178,7 +178,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
             answers.Add(new Answer(method, pattern, (int)response.StatusCode));
         }
 
-        // Created, and the identifier every row below names.
+        // Created, and the identifier (_streamId) every request on the existing stream names.
         using (var created = await client.PostAsJsonAsync(
             StreamRoute, new { delivery = PushDelivery, events_requested = new[] { SomeEvent } }, ct))
         {
@@ -298,7 +298,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
             }
         }
 
-        // Deletion last: every row above needs the stream.
+        // Deletion last: every other request on _streamId needs the stream.
         await Record(HttpMethods.Delete, StreamRoute, $"{StreamRoute}?stream_id={MissingStream}");
         await Record(HttpMethods.Delete, StreamRoute, StreamRoute);
         await Record(HttpMethods.Delete, StreamRoute, $"{StreamRoute}?stream_id={_streamId}");

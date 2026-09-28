@@ -222,8 +222,9 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// The same arm one over: RemoveAsync's index cleanup does not take the caller's outcome away
-    /// either, and its PRIMARY removal still does.
+    /// The arm <see cref="TryRemoveAsync_WhenTheIndexCleanupFails_StillTellsTheCallerItTookTheCode"/>
+    /// drives, on RemoveAsync: its index cleanup does not take the caller's outcome away either, and its
+    /// PRIMARY removal still does.
     /// </summary>
     /// <remarks>
     /// The token endpoint calls this from its expired and denied arms and then answers with a grant
@@ -259,7 +260,8 @@ public class DeviceAuthorizationStorageTests
     /// The discard path reports under its OWN event, because what an operator must do differs.
     /// </summary>
     /// <remarks>
-    /// Its sibling says the code was claimed and the caller was told it took it. Neither is true
+    /// The claim path's event, <c>UserCodeIndexNotRemovedAfterClaim</c>, says the code was claimed and the
+    /// caller was told it took it. Neither is true
     /// here - nothing was issued, nobody was told anything, and the request is removed on the next
     /// line - so borrowing that message would send somebody looking for an issuance that never
     /// happened. The row asserts the ID rather than the wording, because the id is what a filter is

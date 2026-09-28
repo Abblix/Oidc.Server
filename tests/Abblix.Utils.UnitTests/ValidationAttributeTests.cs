@@ -24,7 +24,7 @@ namespace Abblix.Utils.UnitTests;
 /// These decide whether a value that arrived from outside is allowed to go further, and they had no tests
 /// of their own. An attribute that accepts what it should refuse fails silently by construction: the
 /// request proceeds, and whatever the value breaks does so somewhere else entirely.
-/// Each case below is a value shape a real request produces - a missing member, an empty string, a
+/// Each case in this class is a value shape a real request produces - a missing member, an empty string, a
 /// relative address, an array with a hole in it - rather than a sampling of the type system.
 /// </remarks>
 public class ValidationAttributeTests

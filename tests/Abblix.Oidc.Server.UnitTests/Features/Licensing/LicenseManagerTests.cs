@@ -274,10 +274,10 @@ public class LicenseManagerTests
     /// A second license still active on the day is counted too: what shrinks is what the merge loses.
     /// </summary>
     /// <remarks>
-    /// The sibling of <see cref="A_third_license_covering_the_day_is_counted_too"/>, and the one that shows the comparison is not merely "look at more
-    /// licenses": on the day the first license expires, the issuer it contributed is still accepted,
-    /// because another active license carries it. That issuer IS lost later, when the second expires
-    /// too, and the record naming that later day is true - which is why this row filters by the day
+    /// The sibling of <see cref="A_third_license_covering_the_day_is_counted_too"/>, and the one that shows the
+    /// comparison is not merely "look at more licenses": on the day the first license expires, the issuer it
+    /// contributed is still accepted, because another active license carries it. That issuer IS lost later, when the
+    /// second expires too, and the record naming that later day is true - which is why this row filters by the day
     /// rather than by the issuer's name.
     /// </remarks>
     [Fact]
@@ -733,10 +733,10 @@ public class LicenseManagerTests
     /// <remarks>
     /// Without the first, a reporter that announced every covering successor would pass every test here that
     /// expects a narrowing to be announced, such as
-    /// <see cref="A_renewal_granting_fewer_clients_is_announced_with_the_day_it_takes_over"/> - and every renewal would arrive with a warning nobody can act on. The second is the deliberate
-    /// exclusion: a grace period changes nothing on the day the successor takes over, only what happens
-    /// after the successor itself expires, so counting it would fire on a renewal that is larger in every
-    /// way a deployment can feel.
+    /// <see cref="A_renewal_granting_fewer_clients_is_announced_with_the_day_it_takes_over"/> - and every renewal would
+    /// arrive with a warning nobody can act on. The second is the deliberate exclusion: a grace period changes nothing
+    /// on the day the successor takes over, only what happens after the successor itself expires, so counting it would
+    /// fire on a renewal that is larger in every way a deployment can feel.
     /// </remarks>
     [Fact]
     public void A_renewal_granting_more_says_nothing()
@@ -1431,9 +1431,9 @@ public class LicenseManagerTests
     /// </summary>
     /// <remarks>
     /// The control for the silence of <see cref="AddLicense_LoadingLicenses_ReportsNothing"/>, and the reason
-    /// that silence is a decision rather than the report having been lost: the same three licenses, with the renewal removed, produce a record each. The
-    /// throttle keys on the license value paired with the status, so three licenses carrying distinct
-    /// terms are three keys and three records.
+    /// that silence is a decision rather than the report having been lost: the same three licenses, with the renewal
+    /// removed, produce a record each. The throttle keys on the license value paired with the status, so three licenses
+    /// carrying distinct terms are three keys and three records.
     /// </remarks>
     [Fact]
     public void GenerateActiveLicense_SeveralExpiredAndNothingInForce_ReportsEach()
@@ -1515,8 +1515,8 @@ public class LicenseManagerTests
     /// </summary>
     /// <remarks>
     /// The control for the silence of <see cref="AddLicense_GraceLicenseBesideItsRenewal_ReportsNothing"/>, and
-    /// the reason that silence is a decision rather than the record having been lost on the way to the recorder: the same license, with the renewal removed, produces
-    /// the record the operator needs.
+    /// the reason that silence is a decision rather than the record having been lost on the way to the recorder: the
+    /// same license, with the renewal removed, produces the record the operator needs.
     /// </remarks>
     [Fact]
     public void GenerateActiveLicense_GraceLicenseWithNoRenewal_ReportsIt()

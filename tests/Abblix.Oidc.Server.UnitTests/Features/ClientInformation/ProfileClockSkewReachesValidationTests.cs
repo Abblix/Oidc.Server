@@ -190,8 +190,9 @@ public class ProfileClockSkewReachesValidationTests
     /// <summary>
     /// And selecting no profile brings ITS answer, not the library's own - which is none, and would
     /// leave a bearer assertion from an issuer whose clock this server does not run refused over a
-    /// second of drift. Without this case the one above would be satisfied by a site that sets no
-    /// tolerance at all, since the profile's pair would then never be asked for.
+    /// second of drift. Without this case
+    /// <see cref="UnderTheProfile_TheProfilesToleranceReachesTheValidator"/> would be satisfied by a
+    /// site that sends the FAPI 2.0 pair whatever profile is selected.
     /// </summary>
     [Fact]
     public async Task WithNoProfile_TheProfilesOwnToleranceReachesTheValidator()

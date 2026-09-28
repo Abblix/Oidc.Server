@@ -37,7 +37,7 @@ public class JwtEncryptionTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         // RSA1_5 is deliberately not part of the AddJsonWebTokens defaults - the legacy-interop
-        // round-trip and Bleichenbacher-mitigation tests below opt in explicitly
+        // round trip, Rsa1_5_RoundTrips, opts in explicitly
         services.AddRsaPkcs1KeyManagement();
         services.AddJsonWebTokens();
         return services.BuildServiceProvider();

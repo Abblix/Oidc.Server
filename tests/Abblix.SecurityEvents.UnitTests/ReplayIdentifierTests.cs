@@ -37,7 +37,8 @@ public class ReplayIdentifierTests
 
     /// <summary>
     /// The control <see cref="TwoPairsThatWouldCollideUnescaped_ComposeToDifferentValues"/> needs: the
-    /// same pair composes to the same value, so the inequality there says the halves are told apart rather than that nothing ever matches.
+    /// same pair composes to the same value, so the inequality there says the halves are told apart rather than that
+    /// nothing ever matches.
     /// </summary>
     [Fact]
     public void TheSamePair_ComposesToTheSameValue()

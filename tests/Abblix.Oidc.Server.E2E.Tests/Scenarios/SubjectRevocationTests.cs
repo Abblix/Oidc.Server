@@ -241,11 +241,9 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     /// again once the suspension is lifted.
     /// </summary>
     /// <remarks>
-    /// The control that keeps <see cref="Revoking_a_subject_stops_its_session_from_minting_more"/> and
-    /// <see cref="Revoking_a_session_stops_that_session_from_minting_more"/> honest. Written as a boolean rather
-    /// than a comparison,
-    /// the change would refuse here too - and since a fresh sign-in carries the same subject, the refusal
-    /// would repeat for as long as the record is kept.
+    /// The control that keeps <see cref="Revoking_a_subject_stops_its_session_from_minting_more"/> honest.
+    /// Written as a boolean rather than a comparison, the change would refuse here too - and since a fresh sign-in
+    /// carries the same subject, the refusal would repeat for as long as the record is kept.
     /// </remarks>
     [Fact]
     public async Task A_cutoff_older_than_the_sign_in_leaves_the_session_working()

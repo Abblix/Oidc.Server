@@ -666,10 +666,9 @@ public class AuthenticationCompletionHandlerTests
     /// notifier. Without it a request the end user rejected in a second answers only when the waiter's
     /// long-poll window runs out, while the identical request they approved answers at once.
     /// <para>
-    /// The approval half is <see cref="CompleteAuthenticationAsync_WhenApproved_NotifiesWaiters"/>, and the
-    /// two of them together are what make the property
-    /// structural rather than a habit: a first version of this change wrote only this one, and deleting
-    /// the notification from the approval path left the whole suite green.
+    /// The approval half is <see cref="CompleteAuthenticationAsync_WhenApproved_NotifiesWaiters"/>, and the two of them
+    /// together are what make the property structural rather than a habit: a first version of this change wrote only
+    /// this one, and deleting the notification from the approval path left the whole suite green.
     /// </para>
     /// <para>
     /// What neither row covers, because the library does not do it: a status the HOST writes to storage

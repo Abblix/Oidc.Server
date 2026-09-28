@@ -466,7 +466,8 @@ public class TokenStatusValidatorDecoratorTests
     /// </summary>
     /// <remarks>
     /// Separate from <see cref="ValidateAsync_PairwisePseudonymThatCannotBeOpened_IsRefused"/> because the two
-    /// fail at different steps and only one of them involves the converter at all - a lookup returning nothing would otherwise read as "not pairwise, carry on".
+    /// fail at different steps and only one of them involves the converter at all - a lookup returning nothing would
+    /// otherwise read as "not pairwise, carry on".
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_TokenNamingAClientThatIsGone_IsRefused()

@@ -455,10 +455,9 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The control for <see cref="AKeyNamingNoRole_ServesBoth"/> and
-    /// <see cref="AKeyNamingNoRole_OutlivesASuccessorInOneRoleOnly"/>: once BOTH roles have a successor past the
-    /// window, the unrestricted key does leave. Without this the tests would hold equally for a ring that never
-    /// retires anything.
+    /// The control for <see cref="AKeyNamingNoRole_OutlivesASuccessorInOneRoleOnly"/>: once BOTH roles have a
+    /// successor past the window, the unrestricted key does leave. Without this that test would hold equally for
+    /// a ring that never retires anything.
     /// </summary>
     [Fact]
     public async Task AKeyNamingNoRole_RetiresOnceBothRolesMovedOn()

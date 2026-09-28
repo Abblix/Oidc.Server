@@ -63,9 +63,9 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         // tokens, approval would be decorative: anyone who could start a device flow would hold a session
         // for the user, with no human ever having agreed to anything.
         //
-        // Runs on an isolated host with the polling interval collapsed to zero. The shared host seeds the
-        // first permitted poll one interval after issuance, so a poll there is throttled before the pending
-        // check is ever reached - that throttle has its own test below. Removing the wait isolates the
+        // Runs on an isolated host with the polling interval collapsed to zero, so no poll here can be
+        // answered by the interval throttle - that throttle is
+        // A_poll_that_arrives_before_the_advertised_interval_is_throttled. Removing the wait isolates the
         // approval gate itself.
         await using var host = CreateHostWithoutPollingDelay();
         var client = CreateClientFor(host);

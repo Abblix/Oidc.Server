@@ -124,7 +124,8 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// The second half, which the first says nothing about: past the window the token is refused.
+    /// The second half, which <see cref="IssuedAtWithinTheTolerance_IsAccepted"/> says nothing about:
+    /// past the window the token is refused.
     /// The window here is the skew this case asks for, not a ceiling - a ceiling is what a profile
     /// adds on top, and the cases for it are <see cref="UnderACeiling_AheadOfItIsRefusedWhateverSkewIsAsked"/>
     /// and <see cref="UnderACeiling_PastExpiryIsBoundedToo"/>.
