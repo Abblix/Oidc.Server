@@ -41,8 +41,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///
 /// // 3. Meanwhile: User authenticates on device
 /// // 4. The completion handler signals the change - approval and refusal alike, in poll and in ping.
-/// //    Push writes through the same place and wakes nobody, because nothing hands push a notifier and
-/// //    its clients are refused at the token endpoint, so none of them is ever waiting.
+/// //    Push takes the request instead of writing it and wakes nobody: its clients are refused at the
+/// //    token endpoint, so none of them is ever waiting.
 /// await longPollingSignaler.NotifyStatusChangeAsync(authReqId, BackChannelAuthenticationStatus.Authenticated);
 ///
 /// // 5. Waiting request wakes up, checks storage, returns tokens

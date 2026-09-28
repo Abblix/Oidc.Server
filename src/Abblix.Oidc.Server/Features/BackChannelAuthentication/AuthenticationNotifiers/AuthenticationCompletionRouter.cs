@@ -66,7 +66,8 @@ public partial class AuthenticationCompletionRouter(
         if (clientInfo == null)
         {
             LogClientNotFound(authenticationRequestId, clientId);
-            return;
+            throw new InvalidOperationException(
+                $"The authentication request cannot be completed: its client {clientId} is not registered.");
         }
 
         var deliveryMode = clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode));
@@ -79,8 +80,12 @@ public partial class AuthenticationCompletionRouter(
     {
         // Routed by the stored request's client like a completion. With nothing stored there is no client to
         // route by and nothing to deny, which is the refusal the handler would give.
-        var stored = await storage.TryGetAsync(authenticationRequestId)
-            ?? throw AuthenticationCompletionHandler.NotPending("denied", null);
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        if (stored is null)
+        {
+            LogNothingToDeny(authenticationRequestId);
+            throw AuthenticationCompletionHandler.NotPending("denied", null);
+        }
 
         // Refused rather than returned from: the request would stay pending while the host believed the end
         // user's refusal had reached somebody.

@@ -68,8 +68,10 @@ public partial class PushModeCompletionHandler(
         OidcError refusal,
         TimeSpan expiresIn)
     {
-        if (await TakeRequestAsync(authenticationRequestId) is not null)
-            await SendErrorAsync(authenticationRequestId, request, refusal);
+        if (await TakeRequestAsync(authenticationRequestId) is null)
+            throw ClaimLost(authenticationRequestId);
+
+        await SendErrorAsync(authenticationRequestId, request, refusal);
     }
 
     /// <summary>
@@ -79,7 +81,8 @@ public partial class PushModeCompletionHandler(
     /// The request is TAKEN before anything is minted, and the take is the claim. It is the one operation on
     /// the store that decides between two callers, so of a completion and an end user's refusal arriving
     /// together - or two completions - exactly one proceeds and the client is answered once: with tokens, or
-    /// with an error, never both. Whoever finds the request already gone stops without a word.
+    /// with an error, never both. Whoever finds the request already gone - the rival, or a store that let the
+    /// claim expire - is refused as not pending, so no host is told it answered a request somebody else did.
     /// <para>
     /// Nothing is left behind on any path. A second completion finds no record and is refused the way every
     /// answer to a missing request is; a delivery that fails drops the tokens just minted, and the recovery is
@@ -105,12 +108,14 @@ public partial class PushModeCompletionHandler(
         {
             // Removed rather than denied: this client never polls, so a denied request it cannot read is an
             // orphan waiting out its expiry, and with nowhere to send it no error reaches the client either.
-            await TakeRequestAsync(authenticationRequestId);
+            if (await TakeRequestAsync(authenticationRequestId) is null)
+                throw ClaimLost(authenticationRequestId);
+
             return;
         }
 
         if (await TakeRequestAsync(authenticationRequestId) is null)
-            return;
+            throw ClaimLost(authenticationRequestId);
 
         // The per-type validators, asked HERE because this is where a push grant is spent. Poll and ping
         // reach the same question at the token endpoint when their client redeems; a push client never

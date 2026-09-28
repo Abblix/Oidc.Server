@@ -454,9 +454,9 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when token generation fails in push mode, the request is REMOVED and no delivery is
-    /// attempted. Not marked denied: a push client never polls, so a status it will never read is an
-    /// orphan waiting out its expiry.
+    /// Verifies that when token generation fails in push mode, the request is REMOVED and the client is sent
+    /// transaction_failed. Not marked denied: a push client never polls, so a status it will never read is
+    /// an orphan waiting out its expiry.
     /// </summary>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_TokenGenerationFails_RemovesRequestAndSendsTransactionFailed()
@@ -1246,16 +1246,34 @@ public class AuthenticationCompletionHandlerTests
 
     /// <summary>
     /// A push refusal that finds the request already taken - a delivery or another refusal got there first -
-    /// sends nothing, so the client is never told both that it has tokens and that it was refused.
+    /// sends nothing, so the client is never told both that it has tokens and that it was refused, and the
+    /// host is told its refusal did not go through rather than that it did.
     /// </summary>
     [Fact]
-    public async Task DenyAuthenticationAsync_PushMode_WhenTheRequestWasAlreadyTaken_SendsNothing()
+    public async Task DenyAuthenticationAsync_PushMode_WhenTheRequestWasAlreadyTaken_SendsNothingAndRefuses()
     {
         var stored = CreateRequest(UserId, requested: null);
         stored.ClientNotificationEndpoint = _notificationEndpoint;
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
-        await CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn));
+
+        _notificationService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A push completion for a client with nowhere to deliver still takes the request, and one that finds it
+    /// already taken is refused rather than told it answered.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenNotConfiguredAndAlreadyTaken_Refuses()
+    {
+        var request = CreateRequest(UserId, requested: null);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
 
         _notificationService.VerifyNoOtherCalls();
     }
@@ -1825,7 +1843,7 @@ public class AuthenticationCompletionHandlerTests
     /// The take is the claim: it is the one store operation that decides between two callers, so a
     /// completion racing an end user's refusal - or another completion - answers the client only if it won,
     /// and the client is told once, with tokens or with an error. The already-taken row is the loser's side
-    /// of that race, which a test can drive without a clock.
+    /// of that race, which a test can drive without a clock, and it is refused as not pending.
     /// </remarks>
     [Theory]
     [InlineData(true)]
@@ -1858,7 +1876,13 @@ public class AuthenticationCompletionHandlerTests
             .Callback(() => order.Add("delivered"))
             .ReturnsAsync(true);
 
-        await CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn);
+        var completion = CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn);
+
+        // The loser is refused rather than told it answered: its host must not believe tokens went out.
+        if (won)
+            await completion;
+        else
+            await Assert.ThrowsAsync<InvalidOperationException>(() => completion);
 
         Assert.Equal(won ? ["taken", "minted", "delivered"] : ["taken"], order);
     }

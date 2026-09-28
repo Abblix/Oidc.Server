@@ -131,6 +131,21 @@ public class AuthenticationCompletionRouterTests
             Times.Never);
     }
 
+    /// <summary>
+    /// A completion for a stored request whose client is no longer registered is refused, as a denial is:
+    /// the host must not believe the end user's approval reached anybody.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAsync_WhenTheClientIsUnknown_Refuses()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
+                .CompleteAsync(AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5)));
+    }
+
     private static AuthenticationCompletionRouter RouterOver(Mock<IBackChannelRequestStorage> storage, string mode)
     {
         var clients = new Mock<IClientInfoProvider>();

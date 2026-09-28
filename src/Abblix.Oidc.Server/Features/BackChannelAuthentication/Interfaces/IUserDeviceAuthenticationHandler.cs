@@ -129,9 +129,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
 ///     them directly via <see cref="INotificationDeliveryService"/> to the client's
 ///     <c>client_notification_endpoint</c>. This is the only mode where the tokens exist before the
-///     client asks for them, and the request is removed once they are delivered, because a push client
-///     never comes to the token endpoint. CIBA Core 1.0 does not require that removal - it says nothing
-///     about what the OP keeps - so it is this library's choice.
+///     client asks for them. The request is taken from storage before they are minted, so it is gone
+///     whatever the delivery does, because a push client never comes to the token endpoint. CIBA Core 1.0
+///     does not require that removal - it says nothing about what the OP keeps - so it is this library's
+///     choice.
 ///   </item>
 /// </list>
 ///

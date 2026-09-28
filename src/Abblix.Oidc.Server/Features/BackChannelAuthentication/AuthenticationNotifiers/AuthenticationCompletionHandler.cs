@@ -86,10 +86,8 @@ public abstract partial class AuthenticationCompletionHandler(
         // whether the refusal fires would be the choice of the caller it exists to constrain. The
         // stored record is the one thing this seam owns.
         //
-        // Push is what makes a second completion reachable at all. Poll and ping persist Authenticated
-        // before they deliver, so a repeat already found a spent record; push stored nothing until
-        // PushModeCompletionHandler was given the same write, and until then a failed delivery left a
-        // record that still read Pending and still carried what the CLIENT asked for.
+        // Poll and ping persist Authenticated before they deliver, so a repeat finds a spent record; push
+        // takes the request before it mints, so a repeat finds none.
         //
         // Stated as what must be TRUE rather than as the ways it can fail. A record that is gone is not
         // a lesser case of one that is spent: a poll can have redeemed and removed it, and completing on
@@ -97,8 +95,9 @@ public abstract partial class AuthenticationCompletionHandler(
         //
         // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
         // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
-        // deciding, or push removed it after a configuration fault, where nothing was answered at all. Naming one of them would send an operator who just fixed a client
-        // registration looking for a second completion that never happened.
+        // deciding, or push removed it after a configuration fault, where nothing was answered at all.
+        // Naming one of them would send an operator who just fixed a client registration looking for a
+        // second completion that never happened.
         var stored = await ReadPendingAsync(authenticationRequestId, "completed");
 
         // What the request recorded when it arrived - whom it named, what it asked for, the levels it
@@ -276,6 +275,19 @@ public abstract partial class AuthenticationCompletionHandler(
     }
 
     /// <summary>
+    /// Refuses, and logs, an answer that found the request already taken - by a rival answer, or because the
+    /// store let the claim expire - so a caller that lost is never told it succeeded.
+    /// </summary>
+    /// <param name="authenticationRequestId">The request that could not be taken.</param>
+    protected InvalidOperationException ClaimLost(string authenticationRequestId)
+    {
+        LogNotPendingOnCompletion(authenticationRequestId, Answered, null);
+        return NotPending(Answered, null);
+    }
+
+    private const string Answered = "answered";
+
+    /// <summary>
     /// The refusal of an answer to a request that is not pending, worded once for every caller.
     /// </summary>
     /// <param name="answered">What the caller was doing: completed or denied.</param>
@@ -411,9 +423,9 @@ public abstract partial class AuthenticationCompletionHandler(
     /// gone, which is what its own timeout already handles.
     /// </para>
     /// <para>
-    /// Whether anybody IS waiting is not this method's question either. Push goes through it and wakes
-    /// nobody, because nothing hands push a notifier: its constructor has no such parameter, so no
-    /// container configuration can supply one. A deployment that registered no notifier skips the call.
+    /// Whether anybody IS waiting is not this method's question either. Push never writes through it:
+    /// it takes the request instead, and no push client is ever a waiter. A deployment that registered no
+    /// notifier skips the call.
     /// </para>
     /// </remarks>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>

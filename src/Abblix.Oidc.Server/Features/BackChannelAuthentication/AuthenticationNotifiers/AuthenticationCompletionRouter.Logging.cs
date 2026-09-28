@@ -17,4 +17,11 @@ partial class AuthenticationCompletionRouter
         Level = LogLevel.Error,
         Message = "Client not found for auth_req_id: {AuthReqId}, ClientId: {ClientId}")]
     private partial void LogClientNotFound(string AuthReqId, string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.AuthenticationCompletionRouter.NothingToDeny,
+        Level = LogLevel.Error,
+        Message = "auth_req_id {AuthReqId} could not be denied: no record was found, so there was no client " +
+                  "to route the denial to.")]
+    private partial void LogNothingToDeny(string AuthReqId);
 }

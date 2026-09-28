@@ -34,9 +34,8 @@ partial class PushModeCompletionHandler
         EventId = LogEvents.Device.PushModeCompletionHandler.PushDeliveryFailed,
         Level = LogLevel.Warning,
         Message = "CIBA push delivery failed for auth_req_id: {AuthReqId}. The tokens were minted and " +
-                  "are gone - nothing retries them. What is left in storage reads Authenticated, so it " +
-                  "cannot be completed again: recovering means asking the end user, not resending from " +
-                  "this record. It expires on its own.")]
+                  "are gone - nothing retries them, and the request was taken before minting, so nothing " +
+                  "is left to complete again: recovering means asking the end user.")]
     private partial void LogPushDeliveryFailed(string AuthReqId);
 
     /// <summary>
@@ -44,9 +43,9 @@ partial class PushModeCompletionHandler
     /// </summary>
     /// <remarks>
     /// A refusal here names a HOST-side defect: the end user approved something the deployment will not
-    /// issue, so whoever has to fix it is an operator rather than the client. The client is told nothing
-    /// at all, because a push outcome travels through a notification endpoint this server sends no error
-    /// payload to - which is why this record is the only account of the refusal anybody gets.
+    /// issue, so whoever has to fix it is an operator rather than the client. The client is sent
+    /// access_denied with a fixed description, never these words - which is why this record is the only
+    /// account of the reason anybody gets.
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.GrantedAuthorizationDetailsRefused,
