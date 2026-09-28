@@ -95,7 +95,7 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
         HttpRequest request,
         CancellationToken cancellationToken)
     {
-        var fullPath = request.PathBase.Add(request.Path).Value ?? string.Empty;
+        var fullPath = TenantAddress.CanonicalPath(request.PathBase.Add(request.Path).Value ?? string.Empty);
         if (await catalog.FindByAddressAsync(request.Host.Host, fullPath, cancellationToken) is not { } tenant)
             return null;
 
@@ -124,7 +124,7 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
             return null;
         }
 
-        var value = afterWellKnown.Value ?? string.Empty;
+        var value = TenantAddress.CanonicalPath(afterWellKnown.Value ?? string.Empty);
         var suffixEnd = value.IndexOf('/', 1);
         if (suffixEnd < 0)
             return null;

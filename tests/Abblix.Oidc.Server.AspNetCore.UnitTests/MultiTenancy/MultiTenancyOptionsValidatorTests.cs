@@ -53,6 +53,15 @@ public class MultiTenancyOptionsValidatorTests
         => Assert.Contains("http or https URL", FailureOf(Tenant("acme", issuer)), StringComparison.Ordinal);
 
     /// <summary>
+    /// A Host header is ASCII, so a host with no ASCII form under IDN rules - here one carrying a zero-width
+    /// joiner - could never be requested.
+    /// </summary>
+    [Fact]
+    public void AnIssuerHostWithNoAsciiForm_IsRefused()
+        => Assert.Contains("no ASCII form", FailureOf(Tenant("acme", "https://a\u200Db.example.com/")),
+            StringComparison.Ordinal);
+
+    /// <summary>
     /// Plain http stays open, since a server run locally for development is reached that way.
     /// </summary>
     [Fact]
@@ -77,6 +86,8 @@ public class MultiTenancyOptionsValidatorTests
     [InlineData("https://auth.example.com/tenants/acme", "http://auth.example.com/tenants/acme")]
     [InlineData("https://auth.example.com/tenants/acme", "https://auth.example.com:8443/tenants/acme")]
     [InlineData("https://münchen.example.com", "https://xn--mnchen-3ya.example.com")]
+    [InlineData("https://auth.example.com/tenants/a%2fb", "https://auth.example.com/tenants/a%2Fb")]
+    [InlineData("https://auth.example.com/tenants/a%20b", "https://auth.example.com/tenants/a b")]
     public void TwoIssuersAtOneAddress_AreRefused(string first, string second)
         => Assert.Contains("served at the same address", FailureOf(Tenant("acme", first), Tenant("globex", second)),
             StringComparison.Ordinal);

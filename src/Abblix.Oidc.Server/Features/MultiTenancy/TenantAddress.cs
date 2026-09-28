@@ -37,19 +37,27 @@ public sealed record TenantAddress(string Host, string Path)
         return new TenantAddress(TenantHost.Normalize(uri.Host), DecodePath(uri.AbsolutePath).TrimEnd('/'));
     }
 
+    /// <summary>
+    /// <paramref name="path"/> with every encoded slash in one case, the form both an issuer's path and a request
+    /// path are compared in: RFC 3986 section 2.1 makes the case of an escape insignificant, and the server keeps
+    /// an encoded slash as the client wrote it.
+    /// </summary>
+    public static string CanonicalPath(string path)
+        => path.Replace(EncodedSlash, EncodedSlash, StringComparison.OrdinalIgnoreCase);
+
+    private const string EncodedSlash = "%2F";
+
     private static string DecodePath(string escapedPath)
     {
-        const string encodedSlash = "%2F";
-
         var decoded = new StringBuilder();
         var start = 0;
         int slash;
-        while ((slash = escapedPath.IndexOf(encodedSlash, start, StringComparison.OrdinalIgnoreCase)) >= 0)
+        while ((slash = escapedPath.IndexOf(EncodedSlash, start, StringComparison.OrdinalIgnoreCase)) >= 0)
         {
             decoded
                 .Append(Uri.UnescapeDataString(escapedPath[start..slash]))
-                .Append(escapedPath, slash, encodedSlash.Length);
-            start = slash + encodedSlash.Length;
+                .Append(EncodedSlash);
+            start = slash + EncodedSlash.Length;
         }
 
         return decoded.Append(Uri.UnescapeDataString(escapedPath[start..])).ToString();

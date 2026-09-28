@@ -41,6 +41,7 @@ public class TenantResolutionMiddlewareTests
             new TenantDefinition { Id = "societe", Issuer = "https://auth.example.com/tenants/société" },
             new TenantDefinition { Id = "spaced", Issuer = "https://auth.example.com/tenants/a b" },
             new TenantDefinition { Id = "slashed", Issuer = "https://auth.example.com/tenants/a%2Fb" },
+            new TenantDefinition { Id = "slashed-lower", Issuer = "https://auth.example.com/tenants/c%2fd" },
             new TenantDefinition { Id = "loopback6", Issuer = "https://[::1]:8443/" },
             new TenantDefinition { Id = "loopback4", Issuer = "https://127.0.0.1/tenants/local" },
         ],
@@ -173,6 +174,9 @@ public class TenantResolutionMiddlewareTests
     [InlineData("/tenants/société/connect/token", "societe", "/tenants/société")]
     [InlineData("/tenants/a b/connect/token", "spaced", "/tenants/a b")]
     [InlineData("/tenants/a%2Fb/connect/token", "slashed", "/tenants/a%2Fb")]
+    [InlineData("/tenants/a%2fb/connect/token", "slashed", "/tenants/a%2Fb")]
+    [InlineData("/.well-known/openid-configuration/tenants/a%2fb", "slashed", "/tenants/a%2Fb")]
+    [InlineData("/tenants/c%2Fd/connect/token", "slashed-lower", "/tenants/c%2Fd")]
     [InlineData("/.well-known/openid-configuration/tenants/société", "societe", "/tenants/société")]
     public async Task AnIssuerPathWithEncodedCharacters_MatchesTheDecodedRequestPath(
         string path, string tenantId, string pathBase)

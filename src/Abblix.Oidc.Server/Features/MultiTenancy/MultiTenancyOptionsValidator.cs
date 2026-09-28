@@ -33,6 +33,13 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
             select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' must be an http or https URL with no " +
                    "query or fragment.");
 
+        // A Host header is ASCII, so a host with no ASCII form could never be requested.
+        failures.AddRange(
+            from tenant in options.Tenants
+            where IsIssuer(tenant.Issuer) && !TenantAddress.Of(tenant.Issuer).Host.All(char.IsAscii)
+            select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' names a host with no ASCII form, " +
+                   "which no request can carry.");
+
         failures.AddRange(
             from tenant in options.Tenants
             group tenant by tenant.Id into same
