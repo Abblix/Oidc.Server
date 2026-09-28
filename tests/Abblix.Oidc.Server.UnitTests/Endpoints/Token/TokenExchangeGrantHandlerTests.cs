@@ -116,7 +116,7 @@ public class TokenExchangeGrantHandlerTests
         // check passes through, but the keyed lookup at the resolver step fails.
         var handler = CreateHandlerWithoutResolvers();
         var clientInfo = ClientWithAllowlist(null);
-        var request = ExchangeRequest("urn:ietf:params:oauth:token-type:saml2");
+        var request = ExchangeRequest(TokenExchangeTokenTypes.Saml2);
 
         var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
 
