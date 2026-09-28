@@ -34,8 +34,8 @@ public class IdTokenHintValidatorTests
     {
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
 
-        // The audience client resolves by default: these cases are about the hint's own rules, not about
-        // the check that the audience names a registered client.
+        // The audience client resolves by default, so each case fails only on the rule it is about;
+        // ValidateAsync_WithoutClientIdAndAnUnregisteredAudience_ShouldReturnError is the one where it does not.
         _clientInfoProvider = new Mock<IClientInfoProvider>();
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
@@ -183,6 +183,34 @@ public class IdTokenHintValidatorTests
     }
 
     /// <summary>
+    /// With no client_id on the request, the client is taken from the hint's audience, and that client has to be
+    /// registered: otherwise the hint names a session belonging to nobody, and the logout would go on to act
+    /// for a client this server does not know.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithoutClientIdAndAnUnregisteredAudience_ShouldReturnError()
+    {
+        const string unregistered = "unregistered_client";
+        var context = CreateContext("valid_id_token", clientId: null);
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(
+                "valid_id_token",
+                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+            .ReturnsAsync(CreateValidIdToken(unregistered));
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(unregistered))
+            .ReturnsAsync((ClientInfo?)null);
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal("The id token hint names a client that is not registered", error.ErrorDescription);
+        Assert.Null(context.IdToken);
+    }
+
+    /// <summary>
     /// RFC 8725 section 3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
     /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
     /// when its audience matches the requesting client.
@@ -193,10 +221,10 @@ public class IdTokenHintValidatorTests
     /// did: removing the type check entirely left it green, because the request then failed further down for
     /// an unrelated reason.
     /// <para>
-    /// The last two cases are the ones that pin the design. Both are permitted elsewhere - one is what a
-    /// client assertion is, the other what a request object is - and both must still be refused here, which
-    /// works only because the catalog names every type and each position states its own exceptions. Drop
-    /// either from the catalog to spare its own position, and it starts passing as an ID token too.
+    /// The client-authentication and request-object rows are the ones that pin the design. Both are permitted elsewhere
+    /// - one is what a client assertion is, the other what a request object is - and both must still be refused here,
+    /// which works only because the catalog names every type and each position states its own exceptions. Drop either
+    /// from the catalog to spare its own position, and it starts passing as an ID token too.
     /// </para>
     /// </remarks>
     [Theory]
