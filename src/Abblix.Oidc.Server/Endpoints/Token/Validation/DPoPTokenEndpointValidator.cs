@@ -30,7 +30,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// to decide whether DPoP is mandatory (<see cref="ClientInfo.RequireDPoP"/>)
 /// or opportunistic. When the client opts in but the proof is missing, the request is
 /// rejected with <c>invalid_dpop_proof</c>; when the client does not opt in, a missing
-/// proof is silently accepted (Bearer token issued downstream) and a present-and-valid
+/// proof is accepted (Bearer token issued downstream) unless a security profile demands a
+/// sender-constrained token and none will be certificate-bound, and a present-and-valid
 /// proof still binds the token (RFC 9449 section 5.2 server-side opportunistic binding).
 /// <para>
 /// And BEFORE <see cref="AuthorizationGrantValidator"/>, because resolving a device code or a backchannel

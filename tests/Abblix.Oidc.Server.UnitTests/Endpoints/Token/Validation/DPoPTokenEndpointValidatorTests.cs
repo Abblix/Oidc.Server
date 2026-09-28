@@ -149,6 +149,44 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     /// <summary>
+    /// A FAPI 2.0 client that authenticates with mutual TLS gets a certificate-bound token by that alone,
+    /// with no separate registration for certificate-bound tokens, so the profile is met without a proof.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2MutualTlsClient_ReturnsNull()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            clientCertificate: certificate,
+            securityProfile: ClientSecurityProfile.Fapi2,
+            tokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A registration for certificate-bound tokens binds a token only to a certificate this request presents,
+    /// so without one the token would go out as Bearer and the profile is not met.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_MissingHeaderFapi2ClientRegisteredForBindingWithoutCertificate_Refuses()
+    {
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            tlsClientCertificateBoundAccessTokens: true,
+            securityProfile: ClientSecurityProfile.Fapi2);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        AssertProofRejected(error, context);
+    }
+
+    /// <summary>
     /// A certificate alone is not a sender constraint: a client registered neither for mutual-TLS
     /// authentication nor for certificate-bound tokens gets a Bearer token whatever it presents, so the
     /// profile refuses it the same as a client presenting nothing.
@@ -298,7 +336,8 @@ public class DPoPTokenEndpointValidatorTests
         bool clientRequiresDPoP,
         X509Certificate2? clientCertificate = null,
         bool tlsClientCertificateBoundAccessTokens = false,
-        ClientSecurityProfile? securityProfile = null)
+        ClientSecurityProfile? securityProfile = null,
+        string? tokenEndpointAuthMethod = null)
     {
         var clientRequest = new ClientRequest { DPoPProof = proofJwt, ClientCertificate = clientCertificate };
         return new TokenValidationContext(new TokenRequest(), clientRequest)
@@ -308,6 +347,7 @@ public class DPoPTokenEndpointValidatorTests
                 RequireDPoP = clientRequiresDPoP,
                 SecurityProfile = securityProfile,
                 TlsClientCertificateBoundAccessTokens = tlsClientCertificateBoundAccessTokens,
+                TokenEndpointAuthMethod = tokenEndpointAuthMethod!,
             },
         };
     }
