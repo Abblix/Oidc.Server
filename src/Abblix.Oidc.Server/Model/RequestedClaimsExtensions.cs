@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
@@ -141,6 +142,19 @@ public static class RequestedClaimsExtensions
                 : NoAcceptableAcr,
         };
     }
+
+    /// <summary>
+    /// Whether an authentication at <paramref name="level"/> meets the <c>acr</c> this request requires of
+    /// the ID token.
+    /// </summary>
+    /// <remarks>
+    /// A requirement <see cref="RequiredAuthContextClassRefs"/> refuses names qualifiers no authentication
+    /// could satisfy, which is unmet by construction. The levels themselves are compared by
+    /// <see cref="AuthenticationLevels"/>, the rule every place judging a session's level shares.
+    /// </remarks>
+    public static bool AcceptsAuthenticationLevel(this RequestedClaims? claims, string? level)
+        => claims.RequiredAuthContextClassRefs().TryGetSuccess(out var levels) &&
+           AuthenticationLevels.Accept(levels, level);
 
     private const string MalformedAcr = "The acr claim was requested with a value that is not a string";
 

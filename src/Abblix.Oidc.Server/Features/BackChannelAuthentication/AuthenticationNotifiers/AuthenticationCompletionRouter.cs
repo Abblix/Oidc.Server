@@ -23,10 +23,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="logger">Logger for tracking completion events.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
+/// <param name="storage">Holds the stored request, whose client decides the route.</param>
 public partial class AuthenticationCompletionRouter(
     ILogger<AuthenticationCompletionRouter> logger,
     IClientInfoProvider clientInfoProvider,
-    IServiceProvider serviceProvider) : IAuthenticationCompletionHandler
+    IServiceProvider serviceProvider,
+    IBackChannelRequestStorage storage) : IAuthenticationCompletionHandler
 {
     private static readonly string[] AllDeliveryModes =
     [
@@ -54,7 +56,11 @@ public partial class AuthenticationCompletionRouter(
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
-        var clientId = request.AuthorizedGrant.Context.ClientId;
+        // The client the stored request came from decides the delivery mode and whom the answer is judged
+        // for, not the one the host's answer names. With nothing stored there is no request to route, and the
+        // host's copy is used only so the handler can refuse it with the reason it gives for exactly that.
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var clientId = (stored ?? request).AuthorizedGrant.Context.ClientId;
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
 
         if (clientInfo == null)

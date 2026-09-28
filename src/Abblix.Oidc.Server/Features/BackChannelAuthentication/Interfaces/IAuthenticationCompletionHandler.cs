@@ -26,9 +26,12 @@ public interface IAuthenticationCompletionHandler
     /// the client's configured delivery mode.
     /// </summary>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
-    /// <param name="request">The authentication request carrying the grant the end user approved. Its
-    /// own Status is not read: whether this request may still be answered is decided from the STORED
-    /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
+    /// <param name="request">The authentication request carrying the grant the end user approved. Only
+    /// the grant is read from it, and the grant has to be for the client the request came from. Everything
+    /// the request recorded when it arrived - its status, the end users it named, the authorization_details
+    /// and authentication levels it asked for, the client's notification endpoint and token - is taken
+    /// from the STORED record and written over this copy, so a caller cannot change any of it by setting a
+    /// field on its own copy.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>

@@ -529,6 +529,8 @@ internal static class LogEvents
             public const int AuthenticatedUserNotTheOneRequested = Base + 2;
             public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 3;
             public const int NotPendingOnCompletion = Base + 4;
+            public const int AuthenticationLevelNotTheOneRequired = Base + 5;
+            public const int GrantNamesAnotherClient = Base + 6;
         }
 
         /// <summary>

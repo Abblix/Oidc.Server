@@ -45,6 +45,12 @@ internal static class BackChannelAuthenticationRequestMapper
         if (source.RequestedAuthorizationDetails is { } requestedDetails)
             proto.RequestedAuthorizationDetailsJson = requestedDetails.ToJsonString();
 
+        if (source.RequiredAuthContextClassRefs is { } requiredLevels)
+        {
+            proto.RequiredAuthenticationLevels = new RequiredAuthenticationLevels();
+            proto.RequiredAuthenticationLevels.Values.AddRange(requiredLevels);
+        }
+
         return proto;
     }
 
@@ -62,6 +68,7 @@ internal static class BackChannelAuthenticationRequestMapper
                 ? new Uri(source.ClientNotificationEndpoint)
                 : null,
             RequestedSubjects = source.RequestedSubjects?.Values.ToArray(),
+            RequiredAuthContextClassRefs = source.RequiredAuthenticationLevels?.Values.ToArray(),
             RequestedAuthorizationDetails = source.HasRequestedAuthorizationDetailsJson
                 ? JsonNode.Parse(source.RequestedAuthorizationDetailsJson) as JsonArray
                 : null,

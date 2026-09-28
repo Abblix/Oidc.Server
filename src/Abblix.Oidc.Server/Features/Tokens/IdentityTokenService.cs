@@ -82,15 +82,11 @@ internal class IdentityTokenService(
 		// level cannot satisfy such a request, and issuing anyway would state a level the request declared
 		// unacceptable.
 		//
-		// The authorization endpoint answers that request properly - it chooses a session against the
-		// requirement, sends the end user to authenticate when none meets it, and refuses with a code of its
-		// own where the request forbids interaction - so every grant it issues arrives here already at a
-		// level the request accepts. What reaches this line is a grant nothing checked: a decoupled
-		// authentication carries the claims parameter and chooses its session elsewhere. Withholding the
-		// token is not the failed attempt the section asks for, and it costs the client no explanation: the
-		// notification goes out with a null id_token beside the request identifier. Refusing there is its own
-		// decision, which is why this stops at not stating a level the client refused.
-		if (RequiresAnAuthenticationLevelTheSessionLacks(authSession, authContext))
+		// The failed attempt itself is answered before a grant exists: the authorization endpoint chooses a
+		// session against the requirement and refuses where the request forbids interaction, and a decoupled
+		// authentication is refused at completion and again at redemption. This keeps a token from stating a
+		// level the request declared unacceptable, whatever produced the grant it is minted from.
+		if (!authContext.RequestedClaims.AcceptsAuthenticationLevel(authSession.AuthContextClassRef))
 			return null;
 
 		var scope = authContext.Scope;
@@ -224,23 +220,4 @@ internal class IdentityTokenService(
 			identityToken.Payload[claimType] = hash;
 	}
 
-	/// <summary>
-	/// Whether the request requires an authentication level the session does not hold.
-	/// </summary>
-	/// <remarks>
-	/// What the request requires is read by <see cref="RequestedClaimsExtensions.RequiredAuthContextClassRefs"/>,
-	/// which carries the conditions section 5.5.1.1 states and the shapes a qualifier arrives in. A refusal from
-	/// it names qualifiers no authentication could satisfy, which is unmet by construction.
-	/// </remarks>
-	private static bool RequiresAnAuthenticationLevelTheSessionLacks(
-		AuthSession authSession,
-		AuthorizationContext authContext)
-	{
-		var required = authContext.RequestedClaims.RequiredAuthContextClassRefs();
-		if (!required.TryGetSuccess(out var levels))
-			return true;
-
-		return levels is { Length: > 0 } &&
-		       !levels.Contains(authSession.AuthContextClassRef, StringComparer.Ordinal);
-	}
 }

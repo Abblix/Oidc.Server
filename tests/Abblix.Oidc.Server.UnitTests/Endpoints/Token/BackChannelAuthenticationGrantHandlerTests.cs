@@ -10,6 +10,7 @@ using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -1469,6 +1470,184 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
     }
+
+    /// <summary>
+    /// A grant whose session holds a level the request's essential <c>acr</c> does not accept is not
+    /// redeemed, and one at an accepted level is.
+    /// </summary>
+    /// <remarks>
+    /// The completion path judges the level too, but a host writing <c>Authenticated</c> straight into the
+    /// storage it owns never passes through it, and the client then simply polls. OpenID Connect Core 1.0
+    /// Section 5.5.1.1 makes an unmet essential <c>acr</c> a failed authentication attempt either way. The
+    /// accepted row is the control.
+    /// </remarks>
+    [Theory]
+    [InlineData(StrongLevel, true)]
+    [InlineData(WeakLevel, false)]
+    public async Task AuthorizeAsync_JudgesTheLevelAgainstAnEssentialAcr(string authenticatedLevel, bool redeemed)
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var authRequest = RequestRequiringStrongLevel(authenticatedLevel);
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        if (redeemed)
+        {
+            Assert.True(result.TryGetSuccess(out var grant));
+            Assert.Equal(authenticatedLevel, grant.AuthSession.AuthContextClassRef);
+        }
+        else
+        {
+            Assert.True(result.TryGetFailure(out var error));
+            Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+            _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        }
+    }
+
+    /// <summary>
+    /// The level of the grant handed over is judged, not the level of the request read a moment before it,
+    /// and against what the request required when it was read.
+    /// </summary>
+    /// <remarks>
+    /// The same window the subject comparison above is driven through: a host replacing what is stored
+    /// between the handler's read and the processor's removal. The consumed copy carries no requirement at
+    /// all, so a yardstick taken from it would accept anything.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizeAsync_WhenTheStoredLevelChangesBeforeItIsConsumed_ReturnsAccessDenied()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var asRead = RequestRequiringStrongLevel(StrongLevel);
+        var asConsumed = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_456", _currentTime, "backchannel") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// The level recorded on the stored request is the one judged, when the grant beside it no longer
+    /// carries the requirement.
+    /// </summary>
+    /// <remarks>
+    /// A host expressing partial consent replaces the grant's context, and one built with a constructor
+    /// carries no <c>claims</c>. Refused before the request is consumed, as every refusal here is.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizeAsync_WhenTheGrantNoLongerCarriesTheRequirement_JudgesTheRecordedLevel()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var authRequest = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequiredAuthContextClassRefs = [StrongLevel],
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The grant handed over is judged against the levels the request recorded, when a host replaced what
+    /// is stored with a grant at another level and a context carrying no requirement between the read and
+    /// the removal.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeAsync_WhenTheConsumedGrantCarriesNoRequirement_JudgesTheRecordedLevel()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var asRead = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel") { AuthContextClassRef = StrongLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequiredAuthContextClassRefs = [StrongLevel],
+        };
+
+        var asConsumed = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_456", _currentTime, "backchannel") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    private const string StrongLevel = "urn:example:acr:strong";
+    private const string WeakLevel = "urn:example:acr:weak";
+
+    private BackChannelAuthenticationRequest RequestRequiringStrongLevel(string authenticatedLevel) =>
+        new(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel")
+                {
+                    AuthContextClassRef = authenticatedLevel,
+                },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], new RequestedClaims
+                {
+                    IdToken = new()
+                    {
+                        [IanaClaimTypes.Acr] = new RequestedClaimDetails { Essential = true, Values = [StrongLevel] },
+                    },
+                })),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+        };
 
     /// <summary>
     /// A long-polling wake-up is judged like any other redemption.
