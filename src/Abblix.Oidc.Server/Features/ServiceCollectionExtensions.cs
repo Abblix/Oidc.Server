@@ -111,6 +111,7 @@ public static class ServiceCollectionExtensions
         services.Decorate<IClientAuthenticator, SecurityProfileClientAuthenticator>();
 
         services.TryAddSingleton<AuthenticationFailureBudget>();
+        services.TryAddSingleton<UnnamedSourceNotice>();
 
         // Registered with TryAdd, so a host that put its own limiter under this key keeps it - and then the
         // budget is live whatever the settings say, including while they say to count nothing.
