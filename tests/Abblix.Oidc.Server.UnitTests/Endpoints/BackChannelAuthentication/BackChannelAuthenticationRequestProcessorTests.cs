@@ -162,7 +162,9 @@ public class BackChannelAuthenticationRequestProcessorTests
 
     /// <summary>
     /// The levels an essential <c>acr</c> requires are recorded on the stored request, read before the host
-    /// is handed the request, and a request requiring none records that as an empty set.
+    /// is handed the request, and a request requiring none records that as an empty set. A requirement no
+    /// level could satisfy, reaching here past the validator, records nothing, so completion reads it from
+    /// the grant and refuses every level.
     /// </summary>
     /// <remarks>
     /// The grant's own copy of the <c>claims</c> parameter is the one a host replaces when the end user
@@ -173,7 +175,8 @@ public class BackChannelAuthenticationRequestProcessorTests
     [InlineData("""{"id_token":{"acr":{"essential":true,"values":["urn:example:acr:strong"]}}}""", new[] { "urn:example:acr:strong" })]
     [InlineData("""{"id_token":{"acr":{"values":["urn:example:acr:strong"]}}}""", new string[0])]
     [InlineData(null, new string[0])]
-    public async Task TheRequiredLevels_AreRecordedOnTheStoredRequest(string? claimsJson, string[] expected)
+    [InlineData("""{"id_token":{"acr":{"essential":true,"values":[]}}}""", null)]
+    public async Task TheRequiredLevels_AreRecordedOnTheStoredRequest(string? claimsJson, string[]? expected)
     {
         Result<AuthSession, OidcError> session = new AuthSession(
             Subject: Approved,

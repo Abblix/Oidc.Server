@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -112,6 +113,18 @@ public abstract partial class AuthenticationCompletionHandler(
                 + "asking the end user again rather than completing the same request twice.");
         }
 
+        // What the request recorded when it arrived is the STORED record's, never the host's copy: a host
+        // answers with a record of its own, and one it builds with a constructor carries none of it. Taken
+        // onto that copy rather than read beside it, because the copy is what every check below judges and
+        // what each mode writes back, and the token endpoint judges the redeemed grant against the record it
+        // finds there. A request stored before the levels were recorded has them read from its grant now,
+        // while the grant still says what the client asked for.
+        request.RequestedSubjects = stored.RequestedSubjects;
+        request.RequestedAuthorizationDetails = stored.RequestedAuthorizationDetails;
+        request.RequiredAuthContextClassRefs = stored.RequiredAuthContextClassRefs
+            ?? stored.AuthorizedGrant.Context.RequestedClaims.RequiredAuthContextClassRefs()
+                .Match<string[]?>(levels => levels, _ => null);
+
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
         // Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token for a different user,
         // even if they have an active session with the Authorization Server". The end user authenticated out
@@ -132,12 +145,8 @@ public abstract partial class AuthenticationCompletionHandler(
         // level exists only now, carried by the session the host completes with, so a request cannot be
         // refused for it any earlier - and withholding the ID token later would answer a failed
         // authentication with an access token and no reason.
-        //
-        // The requirement is read from the STORED record, not from the grant the host hands in: a host
-        // expressing partial consent replaces that grant's context, and one it builds afresh carries no
-        // claims at all.
         if (!AuthenticationLevels.Accept(
-                stored.RequiredAuthContextClassRefs,
+                request.RequiredAuthContextClassRefs,
                 stored.AuthorizedGrant.Context.RequestedClaims,
                 request.AuthorizedGrant.AuthSession.AuthContextClassRef))
         {

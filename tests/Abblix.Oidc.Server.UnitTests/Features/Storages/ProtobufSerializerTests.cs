@@ -433,6 +433,43 @@ public class ProtobufSerializerTests
         Assert.NotNull(result.Claims);
     }
 
+    /// <summary>Absent, empty and carrying values: the three answers the field gives.</summary>
+    public static TheoryData<string[]?> RequiredLevelShapes => new()
+    {
+        (string[]?)null,
+        new string[0],
+        new[] { "urn:example:acr:strong", "urn:example:acr:stronger" },
+    };
+
+    /// <summary>
+    /// The levels a decoupled request required travel through the protobuf serializer in all three states,
+    /// and the composite serializer a deployment registers never falls back to JSON for them.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RequiredLevelShapes))]
+    public void Serialize_BackChannelAuthenticationRequest_KeepsTheRequiredLevels(string[]? levels)
+    {
+        var recorder = new RecordingLoggerFactory();
+        var composite = new CompositeBinarySerializer(
+            recorder.CreateLogger<CompositeBinarySerializer>(),
+            new ProtobufSerializer(),
+            new JsonBinarySerializer());
+
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(session, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            RequiredAuthContextClassRefs = levels,
+        };
+
+        var result = composite.Deserialize<BackChannelAuthenticationRequest>(composite.Serialize(request));
+
+        Assert.NotNull(result);
+        Assert.Equal(levels, result.RequiredAuthContextClassRefs);
+        Assert.Empty(recorder.Entries);
+    }
+
     [Theory]
     [InlineData(BackChannelAuthenticationStatus.Pending)]
     [InlineData(BackChannelAuthenticationStatus.Denied)]

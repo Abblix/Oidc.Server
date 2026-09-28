@@ -1585,6 +1585,48 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 
+    /// <summary>
+    /// The grant handed over is judged against the levels the request recorded, when a host replaced what
+    /// is stored with a grant at another level and a context carrying no requirement between the read and
+    /// the removal.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeAsync_WhenTheConsumedGrantCarriesNoRequirement_JudgesTheRecordedLevel()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var asRead = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel") { AuthContextClassRef = StrongLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequiredAuthContextClassRefs = [StrongLevel],
+        };
+
+        var asConsumed = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_456", _currentTime, "backchannel") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
     private const string StrongLevel = "urn:example:acr:strong";
     private const string WeakLevel = "urn:example:acr:weak";
 

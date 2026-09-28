@@ -795,11 +795,32 @@ public class AuthenticationCompletionHandlerTests
     /// A push client never polls - the token endpoint refuses it outright - so a denied request it can never
     /// read would sit in storage until it expired. The same handler already removes one when token
     /// generation fails, for the same reason.
+    /// <para>
+    /// Deliverable, with minting and sending set up to succeed, so the only thing keeping tokens from the
+    /// client is the refusal: a request without a notification endpoint is removed by the delivery path as
+    /// well, and would pass this row with the subject check gone.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_WhenAuthenticatedUserIsNotTheOneRequested_RemovesTheRequest()
     {
         var request = CreateRequest("somebody-else", requested: UserId);
+        request.ClientNotificationEndpoint = _notificationEndpoint;
+
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
+                new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
+                TokenTypes.Bearer,
+                TimeSpan.FromHours(1),
+                TokenTypeIdentifiers.AccessToken));
+        _notificationService
+            .Setup(s => s.SendAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<string>(),
+                It.IsAny<IBackChannelNotificationRequest>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
         _storage
             .Setup(s => s.TryRemoveAsync(AuthReqId))
             .ReturnsAsync(request);
@@ -808,6 +829,7 @@ public class AuthenticationCompletionHandlerTests
             AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
         _notificationService.Verify(
             n => n.SendAsync(
                 It.IsAny<Uri>(),
@@ -825,12 +847,21 @@ public class AuthenticationCompletionHandlerTests
     /// right one: the token endpoint lets a ping client reach it, so a request left denied answers a client
     /// that polls anyway with <c>access_denied</c>, where removing it would answer <c>expired_token</c> and
     /// send that client looking for a timeout it did not have. The notification itself is not sent either
-    /// way, because delivery never runs on the refusal path.
+    /// way, because delivery never runs on the refusal path. The request is deliverable, so a missing
+    /// endpoint cannot be what keeps the notification back.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PingMode_WhenAuthenticatedUserIsNotTheOneRequested_Denies()
     {
         var request = CreateRequest("somebody-else", requested: UserId);
+        request.ClientNotificationEndpoint = _notificationEndpoint;
+        _notificationService
+            .Setup(s => s.SendAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<string>(),
+                It.IsAny<IBackChannelNotificationRequest>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
         _storage
             .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
@@ -961,6 +992,122 @@ public class AuthenticationCompletionHandlerTests
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
     }
 
+    /// <summary>
+    /// What the request recorded when it arrived - whom it named, the authorization_details it asked for and
+    /// the levels it required - is taken from the stored record, both to judge the answer and onto the record
+    /// completion writes back, whatever the host's copy carries.
+    /// </summary>
+    /// <remarks>
+    /// A host answers with a record of its own, and one it builds with a constructor carries none of the
+    /// three. Judged against that copy, every check would pass for want of anything to compare; written back
+    /// as it is, the record the token endpoint later reads would have lost them too, and the check made there
+    /// for a host writing storage directly would compare against nothing.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WritesBackWhatTheStoredRequestRecorded()
+    {
+        var stored = StoredRequestRecordingEverything();
+        StoredRecordIs(stored);
+
+        var answered = HostCopyCarryingNothing(stored, UserId, StrongLevel);
+        BackChannelAuthenticationRequest? written = null;
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
+            .Callback((string _, BackChannelAuthenticationRequest record, TimeSpan _) => written = record)
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, answered, PollClient(), _expiresIn);
+
+        Assert.NotNull(written);
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, written.Status);
+        Assert.Equal(stored.RequestedSubjects, written.RequestedSubjects);
+        Assert.Equal(stored.RequiredAuthContextClassRefs, written.RequiredAuthContextClassRefs);
+        Assert.Equal(stored.RequestedAuthorizationDetails!.ToJsonString(), written.RequestedAuthorizationDetails!.ToJsonString());
+    }
+
+    /// <summary>
+    /// Each of the three is judged from the stored record when the host's copy carries none of them: an
+    /// answer from somebody else, at another level, or carrying authorization_details nobody asked for.
+    /// </summary>
+    [Theory]
+    [InlineData("somebody-else", StrongLevel, false)]
+    [InlineData(UserId, WeakLevel, false)]
+    [InlineData(UserId, StrongLevel, true)]
+    public async Task CompleteAuthenticationAsync_JudgesWhatTheStoredRequestRecorded(
+        string answeredBy, string level, bool widened)
+    {
+        var stored = StoredRequestRecordingEverything();
+        StoredRecordIs(stored);
+
+        var answered = HostCopyCarryingNothing(stored, answeredBy, level);
+        if (widened)
+        {
+            answered = answered with
+            {
+                AuthorizedGrant = answered.AuthorizedGrant with
+                {
+                    Context = answered.AuthorizedGrant.Context with { AuthorizationDetails = Details(["account_information"]) },
+                },
+            };
+        }
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, answered, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, answered, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, answered.Status);
+    }
+
+    /// <summary>
+    /// A request stored before the levels were recorded has them read from its grant at completion, and
+    /// the record written back carries them, so the token endpoint no longer depends on the grant the host
+    /// handed in.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_RecordsTheLevelsOfARequestStoredWithoutThem()
+    {
+        var stored = CreateRequestRequiring(StrongLevel, null);
+        StoredRecordIs(stored);
+
+        var answered = HostCopyCarryingNothing(stored, UserId, StrongLevel);
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, answered, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, answered, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, answered.Status);
+        Assert.Equal([StrongLevel], Assert.IsType<string[]>(answered.RequiredAuthContextClassRefs));
+    }
+
+    private static BackChannelAuthenticationRequest StoredRequestRecordingEverything()
+    {
+        var stored = CreateRequestRequiring(StrongLevel, null);
+        stored.RequestedSubjects = [UserId];
+        stored.RequestedAuthorizationDetails = Details(["payment_initiation"]);
+        stored.RequiredAuthContextClassRefs = [StrongLevel];
+        return stored;
+    }
+
+    /// <summary>
+    /// The record a host builds for itself: a fresh context, and nothing the request recorded carried over.
+    /// </summary>
+    private static BackChannelAuthenticationRequest HostCopyCarryingNothing(
+        BackChannelAuthenticationRequest stored, string answeredBy, string level) =>
+        new(
+            new AuthorizedGrant(
+                new AuthSession(answeredBy, "session_1", DateTimeOffset.UnixEpoch, "test") { AuthContextClassRef = level },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            stored.ExpiresAt)
+        {
+            ClientNotificationToken = NotificationToken,
+        };
+
     private void StoredRecordIs(BackChannelAuthenticationRequest stored)
         => _storage.Setup(s => s.TryGetAsync(It.IsAny<string>())).ReturnsAsync(stored);
 
@@ -1082,8 +1229,14 @@ public class AuthenticationCompletionHandlerTests
         BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba/notify"),
     };
 
-    private static BackChannelAuthenticationRequest CreateRequest(string authenticated, string? requested) =>
-        new(
+    /// <summary>
+    /// A request naming <paramref name="requested"/> and answered by <paramref name="authenticated"/>, stored
+    /// as the pending record it answers - the shape a host produces by reading the stored request and
+    /// answering with a copy of it. A test needing another stored record arranges its own afterwards.
+    /// </summary>
+    private BackChannelAuthenticationRequest CreateRequest(string authenticated, string? requested)
+    {
+        var request = new BackChannelAuthenticationRequest(
             new AuthorizedGrant(
                 new AuthSession(authenticated, "session_1", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
@@ -1093,16 +1246,22 @@ public class AuthenticationCompletionHandlerTests
             ClientNotificationToken = NotificationToken,
         };
 
+        StoredRecordIs(request);
+        return request;
+    }
+
     /// <summary>
     /// A request whose client asked for <paramref name="requestedTypes"/> and whose host completed it with
     /// <paramref name="grantedTypes"/> on the grant, which is how a device interaction expresses what the
-    /// end user actually approved.
+    /// end user actually approved. Stored as the pending record it answers, as <see cref="CreateRequest"/>
+    /// is.
     /// </summary>
-    private static BackChannelAuthenticationRequest CreateRequestWithAuthorizationDetails(
+    private BackChannelAuthenticationRequest CreateRequestWithAuthorizationDetails(
         string[] requestedTypes,
         string[] grantedTypes,
         bool deliverable = false)
-        => new(
+    {
+        var request = new BackChannelAuthenticationRequest(
             new AuthorizedGrant(
                 new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)
@@ -1121,6 +1280,10 @@ public class AuthenticationCompletionHandlerTests
                 ? new Uri("https://client.example.com/ciba/notify")
                 : null,
         };
+
+        StoredRecordIs(request);
+        return request;
+    }
 
     private static JsonArray Details(string[] types)
     {
