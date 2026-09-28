@@ -27,5 +27,6 @@ internal class ConfigureEndpointConventions(IOptions<OidcOptions> oidcOptions)
     public void PostConfigure(string? name, MvcOptions options)
     {
         options.Conventions.Add(new EnabledByConvention(oidcOptions));
+        options.Conventions.Add(new RequireTenantConvention());
     }
 }

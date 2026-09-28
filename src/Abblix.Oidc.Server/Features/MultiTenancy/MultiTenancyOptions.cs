@@ -6,11 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// The tenants a deployment serves and how a request is resolved to one of them.
 /// </summary>
+[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class MultiTenancyOptions
 {
     /// <summary>
@@ -24,8 +27,12 @@ public sealed class MultiTenancyOptions
     public List<TenantDefinition> Tenants { get; set; } = [];
 
     /// <summary>
-    /// The path segment that introduces a tenant in a request path, or null to resolve tenants by host name
-    /// only.
+    /// The path segment that introduces a tenant in a request path, compared exactly, or null to resolve
+    /// tenants by host name only.
     /// </summary>
+    /// <remarks>
+    /// Every path under it names a tenant: one that names none the deployment declares is answered 404, so the
+    /// application serves nothing of its own under this segment.
+    /// </remarks>
     public string? PathSegment { get; set; } = DefaultPathSegment;
 }

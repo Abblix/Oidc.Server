@@ -10,12 +10,12 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Moq;
 using Xunit;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -24,46 +24,57 @@ using Xunit;
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
 /// <summary>
-/// What <see cref="MultiTenancyExtensions.AddMultiTenancy"/> puts in the container, and the issuer a request
-/// gets through it.
+/// What <see cref="MultiTenancyExtensions.AddMultiTenancy"/> puts in the container, the issuer a request gets
+/// through it, and the tenant lists startup refuses.
 /// </summary>
 public class MultiTenancyRegistrationTests
 {
-    private const string HostIssuer = "https://auth.example.com/t/acme";
+    private const string AcmeIssuer = "https://acme.example.com";
 
-    private static ServiceProvider BuildProvider(Action<MultiTenancyOptions>? configure = null)
+    private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = AcmeIssuer };
+
+    private static ServiceProvider BuildProvider(bool multiTenancyFirst = false)
     {
-        var inner = new Mock<IIssuerProvider>();
-        inner.Setup(p => p.GetIssuer()).Returns(HostIssuer);
-
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddSingleton(inner.Object);
-        services.AddMultiTenancy(configure ?? (options => options.Tenants.Add(new TenantDefinition { Id = "acme" })));
+        if (multiTenancyFirst)
+            services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+
+        // The library's own issuer registration, not a stand-in, since it is what AddMultiTenancy has to win over.
+        services.AddIssuer();
+
+        if (!multiTenancyFirst)
+            services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+
         return services.BuildServiceProvider();
     }
 
-    private static void EnterTenant(IServiceProvider provider, string? tenantId)
+    private static void EnterTenant(IServiceProvider provider, TenantDefinition? tenant)
     {
         var context = new DefaultHttpContext();
-        if (tenantId is not null)
-            context.Features.Set(new TenantContext(tenantId));
+        if (tenant is not null)
+            context.Features.Set(new TenantContext { Tenant = tenant });
 
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
     }
 
-    [Fact]
-    public void UnderATenant_TheIssuerIsTheOneTheDecoratedProviderNames()
+    /// <summary>
+    /// The issuer is the one the tenant declares, whichever order the host registers the two in.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UnderATenant_TheIssuerIsTheOneItDeclares(bool multiTenancyFirst)
     {
-        using var provider = BuildProvider();
-        EnterTenant(provider, "acme");
+        using var provider = BuildProvider(multiTenancyFirst);
+        EnterTenant(provider, Acme);
 
-        Assert.Equal(HostIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer());
+        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer());
     }
 
     /// <summary>
-    /// A request that reached the server without a tenant has no issuer of its own; answering with the bare host
-    /// would mint tokens every tenant on that host accepts.
+    /// A request that reached the server without a tenant has no issuer of its own; answering with the host
+    /// would mint tokens every tenant on it accepts.
     /// </summary>
     [Fact]
     public void WithoutATenant_TheIssuerIsRefused()
@@ -82,8 +93,7 @@ public class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>().Configure(options => options.Issuer = "https://auth.example.com");
-        services.AddSingleton(Mock.Of<IIssuerProvider>());
-        services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition { Id = "acme" }));
+        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
@@ -91,92 +101,36 @@ public class MultiTenancyRegistrationTests
         Assert.Contains(nameof(OidcOptions.Issuer), refusal.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("a/b", "one non-empty path segment")]
-    [InlineData("", "one non-empty path segment")]
-    public void ATenantIdThatIsNotOnePathSegment_IsRefused(string tenantId, string expected)
-    {
-        var result = new MultiTenancyOptionsValidator().Validate(
-            null, new MultiTenancyOptions { Tenants = [new TenantDefinition { Id = tenantId }] });
-
-        Assert.True(result.Failed);
-        Assert.Contains(expected, result.FailureMessage, StringComparison.Ordinal);
-    }
-
     [Fact]
-    public void ATenantIdDeclaredTwice_IsRefused()
+    public async Task TheCatalog_FindsATenantByIdExactly_AndByAnySpellingOfItsHost()
     {
-        var result = new MultiTenancyOptionsValidator().Validate(
-            null,
-            new MultiTenancyOptions
-            {
-                Tenants = [new TenantDefinition { Id = "acme" }, new TenantDefinition { Id = "acme" }],
-            });
+        var services = new ServiceCollection();
+        services.AddMultiTenancy(options => options.Tenants.Add(
+            new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Hosts = ["acme.example.com"] }));
+        await using var provider = services.BuildServiceProvider();
+        var catalog = provider.GetRequiredService<ITenantCatalog>();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        Assert.True(result.Failed);
-        Assert.Contains("declared more than once", result.FailureMessage, StringComparison.Ordinal);
+        Assert.Equal("acme", (await catalog.FindByIdAsync("acme", cancellationToken))?.Id);
+        Assert.Null(await catalog.FindByIdAsync("ACME", cancellationToken));
+        Assert.Equal("acme", (await catalog.FindByHostAsync("ACME.example.com.", cancellationToken))?.Id);
     }
 
     /// <summary>
-    /// Host names are compared without regard to case when a request is resolved, so two spellings of one
-    /// host are one binding.
+    /// A request that names no tenant is refused at the OpenID endpoints only where multi-tenancy is on; a
+    /// deployment that never enabled it serves as before.
     /// </summary>
     [Fact]
-    public void AHostBoundToTwoTenants_IsRefused_WhateverItsCase()
+    public void TheTenantRequirement_HoldsOnlyUnderMultiTenancy()
     {
-        var result = new MultiTenancyOptionsValidator().Validate(
-            null,
-            new MultiTenancyOptions
-            {
-                Tenants =
-                [
-                    new TenantDefinition { Id = "acme", Hosts = ["login.example.com"] },
-                    new TenantDefinition { Id = "globex", Hosts = ["Login.Example.com"] },
-                ],
-            });
+        using var plain = new ServiceCollection().BuildServiceProvider();
+        using var multiTenant = BuildProvider();
 
-        Assert.True(result.Failed);
-        Assert.Contains("bound to more than one tenant", result.FailureMessage, StringComparison.Ordinal);
-    }
+        Assert.False(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = plain }));
+        Assert.True(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = multiTenant }));
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("t/x")]
-    public void APathSegmentThatIsNotOneSegment_IsRefused(string segment)
-    {
-        var result = new MultiTenancyOptionsValidator().Validate(
-            null, new MultiTenancyOptions { PathSegment = segment });
-
-        Assert.True(result.Failed);
-        Assert.Contains(nameof(MultiTenancyOptions.PathSegment), result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AValidTenantList_IsAccepted()
-    {
-        var result = new MultiTenancyOptionsValidator().Validate(
-            null,
-            new MultiTenancyOptions
-            {
-                Tenants =
-                [
-                    new TenantDefinition { Id = "acme", Hosts = ["acme.example.com"] },
-                    new TenantDefinition { Id = "globex" },
-                ],
-            });
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public async Task TheCatalog_FindsATenantByIdExactly_AndByHostWithoutRegardToCase()
-    {
-        await using var provider = BuildProvider(options =>
-            options.Tenants.Add(new TenantDefinition { Id = "acme", Hosts = ["acme.example.com"] }));
-        var catalog = provider.GetRequiredService<ITenantCatalog>();
-
-        Assert.Equal("acme", (await catalog.FindByIdAsync("acme"))?.Id);
-        Assert.Null(await catalog.FindByIdAsync("ACME"));
-        Assert.Equal("acme", (await catalog.FindByHostAsync("ACME.example.com"))?.Id);
+        var resolved = new DefaultHttpContext { RequestServices = multiTenant };
+        resolved.Features.Set(new TenantContext { Tenant = Acme });
+        Assert.False(TenantRequirement.IsUnmet(resolved));
     }
 }

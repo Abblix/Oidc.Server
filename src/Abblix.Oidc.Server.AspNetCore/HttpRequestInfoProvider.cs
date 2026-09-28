@@ -23,7 +23,16 @@ public class HttpRequestInfoProvider(IHttpContextAccessor httpContextAccessor) :
     private HttpRequest Request => httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
 
     /// <inheritdoc />
-    public string RequestUri => Request.GetBaseUrl();
+    /// <remarks>
+    /// A request resolved to a tenant by its path had the tenant's segments moved into the path base, and the
+    /// endpoints discovery advertises for that tenant carry them; so its address, which a DPoP proof and a client
+    /// assertion are checked against, carries them too. Every other request keeps the address it always had.
+    /// </remarks>
+#pragma warning disable ABXMT001 // Reading whether a tenant was resolved changes nothing for a host without them.
+    public string RequestUri => Request.HttpContext.Features.Get<Features.MultiTenancy.TenantContext>() is null
+        ? Request.GetBaseUrl()
+        : Request.GetAppUrl() + Request.Path;
+#pragma warning restore ABXMT001
 
     /// <inheritdoc />
     public string RequestMethod => Request.Method;

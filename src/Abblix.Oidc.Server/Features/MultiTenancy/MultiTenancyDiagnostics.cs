@@ -6,22 +6,19 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// The tenant a request was resolved to.
+/// The diagnostic that marks multi-tenancy experimental.
 /// </summary>
 /// <remarks>
-/// Carries the whole definition, since what a request needs of its tenant is read synchronously while the
-/// catalog that holds it is asynchronous.
+/// Experimental until every per-tenant store, setting and key is separated: until then a tenant's data is not
+/// yet kept apart from the others', and the diagnostic makes a host opt in knowingly.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantContext
+public static class MultiTenancyDiagnostics
 {
     /// <summary>
-    /// The tenant the request belongs to.
+    /// The diagnostic id every multi-tenancy type and entry point carries.
     /// </summary>
-    public required TenantDefinition Tenant { get; init; }
+    public const string Experimental = "ABXMT001";
 }

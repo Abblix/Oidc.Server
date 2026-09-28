@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -22,25 +21,18 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// Serves several isolated tenants from one deployment.
 /// </summary>
 /// <remarks>
-/// Experimental until every per-tenant store, setting and key is separated: until then a tenant's data is not
-/// yet kept apart from the others', and the diagnostic makes a host opt in knowingly.
+/// A host that never calls these works as before: one tenant, nothing about it in the path.
 /// </remarks>
+[Experimental(MultiTenancyDiagnostics.Experimental)]
 public static class MultiTenancyExtensions
 {
-    /// <summary>
-    /// The diagnostic that marks multi-tenancy experimental.
-    /// </summary>
-    public const string ExperimentalDiagnostic = "ABXMT001";
-
     /// <summary>
     /// Registers tenant resolution, and makes every issuer the resolved tenant's.
     /// </summary>
     /// <remarks>
-    /// Call after the OpenID services are added: it decorates the issuer provider they register, so an issuer
-    /// provider of the host's own stays in place, and a request without a tenant is refused one.
+    /// Each tenant declares its issuer in <see cref="TenantDefinition.Issuer"/>, so
     /// <see cref="OidcOptions.Issuer"/> must be left unset, and startup refuses it otherwise.
     /// </remarks>
-    [Experimental(ExperimentalDiagnostic)]
     public static IServiceCollection AddMultiTenancy(
         this IServiceCollection services,
         Action<MultiTenancyOptions> configure)
@@ -54,18 +46,20 @@ public static class MultiTenancyExtensions
         services.AddHttpContextAccessor();
         services.TryAddSingleton<ITenantCatalog, OptionsTenantCatalog>();
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
-        return services.Decorate<IIssuerProvider, TenantGuardIssuerProvider>();
+        services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
+        return services;
     }
 
     /// <summary>
-    /// Resolves each request to its tenant.
+    /// Resolves each request to its tenant, and routes it after that.
     /// </summary>
     /// <remarks>
-    /// Place it before <c>UseAuthentication</c>: a tenant named in the path moves into the path base, and the
-    /// authentication cookie takes its path from there, which is what keeps one tenant's sign-in from reaching
-    /// another tenant on the same host.
+    /// Routing is added right after resolution, because a tenant named in the path moves into the path base and
+    /// the route has to be matched on what is left: a web application that routes on its own would otherwise
+    /// match the endpoints against the full path and answer every tenant 404. So call this BEFORE any
+    /// <c>UseRouting</c> of the host's, and before <c>UseAuthentication</c>, whose cookie then takes the tenant's
+    /// path and does not reach another tenant on the same host.
     /// </remarks>
-    [Experimental(ExperimentalDiagnostic)]
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
-        => app.UseMiddleware<TenantResolutionMiddleware>();
+        => app.UseMiddleware<TenantResolutionMiddleware>().UseRouting();
 }

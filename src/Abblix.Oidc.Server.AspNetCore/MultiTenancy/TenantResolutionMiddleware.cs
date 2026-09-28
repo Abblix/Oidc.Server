@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -18,17 +19,19 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// <remarks>
 /// <para>
 /// A host bound to a tenant decides it, and a path on that host is not read for another one - otherwise one
-/// request could be resolved two ways. On any other host, a path starting <c>/{segment}/{tenant}</c> names the
-/// tenant, and both segments move into the request's path base, so the endpoints are routed exactly as without
-/// tenants, and everything built from the path base - the request-based issuer, the cookie path, every
-/// endpoint address - carries the tenant.
+/// request could be resolved two ways. On any other host, a path starting <c>/{segment}/{tenant}</c>, with the
+/// segment spelled exactly, names the tenant, and both segments move into the request's path base: the
+/// endpoints are routed exactly as without tenants, and every address built from the path base - the endpoints
+/// discovery advertises, the cookie path, the address a proof or an assertion is checked against - carries the
+/// tenant.
 /// </para>
 /// <para>
 /// A request that names a tenant nobody declared is answered 404 before any endpoint sees it. A request that
-/// names none passes through without a tenant, since the application may serve other things; an OpenID
-/// endpoint reached that way is refused by <see cref="TenantGuardIssuerProvider"/>.
+/// names none passes through without a tenant, since the application may serve other things; the OpenID
+/// endpoints refuse it.
 /// </para>
 /// </remarks>
+[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantResolutionMiddleware(
     RequestDelegate next,
     ITenantCatalog catalog,
@@ -40,23 +43,23 @@ public sealed class TenantResolutionMiddleware(
     public async Task InvokeAsync(HttpContext context)
     {
         var request = context.Request;
+        var cancellationToken = context.RequestAborted;
 
-        if (await catalog.FindByHostAsync(request.Host.Host) is { } boundTenant)
+        if (await catalog.FindByHostAsync(request.Host.Host, cancellationToken) is { } boundTenant)
         {
-            context.Features.Set(new TenantContext(boundTenant.Id));
+            context.Features.Set(new TenantContext { Tenant = boundTenant });
             await next(context);
             return;
         }
 
         if (options.CurrentValue.PathSegment is not { } segment ||
-            !request.Path.StartsWithSegments("/" + segment, out var afterSegment) ||
-            !TrySplitFirstSegment(afterSegment, out var tenantId, out var rest))
+            !TryReadTenant(request.Path, segment, out var tenantId, out var rest))
         {
             await next(context);
             return;
         }
 
-        if (await catalog.FindByIdAsync(tenantId) is null)
+        if (await catalog.FindByIdAsync(tenantId, cancellationToken) is not { } pathTenant)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -66,7 +69,7 @@ public sealed class TenantResolutionMiddleware(
         var originalPath = request.Path;
         request.PathBase = originalPathBase.Add(new PathString($"/{segment}/{tenantId}"));
         request.Path = rest;
-        context.Features.Set(new TenantContext(tenantId));
+        context.Features.Set(new TenantContext { Tenant = pathTenant });
         try
         {
             await next(context);
@@ -79,21 +82,23 @@ public sealed class TenantResolutionMiddleware(
     }
 
     /// <summary>
-    /// Splits <c>/{first}/rest</c> into its first segment and what follows it.
+    /// Reads <c>/{segment}/{tenant}</c> off the start of <paramref name="path"/>, the segment compared exactly:
+    /// a browser compares cookie paths exactly too, so a tenant reached through another spelling of the segment
+    /// would never be sent the cookie set under the tenant's path.
     /// </summary>
-    private static bool TrySplitFirstSegment(PathString path, out string first, out PathString rest)
+    private static bool TryReadTenant(PathString path, string segment, out string tenantId, out PathString rest)
     {
-        var value = path.Value;
-        if (string.IsNullOrEmpty(value) || value.Length < 2)
-        {
-            first = string.Empty;
-            rest = PathString.Empty;
-            return false;
-        }
+        tenantId = string.Empty;
+        rest = PathString.Empty;
 
-        var end = value.IndexOf('/', 1);
-        first = end < 0 ? value[1..] : value[1..end];
+        var prefix = "/" + segment + "/";
+        var value = path.Value;
+        if (value is null || !value.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+
+        var end = value.IndexOf('/', prefix.Length);
+        tenantId = end < 0 ? value[prefix.Length..] : value[prefix.Length..end];
         rest = end < 0 ? PathString.Empty : new PathString(value[end..]);
-        return true;
+        return tenantId.Length > 0;
     }
 }
