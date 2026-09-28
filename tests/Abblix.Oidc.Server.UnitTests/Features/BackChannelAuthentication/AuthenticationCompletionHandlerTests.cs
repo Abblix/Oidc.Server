@@ -1133,7 +1133,8 @@ public class AuthenticationCompletionHandlerTests
 
     /// <summary>
     /// A grant the host wrote for another client than the one the request came from is refused: tokens are
-    /// minted for the client named on the grant, and that has to be the one that asked.
+    /// minted for the client named on the grant, and that has to be the one that asked. The denial written
+    /// back is the stored record's, so the client that asked reads access_denied when it polls.
     /// </summary>
     [Fact]
     public async Task CompleteAuthenticationAsync_WhenTheGrantNamesAnotherClient_Denies()
@@ -1147,14 +1148,18 @@ public class AuthenticationCompletionHandlerTests
                 new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test") { AuthContextClassRef = StrongLevel },
                 stored.AuthorizedGrant.Context with { ClientId = "another-client" }),
         };
+        BackChannelAuthenticationRequest? written = null;
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, answered, _expiresIn))
+            .Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
+            .Callback((string _, BackChannelAuthenticationRequest record, TimeSpan _) => written = record)
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
             AuthReqId, answered, PollClient(), _expiresIn);
 
-        Assert.Equal(BackChannelAuthenticationStatus.Denied, answered.Status);
+        Assert.NotNull(written);
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, written.Status);
+        Assert.Equal(ClientId, written.AuthorizedGrant.Context.ClientId);
     }
 
     private static BackChannelAuthenticationRequest StoredRequestRecordingEverything()

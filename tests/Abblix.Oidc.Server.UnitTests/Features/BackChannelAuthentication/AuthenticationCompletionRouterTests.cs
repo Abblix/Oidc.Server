@@ -73,6 +73,7 @@ public class AuthenticationCompletionRouterTests
 
         Assert.NotNull(written);
         Assert.Equal(BackChannelAuthenticationStatus.Denied, written.Status);
+        Assert.Equal(RequestingClient, written.AuthorizedGrant.Context.ClientId);
         clients.Verify(c => c.TryFindClientAsync(AnotherClient), Times.Never);
     }
 

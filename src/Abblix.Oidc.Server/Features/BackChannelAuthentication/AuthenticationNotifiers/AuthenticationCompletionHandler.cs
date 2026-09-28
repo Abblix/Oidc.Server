@@ -131,14 +131,17 @@ public abstract partial class AuthenticationCompletionHandler(
 
         // The grant the host completes with is minted for the client its context names, so that has to be
         // the client the request came from. The grant itself cannot be taken from the stored record: it
-        // carries the end user's answer, which exists only in the host's copy.
+        // carries the end user's answer, which exists only in the host's copy. Refused with the STORED record,
+        // so the denial left behind belongs to the client that asked: the token endpoint matches the client
+        // before it reads the status, and a record carrying the host's grant would answer the asking client
+        // invalid_grant and the named one access_denied.
         if (!string.Equals(
                 request.AuthorizedGrant.Context.ClientId,
                 stored.AuthorizedGrant.Context.ClientId,
                 StringComparison.Ordinal))
         {
             LogGrantNamesAnotherClient(authenticationRequestId, stored.AuthorizedGrant.Context.ClientId);
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            await RefuseAsync(authenticationRequestId, stored, expiresIn);
             return;
         }
 
