@@ -7,7 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using RequestedClaimDetails = Abblix.Oidc.Server.Model.RequestedClaimDetails;
+using RequestedClaims = Abblix.Oidc.Server.Model.RequestedClaims;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -366,10 +369,10 @@ public class AuthenticationCompletionHandlerTests
 
         var jwt = new Jwt.JsonWebToken();
         var tokenIssued = new TokenIssued(
-            new EncodedJsonWebToken(jwt, "access_token_jwt"),
+            new EncodedJsonWebToken(jwt, EncodedAccessToken),
             TokenTypes.Bearer,
             TimeSpan.FromHours(1),
-            new Uri("urn:ietf:params:oauth:token-type:access_token"));
+            TokenTypeIdentifiers.AccessToken);
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
@@ -439,10 +442,10 @@ public class AuthenticationCompletionHandlerTests
 
         var jwt = new Jwt.JsonWebToken();
         var tokenIssued = new TokenIssued(
-            new EncodedJsonWebToken(jwt, "access_token_jwt"),
+            new EncodedJsonWebToken(jwt, EncodedAccessToken),
             TokenTypes.Bearer,
             TimeSpan.FromHours(1),
-            new Uri("urn:ietf:params:oauth:token-type:access_token"));
+            TokenTypeIdentifiers.AccessToken);
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
@@ -867,6 +870,107 @@ public class AuthenticationCompletionHandlerTests
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
     }
+
+    /// <summary>
+    /// An end user who authenticated at a level the request's essential <c>acr</c> does not accept is
+    /// refused, and one who authenticated at an accepted level completes.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 5.5.1.1 treats an essential <c>acr</c> that cannot be met as a
+    /// failed authentication attempt. The level exists only once the host completes with the session the
+    /// end user produced, so this is the first moment it can be judged. The accepted row is the control:
+    /// both rows differ only in the session's level.
+    /// </remarks>
+    [Theory]
+    [InlineData(StrongLevel, BackChannelAuthenticationStatus.Authenticated)]
+    [InlineData(WeakLevel, BackChannelAuthenticationStatus.Denied)]
+    [InlineData(null, BackChannelAuthenticationStatus.Denied)]
+    public async Task CompleteAuthenticationAsync_JudgesTheLevelAgainstAnEssentialAcr(
+        string? authenticatedLevel,
+        BackChannelAuthenticationStatus expected)
+    {
+        var request = CreateRequestRequiring(StrongLevel, authenticatedLevel);
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(expected, request.Status);
+    }
+
+    /// <summary>
+    /// A push-mode refusal for an unmet essential <c>acr</c> removes the request and mints nothing, as
+    /// every push refusal does.
+    /// </summary>
+    /// <remarks>
+    /// Minting and delivery are both set up to succeed, so the only way this request can end without
+    /// tokens reaching the client is the refusal itself - a push request left unconfigured would be removed
+    /// by the delivery path too, and the row would then pass for a reason that has nothing to do with the
+    /// level.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheEssentialAcrIsUnmet_RemovesTheRequest()
+    {
+        var request = CreateRequestRequiring(StrongLevel, WeakLevel);
+        request.ClientNotificationEndpoint = _notificationEndpoint;
+
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
+                new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
+                TokenTypes.Bearer,
+                TimeSpan.FromHours(1),
+                TokenTypeIdentifiers.AccessToken));
+        _notificationService.Setup(s => s.SendAsync(
+                _notificationEndpoint,
+                NotificationToken,
+                It.IsAny<IBackChannelNotificationRequest>(),
+                BackchannelTokenDeliveryModes.Push))
+            .ReturnsAsync(true);
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
+        _storage
+            .Setup(s => s.TryRemoveAsync(AuthReqId))
+            .ReturnsAsync(request);
+
+        await CreatePushModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _notificationService.Verify(
+            n => n.SendAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<string>(),
+                It.IsAny<IBackChannelNotificationRequest>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    private const string EncodedAccessToken = "access_token_jwt";
+    private const string StrongLevel = "urn:example:acr:strong";
+    private const string WeakLevel = "urn:example:acr:weak";
+
+    private static BackChannelAuthenticationRequest CreateRequestRequiring(string required, string? authenticated) =>
+        new(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test")
+                {
+                    AuthContextClassRef = authenticated,
+                },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], EssentialAcr(required))),
+            DateTimeOffset.UnixEpoch.AddHours(1))
+        {
+            ClientNotificationToken = NotificationToken,
+        };
+
+    private static RequestedClaims EssentialAcr(string level) => new()
+    {
+        IdToken = new()
+        {
+            [IanaClaimTypes.Acr] = new RequestedClaimDetails { Essential = true, Values = [level] },
+        },
+    };
 
     private static ClientInfo PollClient() => new(ClientId)
     {
@@ -1353,10 +1457,10 @@ public class AuthenticationCompletionHandlerTests
             .Callback(() => order.Add("minted"))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(
                 new TokenIssued(
-                    new EncodedJsonWebToken(new Jwt.JsonWebToken(), "access_token_jwt"),
+                    new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                     TokenTypes.Bearer,
                     TimeSpan.FromHours(1),
-                    new Uri("urn:ietf:params:oauth:token-type:access_token"))));
+                    TokenTypeIdentifiers.AccessToken)));
 
         _notificationService
             .Setup(s => s.SendAsync(

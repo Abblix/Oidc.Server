@@ -25,6 +25,13 @@ partial class AuthenticationCompletionHandler
                   "so it is refused. ClientId: {ClientId}")]
     private partial void LogAuthenticatedUserNotTheOneRequested(string AuthReqId, string ClientId);
 
+    [LoggerMessage(
+        EventId = LogEvents.Device.AuthenticationCompletionHandler.AuthenticationLevelNotTheOneRequired,
+        Level = LogLevel.Warning,
+        Message = "The end user authenticated for auth_req_id {AuthReqId} at a level the request's essential " +
+                  "acr does not accept, so it is refused. ClientId: {ClientId}")]
+    private partial void LogAuthenticationLevelNotTheOneRequired(string AuthReqId, string ClientId);
+
     /// <summary>
     /// The escaped TYPES, never the entries: an authorization_details entry carries whatever its type
     /// defines, which for the types this serves is payment and account data.

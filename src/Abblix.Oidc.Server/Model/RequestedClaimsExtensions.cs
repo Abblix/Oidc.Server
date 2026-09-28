@@ -142,6 +142,20 @@ public static class RequestedClaimsExtensions
         };
     }
 
+    /// <summary>
+    /// Whether an authentication at <paramref name="level"/> meets the <c>acr</c> this request requires of
+    /// the ID token.
+    /// </summary>
+    /// <remarks>
+    /// The one answer every place judging a finished authentication gives, so the ID token, a decoupled
+    /// completion and its redemption cannot disagree about the same session. A requirement
+    /// <see cref="RequiredAuthContextClassRefs"/> refuses names qualifiers no authentication could satisfy,
+    /// which is unmet by construction; a session recording no level meets no named one.
+    /// </remarks>
+    public static bool AcceptsAuthenticationLevel(this RequestedClaims? claims, string? level)
+        => claims.RequiredAuthContextClassRefs().TryGetSuccess(out var levels) &&
+           (levels.Length == 0 || levels.Contains(level, StringComparer.Ordinal));
+
     private const string MalformedAcr = "The acr claim was requested with a value that is not a string";
 
     private const string NoAcceptableAcr =

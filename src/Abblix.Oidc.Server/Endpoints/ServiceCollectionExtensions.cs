@@ -749,6 +749,8 @@ public static class ServiceCollectionExtensions
             // specification names for it.
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator,
                 BackChannelAuthentication.Validation.RequestedSubjectValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator,
+                BackChannelAuthentication.Validation.RequiredAuthContextClassRefValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PingModeValidator>(),

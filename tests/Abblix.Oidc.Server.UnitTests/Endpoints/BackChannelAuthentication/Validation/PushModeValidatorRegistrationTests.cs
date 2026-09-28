@@ -47,6 +47,19 @@ public class PushModeValidatorRegistrationTests
         Assert.Contains(validators, v => v is PushModeValidator);
     }
 
+    /// <summary>
+    /// The essential acr reader runs in the backchannel pipeline, so a malformed requirement is refused on
+    /// arrival and the host is handed the levels it has to meet.
+    /// </summary>
+    [Fact]
+    public void AddOidcServices_WiresTheRequiredAcrReaderIntoTheBackChannelPipeline()
+    {
+        var validators = ExtractComposedValidators(
+            BuildProvider().GetRequiredService<IBackChannelAuthenticationContextValidator>());
+
+        Assert.Contains(validators, v => v is RequiredAuthContextClassRefValidator);
+    }
+
     private static IBackChannelAuthenticationContextValidator[] ExtractComposedValidators(
         IBackChannelAuthenticationContextValidator composite)
     {

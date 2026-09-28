@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -55,8 +56,9 @@ public abstract partial class AuthenticationCompletionHandler(
     /// This method:
     /// <list type="bullet">
     ///   <item>Refuses unless the STORED record reads Pending</item>
-    ///   <item>Refuses an answer from somebody other than the end user the request named, by denying or
-    ///   removing according to the mode</item>
+    ///   <item>Refuses an answer from somebody other than the end user the request named, or at an
+    ///   authentication level its essential acr does not accept, by denying or removing according to the
+    ///   mode</item>
     ///   <item>Sets the request status to Authenticated</item>
     ///   <item>Delegates to HandleDeliveryAsync for mode-specific token delivery (poll/ping/push)</item>
     /// </list>
@@ -121,6 +123,19 @@ public abstract partial class AuthenticationCompletionHandler(
             !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
             LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
+
+        // And at the level the request required. OpenID Connect Core 1.0 Section 5.5.1.1: when an essential
+        // acr cannot be met, the server "MUST treat that outcome as a failed authentication attempt". The
+        // level exists only now, carried by the session the host completes with, so a request cannot be
+        // refused for it any earlier - and withholding the ID token later would answer a failed
+        // authentication with an access token and no reason.
+        if (!request.AuthorizedGrant.Context.RequestedClaims.AcceptsAuthenticationLevel(
+                request.AuthorizedGrant.AuthSession.AuthContextClassRef))
+        {
+            LogAuthenticationLevelNotTheOneRequired(authenticationRequestId, clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }
@@ -205,7 +220,8 @@ public abstract partial class AuthenticationCompletionHandler(
     }
 
     /// <summary>
-    /// Refuses a request whose authenticated end user is not the one it named.
+    /// Refuses a request whose authentication does not answer it: another end user, a level it does not
+    /// accept, or authorization_details it did not ask for.
     /// </summary>
     /// <remarks>
     /// Denying and leaving the request behind is right for a mode whose client polls, since the poll is what
