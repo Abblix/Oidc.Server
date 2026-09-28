@@ -60,7 +60,9 @@ public static class MultiTenancyExtensions
     /// BEFORE any
     /// <c>UseRouting</c> of the host's - a call placed after one is refused, since a route matched there, a
     /// fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
-    /// cookie then takes the tenant's path and does not reach another tenant on the same host.
+    /// cookie then takes the tenant's path and does not reach another tenant on the same host. A path base set
+    /// before this call, by <c>UsePathBase</c> for one, is compared with the issuer's path exactly, in the
+    /// spelling the request arrived in, so a request spelling it in another case reaches no tenant.
     /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
     {

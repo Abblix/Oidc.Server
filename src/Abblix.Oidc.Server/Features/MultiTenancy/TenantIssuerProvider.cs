@@ -26,6 +26,6 @@ public sealed class TenantIssuerProvider(ITenantAccessor tenantAccessor) : IIssu
     public string GetIssuer()
         => tenantAccessor.Current?.Tenant.Issuer
            ?? throw new InvalidOperationException(
-               "The request was not resolved to a tenant, so it has no issuer. Reach the server through a host " +
-               $"bound to a tenant or through a path naming one, with {nameof(MultiTenancyOptions)} listing it.");
+               "The request was not resolved to a tenant, so it has no issuer. Reach the server at an address " +
+               $"one of the issuers declared in {nameof(MultiTenancyOptions)} names.");
 }

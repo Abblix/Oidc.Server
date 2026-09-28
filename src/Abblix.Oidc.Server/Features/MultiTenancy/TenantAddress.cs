@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -25,10 +26,33 @@ public sealed record TenantAddress(string Host, string Path)
     /// <summary>
     /// The address <paramref name="issuer"/> names.
     /// </summary>
+    /// <remarks>
+    /// The host is taken with the brackets an IPv6 address keeps in a Host header, and the path decoded as the
+    /// server decodes a request path - every escape except an encoded slash, which would otherwise split a
+    /// segment - since that is the form each is compared with.
+    /// </remarks>
     public static TenantAddress Of(string issuer)
     {
         var uri = new Uri(issuer, UriKind.Absolute);
-        return new TenantAddress(TenantHost.Normalize(uri.IdnHost), uri.AbsolutePath.TrimEnd('/'));
+        return new TenantAddress(TenantHost.Normalize(uri.Host), DecodePath(uri.AbsolutePath).TrimEnd('/'));
+    }
+
+    private static string DecodePath(string escapedPath)
+    {
+        const string encodedSlash = "%2F";
+
+        var decoded = new StringBuilder();
+        var start = 0;
+        int slash;
+        while ((slash = escapedPath.IndexOf(encodedSlash, start, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            decoded
+                .Append(Uri.UnescapeDataString(escapedPath[start..slash]))
+                .Append(escapedPath, slash, encodedSlash.Length);
+            start = slash + encodedSlash.Length;
+        }
+
+        return decoded.Append(Uri.UnescapeDataString(escapedPath[start..])).ToString();
     }
 
     /// <summary>

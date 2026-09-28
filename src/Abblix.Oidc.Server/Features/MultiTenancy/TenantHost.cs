@@ -8,6 +8,8 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -24,7 +26,8 @@ public static class TenantHost
     private static readonly IdnMapping Idn = new();
 
     /// <summary>
-    /// <paramref name="host"/> in ASCII, in lower case, without a trailing dot.
+    /// <paramref name="host"/> in ASCII, in lower case, without a trailing dot; an IP address in its canonical
+    /// form, an IPv6 one in brackets as a Host header carries it.
     /// </summary>
     /// <remarks>
     /// A name that is not a valid internationalized host comes back only lowered and trimmed. It arrives in a
@@ -35,6 +38,15 @@ public static class TenantHost
         var trimmed = host.TrimEnd('.').ToLowerInvariant();
         if (trimmed.Length == 0)
             return trimmed;
+
+        if (trimmed.StartsWith('[') && trimmed.EndsWith(']') &&
+            IPAddress.TryParse(trimmed[1..^1], out var v6) && v6.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            return $"[{v6}]";
+        }
+
+        if (IPAddress.TryParse(trimmed, out var v4) && v4.AddressFamily == AddressFamily.InterNetwork)
+            return v4.ToString();
 
         try
         {

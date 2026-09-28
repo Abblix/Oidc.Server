@@ -30,8 +30,8 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
         failures.AddRange(
             from tenant in options.Tenants
             where !IsIssuer(tenant.Issuer)
-            select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' must be an absolute URI with no query " +
-                   "or fragment.");
+            select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' must be an http or https URL with no " +
+                   "query or fragment.");
 
         failures.AddRange(
             from tenant in options.Tenants
@@ -52,8 +52,14 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
+    /// <remarks>
+    /// OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 make the issuer an https URL; http is let
+    /// through for a server run locally. The scheme is checked by name because on Unix a bare path parses as an
+    /// absolute file address, whose empty host a request without a Host header would match.
+    /// </remarks>
     private static bool IsIssuer(string? value)
         => Uri.TryCreate(value, UriKind.Absolute, out var issuer) &&
+           (issuer.Scheme == Uri.UriSchemeHttps || issuer.Scheme == Uri.UriSchemeHttp) &&
            string.IsNullOrEmpty(issuer.Query) &&
            string.IsNullOrEmpty(issuer.Fragment);
 }

@@ -38,6 +38,11 @@ public class TenantResolutionMiddlewareTests
             new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
             new TenantDefinition { Id = "globex-eu", Issuer = "https://auth.example.com/tenants/globex/eu/" },
             new TenantDefinition { Id = "initech", Issuer = "https://idp.example.com/idp/initech" },
+            new TenantDefinition { Id = "societe", Issuer = "https://auth.example.com/tenants/société" },
+            new TenantDefinition { Id = "spaced", Issuer = "https://auth.example.com/tenants/a b" },
+            new TenantDefinition { Id = "slashed", Issuer = "https://auth.example.com/tenants/a%2Fb" },
+            new TenantDefinition { Id = "loopback6", Issuer = "https://[::1]:8443/" },
+            new TenantDefinition { Id = "loopback4", Issuer = "https://127.0.0.1/tenants/local" },
         ],
     };
 
@@ -158,6 +163,40 @@ public class TenantResolutionMiddlewareTests
         var (_, seen) = await RunAsync(SharedHost, path);
 
         Assert.Equal(new Seen("shared", string.Empty, path), seen);
+    }
+
+    /// <summary>
+    /// The server hands the pipeline a decoded path, except for an encoded slash, which would otherwise split a
+    /// segment; an issuer's path is compared in that same form.
+    /// </summary>
+    [Theory]
+    [InlineData("/tenants/société/connect/token", "societe", "/tenants/société")]
+    [InlineData("/tenants/a b/connect/token", "spaced", "/tenants/a b")]
+    [InlineData("/tenants/a%2Fb/connect/token", "slashed", "/tenants/a%2Fb")]
+    [InlineData("/.well-known/openid-configuration/tenants/société", "societe", "/tenants/société")]
+    public async Task AnIssuerPathWithEncodedCharacters_MatchesTheDecodedRequestPath(
+        string path, string tenantId, string pathBase)
+    {
+        var (_, seen) = await RunAsync(SharedHost, path);
+
+        Assert.Equal(tenantId, seen?.TenantId);
+        Assert.Equal(pathBase, seen?.PathBase);
+    }
+
+    /// <summary>
+    /// A request names an IPv6 host in brackets and in whatever spelling its client chose, so an address host is
+    /// compared in its canonical form.
+    /// </summary>
+    [Theory]
+    [InlineData("[::1]:5000", "/connect/token", "loopback6")]
+    [InlineData("[0:0::1]", "/connect/token", "loopback6")]
+    [InlineData("127.0.0.1:5000", "/tenants/local/connect/token", "loopback4")]
+    [InlineData("127.1", "/tenants/local/connect/token", "loopback4")]
+    public async Task AnIssuerOnAnIpAddress_MatchesAnySpellingOfThatAddress(string host, string path, string tenantId)
+    {
+        var (_, seen) = await RunAsync(host, path);
+
+        Assert.Equal(tenantId, seen?.TenantId);
     }
 
     [Fact]

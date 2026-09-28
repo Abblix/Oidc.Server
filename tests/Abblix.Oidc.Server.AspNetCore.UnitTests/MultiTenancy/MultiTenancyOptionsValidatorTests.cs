@@ -46,8 +46,18 @@ public class MultiTenancyOptionsValidatorTests
     [InlineData("/tenants/acme")]
     [InlineData("https://auth.example.com/tenants/acme?x=1")]
     [InlineData("https://auth.example.com/tenants/acme#x")]
-    public void AnIssuerThatIsNotAnAbsoluteUriWithoutQueryOrFragment_IsRefused(string issuer)
-        => Assert.Contains("absolute URI", FailureOf(Tenant("acme", issuer)), StringComparison.Ordinal);
+    [InlineData("urn:acme")]
+    [InlineData("file:///tenants/acme")]
+    [InlineData("ftp://auth.example.com/tenants/acme")]
+    public void AnIssuerThatIsNotAnHttpAddressWithoutQueryOrFragment_IsRefused(string issuer)
+        => Assert.Contains("http or https URL", FailureOf(Tenant("acme", issuer)), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Plain http stays open, since a server run locally for development is reached that way.
+    /// </summary>
+    [Fact]
+    public void AnHttpIssuer_IsAccepted()
+        => Assert.Null(FailureOf(Tenant("acme", "http://localhost:5000/tenants/acme")));
 
     [Fact]
     public void ATenantIdDeclaredTwice_IsRefused()

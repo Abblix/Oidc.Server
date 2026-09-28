@@ -26,10 +26,11 @@ public sealed class TenantDefinition
     /// document - and the address the tenant is served at.
     /// </summary>
     /// <remarks>
-    /// A request belongs to the tenant whose issuer names its host and the longest start of its path, so a
-    /// tenant has one address, and OpenID Connect Discovery 1.0 section 4.3 - the issuer is the address the
-    /// discovery document was fetched from - holds by construction: <c>https://acme.example.com</c> serves a
-    /// whole host, <c>https://auth.example.com/tenants/acme</c> a path on a shared one.
+    /// A request belongs to the tenant whose issuer names its host and the longest start of its path, so the
+    /// host and path of the address the discovery document is fetched from are the issuer's, as OpenID Connect
+    /// Discovery 1.0 section 4.3 requires: <c>https://acme.example.com</c> serves a whole host,
+    /// <c>https://auth.example.com/tenants/acme</c> a path on a shared one. Scheme and port are not compared,
+    /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
     /// </remarks>
     public required string Issuer { get; init; }
 }
