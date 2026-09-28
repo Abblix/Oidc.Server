@@ -83,9 +83,10 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
 
     /// <summary>
     /// The authentication levels an essential <c>acr</c> in the request's <c>claims</c> parameter requires
-    /// of the ID token. EMPTY when it requires none; <c>null</c> on a request stored by a build that did not
-    /// record them, whose requirement is then read from the grant's <c>claims</c> - and completion records
-    /// what it read there.
+    /// of the ID token. EMPTY when it requires none; <c>null</c> when its requirement is to be read from the
+    /// grant's <c>claims</c> instead - on a request stored by a build that did not record the levels, whose
+    /// completion then records what it read there, and on one whose qualifiers no level could satisfy, which
+    /// the request validator refuses before anything is stored.
     /// </summary>
     /// <remarks>
     /// Recorded rather than derived, for the reason <see cref="RequestedAuthorizationDetails"/> is: a host

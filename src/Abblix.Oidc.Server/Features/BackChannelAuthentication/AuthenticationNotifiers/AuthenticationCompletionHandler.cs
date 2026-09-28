@@ -113,17 +113,34 @@ public abstract partial class AuthenticationCompletionHandler(
                 + "asking the end user again rather than completing the same request twice.");
         }
 
-        // What the request recorded when it arrived is the STORED record's, never the host's copy: a host
-        // answers with a record of its own, and one it builds with a constructor carries none of it. Taken
-        // onto that copy rather than read beside it, because the copy is what every check below judges and
-        // what each mode writes back, and the token endpoint judges the redeemed grant against the record it
-        // finds there. A request stored before the levels were recorded has them read from its grant now,
-        // while the grant still says what the client asked for.
+        // What the request recorded when it arrived - whom it named, what it asked for, the levels it
+        // required, and where and with which token the client is to be notified - is the STORED record's,
+        // never the host's copy: a host answers with a record of its own, and one it builds with a
+        // constructor carries none of it. Taken onto that copy rather than read beside it, because the copy
+        // is what every check below judges, what each mode delivers from and writes back, and the token
+        // endpoint judges the redeemed grant against the record it finds there. A request stored before the
+        // levels were recorded has them read from its grant now, while the grant still says what the client
+        // asked for.
         request.RequestedSubjects = stored.RequestedSubjects;
         request.RequestedAuthorizationDetails = stored.RequestedAuthorizationDetails;
         request.RequiredAuthContextClassRefs = stored.RequiredAuthContextClassRefs
             ?? stored.AuthorizedGrant.Context.RequestedClaims.RequiredAuthContextClassRefs()
                 .Match<string[]?>(levels => levels, _ => null);
+        request.ClientNotificationEndpoint = stored.ClientNotificationEndpoint;
+        request.ClientNotificationToken = stored.ClientNotificationToken;
+
+        // The grant the host completes with is minted for the client its context names, so that has to be
+        // the client the request came from. The grant itself cannot be taken from the stored record: it
+        // carries the end user's answer, which exists only in the host's copy.
+        if (!string.Equals(
+                request.AuthorizedGrant.Context.ClientId,
+                stored.AuthorizedGrant.Context.ClientId,
+                StringComparison.Ordinal))
+        {
+            LogGrantNamesAnotherClient(authenticationRequestId, stored.AuthorizedGrant.Context.ClientId);
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
 
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
         // Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token for a different user,

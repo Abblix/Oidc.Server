@@ -134,6 +134,7 @@ public class AuthenticationCompletionHandlerTests
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
+        StoredRecordIs(request);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -322,6 +323,7 @@ public class AuthenticationCompletionHandlerTests
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
+        StoredRecordIs(request);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -361,6 +363,7 @@ public class AuthenticationCompletionHandlerTests
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
+        StoredRecordIs(request);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -434,6 +437,7 @@ public class AuthenticationCompletionHandlerTests
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
+        StoredRecordIs(request);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -502,6 +506,7 @@ public class AuthenticationCompletionHandlerTests
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
+        StoredRecordIs(request);
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -1085,6 +1090,73 @@ public class AuthenticationCompletionHandlerTests
         Assert.Equal([StrongLevel], Assert.IsType<string[]>(answered.RequiredAuthContextClassRefs));
     }
 
+    /// <summary>
+    /// A ping is sent to the endpoint, with the token, the stored request recorded - not to whatever the
+    /// host's copy carries, including nothing at all.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("https://elsewhere.example.com/notify", "another-token")]
+    public async Task CompleteAuthenticationAsync_PingsWhereTheStoredRequestSaid(string? hostEndpoint, string? hostToken)
+    {
+        var stored = CreateRequestRequiring(StrongLevel, null);
+        stored.ClientNotificationEndpoint = _notificationEndpoint;
+        StoredRecordIs(stored);
+
+        var answered = HostCopyCarryingNothing(stored, UserId, StrongLevel);
+        answered.ClientNotificationEndpoint = hostEndpoint is null ? null : new Uri(hostEndpoint);
+        answered.ClientNotificationToken = hostToken;
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, answered, _expiresIn))
+            .Returns(Task.CompletedTask);
+        _notificationService
+            .Setup(s => s.SendAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<string>(),
+                It.IsAny<IBackChannelNotificationRequest>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
+
+        await CreatePingModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, answered, PingClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, answered.Status);
+        _notificationService.Verify(
+            s => s.SendAsync(
+                _notificationEndpoint,
+                NotificationToken,
+                It.IsAny<IBackChannelNotificationRequest>(),
+                BackchannelTokenDeliveryModes.Ping),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// A grant the host wrote for another client than the one the request came from is refused: tokens are
+    /// minted for the client named on the grant, and that has to be the one that asked.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheGrantNamesAnotherClient_Denies()
+    {
+        var stored = CreateRequestRequiring(StrongLevel, null);
+        StoredRecordIs(stored);
+
+        var answered = stored with
+        {
+            AuthorizedGrant = new AuthorizedGrant(
+                new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test") { AuthContextClassRef = StrongLevel },
+                stored.AuthorizedGrant.Context with { ClientId = "another-client" }),
+        };
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, answered, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, answered, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, answered.Status);
+    }
+
     private static BackChannelAuthenticationRequest StoredRequestRecordingEverything()
     {
         var stored = CreateRequestRequiring(StrongLevel, null);
@@ -1231,8 +1303,10 @@ public class AuthenticationCompletionHandlerTests
 
     /// <summary>
     /// A request naming <paramref name="requested"/> and answered by <paramref name="authenticated"/>, stored
-    /// as the pending record it answers - the shape a host produces by reading the stored request and
-    /// answering with a copy of it. A test needing another stored record arranges its own afterwards.
+    /// as the pending record it answers: the SAME instance, which is what a host answering with a copy of the
+    /// stored request amounts to for every field completion reads. What a host's copy that differs from the
+    /// stored record does is driven by the tests building the two apart; a test needing another stored
+    /// record arranges its own afterwards.
     /// </summary>
     private BackChannelAuthenticationRequest CreateRequest(string authenticated, string? requested)
     {
