@@ -642,7 +642,7 @@ public class RevocationRequestValidatorTests
 
         // Assert
         Assert.Equal(reported, recorded.Entries.Count(
-            entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing));
+            entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetLeavesUncharged));
     }
 
     /// <summary>

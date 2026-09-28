@@ -44,7 +44,7 @@ public class UnnamedSourceNoticeTests
         Assert.Equal(
             [CallerRateLimiters.AuthenticationFailures, CallerRateLimiters.Revocation],
             recorded.Entries
-                .Where(entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing)
+                .Where(entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetLeavesUncharged)
                 .Select(entry => entry.Value("Budget")));
         Assert.All(recorded.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
     }
@@ -88,16 +88,18 @@ public class UnnamedSourceNoticeTests
     }
 
     /// <summary>
-    /// The warning names which requests went uncharged, because for revocation that is only a public
-    /// client's: a confidential client is still charged by its identifier.
+    /// The warning names which requests went uncharged, each budget its own: for revocation that is only a
+    /// public client's, since a confidential client is still charged by its identifier.
     /// </summary>
-    [Fact]
-    public void TheWarningNamesTheRequestsLeftUncharged()
+    [Theory]
+    [InlineData(CallerRateLimiters.AuthenticationFailures, "failed client authentications")]
+    [InlineData(CallerRateLimiters.Revocation, "revocation requests from public clients")]
+    public void TheWarningNamesTheRequestsLeftUncharged(string budget, string uncharged)
     {
         var recorded = new RecordingLoggerFactory();
-        NoticeOver(recorded, new OidcOptions()).Report(CallerRateLimiters.Revocation);
+        NoticeOver(recorded, new OidcOptions { AuthenticationFailureLimit = { PermitLimit = 5 } }).Report(budget);
 
-        Assert.Equal("revocation requests from public clients", Assert.Single(recorded.Entries).Value("Uncharged"));
+        Assert.Equal(uncharged, Assert.Single(recorded.Entries).Value("Uncharged"));
     }
 
     /// <summary>

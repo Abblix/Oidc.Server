@@ -61,7 +61,7 @@ public class LogEventUniquenessTests
         var found = EventIds();
 
         Assert.Contains(found, entry => entry.Id == LogEvents.Endpoints.JwtBearer.MissingAssertion);
-        Assert.Contains(found, entry => entry.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing);
+        Assert.Contains(found, entry => entry.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetLeavesUncharged);
         Assert.True(found.Count > MinimumDeclaredEvents, $"The walk found only {found.Count} events");
     }
 

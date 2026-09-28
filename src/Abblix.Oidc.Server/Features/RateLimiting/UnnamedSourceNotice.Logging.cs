@@ -16,10 +16,10 @@ partial class UnnamedSourceNotice
     /// Written once per budget, so it names what to change rather than the request that met it.
     /// </summary>
     [LoggerMessage(
-        EventId = LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing,
+        EventId = LogEvents.RateLimiting.UnnamedSourceNotice.BudgetLeavesUncharged,
         Level = LogLevel.Warning,
         Message = "The budget {Budget} is on, but {Uncharged} arriving from no address this server can name " +
                   "are not charged to it, so it refuses none of them. Resolve forwarded headers into the " +
                   "connection's address, or serve over a transport that carries one. Reported once.")]
-    private partial void LogBudgetCountsNothing(string Budget, string Uncharged);
+    private partial void LogBudgetLeavesUncharged(string Budget, string Uncharged);
 }

@@ -46,7 +46,7 @@ public sealed partial class UnnamedSourceNotice(ILogger<UnnamedSourceNotice> log
     {
         var (isOn, uncharged) = Describe(budget);
         if (isOn && _reported.TryAdd(budget, true))
-            LogBudgetCountsNothing(budget, uncharged);
+            LogBudgetLeavesUncharged(budget, uncharged);
     }
 
     /// <summary>

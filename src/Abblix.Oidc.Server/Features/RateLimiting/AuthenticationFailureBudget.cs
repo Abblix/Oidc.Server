@@ -41,7 +41,7 @@ public sealed class AuthenticationFailureBudget(
     /// <param name="source">The request's <see cref="Source"/>, named once by the caller for the whole
     /// request; null leaves it uncounted.</param>
     /// <returns>The refusal to return to the caller, or null when its credentials may be looked at.</returns>
-    public TooManyRequestsError? RefuseIfSpent(string? source)
+    internal TooManyRequestsError? RefuseIfSpent(string? source)
     {
         if (source is null)
             return null;
@@ -62,7 +62,7 @@ public sealed class AuthenticationFailureBudget(
     /// Charges one failed authentication to this request's source.
     /// </summary>
     /// <param name="source">The request's <see cref="Source"/>; null charges nothing.</param>
-    public void RecordFailure(string? source)
+    internal void RecordFailure(string? source)
     {
         if (source is not null)
             limiter.AttemptAcquire(source).Dispose();

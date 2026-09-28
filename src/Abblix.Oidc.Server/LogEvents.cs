@@ -915,7 +915,7 @@ internal static class LogEvents
         {
             private const int Base = 10420;
 
-            public const int BudgetCountsNothing = Base;
+            public const int BudgetLeavesUncharged = Base;
         }
     }
 }
