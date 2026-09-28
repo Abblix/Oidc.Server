@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 /// </summary>
 public class MultiTenancyRegistrationTests
 {
-    private const string AcmeIssuer = "https://acme.example.com";
+    private const string AcmeIssuer = "https://auth.example.com/t/acme";
 
     private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = AcmeIssuer };
 
@@ -106,7 +106,7 @@ public class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddMultiTenancy(options => options.Tenants.Add(
-            new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Hosts = ["acme.example.com"] }));
+            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com", Hosts = ["acme.example.com"] }));
         await using var provider = services.BuildServiceProvider();
         var catalog = provider.GetRequiredService<ITenantCatalog>();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -127,10 +127,35 @@ public class MultiTenancyRegistrationTests
         using var multiTenant = BuildProvider();
 
         Assert.False(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = plain }));
+
+        EnterTenant(multiTenant, null);
         Assert.True(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = multiTenant }));
 
-        var resolved = new DefaultHttpContext { RequestServices = multiTenant };
-        resolved.Features.Set(new TenantContext { Tenant = Acme });
-        Assert.False(TenantRequirement.IsUnmet(resolved));
+        EnterTenant(multiTenant, Acme);
+        Assert.False(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = multiTenant }));
+    }
+
+    /// <summary>
+    /// The tenant is asked of the accessor everywhere, so a host that resolves tenants its own way - setting
+    /// nothing on the request - is answered the same by the endpoints as by the issuer.
+    /// </summary>
+    [Fact]
+    public void AHostsOwnTenantAccessor_IsWhatEveryQuestionAsks()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ITenantAccessor>(new FixedTenantAccessor(Acme));
+        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
+
+        Assert.False(TenantRequirement.IsUnmet(context));
+        Assert.Same(Acme, TenantRequirement.CurrentTenant(context)?.Tenant);
+        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer());
+    }
+
+    private sealed class FixedTenantAccessor(TenantDefinition tenant) : ITenantAccessor
+    {
+        public TenantContext Current { get; } = new() { Tenant = tenant };
     }
 }

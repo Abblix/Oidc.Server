@@ -79,6 +79,52 @@ public class MultiTenancyOptionsValidatorTests
             Tenants = [Tenant("acme", "https://auth.example.com"), Tenant("globex", "https://auth.example.com")],
         }), StringComparison.Ordinal);
 
+    /// <summary>
+    /// Issuers a relying party would take for one - differing by host case or a trailing slash - are one.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/t/acme", "https://auth.example.com/t/acme/")]
+    [InlineData("https://auth.example.com/t/acme", "https://AUTH.example.com/t/acme")]
+    public void IssuersThatAreOneForARelyingParty_AreRefused(string first, string second)
+        => Assert.Contains("declared by more than one tenant", FailureOf(new MultiTenancyOptions
+        {
+            Tenants =
+            [
+                new TenantDefinition { Id = "acme", Issuer = first },
+                new TenantDefinition { Id = "acme2", Issuer = second, Hosts = ["auth.example.com"] },
+            ],
+        }), StringComparison.Ordinal);
+
+    /// <summary>
+    /// OpenID Connect Discovery 1.0 section 4.3: the issuer is the address the discovery document was fetched
+    /// from, so a host-bound tenant's issuer is on one of its hosts.
+    /// </summary>
+    [Fact]
+    public void AnIssuerOffTheTenantsHosts_IsRefused()
+        => Assert.Contains("not on any of its hosts", FailureOf(new MultiTenancyOptions
+        {
+            Tenants = [Tenant("acme", "https://auth.example.com/t/acme", "acme.example.com")],
+        }), StringComparison.Ordinal);
+
+    /// <summary>
+    /// And a tenant reached by path has its issuer end in that path.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com")]
+    [InlineData("https://auth.example.com/t/globex")]
+    [InlineData("https://auth.example.com/tenants/acme")]
+    public void APathTenantsIssuerNotEndingInItsPath_IsRefused(string issuer)
+        => Assert.Contains("/t/acme", FailureOf(new MultiTenancyOptions { Tenants = [Tenant("acme", issuer)] }),
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void ATenantWithNoHosts_WhenPathResolutionIsOff_IsRefused()
+        => Assert.Contains("no request can reach it", FailureOf(new MultiTenancyOptions
+        {
+            PathSegment = null,
+            Tenants = [Tenant("acme")],
+        }), StringComparison.Ordinal);
+
     [Fact]
     public void ATenantIdDeclaredTwice_IsRefused()
         => Assert.Contains("declared more than once", FailureOf(new MultiTenancyOptions

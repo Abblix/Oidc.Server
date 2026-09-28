@@ -7,7 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Reflection;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Conventions;
 using Abblix.Oidc.Server.Mvc.Filters;
@@ -45,6 +52,36 @@ public class RequireTenantConventionTests
             application.Controllers.Where(controller => controller != hostController),
             controller => Assert.Single(controller.Filters.OfType<RequireTenantFilter>()));
         Assert.Empty(hostController.Filters);
+    }
+
+    /// <summary>
+    /// Under multi-tenancy a request without a tenant is answered 404 before the action runs; without
+    /// multi-tenancy nothing is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void TheFilter_Answers404_OnlyToATenantlessRequestUnderMultiTenancy(bool multiTenant, bool refused)
+    {
+        var services = new ServiceCollection();
+        services.AddHttpContextAccessor();
+#pragma warning disable ABXMT001 // The feature is experimental for its consumers; these tests are where it is built.
+        if (multiTenant)
+            services.AddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
+#pragma warning restore ABXMT001
+        using var provider = services.BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = provider };
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = httpContext;
+
+        var context = new ResourceExecutingContext(
+            new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), [], []);
+
+        new RequireTenantFilter().OnResourceExecuting(context);
+
+        if (refused)
+            Assert.IsType<NotFoundResult>(context.Result);
+        else
+            Assert.Null(context.Result);
     }
 
     /// <summary>

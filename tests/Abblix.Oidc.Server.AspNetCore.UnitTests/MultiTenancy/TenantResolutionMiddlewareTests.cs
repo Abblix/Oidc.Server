@@ -150,6 +150,19 @@ public class TenantResolutionMiddlewareTests
         Assert.Equal(new Seen("acme", string.Empty, "/t/globex/connect/token"), seen);
     }
 
+    /// <summary>
+    /// A tenant bound to hosts is served only there, where its issuer is: reached by path on another host, its
+    /// discovery document would name an issuer that is not the address it was fetched from.
+    /// </summary>
+    [Fact]
+    public async Task APathNamingATenantBoundToHosts_IsAnswered404()
+    {
+        var (context, seen) = await RunAsync(SharedHost, "/t/acme/connect/token");
+
+        Assert.Null(seen);
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
     [Fact]
     public async Task APathNamingAnUndeclaredTenant_IsAnswered404_BeforeAnyEndpoint()
     {

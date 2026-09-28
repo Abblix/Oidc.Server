@@ -16,7 +16,8 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// Answers 404 to a request that multi-tenancy left without a tenant, before the action runs.
 /// </summary>
 /// <remarks>
-/// A resource filter, so it runs ahead of model binding and of every other filter an OpenID action carries.
+/// A resource filter: it runs after the authorization filters an OpenID controller carries - the HTTPS
+/// requirement and CORS - and before model binding and the action, so nothing the action would store is stored.
 /// </remarks>
 internal sealed class RequireTenantFilter : IResourceFilter
 {

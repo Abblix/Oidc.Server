@@ -26,7 +26,8 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// tenant.
 /// </para>
 /// <para>
-/// A request that names a tenant nobody declared is answered 404 before any endpoint sees it. A request that
+/// A request whose path names a tenant nobody declared, or one bound to hosts, is answered 404 before any
+/// endpoint sees it. A request that
 /// names none passes through without a tenant, since the application may serve other things; the OpenID
 /// endpoints refuse it.
 /// </para>
@@ -38,10 +39,22 @@ public sealed class TenantResolutionMiddleware(
     IOptionsMonitor<MultiTenancyOptions> options)
 {
     /// <summary>
+    /// The key a request this middleware has seen, resolved or not, is marked under.
+    /// </summary>
+    private static readonly object ResolutionRan = new();
+
+    /// <summary>
+    /// Whether this middleware ran for <paramref name="context"/>, which tells a request that names no tenant
+    /// from one reaching the server with resolution missing from its pipeline.
+    /// </summary>
+    public static bool HasRun(HttpContext context) => context.Items.ContainsKey(ResolutionRan);
+
+    /// <summary>
     /// Resolves the tenant of <paramref name="context"/> and runs the rest of the pipeline under it.
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
+        context.Items[ResolutionRan] = true;
         var request = context.Request;
         var cancellationToken = context.RequestAborted;
 
@@ -59,7 +72,9 @@ public sealed class TenantResolutionMiddleware(
             return;
         }
 
-        if (await catalog.FindByIdAsync(tenantId, cancellationToken) is not { } pathTenant)
+        // A tenant bound to hosts is served at those hosts only, where its issuer is: reached by path elsewhere
+        // it would publish a discovery document whose issuer is not the address it was fetched from.
+        if (await catalog.FindByIdAsync(tenantId, cancellationToken) is not { Hosts.Count: 0 } pathTenant)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
@@ -51,5 +52,23 @@ public class TenantRoutingTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("/t/globex|globex", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Placed after the host's own routing, resolution would come too late - a route, a fallback page included,
+    /// is already matched on the full path - so the call is refused where the pipeline is built.
+    /// </summary>
+    [Fact]
+    public void UseMultiTenancy_AfterTheHostsOwnRouting_IsRefused()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddMultiTenancy(options => options.Tenants.Add(
+            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/t/globex" }));
+        var app = builder.Build();
+        app.UseRouting();
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => app.UseMultiTenancy());
+        Assert.Contains("before UseRouting()", refusal.Message, StringComparison.Ordinal);
     }
 }

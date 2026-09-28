@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -24,7 +26,13 @@ public class TenantRequestAddressTests
 {
     private static HttpContext Request(bool underTenant)
     {
-        var context = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        services.AddHttpContextAccessor();
+        if (underTenant)
+            services.AddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
+        var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("auth.example.com");
         context.Request.PathBase = "/t/globex";
@@ -37,6 +45,7 @@ public class TenantRequestAddressTests
             });
         }
 
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
         return context;
     }
 
@@ -56,25 +65,22 @@ public class TenantRequestAddressTests
         => Assert.Equal("https://auth.example.com/connect/token", RequestUriOf(Request(underTenant: false)));
 
     /// <summary>
-    /// A login page addressed from the root would run without the tenant, and its cookie, written for the root,
-    /// would reach every tenant on the host.
+    /// Under a tenant every relative address is the tenant's: a login page addressed from the root would run
+    /// without the tenant, and the MVC transport advertises endpoints by route templates that carry no leading
+    /// slash. Without tenants both resolve as they always did.
     /// </summary>
-    [Fact]
-    public void UnderATenant_ARootedInteractionAddress_IsTheTenants()
-        => Assert.Equal(
-            new Uri("https://auth.example.com/t/globex/Auth/Login"),
-            Request(underTenant: true).Request.ResolveInteractionUri("/Auth/Login"));
-
-    [Fact]
-    public void WithoutATenant_ARootedInteractionAddress_IsTheServerRoots()
-        => Assert.Equal(
-            new Uri("https://auth.example.com/Auth/Login"),
-            Request(underTenant: false).Request.ResolveInteractionUri("/Auth/Login"));
+    [Theory]
+    [InlineData(true, "/Auth/Login", "https://auth.example.com/t/globex/Auth/Login")]
+    [InlineData(true, "connect/token", "https://auth.example.com/t/globex/connect/token")]
+    [InlineData(false, "/Auth/Login", "https://auth.example.com/Auth/Login")]
+    [InlineData(false, "connect/token", "https://auth.example.com/t/connect/token")]
+    public void ARelativeAddress_IsTheTenants_OnlyUnderATenant(bool underTenant, string path, string expected)
+        => Assert.Equal(new Uri(expected), Request(underTenant).Request.ResolveInteractionUri(path));
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void AnApplicationRelativeInteractionAddress_IsTheApplicationBases_EitherWay(bool underTenant)
+    public void AnApplicationRelativeAddress_IsTheApplicationBases_EitherWay(bool underTenant)
         => Assert.Equal(
             new Uri("https://auth.example.com/t/globex/Auth/Login"),
             Request(underTenant).Request.ResolveInteractionUri("~/Auth/Login"));
@@ -82,7 +88,7 @@ public class TenantRequestAddressTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void AnAbsoluteInteractionAddress_IsKept_EitherWay(bool underTenant)
+    public void AnAbsoluteAddress_IsKept_EitherWay(bool underTenant)
         => Assert.Equal(
             new Uri("https://login.example.org/Auth/Login"),
             Request(underTenant).Request.ResolveInteractionUri("https://login.example.org/Auth/Login"));

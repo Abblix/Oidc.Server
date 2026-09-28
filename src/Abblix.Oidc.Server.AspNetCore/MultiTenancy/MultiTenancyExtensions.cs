@@ -57,9 +57,25 @@ public static class MultiTenancyExtensions
     /// Routing is added right after resolution, because a tenant named in the path moves into the path base and
     /// the route has to be matched on what is left: a web application that routes on its own would otherwise
     /// match the endpoints against the full path and answer every tenant 404. So call this BEFORE any
-    /// <c>UseRouting</c> of the host's, and before <c>UseAuthentication</c>, whose cookie then takes the tenant's
-    /// path and does not reach another tenant on the same host.
+    /// <c>UseRouting</c> of the host's - a call placed after one is refused, since a route matched there, a
+    /// fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
+    /// cookie then takes the tenant's path and does not reach another tenant on the same host.
     /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
-        => app.UseMiddleware<TenantResolutionMiddleware>().UseRouting();
+    {
+        if (app.Properties.ContainsKey(EndpointRouteBuilderProperty))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(UseMultiTenancy)}() must come before UseRouting(): routing already ran here, so a route " +
+                "would be matched against the full path before the tenant named in it is resolved.");
+        }
+
+        return app.UseMiddleware<TenantResolutionMiddleware>().UseRouting();
+    }
+
+    /// <summary>
+    /// The application property ASP.NET Core's <c>UseRouting</c> leaves behind, by which a routing call already
+    /// in the pipeline is seen.
+    /// </summary>
+    private const string EndpointRouteBuilderProperty = "__EndpointRouteBuilder";
 }

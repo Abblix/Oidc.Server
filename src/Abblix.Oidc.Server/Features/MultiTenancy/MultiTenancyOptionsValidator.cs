@@ -54,11 +54,35 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
             where same.Count() > 1
             select $"The tenant id '{same.Key}' is declared more than once.");
 
+        // Compared as the issuers a relying party would take for one: host case and a trailing slash aside.
         failures.AddRange(
             from tenant in options.Tenants
-            group tenant.Id by tenant.Issuer into same
+            where IsIssuer(tenant.Issuer)
+            group tenant.Id by IssuerKey(tenant.Issuer) into same
             where same.Count() > 1
             select $"The issuer '{same.Key}' is declared by more than one tenant: {string.Join(", ", same)}.");
+
+        // OpenID Connect Discovery 1.0 section 4.3: the issuer in a discovery document is the address it was
+        // fetched from, so a tenant's issuer has to be where the tenant is served - one of its hosts, or its path.
+        failures.AddRange(
+            from tenant in options.Tenants
+            where IsIssuer(tenant.Issuer) && tenant.Hosts.Count > 0
+            let issuerHost = TenantHost.Normalize(new Uri(tenant.Issuer).IdnHost)
+            where !tenant.Hosts.Any(host => TenantHost.Normalize(host) == issuerHost)
+            select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' is not on any of its hosts.");
+
+        failures.AddRange(
+            from tenant in options.Tenants
+            where IsIssuer(tenant.Issuer) && tenant.Hosts.Count == 0 && options.PathSegment is null
+            select $"Tenant '{tenant.Id}' has no hosts and path resolution is off, so no request can reach it.");
+
+        failures.AddRange(
+            from tenant in options.Tenants
+            where IsIssuer(tenant.Issuer) && tenant.Hosts.Count == 0 && options.PathSegment is { } segment &&
+                  !new Uri(tenant.Issuer).AbsolutePath.TrimEnd('/')
+                      .EndsWith($"/{segment}/{tenant.Id}", StringComparison.Ordinal)
+            select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' must end in the path the tenant is " +
+                   $"reached at, /{options.PathSegment}/{tenant.Id}.");
 
         failures.AddRange(
             from tenant in options.Tenants
@@ -79,6 +103,12 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
         => !string.IsNullOrEmpty(value) &&
            value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_' or '~') &&
            value.Any(c => c != '.');
+
+    private static string IssuerKey(string issuer)
+    {
+        var uri = new Uri(issuer);
+        return $"{uri.Scheme}://{TenantHost.Normalize(uri.IdnHost)}:{uri.Port}{uri.AbsolutePath.TrimEnd('/')}";
+    }
 
     private static bool IsIssuer(string? value)
         => Uri.TryCreate(value, UriKind.Absolute, out var issuer) &&
