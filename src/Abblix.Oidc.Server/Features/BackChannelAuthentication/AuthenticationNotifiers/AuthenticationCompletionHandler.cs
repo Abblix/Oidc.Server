@@ -97,8 +97,7 @@ public abstract partial class AuthenticationCompletionHandler(
         //
         // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
         // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
-        // deciding, or push's own refusal path removed it after a configuration fault, where nothing was
-        // answered at all. Naming one of them would send an operator who just fixed a client
+        // deciding, or push removed it after a configuration fault, where nothing was answered at all. Naming one of them would send an operator who just fixed a client
         // registration looking for a second completion that never happened.
         var stored = await ReadPendingAsync(authenticationRequestId, "completed");
 
@@ -272,16 +271,23 @@ public abstract partial class AuthenticationCompletionHandler(
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
             return stored;
 
-        LogNotPendingOnCompletion(authenticationRequestId, stored?.Status.ToString());
+        LogNotPendingOnCompletion(authenticationRequestId, answered, stored?.Status.ToString());
+        throw NotPending(answered, stored);
+    }
 
-        throw new InvalidOperationException(
+    /// <summary>
+    /// The refusal of an answer to a request that is not pending, worded once for every caller.
+    /// </summary>
+    /// <param name="answered">What the caller was doing: completed or denied.</param>
+    /// <param name="stored">The record found, or null when there was none.</param>
+    internal static InvalidOperationException NotPending(string answered, BackChannelAuthenticationRequest? stored)
+        => new(
             $"The authentication request cannot be {answered}: the stored record "
             + (stored is null
                 ? "is not there"
                 : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
             + ". Only a pending request can be answered. Recovering from a failed delivery means "
             + "asking the end user again rather than answering the same request twice.");
-    }
 
     // The reasons a request is refused with. access_denied throughout: CIBA Core 1.0 defines it for the token
     // endpoint and the push error payload alike, and it is the server or the end user denying the request.

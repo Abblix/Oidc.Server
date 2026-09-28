@@ -21,8 +21,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <summary>
 /// Handles CIBA push mode token delivery where tokens are sent directly to the client's notification endpoint
 /// immediately upon authentication completion.
-/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage -
-/// except when the delivery itself fails, which is the one outcome that leaves the record behind.
+/// In push mode the request is taken from storage, then tokens are generated and delivered via HTTP POST; a
+/// request that ends without tokens is answered with the error payload of CIBA Core 1.0 section 12.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
@@ -50,18 +50,17 @@ public partial class PushModeCompletionHandler(
         new(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
 
     /// <summary>
-    /// Removes the request rather than denying it, because a push client never polls, and sends the client
-    /// the error.
+    /// Takes the request and sends the client the error, because a push client never polls.
     /// </summary>
     /// <remarks>
-    /// A denied request this client cannot read is an orphan sitting in storage until it expires, which is
-    /// why the token-generation failure below removes one too. CIBA Core 1.0 section 12 has the outcome
-    /// travel to a push client through its notification endpoint, as an error payload.
+    /// A denied request this client cannot read is an orphan sitting in storage until it expires. CIBA Core
+    /// 1.0 section 12 has the outcome travel to a push client through its notification endpoint, as an error
+    /// payload - sent only by whoever took the request, the same claim delivery makes before it mints, so a
+    /// refusal and a delivery racing each other answer the client once between them.
     /// </remarks>
     /// <param name="authenticationRequestId">The request refused.</param>
     /// <param name="request">The request, carrying where and with which token the client is notified.</param>
-    /// <param name="refusal">The error sent: access_denied, or transaction_failed when tokens could not be
-    /// issued.</param>
+    /// <param name="refusal">The error sent.</param>
     /// <param name="expiresIn">Unused: nothing is left behind to expire.</param>
     protected override async Task RefuseAsync(
         string authenticationRequestId,
@@ -69,49 +68,28 @@ public partial class PushModeCompletionHandler(
         OidcError refusal,
         TimeSpan expiresIn)
     {
-        // Sent only by whoever took the request, so a refusal racing a delivery cannot tell the client both.
-        if (await TakeRequestAsync(authenticationRequestId) is null)
-            return;
-
-        // CIBA Core 1.0 section 12: the only way a push client learns its request ended without tokens.
-        // Nothing is sent where the client registered nowhere to send it.
-        if (!ValidateNotificationConfiguration(
-                request.ClientNotificationEndpoint,
-                request.ClientNotificationToken,
-                BackchannelTokenDeliveryModes.Push,
-                request.AuthorizedGrant.Context.ClientId,
-                authenticationRequestId))
-        {
-            return;
-        }
-
-        await notificationService.SendAsync(
-            request.ClientNotificationEndpoint,
-            request.ClientNotificationToken,
-            new BackChannelPushErrorNotificationRequest
-            {
-                AuthenticationRequestId = authenticationRequestId,
-                Error = refusal.Error,
-                ErrorDescription = refusal.ErrorDescription,
-            },
-            BackchannelTokenDeliveryModes.Push);
+        if (await TakeRequestAsync(authenticationRequestId) is not null)
+            await SendErrorAsync(authenticationRequestId, request, refusal);
     }
 
     /// <summary>
-    /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
-    /// The status transition is persisted before the tokens are minted, and the request is removed after
-    /// a delivery that succeeded. The WRITE is the protection: it leaves a record a sequential retry is
-    /// refused by, on the one path where a record survives. The removal is hygiene now that the write
-    /// exists - what it would otherwise leave is an Authenticated orphan that the completion handler and
-    /// the token endpoint both already refuse, waiting out its expiry. The write is the same one poll and ping make, so it
-    /// carries the whole record including the grant the host completed with.
+    /// Handles push mode token delivery: takes the request, then mints the tokens and posts them to the client.
     /// </summary>
+    /// <remarks>
+    /// The request is TAKEN before anything is minted, and the take is the claim. It is the one operation on
+    /// the store that decides between two callers, so of a completion and an end user's refusal arriving
+    /// together - or two completions - exactly one proceeds and the client is answered once: with tokens, or
+    /// with an error, never both. Whoever finds the request already gone stops without a word.
+    /// <para>
+    /// Nothing is left behind on any path. A second completion finds no record and is refused the way every
+    /// answer to a missing request is; a delivery that fails drops the tokens just minted, and the recovery is
+    /// to ask the end user again.
+    /// </para>
+    /// </remarks>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
-    /// <param name="expiresIn">The lifetime applied when the status transition is persisted, which is
-    /// what a record surviving a failed delivery then expires on. Push writes once and only for that,
-    /// so a delivery that succeeds removes the record long before the lifetime matters.</param>
+    /// <param name="expiresIn">Unused: push leaves no record behind.</param>
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
@@ -131,19 +109,18 @@ public partial class PushModeCompletionHandler(
             return;
         }
 
+        if (await TakeRequestAsync(authenticationRequestId) is null)
+            return;
+
         // The per-type validators, asked HERE because this is where a push grant is spent. Poll and ping
         // reach the same question at the token endpoint when their client redeems; a push client never
         // goes there, so without this the content of an entry whose type was requested - a raised amount,
         // a widened set of accounts - is never judged for push at all, while the identical client in
         // another mode is refused.
         //
-        // Asked after the configuration check rather than before it, so a client that cannot be delivered
-        // to does not spend a validator's round trip, and so the log names the fault an operator has to
-        // fix first. Both outcomes remove the request either way.
-        //
-        // The refusal's own error code is not what the client is sent, unlike at the token endpoint: CIBA
-        // Core 1.0 section 12 allows a push error payload only access_denied, expired_token and
-        // transaction_failed, and a grant refused by the server is the server denying the request.
+        // The refusal's own error code and words are not what the client is sent: CIBA Core 1.0 section 12
+        // allows a push error payload only access_denied, expired_token and transaction_failed, and the
+        // validator's reason is written for whoever fixes the host, so it goes to the log.
         //
         // No cancellation token, because nothing on the path from the router down carries one.
         if (await authorizationDetailsPolicy.RefuseAsync(
@@ -152,30 +129,9 @@ public partial class PushModeCompletionHandler(
             LogGrantedAuthorizationDetailsRefused(
                 authenticationRequestId, clientInfo.ClientId, refusal.Reason);
 
-            await RefuseAsync(authenticationRequestId, request, RefusedGrant, expiresIn);
+            await SendErrorAsync(authenticationRequestId, request, RefusedGrant);
             return;
         }
-
-        // Persisted BEFORE minting, and this is the only write push makes. The property the order buys
-        // is that no token set can exist over a record still reading Pending, and writing first makes it
-        // hold whatever runs afterwards. Any placement after the mint leaves a window instead: a fault, a
-        // crash or a cancellation between minting and the write leaves a full token set alive over a
-        // record the base handler would still complete - the hole this closes, reopened narrower.
-        //
-        // Not "otherwise it would never happen on the failure path". A write inside the delivery-failed
-        // branch runs on that path perfectly well and the failing-delivery row stays green; it is the
-        // span before it that stops being covered.
-        //
-        // The whole record, the same way poll and ping write theirs: the storage serializes the object it
-        // is handed, so the grant the host completed with goes down with the status. What stops a second
-        // completion is not anything the record omits - it is the base handler reading this status back
-        // and refusing everything that is not Pending. A record that carried the status alone would be
-        // just as unusable and harder to explain.
-        //
-        // On the delivery path this write is undone moments later by the removal below. That is a wasted
-        // round trip on the successful case in exchange for the guarantee on the failing one, which is
-        // the case that mints tokens nobody asked for.
-        await StoreAsync(authenticationRequestId, request, expiresIn);
 
         LogGeneratingTokens(authenticationRequestId);
 
@@ -218,48 +174,53 @@ public partial class PushModeCompletionHandler(
                     payload,
                     BackchannelTokenDeliveryModes.Push);
 
+                // The tokens of a failed delivery are dropped with this lambda and nothing retries them.
                 if (delivered)
-                {
-                    // Removed here and not in poll or ping mode, because only this client is finished
-                    // with the request: it has the tokens and will never come to the token endpoint.
-                    // CIBA Core 1.0 does not require this - section 10.3.1 says nothing about what the OP
-                    // keeps - so it is a choice, made because the alternative is an orphan.
-                    await TakeRequestAsync(authenticationRequestId);
                     LogTokensDelivered(authenticationRequestId);
-                }
                 else
-                {
-                    // Delivery failed, and the tokens just minted are dropped with this lambda - nothing
-                    // retries them.
-                    //
-                    // What survives in storage reads Authenticated, written above before anything was
-                    // minted, and carries the grant the end user actually approved along with the
-                    // session naming them. Before that write it was the PRE-completion record - Pending,
-                    // carrying what the client asked for - and it had everything CompleteAsync needed
-                    // except any sign it had been used, which is what made handing it back an over-grant
-                    // rather than a retry.
-                    //
-                    // The status is what closes that: the base handler reads it from storage and
-                    // completes only a Pending request.
-                    //
-                    // It is kept rather than removed so a host can see the request existed, and it expires
-                    // on its own. The correct recovery is to ask the end user again, which is what the
-                    // refusal now makes the only one available.
                     LogPushDeliveryFailed(authenticationRequestId);
-                }
 
                 return null;
             },
             async error =>
             {
                 LogTokenGenerationFailed(authenticationRequestId, error.Error);
-
-                // No tokens were minted, so there is nothing a second attempt could deliver and nothing
-                // for a host to complete again. Removed rather than marked denied, because a push client
-                // never polls and would never read the mark, and the client is told the transaction failed.
-                await RefuseAsync(authenticationRequestId, request, TokensNotIssued, expiresIn);
-
+                await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
                 return null;
             });
+    }
+
+    /// <summary>
+    /// Sends the push error payload of CIBA Core 1.0 section 12, by a caller that has taken the request.
+    /// </summary>
+    /// <remarks>
+    /// The only way a push client learns its request ended without tokens. Nothing is sent where the client
+    /// registered nowhere to send it.
+    /// </remarks>
+    private async Task SendErrorAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        OidcError refusal)
+    {
+        if (!ValidateNotificationConfiguration(
+                request.ClientNotificationEndpoint,
+                request.ClientNotificationToken,
+                BackchannelTokenDeliveryModes.Push,
+                request.AuthorizedGrant.Context.ClientId,
+                authenticationRequestId))
+        {
+            return;
+        }
+
+        await notificationService.SendAsync(
+            request.ClientNotificationEndpoint,
+            request.ClientNotificationToken,
+            new BackChannelPushErrorNotificationRequest
+            {
+                AuthenticationRequestId = authenticationRequestId,
+                Error = refusal.Error,
+                ErrorDescription = refusal.ErrorDescription,
+            },
+            BackchannelTokenDeliveryModes.Push);
     }
 }

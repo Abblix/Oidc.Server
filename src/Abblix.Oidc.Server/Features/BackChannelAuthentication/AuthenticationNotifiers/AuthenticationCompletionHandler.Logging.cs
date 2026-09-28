@@ -67,9 +67,9 @@ partial class AuthenticationCompletionHandler
     [LoggerMessage(
         EventId = LogEvents.Device.AuthenticationCompletionHandler.NotPendingOnCompletion,
         Level = LogLevel.Error,
-        Message = "auth_req_id {AuthReqId} was refused at completion. Only a pending request can be " +
+        Message = "auth_req_id {AuthReqId} could not be {Answered}. Only a pending request can be " +
                   "answered, and the stored record reads {Status}. A null there means no record was " +
                   "found, and this seam cannot tell why: absence has more causes than it can " +
                   "distinguish, including a completion that already ran and removed the record.")]
-    private partial void LogNotPendingOnCompletion(string AuthReqId, string? Status);
+    private partial void LogNotPendingOnCompletion(string AuthReqId, string Answered, string? Status);
 }

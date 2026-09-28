@@ -113,6 +113,24 @@ public class AuthenticationCompletionRouterTests
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
     }
 
+    /// <summary>
+    /// A stored request whose client is no longer registered cannot be denied, and the caller is told so:
+    /// the request would otherwise stay pending while the host believed the refusal had gone through.
+    /// </summary>
+    [Fact]
+    public async Task DenyAsync_WhenTheClientIsUnknown_Refuses()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
+
+        storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+    }
+
     private static AuthenticationCompletionRouter RouterOver(Mock<IBackChannelRequestStorage> storage, string mode)
     {
         var clients = new Mock<IClientInfoProvider>();
