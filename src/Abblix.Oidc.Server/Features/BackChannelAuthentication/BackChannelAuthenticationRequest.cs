@@ -80,4 +80,17 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     /// </para>
     /// </remarks>
     public JsonArray? RequestedAuthorizationDetails { get; set; }
+
+    /// <summary>
+    /// The authentication levels an essential <c>acr</c> in the request's <c>claims</c> parameter requires
+    /// of the ID token. EMPTY when it requires none; <c>null</c> only on a request stored before this field
+    /// existed, whose requirement is then read from the grant's <c>claims</c>.
+    /// </summary>
+    /// <remarks>
+    /// Recorded rather than derived, for the reason <see cref="RequestedAuthorizationDetails"/> is: a host
+    /// expressing partial consent replaces the grant's context, and a context it builds afresh carries no
+    /// <c>claims</c> at all, so by the time the level can be judged the grant may no longer say what was
+    /// required.
+    /// </remarks>
+    public string[]? RequiredAuthContextClassRefs { get; set; }
 }

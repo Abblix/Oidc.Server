@@ -1549,6 +1549,42 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
     }
 
+    /// <summary>
+    /// The level recorded on the stored request is the one judged, when the grant beside it no longer
+    /// carries the requirement.
+    /// </summary>
+    /// <remarks>
+    /// A host expressing partial consent replaces the grant's context, and one built with a constructor
+    /// carries no <c>claims</c>. Refused before the request is consumed, as every refusal here is.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizeAsync_WhenTheGrantNoLongerCarriesTheRequirement_JudgesTheRecordedLevel()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var authRequest = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequiredAuthContextClassRefs = [StrongLevel],
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
     private const string StrongLevel = "urn:example:acr:strong";
     private const string WeakLevel = "urn:example:acr:weak";
 

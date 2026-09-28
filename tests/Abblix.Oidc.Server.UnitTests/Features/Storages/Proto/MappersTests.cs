@@ -714,6 +714,31 @@ public class MappersTests
     }
 
     /// <summary>
+    /// The levels a decoupled request requires survive the store in all three states: absent (written by a
+    /// build that did not record them), empty (nothing required) and carrying values.
+    /// </summary>
+    /// <remarks>
+    /// Absent and empty answer differently at completion - the first reads the requirement from the grant,
+    /// the second requires nothing - so a round trip folding one into the other changes what is refused.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(RequestedSubjectShapes))]
+    public void BackChannelAuthenticationRequestMapper_RoundTrip_KeepsRequiredAuthenticationLevels(string[]? levels)
+    {
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(session, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            RequiredAuthContextClassRefs = levels,
+        };
+
+        var result = request.ToProto().FromProto();
+
+        Assert.Equal(levels, result.RequiredAuthContextClassRefs);
+    }
+
+    /// <summary>
     /// What the client asked for has to survive the store, because the answer it is compared against arrives
     /// after a round trip: the end user authenticates out of band, and by then the grant's own copy is the one
     /// the host replaced with the narrowed set.

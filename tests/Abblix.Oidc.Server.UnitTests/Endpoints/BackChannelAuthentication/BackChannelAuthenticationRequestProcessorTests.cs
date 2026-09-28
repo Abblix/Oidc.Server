@@ -161,6 +161,43 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     /// <summary>
+    /// The levels an essential <c>acr</c> requires are recorded on the stored request, read before the host
+    /// is handed the request, and a request requiring none records that as an empty set.
+    /// </summary>
+    /// <remarks>
+    /// The grant's own copy of the <c>claims</c> parameter is the one a host replaces when the end user
+    /// approves part of the request, so the requirement completion judges has to be kept apart from it. An
+    /// empty set rather than nothing, because nothing is how a request stored by an earlier build reads.
+    /// </remarks>
+    [Theory]
+    [InlineData("""{"id_token":{"acr":{"essential":true,"values":["urn:example:acr:strong"]}}}""", new[] { "urn:example:acr:strong" })]
+    [InlineData("""{"id_token":{"acr":{"values":["urn:example:acr:strong"]}}}""", new string[0])]
+    [InlineData(null, new string[0])]
+    public async Task TheRequiredLevels_AreRecordedOnTheStoredRequest(string? claimsJson, string[] expected)
+    {
+        Result<AuthSession, OidcError> session = new AuthSession(
+            Subject: Approved,
+            SessionId: "session-1",
+            AuthenticationTime: DateTimeOffset.UnixEpoch,
+            IdentityProvider: "test");
+
+        _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
+            .Returns(Task.FromResult(session));
+
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(Request(null, claimsJson));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.NotNull(stored);
+        Assert.Equal(expected, stored.RequiredAuthContextClassRefs);
+    }
+
+    /// <summary>
     /// Rewriting the grant's <c>authorization_details</c> in place leaves the requested set untouched.
     /// </summary>
     /// <remarks>

@@ -8,10 +8,10 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -132,7 +132,13 @@ public abstract partial class AuthenticationCompletionHandler(
         // level exists only now, carried by the session the host completes with, so a request cannot be
         // refused for it any earlier - and withholding the ID token later would answer a failed
         // authentication with an access token and no reason.
-        if (!request.AuthorizedGrant.Context.RequestedClaims.AcceptsAuthenticationLevel(
+        //
+        // The requirement is read from the STORED record, not from the grant the host hands in: a host
+        // expressing partial consent replaces that grant's context, and one it builds afresh carries no
+        // claims at all.
+        if (!AuthenticationLevels.Accept(
+                stored.RequiredAuthContextClassRefs,
+                stored.AuthorizedGrant.Context.RequestedClaims,
                 request.AuthorizedGrant.AuthSession.AuthContextClassRef))
         {
             LogAuthenticationLevelNotTheOneRequired(authenticationRequestId, clientInfo.ClientId);

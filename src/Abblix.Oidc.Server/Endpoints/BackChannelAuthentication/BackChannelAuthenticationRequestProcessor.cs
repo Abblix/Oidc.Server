@@ -79,6 +79,13 @@ public class BackChannelAuthenticationRequestProcessor(
 			? JsonSerializer.Deserialize<RequestedClaims>(JsonSerializer.Serialize(claims))
 			: null;
 
+		// Read from the request itself rather than from what a validator left on it, so a host constructing
+		// the request some other way records the same requirement. A qualifier no level could satisfy has
+		// been refused on arrival; were one to arrive here anyway, nothing is recorded and completion reads
+		// the requirement from the grant, where the same qualifier refuses every level.
+		var requiredLevels = request.Model.Claims.RequiredAuthContextClassRefs()
+			.Match<string[]?>(levels => levels, _ => null);
+
 		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
 		if (authResult.TryGetFailure(out var error))
 		{
@@ -156,6 +163,10 @@ public class BackChannelAuthenticationRequestProcessor(
 			// asked for. Recorded even when the check above already passed: a host may replace the session
 			// on the stored request before completing it, which is the shape the interface documents.
 			RequestedSubjects = namedSubjects,
+
+			// What completion judges the end user's level against. The grant carries the same claims, and the
+			// host replaces the grant's context when the end user approves part of the request.
+			RequiredAuthContextClassRefs = requiredLevels,
 
 			// The post-validation array, beside the copy on the grant. The grant's copy is what will be
 			// issued and the host replaces it when the end user approves part of the request; this one is

@@ -890,6 +890,7 @@ public class AuthenticationCompletionHandlerTests
         BackChannelAuthenticationStatus expected)
     {
         var request = CreateRequestRequiring(StrongLevel, authenticatedLevel);
+        StoredRecordIs(request);
         _storage
             .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
@@ -899,6 +900,69 @@ public class AuthenticationCompletionHandlerTests
 
         Assert.Equal(expected, request.Status);
     }
+
+    /// <summary>
+    /// A host that answers with a record of its own - the grant's context built afresh and nothing else
+    /// carried over - does not erase the level the request required.
+    /// </summary>
+    /// <remarks>
+    /// The contract tells a host to replace the context when the end user approved part of the request, and
+    /// a context built with a constructor carries no <c>claims</c> at all. The requirement is read from the
+    /// STORED record, so what the host hands back cannot move it.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheHostRebuildsTheRecord_StillJudgesTheRequiredLevel()
+    {
+        var stored = CreateRequestRequiring(StrongLevel, null);
+        stored.RequiredAuthContextClassRefs = [StrongLevel];
+        StoredRecordIs(stored);
+
+        var answered = stored with
+        {
+            AuthorizedGrant = new AuthorizedGrant(
+                new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            RequiredAuthContextClassRefs = null,
+        };
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, answered, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, answered, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, answered.Status);
+    }
+
+    /// <summary>
+    /// The levels recorded when the request arrived decide, when the stored grant no longer carries the
+    /// requirement in its <c>claims</c>.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_JudgesTheRecordedLevelWhenTheGrantCarriesNone()
+    {
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test") { AuthContextClassRef = WeakLevel },
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UnixEpoch.AddHours(1))
+        {
+            ClientNotificationToken = NotificationToken,
+            RequiredAuthContextClassRefs = [StrongLevel],
+        };
+        StoredRecordIs(request);
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
+
+    private void StoredRecordIs(BackChannelAuthenticationRequest stored)
+        => _storage.Setup(s => s.TryGetAsync(It.IsAny<string>())).ReturnsAsync(stored);
 
     /// <summary>
     /// A push-mode refusal for an unmet essential <c>acr</c> removes the request and mints nothing, as
@@ -915,6 +979,7 @@ public class AuthenticationCompletionHandlerTests
     {
         var request = CreateRequestRequiring(StrongLevel, WeakLevel);
         request.ClientNotificationEndpoint = _notificationEndpoint;
+        StoredRecordIs(request);
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(

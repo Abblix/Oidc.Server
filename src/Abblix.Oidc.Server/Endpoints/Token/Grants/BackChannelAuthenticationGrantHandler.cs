@@ -111,8 +111,9 @@ public partial class BackChannelAuthenticationGrantHandler(
         // accept, but a host writing Authenticated straight into the storage it owns never passes through
         // it, and the client then simply polls. OpenID Connect Core 1.0 Section 5.5.1.1 makes that outcome a
         // failed authentication attempt either way.
+        string[]? recordedLevels = request.RequiredAuthContextClassRefs is { } recorded ? [..recorded] : null;
         var requiredClaims = request.AuthorizedGrant.Context.RequestedClaims;
-        if (!requiredClaims.AcceptsAuthenticationLevel(request.AuthorizedGrant.AuthSession.AuthContextClassRef))
+        if (!AuthenticationLevels.Accept(recordedLevels, requiredClaims, request.AuthorizedGrant.AuthSession.AuthContextClassRef))
             return NotTheRequiredAuthenticationLevel();
 
         // Whom the request named, read before the processor is handed the request. The comparison below
@@ -135,7 +136,7 @@ public partial class BackChannelAuthenticationGrantHandler(
         if (!NamesTheRequestedEndUser(namedEndUsers, grant, clientInfo))
             return NotTheRequestedEndUser();
 
-        if (!requiredClaims.AcceptsAuthenticationLevel(grant.AuthSession.AuthContextClassRef))
+        if (!AuthenticationLevels.Accept(recordedLevels, requiredClaims, grant.AuthSession.AuthContextClassRef))
             return NotTheRequiredAuthenticationLevel();
 
         // And the same for what the grant authorises. The completion path judges this too, but a host can

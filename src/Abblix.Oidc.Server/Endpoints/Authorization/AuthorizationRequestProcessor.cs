@@ -309,7 +309,7 @@ public class AuthorizationRequestProcessor(
 		if (acrValues is { Length: > 0 })
 		{
 			authSessions = authSessions.Where(
-				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
+				session => AuthenticationLevels.Accept(acrValues, session.AuthContextClassRef));
 		}
 
 		// OpenID Connect Core 1.0 Sections 3.1.2.1 and 3.1.2.2: when a request names an end user, a
@@ -366,8 +366,7 @@ public class AuthorizationRequestProcessor(
 			return (candidates, false);
 
 		var atRequiredLevel = candidates.FindAll(
-			session => session.AuthContextClassRef.HasValue() &&
-			           requiredAcrValues.Contains(session.AuthContextClassRef, StringComparer.Ordinal));
+			session => AuthenticationLevels.Accept(requiredAcrValues, session.AuthContextClassRef));
 
 		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0);
 	}
