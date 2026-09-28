@@ -20,6 +20,12 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// <c>ClientId</c> from the token's audience when the request omitted it, or asserts that
 /// an explicitly supplied <c>client_id</c> matches that audience.
 /// </summary>
+/// <remarks>
+/// A client taken from the audience is not checked for registration here: <see cref="ClientValidator"/>
+/// answers that for every request, and it reads the client this step sets, so it has to follow this one in
+/// the family. A host that removes it or moves it ahead of this step passes an unregistered audience through
+/// validation, and a step it inserts right after this one reads a client nobody has checked yet.
+/// </remarks>
 public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IEndSessionContextValidator
 {
     /// <inheritdoc />
@@ -52,9 +58,6 @@ public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IEndSessionCo
                         ErrorCodes.InvalidRequest,
                         "The audience in the id token hint is missing or have multiple values.");
                 }
-
-                // Whether that client is registered is answered once, by the ClientValidator registered after
-                // this one: it reads the client set here, so it has to run second.
             }
             else if (!audiences.Contains(request.ClientId, StringComparer.Ordinal))
             {
