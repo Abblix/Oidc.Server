@@ -38,10 +38,12 @@ public sealed class AuthenticationFailureBudget(
     /// <summary>
     /// Answers whether this request's source has already spent its budget, without spending anything itself.
     /// </summary>
+    /// <param name="source">The request's <see cref="Source"/>, named once by the caller for the whole
+    /// request; null leaves it uncounted.</param>
     /// <returns>The refusal to return to the caller, or null when its credentials may be looked at.</returns>
-    public TooManyRequestsError? RefuseIfSpent()
+    public TooManyRequestsError? RefuseIfSpent(string? source)
     {
-        if (Source is not { } source)
+        if (source is null)
             return null;
 
         // Acquiring nothing is how the platform's limiter is asked whether a permit is available: it answers
@@ -59,9 +61,10 @@ public sealed class AuthenticationFailureBudget(
     /// <summary>
     /// Charges one failed authentication to this request's source.
     /// </summary>
-    public void RecordFailure()
+    /// <param name="source">The request's <see cref="Source"/>; null charges nothing.</param>
+    public void RecordFailure(string? source)
     {
-        if (Source is { } source)
+        if (source is not null)
             limiter.AttemptAcquire(source).Dispose();
     }
 

@@ -614,12 +614,6 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// The refusal is recorded under the budget it belongs to. A client over its own budget is one record
-    /// and a client over the budget it holds at one address is another, because the answer an operator owes
-    /// differs: one client is asking too often wherever it runs, the other is asking too often from one
-    /// place, and the address is what the second record has to carry.
-    /// </summary>
-    /// <summary>
     /// A public client's request from no address the server can name is charged to no budget, and the
     /// budget - on by default - says so once rather than silently refusing nobody. A confidential client's
     /// budget does not depend on the address and has nothing to report.
@@ -651,6 +645,12 @@ public class RevocationRequestValidatorTests
             entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing));
     }
 
+    /// <summary>
+    /// The refusal is recorded under the budget it belongs to. A client over its own budget is one record
+    /// and a client over the budget it holds at one address is another, because the answer an operator owes
+    /// differs: one client is asking too often wherever it runs, the other is asking too often from one
+    /// place, and the address is what the second record has to carry.
+    /// </summary>
     [Fact]
     public async Task ValidateAsync_WhenACallerIsRefused_ShouldRecordTheBudgetItSpent()
     {

@@ -46,18 +46,19 @@ internal sealed partial class ThrottledClientAuthenticator(
     /// <inheritdoc />
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
-        if (budget.Source is null)
+        var source = budget.Source;
+        if (source is null)
             unnamedSource.Report(CallerRateLimiters.AuthenticationFailures);
 
-        if (budget.RefuseIfSpent() is { } refusal)
+        if (budget.RefuseIfSpent(source) is { } refusal)
         {
-            LogSourceRefused(Sanitized.Value(budget.Source));
+            LogSourceRefused(Sanitized.Value(source));
             throw new TooManyAuthenticationFailuresException(refusal.RetryAfter);
         }
 
         var clientInfo = await inner.TryAuthenticateClientAsync(request);
         if (clientInfo == null)
-            budget.RecordFailure();
+            budget.RecordFailure(source);
 
         return clientInfo;
     }

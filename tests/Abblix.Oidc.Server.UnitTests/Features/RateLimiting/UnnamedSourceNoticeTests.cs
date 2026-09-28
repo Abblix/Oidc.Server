@@ -70,6 +70,37 @@ public class UnnamedSourceNoticeTests
     }
 
     /// <summary>
+    /// With the settings a server starts from - the failure budget off, the revocation budget on - only the
+    /// revocation budget is reported, so a mix-up of which setting belongs to which budget shows.
+    /// </summary>
+    [Fact]
+    public void WithTheDefaultSettings_OnlyTheRevocationBudgetIsReported()
+    {
+        var recorded = new RecordingLoggerFactory();
+        var notice = NoticeOver(recorded, new OidcOptions());
+
+        notice.Report(CallerRateLimiters.AuthenticationFailures);
+        notice.Report(CallerRateLimiters.Revocation);
+
+        Assert.Equal(
+            [CallerRateLimiters.Revocation],
+            recorded.Entries.Select(entry => entry.Value("Budget")));
+    }
+
+    /// <summary>
+    /// The warning names which requests went uncharged, because for revocation that is only a public
+    /// client's: a confidential client is still charged by its identifier.
+    /// </summary>
+    [Fact]
+    public void TheWarningNamesTheRequestsLeftUncharged()
+    {
+        var recorded = new RecordingLoggerFactory();
+        NoticeOver(recorded, new OidcOptions()).Report(CallerRateLimiters.Revocation);
+
+        Assert.Equal("revocation requests from public clients", Assert.Single(recorded.Entries).Value("Uncharged"));
+    }
+
+    /// <summary>
     /// Only the budgets counted per address can be reported, and naming another is a defect at the caller.
     /// </summary>
     [Fact]

@@ -153,7 +153,7 @@ public partial class RevocationRequestValidator(
 
 	/// <summary>
 	/// A public client's request from no address this server can name, which no budget is charged for - and
-	/// which the operator is told about, since the budget is then on and refuses nobody.
+	/// which the operator is told about if the budget is on, since it then refuses none of them.
 	/// </summary>
 	private (string ClientId, string? Source)? ChargedToNone()
 	{
