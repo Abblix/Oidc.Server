@@ -35,7 +35,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         // RFC 9449 section 5: when refreshing a DPoP-bound access token, the new token MUST be
         // bound to the same key as the previous one. Abblix enforces this via the section 10
         // carry-over mechanism - the original grant's ProofKeyThumbprint is committed on
-        // the refresh token and DPoPTokenEndpointValidator rejects any proof key drift.
+        // the refresh token and DPoPBindingValidator rejects any proof key drift.
         using var proofKey = new DPoPProofGenerator();
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);

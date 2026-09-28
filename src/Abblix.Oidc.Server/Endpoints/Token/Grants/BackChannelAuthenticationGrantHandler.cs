@@ -95,8 +95,7 @@ public partial class BackChannelAuthenticationGrantHandler(
         string authenticationRequestId,
         StoredRequest request,
         ClientInfo clientInfo,
-        IBackChannelGrantProcessor processor,
-        CancellationToken cancellationToken)
+        IBackChannelGrantProcessor processor)
     {
         // Refused before the request is consumed, so an ordinary mismatch costs the client nothing it could
         // have used: redeeming removes the entry, and a request answerable only for the wrong end user is
@@ -147,8 +146,10 @@ public partial class BackChannelAuthenticationGrantHandler(
 
         // And what the type comparison structurally cannot see: an entry of a type the request DID ask
         // for, carrying content it did not. RFC 9396 section 6.1 leaves that to the type's own validator, so this
-        // asks it - on a copy, because the question must not rewrite its own subject.
-        if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, cancellationToken)
+        // asks it - on a copy, because the question must not rewrite its own subject. Without the caller's
+        // cancellation token, because the request is already taken: giving up here would spend it and issue
+        // nothing, where finishing issues tokens a departed client simply never reads.
+        if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, CancellationToken.None)
             is not { } refusal)
             return grant;
 
@@ -271,7 +272,7 @@ public partial class BackChannelAuthenticationGrantHandler(
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
                 => await RedeemAsync(
-                    request.AuthenticationRequestId, authenticated, clientInfo, processor, cancellationToken),
+                    request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the user has not yet been authenticated and the request is still pending, either
             // tell a client that asked early to slow down, or wait for a status change (long
@@ -344,7 +345,7 @@ public partial class BackChannelAuthenticationGrantHandler(
             { Status: not BackChannelAuthenticationStatus.Pending } advanced)
         {
             return await ProcessUpdatedRequest(
-                advanced, authenticationRequestId, clientInfo, cancellationToken);
+                advanced, authenticationRequestId, clientInfo);
         }
 
         // Asking early pushes the instant further out rather than resetting it from now: a client
@@ -404,7 +405,7 @@ public partial class BackChannelAuthenticationGrantHandler(
 
         var updatedRequest = await storage.TryGetAsync(authenticationRequestId);
         return await ProcessUpdatedRequest(
-            updatedRequest, authenticationRequestId, clientInfo, cancellationToken);
+            updatedRequest, authenticationRequestId, clientInfo);
     }
 
     /// <summary>
@@ -414,14 +415,11 @@ public partial class BackChannelAuthenticationGrantHandler(
     /// <param name="updatedRequest">The updated authentication request from storage, or null if expired.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
-    /// <param name="cancellationToken">Forwarded to the per-type validators that judge the grant's
-    /// authorization_details before it is handed over.</param>
     /// <returns>Either an authorized grant, access denied error, expired token error, or authorization_pending.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> ProcessUpdatedRequest(
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest? updatedRequest,
         string authenticationRequestId,
-        ClientInfo clientInfo,
-        CancellationToken cancellationToken)
+        ClientInfo clientInfo)
     {
         // Validate client ownership before processing (security critical)
         if (updatedRequest?.AuthorizedGrant.Context.ClientId != clientInfo.ClientId)
@@ -436,7 +434,7 @@ public partial class BackChannelAuthenticationGrantHandler(
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
                 return await RedeemAsync(
-                    authenticationRequestId, authenticated, clientInfo, grantProcessor, cancellationToken);
+                    authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
                 return new OidcError(

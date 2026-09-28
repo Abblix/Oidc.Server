@@ -8,6 +8,7 @@
 
 using System;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -387,6 +388,36 @@ public class DeviceCodeGrantHandlerTests
         Assert.NotNull(policy.LastSeen);
         Assert.NotSame(granted, policy.LastSeen);
         Assert.Equal(granted.ToJsonString(), policy.LastSeen!.ToJsonString());
+    }
+
+    /// <summary>
+    /// A poll abandoned by its client after the device code has been claimed still yields the grant: the
+    /// claim cannot be undone, so abandoning past it would spend the code and issue nothing.
+    /// </summary>
+    [Fact]
+    public async Task AnAbandonedPoll_PastTheClaim_StillYieldsTheGrant()
+    {
+        var policy = StubAuthorizationDetailsPolicy.HonouringCancellation;
+        var handler = HandlerWith(policy);
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
+            new CancellationToken(canceled: true));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(1, policy.GrantedCalls);
+        _storage.Verify(storage => storage.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>

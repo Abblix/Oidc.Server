@@ -800,8 +800,10 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> - RFC 9449 section 5
-        /// token-endpoint binding (sub-range 10020-10039).
+        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> and
+        /// <c>DPoPBindingValidator.cs</c> beside it - RFC 9449 section 5 token-endpoint proof and binding
+        /// (sub-range 10020-10039). The two report under one range because they are one check split
+        /// around grant resolution.
         /// </summary>
         public static class DPoPTokenEndpointValidator
         {

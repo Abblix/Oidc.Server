@@ -385,6 +385,38 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal("5000", granted[0]!["instructedAmount"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// A token request abandoned by its client after the authentication request has been taken still yields
+    /// the grant: taking it cannot be undone, so abandoning past it would spend the request and issue nothing.
+    /// </summary>
+    [Fact]
+    public async Task AnAbandonedTokenRequest_PastTheTake_StillYieldsTheGrant()
+    {
+        var policy = StubAuthorizationDetailsPolicy.HonouringCancellation;
+        var handler = HandlerWith(policy);
+
+        var authRequest = new BackChannelAuthenticationRequest(
+            GrantWithDetails(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            _currentTime.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedAuthorizationDetails =
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { AuthenticationRequestId = AuthReqId },
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            new CancellationToken(canceled: true));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(1, policy.GrantedCalls);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
     private AuthorizedGrant GrantWithDetails(JsonArray details)
         => new(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -1136,8 +1168,11 @@ public class BackChannelAuthenticationGrantHandlerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
+        // A token of the caller's own, told apart from every other, so the wait can be shown to have received it.
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, caller.Token);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -1146,8 +1181,10 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Waited once and answered: the question is about the wait, not about how many times the
         // record was read - the pending arm reads it again so an arriving completion is answered at once.
+        // And the wait was handed the caller's token: nothing has been spent while the request is pending, so
+        // a client that stops waiting frees the wait instead of holding it for the whole timeout.
         statusNotifier.Verify(
-            n => n.WaitForStatusChangeAsync(AuthReqId, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            n => n.WaitForStatusChangeAsync(AuthReqId, It.IsAny<TimeSpan>(), caller.Token),
             Times.Once);
     }
 

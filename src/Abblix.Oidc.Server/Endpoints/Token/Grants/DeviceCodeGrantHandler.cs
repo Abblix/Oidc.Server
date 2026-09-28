@@ -73,7 +73,9 @@ public partial class DeviceCodeGrantHandler(
         // already run out (RFC 8628 section 3.2).
         var now = timeProvider.GetUtcNow();
 
-        return await DecideAsync(request.DeviceCode, clientInfo, deviceRequest, now, cancellationToken);
+        // The token goes no further: the storage this decision reads before the claim takes none, and
+        // nothing after the claim may give up, so no step of it has a use for the token.
+        return await DecideAsync(request.DeviceCode, clientInfo, deviceRequest, now);
     }
 
     /// <summary>
@@ -91,13 +93,11 @@ public partial class DeviceCodeGrantHandler(
     /// <param name="clientInfo">The client the answer goes to.</param>
     /// <param name="deviceRequest">What the store held when it was read, or null when it held nothing.</param>
     /// <param name="now">The one clock reading this answer is decided on.</param>
-    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     private async Task<Result<AuthorizedGrant, OidcError>> DecideAsync(
         string deviceCode,
         ClientInfo clientInfo,
         Features.DeviceAuthorization.DeviceAuthorizationRequest? deviceRequest,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
+        DateTimeOffset now)
     {
         var deviceAuthOptions = options.Value.DeviceAuthorization
             .NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -172,9 +172,11 @@ public partial class DeviceCodeGrantHandler(
                 // And what the type comparison above structurally cannot see: an entry of a type the
                 // request DID ask for, carrying content it did not - a raised amount, a widened set of
                 // accounts. RFC 9396 section 6.1 leaves that to the type's own validator, so this asks it.
-                // On a copy: the question must not rewrite its own subject.
+                // On a copy: the question must not rewrite its own subject. And without a cancellation
+                // token, because the code is already claimed: giving up here would spend it and issue
+                // nothing, where finishing issues tokens a departed client simply never reads.
                 if (await authorizationDetailsPolicy.RefuseAsync(
-                        authorizedGrant, clientInfo, cancellationToken) is { } refusal)
+                        authorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
                 {
                     // The reason goes to the log and a fixed string to the client, matching the gate
                     // above: a granted-phase rejection names a host-side defect, and its text is
@@ -235,7 +237,7 @@ public partial class DeviceCodeGrantHandler(
                 if (await storage.TryGetByDeviceCodeAsync(deviceCode) is
                     { Status: not DeviceAuthorizationStatus.Pending } advanced)
                 {
-                    return await DecideAsync(deviceCode, clientInfo, advanced, now, cancellationToken);
+                    return await DecideAsync(deviceCode, clientInfo, advanced, now);
                 }
 
                 // Asking early pushes the instant further out rather than resetting it from now, so a

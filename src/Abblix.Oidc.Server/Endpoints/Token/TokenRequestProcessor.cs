@@ -163,7 +163,7 @@ public class TokenRequestProcessor(
 					//     client authentication already sender-constrains them. Stripping the
 					//     committed jkt from the persisted refresh-token context lets a follow-up
 					//     refresh call skip the committed-vs-presented compare in
-					//     DPoPTokenEndpointValidator, allowing key rotation per section 5's carve-out.
+					//     DPoPBindingValidator, allowing key rotation per section 5's carve-out.
 					ClientType.Confidential => null,
 
 					//   * Public clients: DPoP is the SOLE sender-constraint, so section 5 mandates

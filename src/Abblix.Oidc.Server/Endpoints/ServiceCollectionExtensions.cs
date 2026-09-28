@@ -280,13 +280,18 @@ public static class ServiceCollectionExtensions
         //   the former resolves. It also has to stay in validation rather than move into the processor:
         //   the authorization code is spent by a decorator around the processor, so a refusal there would
         //   burn a code the request never earned.
+        // - The device code and the backchannel authentication request are spent INSIDE
+        //   AuthorizationGrantValidator, so what can refuse without the grant runs before it:
+        //   DPoPTokenEndpointValidator, whose nonce challenge RFC 9449 section 8 answers with a retry that
+        //   must still find the grant. DPoPBindingValidator reads the grant and follows it.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.RevokedSessionValidator>(),
-            ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>()
+            ServiceDescriptor.Singleton<ITokenContextValidator, DPoPBindingValidator>()
         ]);
         // Combine all registered ITokenContextValidator into a single composite validator.
         // This composite approach allows the application to apply multiple validation checks sequentially.
