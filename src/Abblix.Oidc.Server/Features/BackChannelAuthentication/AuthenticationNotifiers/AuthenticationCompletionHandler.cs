@@ -8,9 +8,11 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -55,8 +57,9 @@ public abstract partial class AuthenticationCompletionHandler(
     /// This method:
     /// <list type="bullet">
     ///   <item>Refuses unless the STORED record reads Pending</item>
-    ///   <item>Refuses an answer from somebody other than the end user the request named, by denying or
-    ///   removing according to the mode</item>
+    ///   <item>Refuses an answer from somebody other than the end user the request named, or at an
+    ///   authentication level its essential acr does not accept, by denying or removing according to the
+    ///   mode</item>
     ///   <item>Sets the request status to Authenticated</item>
     ///   <item>Delegates to HandleDeliveryAsync for mode-specific token delivery (poll/ping/push)</item>
     /// </list>
@@ -110,6 +113,38 @@ public abstract partial class AuthenticationCompletionHandler(
                 + "asking the end user again rather than completing the same request twice.");
         }
 
+        // What the request recorded when it arrived - whom it named, what it asked for, the levels it
+        // required, and where and with which token the client is to be notified - is the STORED record's,
+        // never the host's copy: a host answers with a record of its own, and one it builds with a
+        // constructor carries none of it. Taken onto that copy rather than read beside it, because the copy
+        // is what every check below judges, what each mode delivers from and writes back, and the token
+        // endpoint judges the redeemed grant against the record it finds there. A request stored before the
+        // levels were recorded has them read from its grant now, while the grant still says what the client
+        // asked for.
+        request.RequestedSubjects = stored.RequestedSubjects;
+        request.RequestedAuthorizationDetails = stored.RequestedAuthorizationDetails;
+        request.RequiredAuthContextClassRefs = stored.RequiredAuthContextClassRefs
+            ?? stored.AuthorizedGrant.Context.RequestedClaims.RequiredAuthContextClassRefs()
+                .Match<string[]?>(levels => levels, _ => null);
+        request.ClientNotificationEndpoint = stored.ClientNotificationEndpoint;
+        request.ClientNotificationToken = stored.ClientNotificationToken;
+
+        // The grant the host completes with is minted for the client its context names, so that has to be
+        // the client the request came from. The grant itself cannot be taken from the stored record: it
+        // carries the end user's answer, which exists only in the host's copy. Refused with the STORED record,
+        // so the denial left behind belongs to the client that asked: the token endpoint matches the client
+        // before it reads the status, and a record carrying the host's grant would answer the asking client
+        // invalid_grant and the named one access_denied.
+        if (!string.Equals(
+                request.AuthorizedGrant.Context.ClientId,
+                stored.AuthorizedGrant.Context.ClientId,
+                StringComparison.Ordinal))
+        {
+            LogGrantNamesAnotherClient(authenticationRequestId, stored.AuthorizedGrant.Context.ClientId);
+            await RefuseAsync(authenticationRequestId, stored, expiresIn);
+            return;
+        }
+
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
         // Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token for a different user,
         // even if they have an active session with the Authorization Server". The end user authenticated out
@@ -121,6 +156,21 @@ public abstract partial class AuthenticationCompletionHandler(
             !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
             LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
+
+        // And at the level the request required. OpenID Connect Core 1.0 Section 5.5.1.1: when an essential
+        // acr cannot be met, the server "MUST treat that outcome as a failed authentication attempt". The
+        // level exists only now, carried by the session the host completes with, so a request cannot be
+        // refused for it any earlier - and withholding the ID token later would answer a failed
+        // authentication with an access token and no reason.
+        if (!AuthenticationLevels.Accept(
+                request.RequiredAuthContextClassRefs,
+                stored.AuthorizedGrant.Context.RequestedClaims,
+                request.AuthorizedGrant.AuthSession.AuthContextClassRef))
+        {
+            LogAuthenticationLevelNotTheOneRequired(authenticationRequestId, clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }
@@ -205,7 +255,8 @@ public abstract partial class AuthenticationCompletionHandler(
     }
 
     /// <summary>
-    /// Refuses a request whose authenticated end user is not the one it named.
+    /// Refuses a request whose authentication does not answer it: another end user, a level it does not
+    /// accept, or authorization_details it did not ask for.
     /// </summary>
     /// <remarks>
     /// Denying and leaving the request behind is right for a mode whose client polls, since the poll is what

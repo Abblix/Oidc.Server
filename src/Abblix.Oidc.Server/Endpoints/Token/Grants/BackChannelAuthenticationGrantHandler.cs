@@ -107,9 +107,19 @@ public partial class BackChannelAuthenticationGrantHandler(
         if (WidensTheRequest(request, request.AuthorizedGrant))
             return NotWhatTheRequestAskedFor();
 
+        // The completion path refuses an authentication at a level the request's essential acr does not
+        // accept, but a host writing Authenticated straight into the storage it owns never passes through
+        // it, and the client then simply polls. OpenID Connect Core 1.0 Section 5.5.1.1 makes that outcome a
+        // failed authentication attempt either way.
+        string[]? recordedLevels = request.RequiredAuthContextClassRefs is { } recorded ? [..recorded] : null;
+        var requiredClaims = request.AuthorizedGrant.Context.RequestedClaims;
+        if (!AuthenticationLevels.Accept(recordedLevels, requiredClaims, request.AuthorizedGrant.AuthSession.AuthContextClassRef))
+            return NotTheRequiredAuthenticationLevel();
+
         // Whom the request named, read before the processor is handed the request. The comparison below
         // exists because what is stored can change between the two checks; taking its yardstick from the
-        // same object the processor holds would let one change move both sides together.
+        // same object the processor holds would let one change move both sides together. The level's
+        // yardstick above is read before the same call for the same reason.
         string[]? namedEndUsers = request.RequestedSubjects is { } named ? [..named] : null;
 
         var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
@@ -125,6 +135,9 @@ public partial class BackChannelAuthenticationGrantHandler(
         // another is the whole failure this comparison exists to prevent.
         if (!NamesTheRequestedEndUser(namedEndUsers, grant, clientInfo))
             return NotTheRequestedEndUser();
+
+        if (!AuthenticationLevels.Accept(recordedLevels, requiredClaims, grant.AuthSession.AuthContextClassRef))
+            return NotTheRequiredAuthenticationLevel();
 
         // And the same for what the grant authorises. The completion path judges this too, but a host can
         // complete with a narrowed grant and then store a wider one before the client polls - the same
@@ -147,6 +160,9 @@ public partial class BackChannelAuthenticationGrantHandler(
 
     private static OidcError NotTheRequestedEndUser()
         => new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
+
+    private static OidcError NotTheRequiredAuthenticationLevel()
+        => new(ErrorCodes.AccessDenied, "The end user authenticated at a level the request does not accept");
 
     private static OidcError NotWhatTheRequestAskedFor()
         => new(ErrorCodes.AccessDenied,

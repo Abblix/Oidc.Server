@@ -60,5 +60,16 @@ public record ValidBackChannelAuthenticationRequest(
 			context.Resources,
 			context.AuthorizationDetails)
 	{
+		RequiredAuthContextClassRefs = context.RequiredAuthContextClassRefs;
 	}
+
+	/// <summary>
+	/// The authentication levels this request requires of the ID token, or null when it requires none.
+	/// </summary>
+	/// <remarks>
+	/// For the host initiating the authentication, which chooses how the end user authenticates and so is
+	/// the only party able to meet them. The server judges the level the host completes with, and refuses
+	/// an authentication at any other level.
+	/// </remarks>
+	public string[]? RequiredAuthContextClassRefs { get; init; }
 }

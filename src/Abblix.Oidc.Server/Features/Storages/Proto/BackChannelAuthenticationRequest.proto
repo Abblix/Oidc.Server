@@ -23,6 +23,10 @@ message AcceptedSubjects {
   repeated string values = 1;
 }
 
+message RequiredAuthenticationLevels {
+  repeated string values = 1;
+}
+
 // Represents a backchannel authentication request (CIBA protocol)
 message BackChannelAuthenticationRequest {
   // The authorized grant associated with this authentication request
@@ -66,4 +70,11 @@ message BackChannelAuthenticationRequest {
   // field existed, which is not the same as a request that asked for nothing: that one is stored as
   // an empty array. Same scheme as the device authorization request.
   optional string requested_authorization_details_json = 8;
+
+  // The authentication levels an essential acr in the request's claims parameter requires, kept apart
+  // from the claims on the grant for the reason the authorization_details above are: the host replaces
+  // the grant's context when the end user narrows the request. Wrapped for the reason the subjects are:
+  // absent is a request written by a build that did not record them, whose requirement is read from the grant,
+  // while empty is a request that required nothing.
+  RequiredAuthenticationLevels required_authentication_levels = 9;
 }

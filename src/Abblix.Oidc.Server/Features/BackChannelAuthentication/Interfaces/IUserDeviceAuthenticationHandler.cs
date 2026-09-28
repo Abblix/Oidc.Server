@@ -49,8 +49,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         var userIdentifier = ExtractUserIdentifier(request);
 ///         var bindingMessage = request.Model.BindingMessage;
 ///
+///         // The levels an essential acr requires, or null when it requires none. The device interaction
+///         // has to reach one of them: completion refuses an authentication at any other level.
+///         var requiredLevels = request.RequiredAuthContextClassRefs;
+///
 ///         // Send push notification to user's device
-///         await _pushService.SendAuthRequestAsync(userIdentifier, bindingMessage);
+///         await _pushService.SendAuthRequestAsync(userIdentifier, bindingMessage, requiredLevels);
 ///
 ///         // Return pending - authentication completes asynchronously
 ///         // User will approve/deny on their device
@@ -58,18 +62,21 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     }
 ///
 ///     // Called when user approves on their device
-///     public async Task OnUserApprovedAsync(string authReqId, string userId)
+///     public async Task OnUserApprovedAsync(string authReqId, string userId, string authenticatedLevel)
 ///     {
 ///         // Retrieve the stored authentication request
 ///         var storedRequest = await _storage.TryGetAsync(authReqId);
 ///         if (storedRequest == null) return;
 ///
-///         // Create authenticated session
+///         // Create authenticated session, carrying the level the device interaction actually reached
 ///         var authSession = new AuthSession(
 ///             userId,
 ///             SessionId: _sessionIdGenerator.GenerateSessionId(),
 ///             AuthenticationTime: _clock.GetUtcNow(),
-///             IdentityProvider: "local");
+///             IdentityProvider: "local")
+///         {
+///             AuthContextClassRef = authenticatedLevel,
+///         };
 ///
 ///         // Carry the end user's answer on the grant. AuthorizedGrant is a positional member of the
 ///         // record, so it is init-only and a `with` expression is how it is replaced; the copy carries

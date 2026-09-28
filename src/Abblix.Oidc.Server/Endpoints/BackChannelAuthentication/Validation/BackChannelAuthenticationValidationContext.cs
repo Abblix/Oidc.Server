@@ -84,4 +84,10 @@ public record BackChannelAuthenticationValidationContext(
     /// <c>null</c> when the request did not include <c>authorization_details</c>.
     /// </summary>
     public JsonArray? AuthorizationDetails { get; set; }
+
+    /// <summary>
+    /// The authentication levels an essential <c>acr</c> requires of the ID token, or null when it requires
+    /// none, set by <see cref="RequiredAuthContextClassRefValidator"/>.
+    /// </summary>
+    public string[]? RequiredAuthContextClassRefs { get; set; }
 }
