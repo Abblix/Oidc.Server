@@ -260,11 +260,11 @@ public class DeviceAuthorizationStorageTests
     /// The discard path reports under its OWN event, because what an operator must do differs.
     /// </summary>
     /// <remarks>
-    /// The claim path's event, <c>UserCodeIndexNotRemovedAfterClaim</c>, says the code was claimed and the
-    /// caller was told it took it. Neither is true
-    /// here - nothing was issued, nobody was told anything, and the request is removed on the next
-    /// line - so borrowing that message would send somebody looking for an issuance that never
-    /// happened. The row asserts the ID rather than the wording, because the id is what a filter is
+    /// The claim path's event,
+    /// <see cref="LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim"/>, says the code was
+    /// claimed and the caller was told it took it. Neither is true here - nothing was issued, nobody was told anything,
+    /// and the request is removed on the next line - so borrowing that message would send somebody looking for an
+    /// issuance that never happened. The row asserts the ID rather than the wording, because the id is what a filter is
     /// built on and what a renumbering would silently break.
     /// </remarks>
     [Fact]

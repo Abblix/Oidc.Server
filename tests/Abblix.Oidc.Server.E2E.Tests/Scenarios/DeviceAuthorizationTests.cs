@@ -65,8 +65,8 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         //
         // Runs on an isolated host with the polling interval collapsed to zero, so no poll here can be
         // answered by the interval throttle - that throttle is
-        // A_poll_that_arrives_before_the_advertised_interval_is_throttled. Removing the wait isolates the
-        // approval gate itself.
+        // A_poll_that_arrives_before_the_advertised_interval_is_throttled. With the wait removed, whatever
+        // answers a poll here is the approval gate, never the throttle.
         await using var host = CreateHostWithoutPollingDelay();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);

@@ -20,8 +20,8 @@ namespace Abblix.Jwt.UnitTests;
 /// The two used to be one: the validator ran the caller's delegate on either flag, and dereferenced it
 /// unconditionally. So the documented use of the presence flag on its own - "requires the issuer claim (iss)
 /// to be present" - threw <see cref="InvalidOperationException"/> from inside validation instead of
-/// validating, which on a request path reaches the host as a 500 rather than a refusal. Every case in this
-/// class is a shape that used to throw or to run a check nobody asked for.
+/// validating, which on a request path reaches the host as a 500 rather than a refusal. The cases here are the
+/// shapes that used to throw or to run a check nobody asked for, and the controls beside them.
 /// </remarks>
 public class PresenceAndValidityFlagTests
 {

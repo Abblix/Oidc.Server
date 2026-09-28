@@ -88,8 +88,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         // A route that answered nothing would satisfy "declared covers answered" while proving no part
         // of it, so the drive is required to have reached every route MappedRoutes lists before
-        // anything is judged. No count is written here: the table is what says how many there are, and
-        // a number beside it is a second place to keep in step.
+        // anything is judged. No count is written here: MappedRoutes is what says how many there are,
+        // and a number beside it is a second place to keep in step.
         var routes = MappedRoutes();
         var reached = answered.Select(answer => (answer.Method, answer.Pattern)).ToHashSet();
         Assert.True(
