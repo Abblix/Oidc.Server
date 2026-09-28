@@ -172,9 +172,11 @@ public partial class DeviceCodeGrantHandler(
                 // And what the type comparison above structurally cannot see: an entry of a type the
                 // request DID ask for, carrying content it did not - a raised amount, a widened set of
                 // accounts. RFC 9396 section 6.1 leaves that to the type's own validator, so this asks it.
-                // On a copy: the question must not rewrite its own subject.
+                // On a copy: the question must not rewrite its own subject. And without the caller's
+                // cancellation token, because the code is already claimed: giving up here would spend it
+                // and issue nothing, where finishing issues tokens a departed client simply never reads.
                 if (await authorizationDetailsPolicy.RefuseAsync(
-                        authorizedGrant, clientInfo, cancellationToken) is { } refusal)
+                        authorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
                 {
                     // The reason goes to the log and a fixed string to the client, matching the gate
                     // above: a granted-phase rejection names a host-side defect, and its text is

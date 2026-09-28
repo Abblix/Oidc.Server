@@ -385,6 +385,38 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal("5000", granted[0]!["instructedAmount"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// A token request abandoned by its client after the authentication request has been taken still yields
+    /// the grant: taking it cannot be undone, so abandoning past it would spend the request and issue nothing.
+    /// </summary>
+    [Fact]
+    public async Task AnAbandonedTokenRequest_PastTheTake_StillYieldsTheGrant()
+    {
+        var policy = StubAuthorizationDetailsPolicy.HonouringCancellation;
+        var handler = HandlerWith(policy);
+
+        var authRequest = new BackChannelAuthenticationRequest(
+            GrantWithDetails(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            _currentTime.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedAuthorizationDetails =
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { AuthenticationRequestId = AuthReqId },
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            new CancellationToken(canceled: true));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(1, policy.GrantedCalls);
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
     private AuthorizedGrant GrantWithDetails(JsonArray details)
         => new(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),

@@ -56,7 +56,14 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// </summary>
     public static StubAuthorizationDetailsPolicy ClearingInPlace => new() { _empty = true, _clear = true };
 
+    /// <summary>
+    /// Accepts, but gives up the way a validator making a remote call does once the token it was handed is
+    /// cancelled - which is what a host's validator is entitled to do with it.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy HonouringCancellation => new() { _honourCancellation = true };
+
     private string? _refusal;
+    private bool _honourCancellation;
     private (string Member, string Value)? _cap;
     private bool _empty;
     private bool _clear;
@@ -98,6 +105,9 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
         CancellationToken token)
     {
         GrantedCalls++;
+        if (_honourCancellation)
+            token.ThrowIfCancellationRequested();
+
         return ApplyAsync(granted, client, token);
     }
 }
