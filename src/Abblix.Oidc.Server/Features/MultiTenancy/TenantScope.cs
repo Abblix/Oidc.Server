@@ -66,6 +66,10 @@ public sealed class TenantScope : IDisposable
     /// passed over when the inner one ends: restoring its tenant then would run later work as a tenant whose scope
     /// is over. It does not throw, since a Dispose that throws while an exception is already leaving a
     /// <c>using</c> block would replace that exception.
+    /// <para>
+    /// Work started inside a scope carries the scope with it, and when that work outlives the scope it keeps
+    /// running as its tenant until it enters and ends a scope of its own; await such work before ending the scope.
+    /// </para>
     /// </remarks>
     public void Dispose()
     {
