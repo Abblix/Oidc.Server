@@ -218,6 +218,24 @@ public class MultiTenancyRegistrationTests
             },
             "Client 'public'"
         },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                Clients = [new ClientInfo("App"), new ClientInfo("app")],
+            },
+            "2 clients are configured under the id 'App' and 'app'"
+        },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                Resources = [new ResourceDefinition(new Uri("api", UriKind.Relative))],
+            },
+            "The resource 'api' must be named by an absolute URI"
+        },
     };
 
     /// <summary>
@@ -233,6 +251,8 @@ public class MultiTenancyRegistrationTests
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
         ]);
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
         using var provider = services.BuildServiceProvider();

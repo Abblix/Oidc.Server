@@ -158,6 +158,13 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientSecretsOptionsValidator>());
 
+        // Fail loud at startup when the client or resource registry could not hold what is configured, instead
+        // of failing every request that builds it, without naming what it could not hold.
+        services.TryAddEnumerable([
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
+        ]);
+
         // Fail loud at startup when EnabledEndpoints advertises an opt-in endpoint whose feature services were
         // never registered by the matching AddX() call, instead of 500-ing on every request to it.
         services.TryAddEnumerable(

@@ -50,10 +50,12 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         typeof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions).FullName!,
 
         // Startup judging the configured values
+        typeof(ClientIdsOptionsValidator).FullName!,
         typeof(ClientSecretsOptionsValidator).FullName!,
         typeof(ClockSkewCeilingValidator).FullName!,
         typeof(DefaultResourceIndicatorValidator).FullName!,
         typeof(OidcOptionsSecurityProfileValidator).FullName!,
+        typeof(ResourceDefinitionsValidator).FullName!,
         typeof(TenantOwnedOptionsValidator).FullName!,
     ];
 
