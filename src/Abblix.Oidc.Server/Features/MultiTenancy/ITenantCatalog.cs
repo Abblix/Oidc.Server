@@ -15,6 +15,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </summary>
 /// <remarks>
 /// Asked on every request, so an implementation answers from memory where it can.
+/// <para>
+/// A tenant's definition does not change while the server runs. What is built from it once - its clients, scopes,
+/// resources and pairwise converter - is kept for the tenant's id, so a catalog answering a changed definition
+/// under the same id would serve that tenant partly from each. The checks startup runs over tenants judge
+/// <see cref="MultiTenancyOptions.Tenants"/>; a catalog of the host's own answering other tenants gets none of them.
+/// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantCatalog
