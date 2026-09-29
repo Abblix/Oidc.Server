@@ -31,13 +31,10 @@ internal static class TenantSeams
     /// </remarks>
     public static readonly ITenantSeam[] All =
     [
-        new TenantSeam<IEntityStorage, TenantEntityStorage>(),
-        new TenantSeam<IReplayCache, TenantReplayCache>(),
-        new TenantSeam<PartitionedRateLimiter<string>, TenantAddressRateLimiter>(
-            CallerRateLimiters.AuthenticationFailures),
-        new TenantSeam<PartitionedRateLimiter<(string ClientId, string? Source)>, TenantCallerRateLimiter>(
-            CallerRateLimiters.Introspection, required: false),
-        new TenantSeam<PartitionedRateLimiter<(string ClientId, string? Source)>, TenantCallerRateLimiter>(
-            CallerRateLimiters.Revocation, required: false),
+        new DecoratedTenantSeam<IEntityStorage, TenantEntityStorage>(),
+        new DecoratedTenantSeam<IReplayCache, TenantReplayCache>(),
+        new RateLimiterTenantSeam<string>(CallerRateLimiters.AuthenticationFailures),
+        new RateLimiterTenantSeam<(string ClientId, string? Source)>(CallerRateLimiters.Introspection, required: false),
+        new RateLimiterTenantSeam<(string ClientId, string? Source)>(CallerRateLimiters.Revocation, required: false),
     ];
 }

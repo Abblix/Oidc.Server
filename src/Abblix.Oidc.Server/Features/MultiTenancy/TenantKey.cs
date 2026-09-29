@@ -24,19 +24,26 @@ public static class TenantKey
     /// The id's length goes before the id, because an id may hold the separator: without it tenant <c>a</c>
     /// with key <c>b:x</c> and tenant <c>a:b</c> with key <c>x</c> would be one entry.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">
-    /// No tenant is resolved: a tenant's operation that lost its tenant on the way - work carried on after the
-    /// request ended - would write where its tenant never reads, and the tenant would silently miss its data.
+    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenantId"/> says.
     /// </exception>
     public static string Of(ITenantAccessor accessor, string key)
     {
-        var tenantId = accessor.Current?.Tenant.Id
-            ?? throw new InvalidOperationException(
-                "The operation runs outside any tenant, so there is no tenant's space to keep its data in. " +
-                $"Run it within a request resolved to a tenant, or within {nameof(TenantScope)}.{nameof(TenantScope.Enter)}.");
-
+        var tenantId = CurrentTenantId(accessor);
         return string.Create(
             CultureInfo.InvariantCulture,
             $"tenant:{tenantId.Length}:{tenantId}:{key}");
     }
+
+    /// <summary>
+    /// The id of the tenant <paramref name="accessor"/> resolved.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// No tenant is resolved: a tenant's operation that lost its tenant on the way - work carried on after the
+    /// request ended - would write where its tenant never reads, and the tenant would silently miss its data.
+    /// </exception>
+    internal static string CurrentTenantId(ITenantAccessor accessor)
+        => accessor.Current?.Tenant.Id
+           ?? throw new InvalidOperationException(
+               "The operation runs outside any tenant, so there is no tenant's space to keep its data in. " +
+               $"Run it within a request resolved to a tenant, or within {nameof(TenantScope)}.{nameof(TenantScope.Enter)}.");
 }

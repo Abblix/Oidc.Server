@@ -122,27 +122,170 @@ public sealed class TenantRateLimiterTests : IDisposable
     }
 
     /// <summary>
-    /// The limiter a tenant budget wraps was built for it alone and holds the timers of its windows, so it goes
-    /// when the wrapper goes, whichever way the container disposes it.
+    /// Each tenant's limiter was built for the budget alone and holds the timers of its windows, so it goes when
+    /// the budget goes, whichever way the container disposes it.
     /// </summary>
     [Fact]
-    public void DisposingTheBudget_DisposesTheLimiterItWraps()
+    public void DisposingTheBudget_DisposesEveryTenantsLimiter()
     {
-        var inner = PartitionedRateLimiter.Create<string, string>(key => RateLimitPartition.GetNoLimiter(key));
+        var (budget, built) = BudgetOverNewLimiters();
 
-        new TenantAddressRateLimiter(inner, new HttpContextTenantAccessor(new HttpContextAccessor())).Dispose();
+        budget.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => inner.AttemptAcquire(Address));
+        Assert.All(built, limiter => Assert.Throws<ObjectDisposedException>(() => limiter.AttemptAcquire(Address)));
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task DisposingTheBudgetAsynchronously_DisposesTheLimiterItWraps()
+    public async System.Threading.Tasks.Task DisposingTheBudgetAsynchronously_DisposesEveryTenantsLimiter()
     {
-        var inner = PartitionedRateLimiter.Create<string, string>(key => RateLimitPartition.GetNoLimiter(key));
+        var (budget, built) = BudgetOverNewLimiters();
 
-        await new TenantAddressRateLimiter(inner, new HttpContextTenantAccessor(new HttpContextAccessor())).DisposeAsync();
+        await budget.DisposeAsync();
 
-        Assert.Throws<ObjectDisposedException>(() => inner.AttemptAcquire(Address));
+        Assert.All(built, limiter => Assert.Throws<ObjectDisposedException>(() => limiter.AttemptAcquire(Address)));
+    }
+
+    /// <summary>
+    /// A budget that has built a limiter for two tenants, and those limiters.
+    /// </summary>
+    private static (TenantPartitionedRateLimiter<string> Budget, System.Collections.Generic.List<PartitionedRateLimiter<string>> Built)
+        BudgetOverNewLimiters()
+    {
+        var built = new System.Collections.Generic.List<PartitionedRateLimiter<string>>();
+        var httpContextAccessor = new HttpContextAccessor();
+        var budget = new TenantPartitionedRateLimiter<string>(
+            () =>
+            {
+                var limiter = PartitionedRateLimiter.Create<string, string>(key => RateLimitPartition.GetNoLimiter(key));
+                built.Add(limiter);
+                return limiter;
+            },
+            new HttpContextTenantAccessor(httpContextAccessor));
+
+        foreach (var tenantId in new[] { "acme", "globex" })
+        {
+            httpContextAccessor.HttpContext = InTenant(tenantId);
+            budget.AttemptAcquire(Address).Dispose();
+        }
+
+        Assert.Equal(2, built.Count);
+        return (budget, built);
+    }
+
+    /// <summary>
+    /// A host's own limiter partitions by the address it was written for: each tenant gets one of its own, built
+    /// the way the host registered it, rather than one shared limiter seeing a key the host never produced.
+    /// </summary>
+    [Fact]
+    public void AHostsOwnLimiter_IsBuiltPerTenant_AndSeesTheAddressUnchanged()
+    {
+        var built = 0;
+        var seen = new System.Collections.Generic.List<string>();
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures,
+            (_, _) =>
+            {
+                built++;
+                return PartitionedRateLimiter.Create<string, string>(address =>
+                {
+                    seen.Add(address);
+                    return RateLimitPartition.GetNoLimiter(address);
+                });
+            });
+        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures);
+
+        foreach (var tenantId in new[] { "acme", "globex", "acme" })
+        {
+            accessor.HttpContext = InTenant(tenantId);
+            failures.AttemptAcquire(Address).Dispose();
+        }
+
+        Assert.Equal(2, built);
+        Assert.All(seen, address => Assert.Equal(Address, address));
+    }
+
+    /// <summary>
+    /// A host's limiter registered by its type is built per tenant in the same way.
+    /// </summary>
+    [Fact]
+    public void AHostsLimiterRegisteredByType_IsBuiltPerTenant()
+    {
+        var log = new HostLimiterLog();
+        var services = new ServiceCollection().AddSingleton(log);
+        services.AddKeyedSingleton<PartitionedRateLimiter<string>, HostLimiter>(CallerRateLimiters.AuthenticationFailures);
+        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures);
+
+        foreach (var tenantId in new[] { "acme", "globex", "acme" })
+        {
+            accessor.HttpContext = InTenant(tenantId);
+            failures.AttemptAcquire(Address).Dispose();
+        }
+
+        Assert.Equal(2, log.Built);
+        Assert.Equal([Address, Address, Address], log.Seen);
+    }
+
+    /// <summary>
+    /// Two first calls of one tenant arriving together build one limiter between them; a second one would be
+    /// dropped with its window timers still running.
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task TwoFirstCallsOfOneTenant_BuildOneLimiter()
+    {
+        var built = 0;
+        using var secondArrived = new System.Threading.ManualResetEventSlim();
+        var httpContextAccessor = new HttpContextAccessor { HttpContext = InTenant("acme") };
+        using var budget = new TenantPartitionedRateLimiter<string>(
+            () =>
+            {
+                if (System.Threading.Interlocked.Increment(ref built) == 2)
+                    secondArrived.Set();
+
+                // Long enough for the other call to reach the build too, unless it is held off
+                secondArrived.Wait(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken);
+                return PartitionedRateLimiter.Create<string, string>(key => RateLimitPartition.GetNoLimiter(key));
+            },
+            new HttpContextTenantAccessor(httpContextAccessor));
+
+        await System.Threading.Tasks.Task.WhenAll(
+            System.Threading.Tasks.Task.Run(() => budget.AttemptAcquire(Address).Dispose(), TestContext.Current.CancellationToken),
+            System.Threading.Tasks.Task.Run(() => budget.AttemptAcquire(Address).Dispose(), TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, built);
+    }
+
+    /// <summary>
+    /// A limiter registered as a ready instance cannot be built again for each tenant, and handing that one
+    /// instance to every tenant would let one tenant's callers spend another's budget.
+    /// </summary>
+    [Fact]
+    public void AHostsLimiterRegisteredAsAnInstance_IsRefused()
+    {
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton(
+            CallerRateLimiters.AuthenticationFailures,
+            PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)));
+        services.AddServerStorage();
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => services.AddMultiTenancy(_ => { }));
+        Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
+    }
+
+    private static DefaultHttpContext InTenant(string tenantId)
+    {
+        var context = new DefaultHttpContext();
+        context.Features.Set(new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = tenantId, Issuer = $"https://auth.example.com/tenants/{tenantId}" },
+        });
+        return context;
     }
 
     /// <summary>
