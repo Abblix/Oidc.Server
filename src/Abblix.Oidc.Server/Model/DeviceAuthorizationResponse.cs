@@ -33,16 +33,16 @@ public record DeviceAuthorizationResponse
     public required string UserCode { get; init; }
 
     /// <summary>
-    /// The end-user verification URI where the user enters the user code (RFC 8628 section 3.2). Carried on the wire DTO and
-    /// filled by the transport layer from the configured device authorization options; the protocol processor leaves
-    /// it unset.
+    /// The end-user verification URI where the user enters the user code (RFC 8628 section 3.2), which the section makes
+    /// REQUIRED. Filled by the device authorization processor from the configured page, resolved under the issuer
+    /// when relative; the transport layer sends it as it is, so a processor of the host's own fills it too.
     /// </summary>
     [JsonPropertyName(Parameters.VerificationUri)]
     public Uri? VerificationUri { get; init; }
 
     /// <summary>
     /// The optional verification URI that already embeds the user code (RFC 8628 section 3.2), letting capable devices render
-    /// a direct link or QR code so the user skips typing the code. Filled by the transport layer.
+    /// a direct link or QR code so the user skips typing the code. Filled by the device authorization processor.
     /// </summary>
     [JsonPropertyName(Parameters.VerificationUriComplete)]
     public Uri? VerificationUriComplete { get; init; }
