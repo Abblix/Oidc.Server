@@ -35,7 +35,28 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
         new(StringComparer.Ordinal);
 
     private PartitionedRateLimiter<TResource> Current
-        => _limiters.GetOrAdd(TenantKey.CurrentTenantId(tenantAccessor), _ => new(createLimiter)).Value;
+        => _limiters.GetOrAdd(TenantKey.CurrentTenantId(tenantAccessor), _ => new(Build)).Value;
+
+    /// <summary>
+    /// A new limiter for a tenant, refused when it is one another tenant already holds.
+    /// </summary>
+    /// <remarks>
+    /// A registration can build its limiter by handing out one it keeps, and then the tenants would spend one
+    /// budget between them. Nothing earlier can see that: the registration is a factory until it is called.
+    /// </remarks>
+    private PartitionedRateLimiter<TResource> Build()
+    {
+        var limiter = createLimiter();
+        if (Built.Any(other => ReferenceEquals(other, limiter)))
+        {
+            throw new InvalidOperationException(
+                "The registration of this budget handed out a limiter it had already given another tenant, so the " +
+                "two tenants would spend one budget. Register a factory or a type that builds a new limiter on " +
+                "every call.");
+        }
+
+        return limiter;
+    }
 
     /// <inheritdoc />
     public override RateLimiterStatistics? GetStatistics(TResource resource)

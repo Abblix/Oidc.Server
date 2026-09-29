@@ -209,6 +209,29 @@ public sealed class TenantRateLimiterTests : IDisposable
     }
 
     /// <summary>
+    /// A host's factory that hands every call the same limiter would let one tenant's callers spend another's
+    /// budget, so the second tenant it is handed to is refused rather than served from the first one's limiter.
+    /// </summary>
+    [Fact]
+    public void AHostsFactoryHandingOutOneLimiter_IsRefusedForTheSecondTenant()
+    {
+        var shared = PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address));
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures, (_, _) => shared);
+        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures);
+
+        accessor.HttpContext = InTenant("acme");
+        failures.AttemptAcquire(Address).Dispose();
+
+        accessor.HttpContext = InTenant("globex");
+        Assert.Throws<InvalidOperationException>(() => failures.AttemptAcquire(Address));
+    }
+
+    /// <summary>
     /// A host's limiter registered by its type is built per tenant in the same way.
     /// </summary>
     [Fact]
