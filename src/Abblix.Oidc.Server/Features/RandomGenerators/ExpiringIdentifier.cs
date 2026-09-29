@@ -73,7 +73,12 @@ internal static class ExpiringIdentifier
 
         Span<byte> instant = stackalloc byte[sizeof(long)];
         Base64Url.DecodeFromChars(encoded, instant);
-        expiresAt = DateTimeOffset.FromUnixTimeSeconds(BinaryPrimitives.ReadInt64BigEndian(instant));
+        // The client writes these bytes, and a value outside the dates DateTimeOffset holds would throw
+        var seconds = BinaryPrimitives.ReadInt64BigEndian(instant);
+        if (seconds < DateTimeOffset.MinValue.ToUnixTimeSeconds() || DateTimeOffset.MaxValue.ToUnixTimeSeconds() < seconds)
+            return false;
+
+        expiresAt = DateTimeOffset.FromUnixTimeSeconds(seconds);
         return true;
     }
 }

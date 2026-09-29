@@ -38,6 +38,8 @@ public class ExpiringIdentifierTests
     [InlineData("random-part.")]
     [InlineData("random-part.not!base64")]
     [InlineData("random-part.AAAA")]
+    [InlineData("random-part.f_________8")] // the largest instant eight bytes hold, past any date
+    [InlineData("random-part.gAAAAAAAAAA")] // the smallest, before any date
     [InlineData("")]
     public void AnIdentifierNotCarryingAnInstant_StatesNoExpiry(string identifier)
         => Assert.False(ExpiringIdentifier.TryReadExpiry(identifier, out _));
