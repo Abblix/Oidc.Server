@@ -246,7 +246,7 @@ public class ClientAssertionMayTightenItselfTests
             new FakeTimeProvider(Now),
             replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
-            Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
+            new OptionsIssuerSettings(Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None })));
 
         return await authenticator.TryAuthenticateClientAsync(new ClientRequest
         {

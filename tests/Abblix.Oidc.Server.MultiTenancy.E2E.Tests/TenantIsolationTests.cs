@@ -8,7 +8,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
-using System.Reflection;
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
@@ -22,7 +21,6 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -66,7 +64,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await License.Loaded;
+        await TestLicense.Loaded;
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -356,21 +354,4 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         Assert.Contains(AcmeResource, payload[IanaClaimTypes.Aud]!.ToJsonString(), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The license this process runs under: the multi-tenant test license, which names both tenants' issuers.
-    /// </summary>
-    private static class License
-    {
-        public static readonly Task Loaded = LoadAsync();
-
-        private static async Task LoadAsync()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            const string name = "Abblix.Oidc.Server.MultiTenancy.E2E.Tests.Resources.test-license-multitenant.jwt";
-            await using var stream = assembly.GetManifestResourceStream(name)
-                ?? throw new InvalidOperationException($"The embedded license {name} is missing.");
-            using var reader = new StreamReader(stream);
-            await LicenseLoader.LoadAsync((await reader.ReadToEndAsync()).Trim());
-        }
-    }
 }

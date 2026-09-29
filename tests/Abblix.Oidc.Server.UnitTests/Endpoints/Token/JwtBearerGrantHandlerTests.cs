@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
@@ -649,7 +650,7 @@ public class JwtBearerGrantHandlerTests
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
 			timeProvider,
-			Options.Create(new OidcOptions()));
+			new OptionsIssuerSettings(Options.Create(new OidcOptions())));
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}

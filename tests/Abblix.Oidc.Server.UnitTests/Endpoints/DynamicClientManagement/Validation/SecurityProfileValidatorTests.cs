@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -27,7 +28,7 @@ public class SecurityProfileValidatorTests
 {
     private static SecurityProfileValidator CreateValidator(
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => new(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }));
+        => new(new OptionsIssuerSettings(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile })));
 
     private static ClientRegistrationValidationContext CreateContext(string[][] responseTypes)
     {

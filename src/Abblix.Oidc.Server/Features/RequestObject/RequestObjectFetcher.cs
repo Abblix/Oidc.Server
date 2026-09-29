@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,11 +32,13 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
+/// <param name="issuerSettings">Provides the issuer's default security profile.</param>
 public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
-    IOptionsSnapshot<OidcOptions> options) : IRequestObjectFetcher
+    IOptionsSnapshot<OidcOptions> options,
+    IIssuerSettings issuerSettings) : IRequestObjectFetcher
 {
     /// <summary>
     /// Fetches and processes the request object by validating its JWT and binding the payload to the request model.
@@ -74,7 +77,7 @@ public partial class RequestObjectFetcher(
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
-                    || SecurityProfileRequirements.For(client, options.Value.DefaultSecurityProfile)
+                    || SecurityProfileRequirements.For(client, issuerSettings.DefaultSecurityProfile)
                         .RequireStrictRequestObjectProcessing;
                 var target = strict ? Activator.CreateInstance<T>() : request;
 

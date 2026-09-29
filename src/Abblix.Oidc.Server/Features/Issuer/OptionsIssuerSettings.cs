@@ -44,4 +44,7 @@ internal sealed class OptionsIssuerSettings(IOptions<OidcOptions> options) : IIs
 
     /// <inheritdoc />
     public Uri? RegistrationUri => options.Value.RegistrationUri;
+
+    /// <inheritdoc />
+    public ClientSecurityProfile DefaultSecurityProfile => options.Value.DefaultSecurityProfile;
 }

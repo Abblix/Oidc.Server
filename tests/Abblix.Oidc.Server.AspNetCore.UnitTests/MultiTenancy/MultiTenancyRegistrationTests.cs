@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -248,6 +249,10 @@ public class MultiTenancyRegistrationTests
         { nameof(OidcOptions.InteractionUri), options => options.InteractionUri = new Uri("/interact", UriKind.Relative) },
         { nameof(OidcOptions.LoginUri), options => options.LoginUri = new Uri("/login", UriKind.Relative) },
         { nameof(OidcOptions.RegistrationUri), options => options.RegistrationUri = new Uri("/register", UriKind.Relative) },
+        {
+            nameof(OidcOptions.DefaultSecurityProfile),
+            options => options.DefaultSecurityProfile = ClientSecurityProfile.Fapi2
+        },
     };
 
     [Theory]

@@ -91,4 +91,10 @@ public sealed class TenantDefinition
     /// tenants. A relative address is a page under this tenant's issuer.
     /// </summary>
     public Uri? RegistrationUri { get; init; }
+
+    /// <summary>
+    /// The security profile every client of this tenant is held to at the least, as
+    /// <see cref="OidcOptions.DefaultSecurityProfile"/> is for a server without tenants.
+    /// </summary>
+    public ClientSecurityProfile DefaultSecurityProfile { get; init; } = ClientSecurityProfile.None;
 }

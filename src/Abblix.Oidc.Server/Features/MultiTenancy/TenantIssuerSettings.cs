@@ -50,5 +50,8 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor) : IIssu
     /// <inheritdoc />
     public Uri? RegistrationUri => Tenant.RegistrationUri;
 
+    /// <inheritdoc />
+    public ClientSecurityProfile DefaultSecurityProfile => Tenant.DefaultSecurityProfile;
+
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

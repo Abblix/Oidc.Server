@@ -67,4 +67,9 @@ public interface IIssuerSettings
     /// The page a user creates an account on.
     /// </summary>
     Uri? RegistrationUri { get; }
+
+    /// <summary>
+    /// The security profile every client of the issuer is held to at the least.
+    /// </summary>
+    ClientSecurityProfile DefaultSecurityProfile { get; }
 }

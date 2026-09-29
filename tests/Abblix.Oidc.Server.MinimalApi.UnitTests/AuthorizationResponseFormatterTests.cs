@@ -112,6 +112,7 @@ public class AuthorizationResponseFormatterTests
         public Uri? InteractionUri { get; init; } = new(Base + "interaction");
         public Uri? LoginUri { get; init; } = new(Base + "login");
         public Uri? RegistrationUri { get; init; } = new(Base + "registration");
+        public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

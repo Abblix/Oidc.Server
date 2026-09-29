@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.Features.DPoP;
@@ -67,7 +68,8 @@ public class DPoPTokenEndpointValidatorTests
             Mock.Of<ILogger<DPoPTokenEndpointValidator>>(),
             _proofValidator.Object,
             _nonceService.Object,
-            _options.Object);
+            _options.Object,
+            new OptionsIssuerSettings(Options.Create(_options.Object.CurrentValue)));
     }
 
     [Fact]

@@ -27,13 +27,13 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
-/// <param name="options">Supplies the server-wide default security profile.</param>
+/// <param name="issuerSettings">Supplies the issuer's default security profile.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
     IIssuerProvider issuerProvider,
-    IOptions<OidcOptions> options,
+    IIssuerSettings issuerSettings,
     TimeProvider timeProvider) : IClientAuthenticator
 {
     /// <summary>
@@ -53,7 +53,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// against, so the two cannot disagree.
     /// </summary>
     protected SecurityProfileRequirements DefaultProfileRequirements
-        => SecurityProfileRequirements.Resolve(options.Value.DefaultSecurityProfile);
+        => SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile);
 
     /// <summary>
     /// Answers whether the assertion's timestamps sit inside the window the profile governing THIS
@@ -74,7 +74,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     private bool TimestampsSatisfyTheClientsOwnProfile(AssertionTimestamps timestamps, ClientInfo clientInfo)
     {
         var refusal = SecurityProfileRequirements
-            .For(clientInfo, options.Value.DefaultSecurityProfile)
+            .For(clientInfo, issuerSettings.DefaultSecurityProfile)
             .ClockSkewOrDefault()
             .WhyRefused(
                 timeProvider.GetUtcNow(),
@@ -103,7 +103,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// </remarks>
     private bool AudienceSatisfiesTheProfile(JsonWebToken token, ClientInfo clientInfo)
     {
-        if (!SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
+        if (!SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
                 .RequireIssuerAudienceInClientAssertion)
         {
             return true;

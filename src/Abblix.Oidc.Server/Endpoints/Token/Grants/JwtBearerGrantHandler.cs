@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -51,8 +52,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="requestInfoProvider">Provides information about the current HTTP request for audience validation.</param>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
-/// <param name="oidcOptions">Carries the deployment's clock tolerance and the default security
-/// profile a client without one of its own falls back to.</param>
+/// <param name="issuerSettings">Carries the issuer's default security profile, which a client without one of its
+/// own falls back to.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
@@ -61,7 +62,7 @@ public partial class JwtBearerGrantHandler(
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
 	TimeProvider timeProvider,
-	IOptions<OidcOptions> oidcOptions) : IAuthorizationGrantHandler
+	IIssuerSettings issuerSettings) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
@@ -136,7 +137,7 @@ public partial class JwtBearerGrantHandler(
 	/// tightened by whatever the client names for itself.
 	/// </summary>
 	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, oidcOptions.Value.DefaultSecurityProfile);
+		=> SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile);
 
 	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.

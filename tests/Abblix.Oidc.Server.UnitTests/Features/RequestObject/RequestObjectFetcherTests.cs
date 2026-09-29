@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -80,7 +81,8 @@ public class RequestObjectFetcherTests
 
     private RequestObjectFetcher CreateFetcher()
     {
-        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object);
+        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object,
+            new OptionsIssuerSettings(_options.Object));
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);

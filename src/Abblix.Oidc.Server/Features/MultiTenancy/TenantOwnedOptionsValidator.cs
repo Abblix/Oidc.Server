@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -17,9 +18,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// for itself.
 /// </summary>
 /// <remarks>
-/// Each tenant declares its own issuer, clients, scopes, resources and user-facing pages in its <see cref="TenantDefinition"/>, and those are the ones
-/// its requests are served with, so the same setting on <see cref="OidcOptions"/> would be ignored while reading
-/// as if it applied to every tenant.
+/// Each tenant declares its own issuer, clients, scopes, resources, user-facing pages and security profile in its
+/// <see cref="TenantDefinition"/>, and those are the ones its requests are served with, so the same setting on
+/// <see cref="OidcOptions"/> would be ignored while reading as if it applied to every tenant.
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantOwnedOptionsValidator : IValidateOptions<OidcOptions>
@@ -27,46 +28,31 @@ public sealed class TenantOwnedOptionsValidator : IValidateOptions<OidcOptions>
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        var failures = new List<string>();
+        // Each setting is named after the tenant's, which OidcOptions spells the same way
+        (bool IsSet, string Setting)[] serverWide =
+        [
+            (options.Issuer is not null, nameof(TenantDefinition.Issuer)),
+            (options.Clients?.Any() == true, nameof(TenantDefinition.Clients)),
+            (options.Scopes is not null, nameof(TenantDefinition.Scopes)),
+            (options.Resources is not null, nameof(TenantDefinition.Resources)),
+            (options.DefaultResourceIndicator is not null, nameof(TenantDefinition.DefaultResourceIndicator)),
+            (options.AccountSelectionUri is not null, nameof(TenantDefinition.AccountSelectionUri)),
+            (options.ConsentUri is not null, nameof(TenantDefinition.ConsentUri)),
+            (options.InteractionUri is not null, nameof(TenantDefinition.InteractionUri)),
+            (options.LoginUri is not null, nameof(TenantDefinition.LoginUri)),
+            (options.RegistrationUri is not null, nameof(TenantDefinition.RegistrationUri)),
+            (
+                options.DefaultSecurityProfile != ClientSecurityProfile.None,
+                nameof(TenantDefinition.DefaultSecurityProfile)),
+        ];
 
-        if (options.Issuer is not null)
-            failures.Add(Refusal(nameof(OidcOptions.Issuer), nameof(TenantDefinition.Issuer)));
-
-        if (options.Clients?.Any() == true)
-            failures.Add(Refusal(nameof(OidcOptions.Clients), nameof(TenantDefinition.Clients)));
-
-        if (options.Scopes is not null)
-            failures.Add(Refusal(nameof(OidcOptions.Scopes), nameof(TenantDefinition.Scopes)));
-
-        if (options.Resources is not null)
-            failures.Add(Refusal(nameof(OidcOptions.Resources), nameof(TenantDefinition.Resources)));
-
-        if (options.DefaultResourceIndicator is not null)
-        {
-            failures.Add(Refusal(
-                nameof(OidcOptions.DefaultResourceIndicator),
-                nameof(TenantDefinition.DefaultResourceIndicator)));
-        }
-
-        if (options.AccountSelectionUri is not null)
-            failures.Add(Refusal(nameof(OidcOptions.AccountSelectionUri), nameof(TenantDefinition.AccountSelectionUri)));
-
-        if (options.ConsentUri is not null)
-            failures.Add(Refusal(nameof(OidcOptions.ConsentUri), nameof(TenantDefinition.ConsentUri)));
-
-        if (options.InteractionUri is not null)
-            failures.Add(Refusal(nameof(OidcOptions.InteractionUri), nameof(TenantDefinition.InteractionUri)));
-
-        if (options.LoginUri is not null)
-            failures.Add(Refusal(nameof(OidcOptions.LoginUri), nameof(TenantDefinition.LoginUri)));
-
-        if (options.RegistrationUri is not null)
-            failures.Add(Refusal(nameof(OidcOptions.RegistrationUri), nameof(TenantDefinition.RegistrationUri)));
+        var failures = (
+            from setting in serverWide
+            where setting.IsSet
+            select $"{nameof(OidcOptions)}.{setting.Setting} applies to the whole server; under multi-tenancy each " +
+                   $"tenant declares its own in {nameof(TenantDefinition)}.{setting.Setting}, so leave it unset."
+        ).ToList();
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
-
-    private static string Refusal(string setting, string tenantSetting)
-        => $"{nameof(OidcOptions)}.{setting} applies to the whole server; under multi-tenancy each tenant declares " +
-           $"its own in {nameof(TenantDefinition)}.{tenantSetting}, so leave it unset.";
 }
