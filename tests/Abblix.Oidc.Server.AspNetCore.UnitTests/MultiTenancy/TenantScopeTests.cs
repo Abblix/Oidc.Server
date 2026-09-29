@@ -90,6 +90,44 @@ public sealed class TenantScopeTests : IDisposable
     }
 
     /// <summary>
+    /// A scope disposed a second time changes nothing: clearing the tenant again would end a later scope's.
+    /// </summary>
+    [Fact]
+    public void ASecondDispose_ChangesNothing()
+    {
+        using (TenantScope.Enter(Acme))
+        {
+            var inner = TenantScope.Enter(Globex);
+            inner.Dispose();
+            inner.Dispose();
+
+            Assert.Equal("acme", TenantScope.Current?.Tenant.Id);
+        }
+
+        Assert.Null(TenantScope.Current);
+    }
+
+    /// <summary>
+    /// A scope disposed while one entered inside it is still open changes nothing, and ends once it is innermost
+    /// again: restoring its outer tenant early would leave the inner one's work running as a tenant nobody chose.
+    /// </summary>
+    [Fact]
+    public void AScopeDisposedBeforeTheOneInsideIt_ChangesNothingUntilItIsInnermost()
+    {
+        var outer = TenantScope.Enter(Acme);
+        var inner = TenantScope.Enter(Globex);
+
+        outer.Dispose();
+        Assert.Equal("globex", TenantScope.Current?.Tenant.Id);
+
+        inner.Dispose();
+        Assert.Equal("acme", TenantScope.Current?.Tenant.Id);
+
+        outer.Dispose();
+        Assert.Null(TenantScope.Current);
+    }
+
+    /// <summary>
     /// Entered within a request, a scope takes precedence over the tenant the request was resolved to: the work
     /// it wraps was addressed to another tenant on purpose.
     /// </summary>

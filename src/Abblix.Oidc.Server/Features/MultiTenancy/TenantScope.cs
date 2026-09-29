@@ -30,9 +30,14 @@ public sealed class TenantScope : IDisposable
 {
     private static readonly AsyncLocal<TenantContext?> Ambient = new();
 
+    private readonly TenantContext _own;
     private readonly TenantContext? _outer;
 
-    private TenantScope(TenantContext? outer) => _outer = outer;
+    private TenantScope(TenantContext own, TenantContext? outer)
+    {
+        _own = own;
+        _outer = outer;
+    }
 
     /// <summary>
     /// The tenant of the innermost scope entered on this flow of execution, or null outside any.
@@ -44,13 +49,24 @@ public sealed class TenantScope : IDisposable
     /// </summary>
     public static TenantScope Enter(TenantDefinition tenant)
     {
-        var scope = new TenantScope(Ambient.Value);
-        Ambient.Value = new TenantContext { Tenant = tenant };
+        var scope = new TenantScope(new TenantContext { Tenant = tenant }, Ambient.Value);
+        Ambient.Value = scope._own;
         return scope;
     }
 
     /// <summary>
-    /// Restores the tenant that was current when this scope was entered.
+    /// Restores the tenant that was current when this scope was entered; a second call changes nothing.
     /// </summary>
-    public void Dispose() => Ambient.Value = _outer;
+    /// <remarks>
+    /// While a scope entered inside this one is still open this changes nothing either, leaving this scope to be
+    /// ended once it is innermost again: restoring its outer tenant now would leave the inner scope's work running
+    /// as a tenant nobody chose. It does not throw, since a Dispose that throws while an exception is already
+    /// leaving a <c>using</c> block would replace that exception.
+    /// </remarks>
+    public void Dispose()
+    {
+        // Once ended, this scope's own context is never current again, so the same check covers a second call.
+        if (ReferenceEquals(Ambient.Value, _own))
+            Ambient.Value = _outer;
+    }
 }
