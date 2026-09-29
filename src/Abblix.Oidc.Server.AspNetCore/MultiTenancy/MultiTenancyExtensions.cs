@@ -7,11 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.RateLimiting;
 using Abblix.DependencyInjection;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,22 +57,42 @@ public static class MultiTenancyExtensions
         services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
         services.DecorateForTenants<IEntityStorage, TenantEntityStorage>();
         services.DecorateForTenants<IReplayCache, TenantReplayCache>();
+        services.DecorateForTenants<PartitionedRateLimiter<string>, TenantAddressRateLimiter>(
+            CallerRateLimiters.AuthenticationFailures);
+
+        // Each registered only when the host enables its endpoint.
+        services.DecorateIfRegistered<PartitionedRateLimiter<(string ClientId, string? Source)>, TenantCallerRateLimiter>(
+            CallerRateLimiters.Introspection);
+        services.DecorateIfRegistered<PartitionedRateLimiter<(string ClientId, string? Source)>, TenantCallerRateLimiter>(
+            CallerRateLimiters.Revocation);
         return services;
     }
 
-    private static void DecorateForTenants<TService, TDecorator>(this IServiceCollection services)
+    private static void DecorateForTenants<TService, TDecorator>(this IServiceCollection services, object? key = null)
         where TService : class
         where TDecorator : class, TService
     {
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(TService)))
+        if (!services.IsRegistered<TService>(key))
         {
             throw new InvalidOperationException(
                 $"{nameof(AddMultiTenancy)}() must come after AddOidcServices() and the server's other Add* calls: " +
-                $"{typeof(TService).Name} is not registered yet, so its data cannot be kept per tenant.");
+                $"{(key is null ? typeof(TService).Name : $"{typeof(TService).Name} '{key}'")} is not registered " +
+                "yet, so its data cannot be kept per tenant.");
         }
 
-        services.Decorate<TService, TDecorator>();
+        services.DecorateKeyed<TService, TDecorator>(key);
     }
+
+    private static void DecorateIfRegistered<TService, TDecorator>(this IServiceCollection services, object key)
+        where TService : class
+        where TDecorator : class, TService
+    {
+        if (services.IsRegistered<TService>(key))
+            services.DecorateKeyed<TService, TDecorator>(key);
+    }
+
+    private static bool IsRegistered<TService>(this IServiceCollection services, object? key)
+        => services.Any(descriptor => descriptor.ServiceType == typeof(TService) && Equals(descriptor.ServiceKey, key));
 
     /// <summary>
     /// Resolves each request to its tenant, and routes it after that.

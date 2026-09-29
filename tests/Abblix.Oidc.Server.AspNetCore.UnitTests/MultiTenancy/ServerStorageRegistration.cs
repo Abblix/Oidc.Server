@@ -28,5 +28,6 @@ internal static class ServerStorageRegistration
             .AddCommonServices()
             .AddStorages()
             .AddNonces()
-            .AddReplayPrevention();
+            .AddReplayPrevention()
+            .AddClientAuthentication();
 }

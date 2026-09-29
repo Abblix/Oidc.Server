@@ -43,7 +43,6 @@ public class MultiTenancyRegistrationTests
 
         // The library's own issuer registration, not a stand-in, since it is what AddMultiTenancy has to win over.
         services.AddIssuer();
-        services.AddServerStorage();
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
 
         return services.BuildServiceProvider();
