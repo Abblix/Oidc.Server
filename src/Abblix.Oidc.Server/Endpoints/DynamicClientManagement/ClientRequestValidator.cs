@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -25,10 +26,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clientInfoProvider">Store consulted for the addressed client.</param>
 /// <param name="registrationAccessTokenValidator">Validator for the bearer registration access token.</param>
 /// <param name="registrationAccessTokenStore">Store holding the jti of each client's current token.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class ClientRequestValidator(
     IClientInfoProvider clientInfoProvider,
     IRegistrationAccessTokenValidator registrationAccessTokenValidator,
-    IRegistrationAccessTokenStore registrationAccessTokenStore) : IClientRequestValidator
+    IRegistrationAccessTokenStore registrationAccessTokenStore,
+    IIssuerSettings issuerSettings) : IClientRequestValidator
 {
     /// <inheritdoc />
     public async Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request)
@@ -47,7 +50,7 @@ public class ClientRequestValidator(
         if (headerErrorDescription != null)
             return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         if (clientInfo == null)
         {
             // RFC 7592 section 2.3: when the addressed client does not exist, the server responds

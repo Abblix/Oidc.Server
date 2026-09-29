@@ -25,6 +25,9 @@ internal sealed class OptionsIssuerSettings(
     PairwiseSubjectSettings? pairwiseSubject = null) : IIssuerSettings
 {
     /// <inheritdoc />
+    public string Id => string.Empty;
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => options.Value.Clients;
 
     /// <inheritdoc />

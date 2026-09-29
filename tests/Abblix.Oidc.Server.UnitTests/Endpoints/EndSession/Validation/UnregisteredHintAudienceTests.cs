@@ -63,6 +63,7 @@ public class UnregisteredHintAudienceTests
         services.AddSingleton(Mock.Of<IAuthSessionService>());
         services.AddSingleton(Mock.Of<ISubjectTypeConverter>());
         services.AddSingleton(Mock.Of<ILogoutConfirmationStore>());
+        services.AddSingleton(SingleIssuer.Settings);
         services.AddEndSessionContextValidators();
 
         await using var provider = services.BuildServiceProvider();

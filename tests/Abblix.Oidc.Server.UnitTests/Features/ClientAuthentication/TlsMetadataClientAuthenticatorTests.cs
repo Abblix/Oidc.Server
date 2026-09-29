@@ -38,7 +38,8 @@ public class TlsMetadataClientAuthenticatorTests
 
         _authenticator = new TlsMetadataClientAuthenticator(
             _loggerMock.Object,
-            _clientInfoProviderMock.Object);
+            _clientInfoProviderMock.Object,
+            SingleIssuer.Settings);
     }
 
     /// <summary>

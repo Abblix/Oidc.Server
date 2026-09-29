@@ -22,6 +22,8 @@ namespace Abblix.Oidc.Server.UnitTests;
 /// </summary>
 internal static class SingleIssuer
 {
+    public static IIssuerSettings Settings => new OptionsIssuerSettings(Options.Create(new OidcOptions()));
+
     public static ScopeManager ScopeManager(IOptions<OidcOptions> options)
         => new(new OptionsIssuerSettings(options), new SingleIssuerLocal<Dictionary<string, ScopeDefinition>>());
 

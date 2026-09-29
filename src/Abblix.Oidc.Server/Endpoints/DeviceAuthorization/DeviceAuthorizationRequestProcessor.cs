@@ -30,19 +30,21 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="options">Configuration options for device authorization.</param>
 /// <param name="timeProvider">Dates the instant the device code carries.</param>
 /// <param name="issuerProvider">The issuer a relative verification page is under.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
     IOptionsSnapshot<OidcOptions> options,
     TimeProvider timeProvider,
-    IIssuerProvider issuerProvider) : IDeviceAuthorizationRequestProcessor
+    IIssuerProvider issuerProvider,
+    IIssuerSettings issuerSettings) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
         ValidDeviceAuthorizationRequest request)
     {
-        request.ClientInfo.CheckClientLicense();
+        request.ClientInfo.CheckClientLicense(issuerSettings);
 
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 

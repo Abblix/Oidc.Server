@@ -116,6 +116,7 @@ public class AuthorizationResponseFormatterTests
 
     private sealed record PagesOf(string Base) : IIssuerSettings
     {
+        public string Id => string.Empty;
         public IEnumerable<ClientInfo> Clients => [];
         public ScopeDefinition[]? Scopes => null;
         public ResourceDefinition[]? Resources => null;

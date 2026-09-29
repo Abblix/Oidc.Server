@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -25,7 +26,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 public partial class TlsClientAuthenticator(
     ILogger<TlsClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider,
-    IClientKeysProvider clientKeysProvider) : IClientAuthenticator
+    IClientKeysProvider clientKeysProvider,
+    IIssuerSettings issuerSettings) : IClientAuthenticator
 {
     /// <summary>
     /// Gets the collection of client authentication methods supported by this authenticator.
@@ -72,7 +74,7 @@ public partial class TlsClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         if (client == null)
         {
             LogClientNotFound(clientId);

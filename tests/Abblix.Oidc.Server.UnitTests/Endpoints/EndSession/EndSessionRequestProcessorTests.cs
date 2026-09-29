@@ -67,7 +67,8 @@ public class EndSessionRequestProcessorTests
                     _sessionClients,
                     _issuerProvider.Object,
                     _clientInfoProvider.Object,
-                    _logoutNotifier.Object),
+                    _logoutNotifier.Object,
+                    SingleIssuer.Settings),
                 Options.Create(_options)),
             _confirmationStore.Object);
     }

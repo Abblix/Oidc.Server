@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
 
@@ -37,7 +38,7 @@ public static partial class LicenseChecker
     private static readonly License FreeLicense = new() { IssuerLimit = 1 };
     private static readonly LicenseManager LicenseManager = new();
 
-    private static ConcurrentDictionary<string, object>? _knownClientIds;
+    private static ConcurrentDictionary<(string IssuerId, string ClientId), object>? _knownClientIds;
     private static ConcurrentDictionary<string, object>? _knownIssuers;
 
     /// <summary>
@@ -59,18 +60,25 @@ public static partial class LicenseChecker
     /// </summary>
     /// <param name="clientInfo">The task returning client information to be checked against licensing constraints.
     /// </param>
+    /// <param name="issuer">The settings of the issuer the client is registered with.</param>
     /// <returns>A task that, upon completion, returns the client information if it complies with the licensing
     /// constraints; otherwise, logs an error.</returns>
-    public static async Task<ClientInfo?> WithLicenseCheck(this Task<ClientInfo?> clientInfo)
-        => (await clientInfo).CheckClientLicense();
+    public static async Task<ClientInfo?> WithLicenseCheck(this Task<ClientInfo?> clientInfo, IIssuerSettings issuer)
+        => (await clientInfo).CheckClientLicense(issuer);
 
     /// <summary>
     /// Applies licensing checks to client information.
     /// </summary>
     /// <param name="clientInfo">The client information to check against licensing constraints.</param>
+    /// <param name="issuer">The settings of the issuer the client is registered with.</param>
     /// <returns>The client information if it complies with the licensing constraints; otherwise, logs an error.
     /// </returns>
-    public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo)
+    /// <remarks>
+    /// A client is counted once for each issuer it is registered with, since two tenants may each register a client
+    /// under one id. The issuer is the one the deployment declares rather than the one a request names, which a
+    /// forged Host header could vary to push the count past the limit.
+    /// </remarks>
+    public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
     {
         if (clientInfo != null)
         {
@@ -78,36 +86,43 @@ public static partial class LicenseChecker
             var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
             if (currentLicense.ClientLimit.HasValue)
             {
-                _knownClientIds ??= new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
+                _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), object>();
+                var client = (issuer.Id, clientInfo.ClientId);
                 if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
-                    !_knownClientIds.ContainsKey(clientInfo.ClientId))
+                    !_knownClientIds.ContainsKey(client))
                 {
                     if (LicenseLogger.Instance.IsAllowed(new { clientInfo.ClientId }, utcNow, TimeSpan.FromMinutes(1)))
                     {
                         LogClientLimitExceededByMargin(
                             LicenseLogger.Instance,
                             currentLicense.ClientLimit,
-                            _knownClientIds.Keys,
-                            clientInfo.ClientId);
+                            _knownClientIds.Keys.Select(Named),
+                            Named(client));
                     }
 
                     return null; // Prevents processing of clients exceeding the limit by more than 30%
                 }
 
-                _knownClientIds.TryAdd(clientInfo.ClientId, null!);
+                _knownClientIds.TryAdd(client, null!);
                 if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
                     LicenseLogger.Instance.IsAllowed(new { clientInfo.ClientId }, utcNow, TimeSpan.FromMinutes(15)))
                 {
                     LogClientLimitExceeded(
                         LicenseLogger.Instance,
                         currentLicense.ClientLimit.Value,
-                        _knownClientIds.Keys);
+                        _knownClientIds.Keys.Select(Named));
                 }
             }
         }
 
         return clientInfo;
     }
+
+    /// <summary>
+    /// A counted client as a log names it: its id, after the issuer's when the deployment serves several.
+    /// </summary>
+    private static string Named((string IssuerId, string ClientId) client)
+        => client.IssuerId.Length == 0 ? client.ClientId : $"{client.IssuerId}/{client.ClientId}";
 
     /// <summary>
     /// Applies licensing checks to an issuer value.

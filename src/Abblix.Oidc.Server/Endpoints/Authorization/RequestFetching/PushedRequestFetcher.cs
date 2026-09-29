@@ -95,7 +95,7 @@ public class PushedRequestFetcher(
         // endpoint's chain - the PAR endpoint itself runs a different fetcher set and must not trip
         // over the requirement it is there to satisfy.
         if (request.ClientId is { } clientId &&
-            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck() is { } clientInfo &&
+            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings) is { } clientInfo &&
             (clientInfo.RequirePushedAuthorizationRequests ||
              SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
                  .RequirePushedAuthorizationRequests))

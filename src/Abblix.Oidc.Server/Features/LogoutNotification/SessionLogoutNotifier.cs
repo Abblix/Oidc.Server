@@ -22,12 +22,14 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// <param name="issuerProvider">Supplies the issuer the notifications name.</param>
 /// <param name="clientInfoProvider">Resolves each recorded client.</param>
 /// <param name="logoutNotifier">Delivers the notification to one client.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public partial class SessionLogoutNotifier(
     ILogger<SessionLogoutNotifier> logger,
     ISessionClientRegistry sessionClients,
     IIssuerProvider issuerProvider,
     IClientInfoProvider clientInfoProvider,
-    ILogoutNotifier logoutNotifier) : ISessionLogoutNotifier
+    ILogoutNotifier logoutNotifier,
+    IIssuerSettings issuerSettings) : ISessionLogoutNotifier
 {
     /// <inheritdoc />
     public async Task<LogoutContext> NotifyClientsAsync(string sessionId, string subject)
@@ -38,7 +40,7 @@ public partial class SessionLogoutNotifier(
         var tasks = new List<Task>();
         foreach (var clientId in await sessionClients.GetClientsAsync(sessionId))
         {
-            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
             if (clientInfo == null)
                 continue;
 

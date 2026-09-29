@@ -25,6 +25,12 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 public interface IIssuerSettings
 {
     /// <summary>
+    /// Tells the issuer apart from the others a deployment serves: a tenant's id, or empty for a server without
+    /// tenants. It is declared, never taken from a request.
+    /// </summary>
+    string Id { get; }
+
+    /// <summary>
     /// The clients registered with the issuer.
     /// </summary>
     IEnumerable<ClientInfo> Clients { get; }

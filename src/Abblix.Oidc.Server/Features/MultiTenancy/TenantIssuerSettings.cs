@@ -30,6 +30,9 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
     : IIssuerSettings
 {
     /// <inheritdoc />
+    public string Id => Tenant.Id;
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
 
     /// <inheritdoc />

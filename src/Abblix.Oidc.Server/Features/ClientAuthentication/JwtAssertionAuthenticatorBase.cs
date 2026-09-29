@@ -37,6 +37,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     TimeProvider timeProvider) : IClientAuthenticator
 {
     /// <summary>
+    /// The settings of the issuer serving the request, exposed so a derived authenticator counts the client it
+    /// finds against the license under that issuer.
+    /// </summary>
+    protected IIssuerSettings IssuerSettings => issuerSettings;
+
+    /// <summary>
     /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
     /// reads the same instant rather than capturing a second copy of the same dependency.
     /// </summary>

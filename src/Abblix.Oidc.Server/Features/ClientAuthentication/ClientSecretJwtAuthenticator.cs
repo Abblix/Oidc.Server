@@ -136,7 +136,7 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        switch (await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck())
+        switch (await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck(IssuerSettings))
         {
             case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
                 LogWrongAuthMethod(issuer);

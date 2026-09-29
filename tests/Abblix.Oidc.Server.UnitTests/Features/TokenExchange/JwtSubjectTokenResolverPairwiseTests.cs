@@ -57,7 +57,7 @@ public class JwtSubjectTokenResolverPairwiseTests
             .Setup(p => p.TryFindClientAsync(OriginalClientId))
             .ReturnsAsync(_pairwiseClient);
 
-        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, _converter, _clientInfoProvider.Object);
+        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, _converter, _clientInfoProvider.Object, SingleIssuer.Settings);
     }
 
     [Fact]
