@@ -32,6 +32,7 @@ public sealed class TenantScopeTests : IDisposable
 
     private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" };
     private static readonly TenantDefinition Globex = new() { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+    private static readonly TenantDefinition Initech = new() { Id = "initech", Issuer = "https://auth.example.com/tenants/initech" };
 
     private readonly ServiceProvider _provider = new ServiceCollection()
         .AddServerStorage()
@@ -90,7 +91,7 @@ public sealed class TenantScopeTests : IDisposable
     }
 
     /// <summary>
-    /// A scope disposed a second time changes nothing: clearing the tenant again would end a later scope's.
+    /// A scope disposed a second time changes nothing: restoring the tenant again would end a later scope's.
     /// </summary>
     [Fact]
     public void ASecondDispose_ChangesNothing()
@@ -99,7 +100,12 @@ public sealed class TenantScopeTests : IDisposable
         {
             var inner = TenantScope.Enter(Globex);
             inner.Dispose();
-            inner.Dispose();
+
+            using (TenantScope.Enter(Globex))
+            {
+                inner.Dispose();
+                Assert.Equal("globex", TenantScope.Current?.Tenant.Id);
+            }
 
             Assert.Equal("acme", TenantScope.Current?.Tenant.Id);
         }
@@ -108,22 +114,24 @@ public sealed class TenantScopeTests : IDisposable
     }
 
     /// <summary>
-    /// A scope disposed while one entered inside it is still open changes nothing, and ends once it is innermost
-    /// again: restoring its outer tenant early would leave the inner one's work running as a tenant nobody chose.
+    /// A scope disposed while one entered inside it is still open leaves that one current, and is passed over when
+    /// it ends: restoring the ended scope's tenant would run later work as a tenant whose scope is over.
     /// </summary>
     [Fact]
-    public void AScopeDisposedBeforeTheOneInsideIt_ChangesNothingUntilItIsInnermost()
+    public void AScopeDisposedBeforeTheOneInsideIt_IsPassedOverWhenThatOneEnds()
     {
-        var outer = TenantScope.Enter(Acme);
-        var inner = TenantScope.Enter(Globex);
+        using (TenantScope.Enter(Initech))
+        {
+            var outer = TenantScope.Enter(Acme);
+            var inner = TenantScope.Enter(Globex);
 
-        outer.Dispose();
-        Assert.Equal("globex", TenantScope.Current?.Tenant.Id);
+            outer.Dispose();
+            Assert.Equal("globex", TenantScope.Current?.Tenant.Id);
 
-        inner.Dispose();
-        Assert.Equal("acme", TenantScope.Current?.Tenant.Id);
+            inner.Dispose();
+            Assert.Equal("initech", TenantScope.Current?.Tenant.Id);
+        }
 
-        outer.Dispose();
         Assert.Null(TenantScope.Current);
     }
 

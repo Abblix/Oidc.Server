@@ -30,12 +30,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantScope : IDisposable
 {
-    private static readonly AsyncLocal<TenantContext?> Ambient = new();
+    private static readonly AsyncLocal<TenantScope?> Ambient = new();
 
     private readonly TenantContext _own;
-    private readonly TenantContext? _outer;
+    private readonly TenantScope? _outer;
+    private bool Ended { get; set; }
 
-    private TenantScope(TenantContext own, TenantContext? outer)
+    private TenantScope(TenantContext own, TenantScope? outer)
     {
         _own = own;
         _outer = outer;
@@ -44,7 +45,7 @@ public sealed class TenantScope : IDisposable
     /// <summary>
     /// The tenant of the innermost scope entered on this flow of execution, or null outside any.
     /// </summary>
-    public static TenantContext? Current => Ambient.Value;
+    public static TenantContext? Current => Ambient.Value?._own;
 
     /// <summary>
     /// Makes <paramref name="tenant"/> the current tenant until the returned scope is disposed.
@@ -52,23 +53,32 @@ public sealed class TenantScope : IDisposable
     public static TenantScope Enter(TenantDefinition tenant)
     {
         var scope = new TenantScope(new TenantContext { Tenant = tenant }, Ambient.Value);
-        Ambient.Value = scope._own;
+        Ambient.Value = scope;
         return scope;
     }
 
     /// <summary>
-    /// Restores the tenant that was current when this scope was entered; a second call changes nothing.
+    /// Ends this scope, making current the nearest scope around it that has not ended; a second call changes
+    /// nothing.
     /// </summary>
     /// <remarks>
-    /// While a scope entered inside this one is still open this changes nothing either, leaving this scope to be
-    /// ended once it is innermost again: restoring its outer tenant now would leave the inner scope's work running
-    /// as a tenant nobody chose. It does not throw, since a Dispose that throws while an exception is already
-    /// leaving a <c>using</c> block would replace that exception.
+    /// A scope ended while one entered inside it is still open stays current for that inner scope's work, and is
+    /// passed over when the inner one ends: restoring its tenant then would run later work as a tenant whose scope
+    /// is over. It does not throw, since a Dispose that throws while an exception is already leaving a
+    /// <c>using</c> block would replace that exception.
     /// </remarks>
     public void Dispose()
     {
-        // Once ended, this scope's own context is never current again, so the same check covers a second call.
-        if (ReferenceEquals(Ambient.Value, _own))
-            Ambient.Value = _outer;
+        Ended = true;
+
+        // Only the innermost scope moves the current one: an outer scope ending early is passed over later
+        if (!ReferenceEquals(Ambient.Value, this))
+            return;
+
+        var current = _outer;
+        while (current is { Ended: true })
+            current = current._outer;
+
+        Ambient.Value = current;
     }
 }
