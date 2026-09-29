@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -33,4 +34,10 @@ public sealed class TenantDefinition
     /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
     /// </remarks>
     public required string Issuer { get; init; }
+
+    /// <summary>
+    /// The clients registered with this tenant. A client is known only at the tenant that lists it, so two
+    /// tenants may each register a client under the same id.
+    /// </summary>
+    public IEnumerable<ClientInfo> Clients { get; init; } = [];
 }

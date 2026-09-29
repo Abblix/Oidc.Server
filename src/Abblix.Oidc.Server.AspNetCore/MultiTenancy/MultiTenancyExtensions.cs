@@ -51,13 +51,15 @@ public static class MultiTenancyExtensions
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantIssuerOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantOwnedOptionsValidator>(),
         ]);
 
         services.AddHttpContextAccessor();
         services.TryAddSingleton<ITenantCatalog, OptionsTenantCatalog>();
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
+        services.Replace(ServiceDescriptor.Singleton<IIssuerSettings, TenantIssuerSettings>());
+        services.Replace(ServiceDescriptor.Transient(typeof(IIssuerLocal<>), typeof(TenantIssuerLocal<>)));
 
         foreach (var seam in TenantSeams.All)
             seam.Wrap(services);

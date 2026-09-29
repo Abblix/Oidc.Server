@@ -215,7 +215,7 @@ public static class ServiceCollectionExtensions
     /// Configures the issuer provider service to dynamically determine the issuer URI based on application settings.
     /// If an issuer is preconfigured in the options, a preconfigured issuer provider is used.
     /// Otherwise, a request-based issuer provider is utilized to determine the issuer URI dynamically,
-    /// allowing for flexible deployment scenarios.
+    /// allowing for flexible deployment scenarios. The settings belonging to the issuer come from the same options.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the issuer provider to.</param>
     /// <returns>The modified <see cref="IServiceCollection"/> with the issuer provider configured.</returns>
@@ -228,6 +228,10 @@ public static class ServiceCollectionExtensions
                 ? sp.CreateService<PreconfiguredIssuerProvider>()
                 : sp.CreateService<RequestBasedIssuerProvider>();
         });
+        services.TryAddSingleton<IIssuerSettings, OptionsIssuerSettings>();
+
+        // Transient, so each service holding values gets its own holder
+        services.TryAddTransient(typeof(IIssuerLocal<>), typeof(SingleIssuerLocal<>));
         return services;
     }
 

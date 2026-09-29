@@ -50,6 +50,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string Acme = "/tenants/acme";
     private const string Globex = "/tenants/globex";
     private const string ClientId = "shared-client-id";
+    private const string AcmeOnlyClientId = "acme-only-client-id";
     private const string ClientSecret = "shared-client-secret";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
@@ -89,22 +90,22 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 UserCodeLength = 8,
             };
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-            options.Clients =
-            [
-                new ClientInfo(ClientId)
-                {
-                    ClientSecrets = [new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) }],
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
-                    AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization],
-                    RedirectUris = [new Uri(RedirectUri)],
-                    PkceRequired = true,
-                },
-            ];
         });
         builder.Services.AddMultiTenancy(options =>
         {
-            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = Host + Acme });
-            options.Tenants.Add(new TenantDefinition { Id = "globex", Issuer = Host + Globex });
+            // Both tenants register a client under the same id; only acme registers the second one
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = Host + Acme,
+                Clients = [Client(ClientId), Client(AcmeOnlyClientId)],
+            });
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = "globex",
+                Issuer = Host + Globex,
+                Clients = [Client(ClientId)],
+            });
         });
 
         _app = builder.Build();
@@ -146,15 +147,55 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             await _app.DisposeAsync();
     }
 
-    private Task<HttpResponseMessage> PostAsync(string tenant, string path, Dictionary<string, string> form)
+    private static ClientInfo Client(string clientId) => new(clientId)
     {
-        form[ClientRequest.Parameters.ClientId] = ClientId;
+        ClientSecrets = [new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) }],
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization],
+        RedirectUris = [new Uri(RedirectUri)],
+        PkceRequired = true,
+    };
+
+    private Task<HttpResponseMessage> PostAsync(string tenant, string path, Dictionary<string, string> form)
+        => PostAsync(tenant, path, ClientId, form);
+
+    private Task<HttpResponseMessage> PostAsync(
+        string tenant,
+        string path,
+        string clientId,
+        Dictionary<string, string> form)
+    {
+        form[ClientRequest.Parameters.ClientId] = clientId;
         form[ClientRequest.Parameters.ClientSecret] = ClientSecret;
         return Http.PostAsync(tenant + path, new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
     }
 
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response)
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+
+    /// <summary>
+    /// A client one tenant registers authenticates there, and the other tenant, which never registered it, refuses
+    /// it as unknown.
+    /// </summary>
+    [Fact]
+    public async Task AClientOfOneTenant_IsUnknownToTheOther()
+    {
+        Dictionary<string, string> Push() => new()
+        {
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = "openid",
+            [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+        };
+
+        var atAcme = await PostAsync(Acme, "/connect/par", AcmeOnlyClientId, Push());
+        Assert.Equal(HttpStatusCode.Created, atAcme.StatusCode);
+
+        var atGlobex = await PostAsync(Globex, "/connect/par", AcmeOnlyClientId, Push());
+        Assert.Equal(HttpStatusCode.Unauthorized, atGlobex.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClient, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
+    }
 
     /// <summary>
     /// A pushed authorization request registered with one tenant is not found by the other: its request_uri

@@ -37,13 +37,21 @@ public static class TenantKey
     /// <summary>
     /// The id of the tenant <paramref name="accessor"/> resolved.
     /// </summary>
+    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says.
+    /// </exception>
+    internal static string CurrentTenantId(ITenantAccessor accessor) => CurrentTenant(accessor).Id;
+
+    /// <summary>
+    /// The tenant <paramref name="accessor"/> resolved.
+    /// </summary>
     /// <exception cref="InvalidOperationException">
     /// No tenant is resolved: a tenant's operation that lost its tenant on the way - work carried on after the
     /// request ended - would write where its tenant never reads, and the tenant would silently miss its data.
     /// </exception>
-    internal static string CurrentTenantId(ITenantAccessor accessor)
-        => accessor.Current?.Tenant.Id
+    internal static TenantDefinition CurrentTenant(ITenantAccessor accessor)
+        => accessor.Current?.Tenant
            ?? throw new InvalidOperationException(
-               "The operation runs outside any tenant, so there is no tenant's space to keep its data in. " +
-               $"Run it within a request resolved to a tenant, or within {nameof(TenantScope)}.{nameof(TenantScope.Enter)}.");
+               "The operation runs outside any tenant, so it has no tenant's space to keep its data in and no " +
+               "tenant's settings to follow. Run it within a request resolved to a tenant, or within " +
+               $"{nameof(TenantScope)}.{nameof(TenantScope.Enter)}.");
 }

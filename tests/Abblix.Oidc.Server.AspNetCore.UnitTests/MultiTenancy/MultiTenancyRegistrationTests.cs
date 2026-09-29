@@ -14,6 +14,7 @@ using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RateLimiting;
@@ -231,6 +232,64 @@ public class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(nameof(OidcOptions.Issuer), refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerWideClients_AreRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => options.Clients = [new ClientInfo("client")]);
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)}", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnderATenant_TheClientsAreTheOnesItDeclares()
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = [new ClientInfo("client")] };
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(acme));
+        using var provider = services.BuildServiceProvider();
+        EnterTenant(provider, acme);
+
+        Assert.Same(acme.Clients, provider.GetRequiredService<IIssuerSettings>().Clients);
+    }
+
+    [Fact]
+    public void EachTenant_KeepsAValueOfItsOwn_AndNoTenantGetsNone()
+    {
+        using var provider = BuildProvider();
+        var local = provider.GetRequiredService<IIssuerLocal<object>>();
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+
+        EnterTenant(provider, Acme);
+        var acmeValue = local.GetOrCreate(() => new object());
+        Assert.Same(acmeValue, local.GetOrCreate(() => new object()));
+
+        EnterTenant(provider, globex);
+        Assert.NotSame(acmeValue, local.GetOrCreate(() => new object()));
+
+        EnterTenant(provider, null);
+        var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(() => new object()));
+        Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutATenant_TheSettingsAreRefused()
+    {
+        using var provider = BuildProvider();
+        EnterTenant(provider, null);
+
+        var settings = provider.GetRequiredService<IIssuerSettings>();
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => settings.Clients);
+        Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

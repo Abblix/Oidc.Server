@@ -7,21 +7,24 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Concurrent;
-using Abblix.Oidc.Server.Common.Configuration;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Issuer;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
 /// Manages the storage and retrieval of client information for OpenID Connect (OIDC) flows.
-/// This class provides methods to access client configurations stored in <see cref="OidcOptions"/>.
+/// Each issuer starts with the clients its <see cref="IIssuerSettings"/> register, and a client added later is
+/// known only to the issuer it was added at.
 /// </summary>
-/// <param name="options">The OIDC options containing client configurations.</param>
-internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoProvider, IClientInfoManager
+/// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
+/// <param name="clients">The clients of each issuer.</param>
+internal class ClientInfoStorage(
+    IIssuerSettings settings,
+    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> clients) : IClientInfoProvider, IClientInfoManager
 {
-    private readonly ConcurrentDictionary<string, ClientInfo> _clients = new(
-        options.Value.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-        StringComparer.OrdinalIgnoreCase);
+    private ConcurrentDictionary<string, ClientInfo> Clients => clients.GetOrCreate(() => new(
+        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
+        StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -33,7 +36,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        return Task.FromResult(_clients.GetValueOrDefault(clientId));
+        return Task.FromResult(Clients.GetValueOrDefault(clientId));
     }
 
     /// <summary>
@@ -43,7 +46,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// <returns>A task that completes when the client is added.</returns>
     public Task AddClientAsync(ClientInfo clientInfo)
     {
-        _clients.TryAdd(clientInfo.ClientId, clientInfo);
+        Clients.TryAdd(clientInfo.ClientId, clientInfo);
         return Task.CompletedTask;
     }
 
@@ -54,7 +57,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// <returns>A task that completes when the client is updated.</returns>
     public Task UpdateClientAsync(ClientInfo clientInfo)
     {
-        _clients[clientInfo.ClientId] = clientInfo;
+        Clients[clientInfo.ClientId] = clientInfo;
         return Task.CompletedTask;
     }
 
@@ -65,7 +68,7 @@ internal class ClientInfoStorage(IOptions<OidcOptions> options) : IClientInfoPro
     /// <returns>A task that completes when the client is removed.</returns>
     public Task RemoveClientAsync(string clientId)
     {
-        _clients.TryRemove(clientId, out _);
+        Clients.TryRemove(clientId, out _);
         return Task.CompletedTask;
     }
 }
