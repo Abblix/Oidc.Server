@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -459,6 +460,28 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
+    /// A request whose record is gone is told expired_token once the instant its auth_req_id carries has come,
+    /// and invalid_grant before it.
+    /// </summary>
+    [Theory]
+    [InlineData(-1, ErrorCodes.ExpiredToken)]
+    [InlineData(0, ErrorCodes.ExpiredToken)]
+    [InlineData(1, ErrorCodes.InvalidGrant)]
+    public async Task RequestNotFound_IsAnsweredByTheExpiryItsIdCarries(int secondsLeft, string expectedError)
+    {
+        var authReqId = ExpiringIdentifier.Compose(AuthReqId, _currentTime.AddSeconds(secondsLeft));
+        _storage.Setup(s => s.TryGetAsync(authReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+
+        var result = await _handler.AuthorizeAsync(
+            new TokenRequest { AuthenticationRequestId = authReqId },
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(expectedError, error.Error);
+    }
+
+    /// <summary>
     /// Verifies that when a different client tries to retrieve a PENDING authentication result,
     /// the handler returns an InvalidGrant error per CIBA spec Section 11.
     /// This prevents one client from stealing another client's authentication request.
@@ -588,33 +611,35 @@ public class BackChannelAuthenticationGrantHandlerTests
     {
         // Arrange
         var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
-        var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(AuthReqId);
-        var watched = new LetsAnotherCallerIn(RealStorage(cache), requestKey);
-        var requests = CibaStorageOver(watched);
 
         var grant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
-        await requests.StoreAsync(
+        // The id the storage hands out, which is what the client polls with and the key the read is watched at
+        var authReqId = await CibaStorageOver(RealStorage(cache)).StoreAsync(
             new BackChannelAuthenticationRequest(grant, _currentTime.AddMinutes(5))
             {
                 Status = BackChannelAuthenticationStatus.Pending,
             },
             TimeSpan.FromMinutes(5));
 
+        var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(authReqId);
+        var watched = new LetsAnotherCallerIn(RealStorage(cache), requestKey);
+        var requests = CibaStorageOver(watched);
+
         // What the user completing authentication elsewhere does, timed to land inside the handler's read.
         watched.OnNextReadOf(async () =>
         {
             var completing = CibaStorageOver(RealStorage(cache));
-            var request = await completing.TryGetAsync(AuthReqId);
+            var request = await completing.TryGetAsync(authReqId);
             request!.Status = BackChannelAuthenticationStatus.Authenticated;
-            await completing.UpdateAsync(AuthReqId, request, TimeSpan.FromMinutes(5));
+            await completing.UpdateAsync(authReqId, request, TimeSpan.FromMinutes(5));
         });
 
         // Act: the real poll, through the handler the token endpoint calls.
         var result = await HandlerOver(requests).AuthorizeAsync(
-            new TokenRequest { AuthenticationRequestId = AuthReqId },
+            new TokenRequest { AuthenticationRequestId = authReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             TestContext.Current.CancellationToken);
 
@@ -623,7 +648,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ClientId, issued.Context.ClientId);
 
         // And the request is spent, so a second poll cannot be answered with the same grant.
-        Assert.Null(await CibaStorageOver(RealStorage(cache)).TryGetAsync(AuthReqId));
+        Assert.Null(await CibaStorageOver(RealStorage(cache)).TryGetAsync(authReqId));
     }
 
     private static IEntityStorage RealStorage(IDistributedCache cache)

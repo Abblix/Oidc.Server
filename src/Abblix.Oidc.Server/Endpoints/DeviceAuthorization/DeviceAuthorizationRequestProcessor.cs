@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -26,11 +27,13 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="deviceCodeGenerator">Generator for high-entropy device codes.</param>
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
+/// <param name="timeProvider">Dates the instant the device code carries.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
-    IOptionsSnapshot<OidcOptions> options) : IDeviceAuthorizationRequestProcessor
+    IOptionsSnapshot<OidcOptions> options,
+    TimeProvider timeProvider) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
@@ -40,7 +43,10 @@ public class DeviceAuthorizationRequestProcessor(
 
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        var deviceCode = deviceCodeGenerator.GenerateDeviceCode();
+        // The code carries its own expiry, so a poll after the record is evicted is still told expired_token
+        var deviceCode = ExpiringIdentifier.Compose(
+            deviceCodeGenerator.GenerateDeviceCode(),
+            timeProvider.GetUtcNow() + deviceAuthOptions.CodeLifetime);
         var userCode = userCodeGenerator.GenerateUserCode();
 
         var deviceRequest = new DeviceAuthorizationRequest(

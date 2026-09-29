@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -34,7 +35,10 @@ public class BackChannelRequestStorage(
 	/// </returns>
 	public async Task<string> StoreAsync(BackChannelAuthenticationRequest authenticationRequest, TimeSpan expiresIn)
 	{
-		var authenticationRequestId = authenticationRequestIdGenerator.GenerateAuthenticationRequestId();
+		// The id carries the request's own expiry, so a poll after the record is evicted is still told expired_token
+		var authenticationRequestId = ExpiringIdentifier.Compose(
+			authenticationRequestIdGenerator.GenerateAuthenticationRequestId(),
+			authenticationRequest.ExpiresAt);
 
 		await storage.SetAsync(
 			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),

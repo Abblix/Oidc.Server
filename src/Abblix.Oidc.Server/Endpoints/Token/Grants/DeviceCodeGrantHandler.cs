@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -105,9 +106,13 @@ public partial class DeviceCodeGrantHandler(
 
         switch (deviceRequest)
         {
-            // A code the storage does not hold is an invalid grant (RFC 6749 section 5.2). A code issued and evicted
-            // on expiry reads the same, since the two cannot be told apart - which also keeps this endpoint from
-            // confirming which guessed codes once existed. A code still held past its lifetime is expired_token below.
+            // A code whose record is gone and whose own instant has come was evicted on expiry, and is told so as
+            // it would be while still held (RFC 8628 section 3.5). The answer comes from what the client sent, so
+            // it confirms nothing about which codes were ever issued.
+            case null when ExpiringIdentifier.HasExpired(deviceCode, now):
+                return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
+
+            // Any other code the storage does not hold is an invalid grant (RFC 6749 section 5.2)
             case null:
                 return new OidcError(ErrorCodes.InvalidGrant, "The device code is not recognized");
 

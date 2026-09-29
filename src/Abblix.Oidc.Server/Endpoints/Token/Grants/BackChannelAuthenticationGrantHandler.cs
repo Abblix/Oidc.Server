@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -261,8 +262,13 @@ public partial class BackChannelAuthenticationGrantHandler(
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch
         {
+            // One whose record is gone and whose own instant has come was evicted on expiry, and is told so as
+            // it would be while still held (CIBA Core section 11, expired_token)
+            null when ExpiringIdentifier.HasExpired(request.AuthenticationRequestId, timeProvider.GetUtcNow())
+                => new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired"),
+
             // CIBA Core section 11: "If the auth_req_id is invalid or was issued to another Client, an
-            // invalid_grant error MUST be returned". One evicted on expiry cannot be told from one never issued.
+            // invalid_grant error MUST be returned"
             null => new OidcError(ErrorCodes.InvalidGrant, "The authentication request is not recognized"),
 
             // If the client making the request is not the same as the one that initiated the authentication
