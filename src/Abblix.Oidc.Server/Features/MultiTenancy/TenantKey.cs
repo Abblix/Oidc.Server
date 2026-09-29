@@ -33,7 +33,7 @@ public static class TenantKey
         var tenantId = accessor.Current?.Tenant.Id
             ?? throw new InvalidOperationException(
                 "The operation runs outside any tenant, so there is no tenant's space to keep its data in. " +
-                "Run it within a request resolved to a tenant.");
+                $"Run it within a request resolved to a tenant, or within {nameof(TenantScope)}.{nameof(TenantScope.Enter)}.");
 
         return string.Create(
             CultureInfo.InvariantCulture,

@@ -13,11 +13,13 @@ using Microsoft.AspNetCore.Http;
 namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 
 /// <summary>
-/// The tenant <see cref="TenantResolutionMiddleware"/> resolved the current request to.
+/// The tenant of the innermost <see cref="TenantScope"/> entered, or else the one
+/// <see cref="TenantResolutionMiddleware"/> resolved the current request to.
 /// </summary>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class HttpContextTenantAccessor(IHttpContextAccessor httpContextAccessor) : ITenantAccessor
 {
     /// <inheritdoc />
-    public TenantContext? Current => httpContextAccessor.HttpContext?.Features.Get<TenantContext>();
+    public TenantContext? Current
+        => TenantScope.Current ?? httpContextAccessor.HttpContext?.Features.Get<TenantContext>();
 }
