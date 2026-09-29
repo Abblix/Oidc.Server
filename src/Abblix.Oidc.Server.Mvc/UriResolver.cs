@@ -79,13 +79,6 @@ public class UriResolver(
         path = convention.Resolve(path);
 
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(httpContextAccessor.HttpContext));
-        var appUrl = httpContext.Request.GetAppUrl();
-
-        // Convert to absolute URI:
-        // - Application-relative paths (~/...) are resolved relative to app base
-        // - Other paths are resolved relative to server root
-        return path.StartsWith("~/")
-            ? new Uri(appUrl + path[1..], UriKind.Absolute)
-            : new Uri(new Uri(appUrl, UriKind.Absolute), path);
+        return httpContext.Request.ResolveInteractionUri(path);
     }
 }

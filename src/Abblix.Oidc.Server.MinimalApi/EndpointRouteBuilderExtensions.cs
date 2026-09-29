@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -86,6 +87,10 @@ public static class EndpointRouteBuilderExtensions
         // a liveness/health probe - maps it outside MapOidcEndpoints; the library gates all of its own endpoints
         // without exception. See RequireHttpsAsync for the redirect/refuse behavior.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
+
+        // Under multi-tenancy, a request that names no tenant has no issuer, keys or clients of its own, and is
+        // answered 404 here rather than halfway through an endpoint that has already stored something.
+        oidcGroup.AddEndpointFilter(RequireTenantAsync);
 
         // Registered next, so it wraps every filter and handler below: a refusal the library decides for
         // itself, raised anywhere under the group, becomes a status the library chose rather than whatever the
@@ -247,6 +252,19 @@ public static class EndpointRouteBuilderExtensions
         }
 
         return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    /// <summary>
+    /// Group endpoint filter answering 404 to a request that multi-tenancy left without a tenant.
+    /// </summary>
+    private static async ValueTask<object?> RequireTenantAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+#pragma warning disable ABXMT001 // A deployment without multi-tenancy is never refused here.
+        return TenantRequirement.IsUnmet(context.HttpContext)
+            ? Results.NotFound()
+            : await next(context);
+#pragma warning restore ABXMT001
     }
 
     /// <summary>

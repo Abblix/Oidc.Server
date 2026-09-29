@@ -923,4 +923,7 @@ internal static class LogEvents
             public const int BudgetLeavesUncharged = Base;
         }
     }
+
+    // Range 10500-10599 is taken by Abblix.Oidc.Server.AspNetCore's own LogEvents (multi-tenancy): the two
+    // assemblies log into one process, so an id here must not repeat one there.
 }

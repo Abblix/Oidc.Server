@@ -174,11 +174,6 @@ public class AuthorizationResponseFormatter(
             return uri;
 
         var request = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
-        var appUrl = request.GetAppUrl();
-        var path = uri.OriginalString;
-
-        return path.StartsWith("~/")
-            ? new Uri(appUrl + path[1..], UriKind.Absolute)
-            : new Uri(new Uri(appUrl, UriKind.Absolute), path);
+        return request.ResolveInteractionUri(uri.OriginalString);
     }
 }
