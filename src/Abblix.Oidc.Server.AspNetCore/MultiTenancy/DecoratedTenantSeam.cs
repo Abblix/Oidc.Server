@@ -7,19 +7,23 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 
 /// <summary>
-/// The tenant of the innermost <see cref="TenantScope"/> entered, or else the one
-/// <see cref="TenantResolutionMiddleware"/> resolved the current request to.
+/// A service one instance of which serves every tenant, the wrapper keeping each tenant's data apart by key.
 /// </summary>
+/// <inheritdoc cref="TenantSeam{TService, TWrapper}"/>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class HttpContextTenantAccessor(IHttpContextAccessor httpContextAccessor) : ITenantAccessor
+internal sealed class DecoratedTenantSeam<TService, TWrapper>(object? key = null, bool required = true)
+    : TenantSeam<TService, TWrapper>(key, required)
+    where TService : class
+    where TWrapper : class, TService
 {
     /// <inheritdoc />
-    public TenantContext? Current
-        => TenantScope.Current ?? httpContextAccessor.HttpContext?.Features.Get<TenantContext>();
+    protected override void WrapRegistration(IServiceCollection services, int index)
+        => services.DecorateKeyed<TService, TWrapper>(Key);
 }

@@ -107,6 +107,18 @@ public class BackChannelRequestStorageTests
     }
 
     /// <summary>
+    /// The auth_req_id handed out is the generator's, with nothing appended: CIBA Core section 11 requires
+    /// invalid_grant for an invalid one, so it carries no expiry a client could write for itself.
+    /// </summary>
+    [Fact]
+    public async Task TheIdHandedOut_IsTheGeneratedOne()
+    {
+        var (sut, request) = CreateSut();
+
+        Assert.Equal(RequestId, await sut.StoreAsync(request, TimeSpan.FromMinutes(5)));
+    }
+
+    /// <summary>
     /// A status read must not consume the request: two consecutive reads both return it. With the
     /// pre-fix positional <c>true</c> (removeOnRetrieval) the first read consumed the record and the
     /// second returned null.

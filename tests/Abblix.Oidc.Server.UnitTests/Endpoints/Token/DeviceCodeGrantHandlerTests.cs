@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -496,11 +497,11 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the device code is not found in storage (expired or never existed),
-    /// the handler returns an ExpiredToken error.
+    /// A device code the storage does not hold and that carries no instant of expiry is an invalid grant
+    /// (RFC 6749 section 5.2).
     /// </summary>
     [Fact]
-    public async Task DeviceCodeNotFound_ShouldReturnExpiredTokenError()
+    public async Task DeviceCodeNotFound_ShouldReturnInvalidGrantError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -513,8 +514,29 @@ public class DeviceCodeGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
-        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// A code whose record is gone is told expired_token once the instant it carries has come, as a poll at the
+    /// expiry is while the record is still held, and invalid_grant before it.
+    /// </summary>
+    [Theory]
+    [InlineData(-1, ErrorCodes.ExpiredToken)]
+    [InlineData(0, ErrorCodes.ExpiredToken)]
+    [InlineData(1, ErrorCodes.InvalidGrant)]
+    public async Task DeviceCodeNotFound_IsAnsweredByTheExpiryItCarries(int secondsLeft, string expectedError)
+    {
+        var deviceCode = ExpiringIdentifier.Compose(DeviceCode, _currentTime.AddSeconds(secondsLeft));
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(deviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+
+        var result = await _handler.AuthorizeAsync(
+            new TokenRequest { DeviceCode = deviceCode },
+            new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(expectedError, error.Error);
     }
 
     /// <summary>

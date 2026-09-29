@@ -211,4 +211,11 @@ public interface IEntityStorageKeyFactory
     /// <param name="sessionId">The session whose end user was asked whether to log out.</param>
     /// <returns>A formatted storage key for that session's outstanding confirmation.</returns>
     string LogoutConfirmationKey(string sessionId);
+
+    /// <summary>
+    /// Generates a storage key for the secret the nonces of one rotation bucket are signed with.
+    /// </summary>
+    /// <param name="bucket">The rotation bucket the secret signs nonces for.</param>
+    /// <returns>A formatted storage key for that bucket's secret.</returns>
+    string NonceSecretKey(long bucket);
 }

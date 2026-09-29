@@ -11,7 +11,9 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -26,11 +28,15 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="deviceCodeGenerator">Generator for high-entropy device codes.</param>
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
+/// <param name="timeProvider">Dates the instant the device code carries.</param>
+/// <param name="issuerProvider">The issuer a relative verification page is under.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
-    IOptionsSnapshot<OidcOptions> options) : IDeviceAuthorizationRequestProcessor
+    IOptionsSnapshot<OidcOptions> options,
+    TimeProvider timeProvider,
+    IIssuerProvider issuerProvider) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
@@ -40,7 +46,13 @@ public class DeviceAuthorizationRequestProcessor(
 
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        var deviceCode = deviceCodeGenerator.GenerateDeviceCode();
+        // Before anything is stored, so a request refused for the page leaves no code behind
+        var verificationUri = VerificationUri(deviceAuthOptions.VerificationUri);
+
+        // The code carries its own expiry, so a poll after the record is evicted is still told expired_token
+        var deviceCode = ExpiringIdentifier.Compose(
+            deviceCodeGenerator.GenerateDeviceCode(),
+            timeProvider.GetUtcNow() + deviceAuthOptions.CodeLifetime);
         var userCode = userCodeGenerator.GenerateUserCode();
 
         var deviceRequest = new DeviceAuthorizationRequest(
@@ -68,8 +80,41 @@ public class DeviceAuthorizationRequestProcessor(
         {
             DeviceCode = deviceCode,
             UserCode = userCode,
+            VerificationUri = verificationUri,
+
+            // RFC 8628 section 3.2: verification_uri_complete lets capable devices render a direct link or QR
+            // code, so the user skips typing the code
+            VerificationUriComplete = new Uri(
+                verificationUri.AddToQuery([(DeviceAuthorizationResponse.Parameters.UserCode, userCode)])),
+
             ExpiresIn = deviceAuthOptions.CodeLifetime,
             Interval = deviceAuthOptions.PollingInterval,
         };
+    }
+
+    /// <summary>
+    /// The page the user enters the code on: <paramref name="configured"/> resolved against the issuer taken as a
+    /// directory, which leaves an absolute one as it is (RFC 3986 section 5.2.2).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// A relative page resolves under an issuer without TLS, where the user would authenticate in the clear. One
+    /// leaving the issuer's path was refused when it was configured.
+    /// </exception>
+    private Uri VerificationUri(Uri configured)
+    {
+        var issuer = new Uri(issuerProvider.GetIssuer().AppendTrailingSlash());
+        var resolved = new Uri(issuer, configured);
+
+        if (configured.IsAbsoluteUri)
+            return resolved;
+
+        if (!string.Equals(resolved.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The relative {nameof(DeviceAuthorizationOptions.VerificationUri)} resolves to {resolved}, which " +
+                "does not use HTTPS: the user authenticates there, and RFC 6749 Section 3.1 requires TLS for that.");
+        }
+
+        return resolved;
     }
 }

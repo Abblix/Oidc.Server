@@ -9,7 +9,8 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common.Configuration;
-using Microsoft.Extensions.Caching.Distributed;
+using Abblix.Oidc.Server.Features.Storages;
+using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -19,32 +20,33 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// HMAC-SHA256 backed implementation of <see cref="INonceService"/>.
 /// Issues stateless nonces of the form <c>Base64Url(timestamp_8B || HMAC-SHA256(secret, timestamp_8B)[..16])</c>
 /// where <c>secret</c> is rotated on a configurable cadence and shared across
-/// server instances via <see cref="IDistributedCache"/>, keyed by time bucket.
+/// server instances via <see cref="IEntityStorage"/>, keyed by time bucket.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The bucketed-secret design avoids any explicit lock or coordination on the
 /// rotation boundary: every instance derives the same bucket index from the
 /// nonce's embedded timestamp, looks up that bucket's secret in the
-/// distributed cache, and either finds it or creates one with last-write-wins
-/// semantics. Per RFC 9449 section 11.3 a brief mismatch during the rotation race
+/// entity storage, and either finds it or claims the key with a new one - of
+/// instances racing to claim it, one wins and the others read the winner's.
+/// Per RFC 9449 section 11.3 a brief mismatch during the rotation race
 /// surfaces to the DPoP client as a single retry with a fresh
 /// <c>DPoP-Nonce</c> header, which is the protocol's intended recovery path;
 /// other consumers of this service get the analogous one-retry behavior
 /// through their own challenge-response loop.
+/// </para>
+/// <para>
+/// The entity storage rather than the distributed cache directly, so a deployment serving several tenants keeps
+/// a secret per tenant, and a nonce issued by one tenant does not validate at another.
+/// </para>
 /// </remarks>
 public partial class RollingHmacNonceService(
     ILogger<RollingHmacNonceService> logger,
-    IDistributedCache cache,
+    IEntityStorage storage,
+    IEntityStorageKeyFactory keyFactory,
     IOptionsMonitor<OidcOptions> options,
     TimeProvider timeProvider) : INonceService
 {
-    /// <summary>
-    /// Cache-key prefix for rotating-secret entries. Bucket-index is appended
-    /// per <see cref="BucketIndex"/> below; the prefix isolates nonce-service
-    /// secrets from any other entries the cache may host.
-    /// </summary>
-    private const string CacheKeyPrefix = "Abblix.Oidc.Server.Features.Nonces:";
-
     /// <summary>
     /// Length of the HMAC secret. 32 bytes matches SHA-256's block-aligned
     /// security level - anything longer would be hashed down by HMAC anyway.
@@ -180,7 +182,7 @@ public partial class RollingHmacNonceService(
 
     /// <summary>
     /// Maps a Unix-second timestamp onto the rotation-bucket index used to
-    /// key the secret in <see cref="IDistributedCache"/>. Two timestamps fall
+    /// key the secret in <see cref="IEntityStorage"/>. Two timestamps fall
     /// into the same bucket iff they were minted under the same secret
     /// generation; this is the only coordination needed between instances.
     /// </summary>
@@ -196,35 +198,36 @@ public partial class RollingHmacNonceService(
     }
 
     /// <summary>
-    /// Looks up the rotating secret for the given bucket. On cache miss
-    /// generates a new random secret and writes it back; if two instances
-    /// race the write, last-write-wins resolves the tie and the surviving
-    /// secret is the one that determines validity for the rest of this
-    /// bucket's lifetime. The cache TTL is set to three rotation intervals
-    /// so a secret remains usable for verification across the entire
+    /// Looks up the rotating secret for the given bucket. When there is none, generates a new random secret and
+    /// claims the bucket's key with it; of instances racing to claim it, one wins, and the others take the
+    /// winner's, so all of them sign and verify with one secret for the rest of the bucket's lifetime. The entry
+    /// lives three rotation intervals so a secret remains usable for verification across the entire
     /// <see cref="NonceOptions.AcceptanceWindow"/>.
     /// </summary>
     private async Task<byte[]> GetOrCreateSecretAsync(long bucket, CancellationToken cancellationToken)
     {
-        var cacheKey = CacheKeyPrefix + bucket;
-        var cached = await cache.GetAsync(cacheKey, cancellationToken);
-        if (cached is { Length: SecretLengthBytes })
-            return cached;
+        var key = keyFactory.NonceSecretKey(bucket);
+        var stored = await storage.GetAsync<Storages.Proto.NonceSecret>(key, removeOnRetrieval: false, cancellationToken);
+        if (stored is { Value.Length: SecretLengthBytes })
+            return stored.Value.ToByteArray();
 
-        var fresh = RandomNumberGenerator.GetBytes(SecretLengthBytes);
-        var ttl = options.CurrentValue.DPoP.Nonce.RotationInterval * 3;
-        await cache.SetAsync(
-            cacheKey,
-            fresh,
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
-            cancellationToken);
+        var fresh = new Storages.Proto.NonceSecret
+        {
+            Value = ByteString.CopyFrom(RandomNumberGenerator.GetBytes(SecretLengthBytes)),
+        };
+        var lifetime = new StorageOptions
+        {
+            AbsoluteExpirationRelativeToNow = options.CurrentValue.DPoP.Nonce.RotationInterval * 3,
+        };
 
-        // Re-read after the write so racing instances converge on the same
-        // surviving secret rather than each holding its own locally.
-        var converged = await cache.GetAsync(cacheKey, cancellationToken);
-        var winner = converged is { Length: SecretLengthBytes } ? converged : fresh;
-        LogSecretGenerated(bucket);
-        return winner;
+        if (await storage.TrySetIfAbsentAsync(key, fresh, lifetime, cancellationToken))
+        {
+            LogSecretGenerated(bucket);
+            return fresh.Value.ToByteArray();
+        }
+
+        var winner = await storage.GetAsync<Storages.Proto.NonceSecret>(key, removeOnRetrieval: false, cancellationToken);
+        return (winner ?? fresh).Value.ToByteArray();
     }
 
     /// <summary>

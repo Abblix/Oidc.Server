@@ -11,7 +11,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Nonces;
+using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
+using Google.Protobuf;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,6 +63,11 @@ public class RollingHmacNonceServiceTests
 
         var time = new FakeTimeProvider(startTime ?? Anchor);
         services.AddSingleton<TimeProvider>(time);
+
+        // The server's own storage over the cache, so instances sharing the cache share the secrets as they do
+        // in a deployment.
+        services.AddCommonServices();
+        services.AddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.AddSingleton<INonceService, RollingHmacNonceService>();
 
         var sp = services.BuildServiceProvider();
@@ -204,6 +213,61 @@ public class RollingHmacNonceServiceTests
         var failure = await svc.ValidateAsync(nonce, Ct);
 
         Assert.Null(failure);
+    }
+
+    /// <summary>
+    /// A storage where another instance claims the bucket's secret between this instance's miss and its own
+    /// claim: the first read finds nothing, the claim loses, and every read after it finds the winner's secret.
+    /// </summary>
+    private sealed class LostRaceStorage(NonceSecret winner) : IEntityStorage
+    {
+        private bool _missed;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => throw new InvalidOperationException("The secret is claimed, never overwritten.");
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+        {
+            if (!_missed)
+            {
+                _missed = true;
+                return Task.FromResult<T?>(default);
+            }
+
+            return Task.FromResult((T?)(object)winner);
+        }
+
+        public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(false);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// The instance that loses the race to create a bucket's secret signs with the winner's, so the nonces of all
+    /// instances verify against one another; signing with its own would make every nonce it issued fail elsewhere.
+    /// </summary>
+    [Fact]
+    public async Task AnInstanceLosingTheRaceForTheSecret_SignsWithTheWinners()
+    {
+        var winner = new NonceSecret { Value = ByteString.CopyFrom(new byte[32]) };
+
+        INonceService Build(IEntityStorage storage)
+        {
+            var services = new ServiceCollection().AddLogging();
+            services.AddSingleton<TimeProvider>(new FakeTimeProvider(Anchor));
+            services.AddSingleton(storage);
+            services.AddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
+            services.AddSingleton<INonceService, RollingHmacNonceService>();
+            return services.BuildServiceProvider().GetRequiredService<INonceService>();
+        }
+
+        var loser = Build(new LostRaceStorage(winner));
+        var nonce = await loser.IssueAsync(Ct);
+
+        var verifier = Build(new LostRaceStorage(winner));
+        await verifier.IssueAsync(Ct);
+        Assert.Null(await verifier.ValidateAsync(nonce, Ct));
     }
 
     [Fact]

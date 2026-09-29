@@ -7,24 +7,19 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
-/// Handles the formatting of responses for device authorization requests (RFC 8628).
-/// This class ensures that the appropriate HTTP responses are generated, including
-/// verification URIs and formatted user codes.
+/// Handles the formatting of responses for device authorization requests (RFC 8628): the device-code response on
+/// success, as the endpoint's processor completed it, or the OAuth error on failure.
 /// </summary>
-/// <param name="options">Configuration options containing device authorization settings.</param>
-public class DeviceAuthorizationResponseFormatter(
-    IOptions<OidcOptions> options) : IDeviceAuthorizationResponseFormatter
+public class DeviceAuthorizationResponseFormatter : IDeviceAuthorizationResponseFormatter
 {
     /// <summary>
     /// Formats a device authorization response into an HTTP response.
@@ -34,28 +29,7 @@ public class DeviceAuthorizationResponseFormatter(
         Result<CoreResponse, OidcError> response)
     {
         return Task.FromResult(response.Match<ActionResult>(
-            onSuccess: success =>
-            {
-                var deviceAuthOptions = options.Value.DeviceAuthorization
-                    .NotNull(nameof(OidcOptions.DeviceAuthorization));
-
-                var deviceResponse = new CoreResponse
-                {
-                    DeviceCode = success.DeviceCode,
-                    UserCode = success.UserCode,
-                    VerificationUri = deviceAuthOptions.VerificationUri,
-                    // RFC 8628 section 3.2: verification_uri_complete lets capable devices render a
-                    // direct link / QR code so the user skips typing the code. The field was
-                    // declared on the wire model but never populated.
-                    VerificationUriComplete = new Uri(
-                        deviceAuthOptions.VerificationUri.AddToQuery(
-                            [(CoreResponse.Parameters.UserCode, success.UserCode)])),
-                    ExpiresIn = deviceAuthOptions.CodeLifetime,
-                    Interval = deviceAuthOptions.PollingInterval,
-                };
-
-                return new OkObjectResult(deviceResponse);
-            },
+            onSuccess: success => new OkObjectResult(success),
             onFailure: error => new BadRequestObjectResult(
                 new ErrorResponse(error.Error, error.ErrorDescription))));
     }

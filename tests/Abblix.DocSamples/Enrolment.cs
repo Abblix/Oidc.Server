@@ -45,6 +45,8 @@ public static class Enrolment
             + ".InitiateAuthenticationAsync("
             + "Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces"
             + ".ValidBackChannelAuthenticationRequest)", 0, "BackChannelHandler.cs"),
+
+        new("T:Abblix.Oidc.Server.Features.MultiTenancy.TenantScope", 0, "TenantScope.cs"),
     ];
 
     /// <summary>
