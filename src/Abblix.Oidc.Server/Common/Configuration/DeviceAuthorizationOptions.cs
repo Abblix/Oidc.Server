@@ -5,6 +5,7 @@
 // This software is provided 'as-is', without any express or implied warranty.
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
@@ -125,6 +126,13 @@ public record DeviceAuthorizationOptions
     private Uri? _verificationUri;
 
     /// <summary>
+    /// An issuer with a path, standing in for any: whether a relative page leaves the issuer's path depends on the
+    /// reference alone, so one issuer answers for all of them.
+    /// </summary>
+    private static readonly Uri AnyIssuer =
+        new System.UriBuilder(Uri.UriSchemeHttps, "issuer.invalid") { Path = "issuer".AppendTrailingSlash() }.Uri;
+
+    /// <summary>
     /// The user-facing URI where users can enter their user code.
     /// This should be short and easy to remember as users will manually type it.
     /// An absolute one must use HTTPS. RFC 8628 does not say so for verification_uri; the requirement is
@@ -134,8 +142,9 @@ public record DeviceAuthorizationOptions
     /// A relative one names a page under the issuer, resolved against the issuer taken as a directory: with the
     /// issuer <c>https://auth.example.com/tenants/acme</c>, <c>device</c> is
     /// <c>https://auth.example.com/tenants/acme/device</c>. Under multi-tenancy that sends each tenant's users to
-    /// a page whose path resolves the tenant their user code was issued in. One that resolves outside the issuer,
-    /// such as <c>/device</c>, or under an issuer without HTTPS is refused when the response is built.
+    /// a page whose path resolves the tenant their user code was issued in. One that would leave the issuer's path,
+    /// such as <c>/device</c> or <c>../device</c>, is refused here, since that depends on the reference alone; one
+    /// resolved under an issuer without HTTPS is refused when the response is built, since that depends on the issuer.
     /// </remarks>
     public required Uri VerificationUri
     {
@@ -153,11 +162,22 @@ public record DeviceAuthorizationOptions
             if (value.IsAbsoluteUri &&
                 !string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             {
+                // The value is named, because a relative path read from configuration on some platforms arrives
+                // here as an absolute file URI, and the scheme alone would not say why
                 throw new ArgumentException(
-                    "The verification_uri must use HTTPS: the user authenticates there, and RFC 6749 "
-                    + "Section 3.1 requires TLS for that",
+                    $"The verification_uri must use HTTPS, and '{value}' does not: the user authenticates there, "
+                    + "and RFC 6749 Section 3.1 requires TLS for that",
                     nameof(VerificationUri));
             }
+
+            if (!value.IsAbsoluteUri && !AnyIssuer.IsBaseOf(new Uri(AnyIssuer, value)))
+            {
+                throw new ArgumentException(
+                    $"The relative verification_uri '{value}' leaves the path of the issuer it is resolved under, so "
+                    + "the page would belong to no issuer. Name a page under the issuer, such as 'device'.",
+                    nameof(VerificationUri));
+            }
+
             _verificationUri = value;
         }
     }

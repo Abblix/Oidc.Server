@@ -58,6 +58,32 @@ public class DeviceAuthorizationOptionsTests
         Assert.Equal(new Uri("device", UriKind.Relative), options.VerificationUri);
     }
 
+    /// <summary>
+    /// A relative page that would leave the issuer's path - from the host's root, up out of it, or to another
+    /// host - is not a page of the issuer, and under multi-tenancy resolves no tenant; it is refused when set.
+    /// </summary>
+    [Theory]
+    [InlineData("/device")]
+    [InlineData("../device")]
+    [InlineData("pages/../../device")]
+    [InlineData("//elsewhere.example.com/device")]
+    public void ARelativeVerificationUriLeavingTheIssuer_IsRefused(string relative)
+        => Assert.Throws<ArgumentException>(
+            () => CreateOptions(32).VerificationUri = new Uri(relative, UriKind.Relative));
+
+    [Theory]
+    [InlineData("device")]
+    [InlineData("device/activate")]
+    [InlineData("pages/../device")]
+    public void ARelativeVerificationUriUnderTheIssuer_IsAccepted(string relative)
+    {
+        var options = CreateOptions(32);
+
+        options.VerificationUri = new Uri(relative, UriKind.Relative);
+
+        Assert.Equal(relative, options.VerificationUri.OriginalString);
+    }
+
     private static DeviceAuthorizationOptions CreateOptions(int deviceCodeLength) => new()
     {
         CodeLifetime = TimeSpan.FromMinutes(5),

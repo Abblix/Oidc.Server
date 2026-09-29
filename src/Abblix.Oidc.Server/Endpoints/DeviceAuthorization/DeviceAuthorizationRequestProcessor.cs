@@ -97,8 +97,8 @@ public class DeviceAuthorizationRequestProcessor(
     /// directory, which leaves an absolute one as it is (RFC 3986 section 5.2.2).
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// A relative page resolves outside the issuer, where under multi-tenancy it resolves no tenant, or under an
-    /// issuer without TLS, where the user would authenticate in the clear.
+    /// A relative page resolves under an issuer without TLS, where the user would authenticate in the clear. One
+    /// leaving the issuer's path was refused when it was configured.
     /// </exception>
     private Uri VerificationUri(Uri configured)
     {
@@ -107,13 +107,6 @@ public class DeviceAuthorizationRequestProcessor(
 
         if (configured.IsAbsoluteUri)
             return resolved;
-
-        if (!issuer.IsBaseOf(resolved))
-        {
-            throw new InvalidOperationException(
-                $"The relative {nameof(DeviceAuthorizationOptions.VerificationUri)} '{configured}' resolves to " +
-                $"{resolved}, outside the issuer {issuer}. Name a page under the issuer, such as 'device'.");
-        }
 
         if (!string.Equals(resolved.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
