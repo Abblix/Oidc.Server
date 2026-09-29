@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -50,6 +51,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string Globex = "/tenants/globex";
     private const string ClientId = "shared-client-id";
     private const string ClientSecret = "shared-client-secret";
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
 
     private WebApplication? _app;
