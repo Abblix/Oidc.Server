@@ -8,15 +8,19 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RateLimiting;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -78,6 +82,68 @@ public class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<InvalidOperationException>(
             () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
         Assert.Contains("after AddOidcServices()", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The refusal names each service it finds missing, the per-caller budgets registered under a key included:
+    /// storage in place but client authentication not yet registered is still the wrong order.
+    /// </summary>
+    [Fact]
+    public void AddMultiTenancy_BeforeTheFailureBudget_IsRefused_NamingIt()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddDistributedMemoryCache()
+            .AddCommonServices()
+            .AddReplayPrevention();
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
+        Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheServersOwnComposition_PassesTheStartupCheck()
+    {
+        using var provider = BuildProvider();
+
+        Assert.Single(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
+    /// <summary>
+    /// A registration made after multi-tenancy replaces the wrapper silently, and every tenant would then read the
+    /// others' data - so startup refuses it, naming the service.
+    /// </summary>
+    [Fact]
+    public void AStorageReplacedAfterMultiTenancy_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.Replace(ServiceDescriptor.Singleton<IEntityStorage, DistributedCacheStorage>());
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"{nameof(IEntityStorage)} is not kept per tenant", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A budget of an enabled endpoint is checked as well, named with its key.
+    /// </summary>
+    [Fact]
+    public void AnEndpointBudgetReplacedAfterMultiTenancy_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection().AddServerStorage().AddIntrospection();
+        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddKeyedSingleton(
+            CallerRateLimiters.Introspection,
+            PartitionedRateLimiter.Create<(string ClientId, string? Source), string>(
+                resource => RateLimitPartition.GetNoLimiter(resource.ClientId)));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains(CallerRateLimiters.Introspection, refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

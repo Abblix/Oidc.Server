@@ -7,14 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.RateLimiting;
-using Abblix.DependencyInjection;
-using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.RateLimiting;
-using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -38,8 +33,8 @@ public static class MultiTenancyExtensions
     /// Each tenant declares its issuer in <see cref="TenantDefinition.Issuer"/>, so
     /// <see cref="OidcOptions.Issuer"/> must be left unset, and startup refuses it otherwise.
     /// Call this after <c>AddOidcServices</c> and every other <c>Add*</c> of the server: it keeps each tenant's
-    /// stored data apart by wrapping the storage those calls registered, so it refuses when one is not
-    /// registered yet.
+    /// data apart by wrapping the services those calls registered, so it refuses when one is not registered yet,
+    /// and startup refuses a server in which a later registration replaced a wrapper.
     /// </remarks>
     public static IServiceCollection AddMultiTenancy(
         this IServiceCollection services,
@@ -48,6 +43,7 @@ public static class MultiTenancyExtensions
         services.AddOptions<MultiTenancyOptions>().Configure(configure).ValidateOnStart();
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantIssuerOptionsValidator>(),
         ]);
 
@@ -55,44 +51,12 @@ public static class MultiTenancyExtensions
         services.TryAddSingleton<ITenantCatalog, OptionsTenantCatalog>();
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
-        services.DecorateForTenants<IEntityStorage, TenantEntityStorage>();
-        services.DecorateForTenants<IReplayCache, TenantReplayCache>();
-        services.DecorateForTenants<PartitionedRateLimiter<string>, TenantAddressRateLimiter>(
-            CallerRateLimiters.AuthenticationFailures);
 
-        // Each registered only when the host enables its endpoint.
-        services.DecorateIfRegistered<PartitionedRateLimiter<(string ClientId, string? Source)>, TenantCallerRateLimiter>(
-            CallerRateLimiters.Introspection);
-        services.DecorateIfRegistered<PartitionedRateLimiter<(string ClientId, string? Source)>, TenantCallerRateLimiter>(
-            CallerRateLimiters.Revocation);
+        foreach (var seam in TenantSeams.All)
+            seam.Wrap(services);
+
         return services;
     }
-
-    private static void DecorateForTenants<TService, TDecorator>(this IServiceCollection services, object? key = null)
-        where TService : class
-        where TDecorator : class, TService
-    {
-        if (!services.IsRegistered<TService>(key))
-        {
-            throw new InvalidOperationException(
-                $"{nameof(AddMultiTenancy)}() must come after AddOidcServices() and the server's other Add* calls: " +
-                $"{(key is null ? typeof(TService).Name : $"{typeof(TService).Name} '{key}'")} is not registered " +
-                "yet, so its data cannot be kept per tenant.");
-        }
-
-        services.DecorateKeyed<TService, TDecorator>(key);
-    }
-
-    private static void DecorateIfRegistered<TService, TDecorator>(this IServiceCollection services, object key)
-        where TService : class
-        where TDecorator : class, TService
-    {
-        if (services.IsRegistered<TService>(key))
-            services.DecorateKeyed<TService, TDecorator>(key);
-    }
-
-    private static bool IsRegistered<TService>(this IServiceCollection services, object? key)
-        => services.Any(descriptor => descriptor.ServiceType == typeof(TService) && Equals(descriptor.ServiceKey, key));
 
     /// <summary>
     /// Resolves each request to its tenant, and routes it after that.
