@@ -99,13 +99,18 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
         if (await catalog.FindByAddressAsync(request.Host.Host, fullPath, cancellationToken) is not { } tenant)
             return null;
 
-        var issuerPathLength = TenantAddress.Of(tenant.Issuer).Path.Length;
-        var issuerPath = new PathString(TenantAddress.CanonicalPath(fullPath[..issuerPathLength]));
-        var pathBase = new PathString(TenantAddress.CanonicalPath(request.PathBase.Value ?? string.Empty));
-        if (!issuerPath.StartsWithSegments(pathBase, StringComparison.Ordinal))
+        // A catalog of the host's own may match by a rule of its own, and the cut below needs this one.
+        var address = TenantAddress.Of(tenant.Issuer);
+        if (!address.Covers(fullPath))
             return null;
 
-        // Cut from the request's own string, so the addresses built from it are the ones the client sent.
+        // The full path starts with the path base and both end at a segment boundary, so an issuer path covering
+        // the full path extends the path base exactly when it is not shorter.
+        var issuerPathLength = address.Path.Length;
+        if (issuerPathLength < (request.PathBase.Value ?? string.Empty).Length)
+            return null;
+
+        // Cut from the request's own string, so an encoded slash stays as the client wrote it.
         return (tenant, new PathString(fullPath[..issuerPathLength]), new PathString(fullPath[issuerPathLength..]));
     }
 

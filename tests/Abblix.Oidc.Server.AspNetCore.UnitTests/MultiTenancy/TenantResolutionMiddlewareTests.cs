@@ -7,11 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -187,6 +189,40 @@ public class TenantResolutionMiddlewareTests
 
         Assert.Equal(tenantId, seen?.TenantId);
         Assert.Equal(pathBase, seen?.PathBase);
+    }
+
+    /// <summary>
+    /// A catalog of the host's own may match by a rule of its own; a tenant whose issuer does not cover the
+    /// request is not the request's, and the request passes on without one rather than failing.
+    /// </summary>
+    [Fact]
+    public async Task ATenantFromACatalogWhoseIssuerDoesNotCoverTheRequest_IsNotTaken()
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" };
+        var catalog = new Mock<ITenantCatalog>();
+        catalog
+            .Setup(c => c.FindByAddressAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(acme);
+
+        Seen? seen = null;
+        var middleware = new TenantResolutionMiddleware(
+            context =>
+            {
+                seen = new Seen(
+                    context.Features.Get<TenantContext>()?.Tenant.Id,
+                    context.Request.PathBase.Value ?? string.Empty,
+                    context.Request.Path.Value ?? string.Empty);
+                return Task.CompletedTask;
+            },
+            catalog.Object);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Host = new HostString(SharedHost);
+        httpContext.Request.Path = "/tenants";
+
+        await middleware.InvokeAsync(httpContext);
+
+        Assert.Equal(new Seen(null, string.Empty, "/tenants"), seen);
     }
 
     /// <summary>

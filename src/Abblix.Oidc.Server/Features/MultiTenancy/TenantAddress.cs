@@ -43,9 +43,9 @@ public sealed record TenantAddress(string Host, string Path)
     /// an encoded slash as the client wrote it.
     /// </summary>
     /// <remarks>
-    /// Used to compare, never to address: the addresses built from a request stay in the spelling the client
-    /// sent, which is what a client assertion's audience and a DPoP proof are bound to. The length never changes,
-    /// so a position found in this form is the same position in the original.
+    /// Used to compare, never to address: an encoded slash in the addresses built from a request stays as the
+    /// client wrote it, since a client assertion's audience is compared with them exactly. The length never
+    /// changes, so a position found in this form is the same position in the original.
     /// </remarks>
     public static string CanonicalPath(string path)
         => path.Replace(EncodedSlash, EncodedSlash, StringComparison.OrdinalIgnoreCase);
