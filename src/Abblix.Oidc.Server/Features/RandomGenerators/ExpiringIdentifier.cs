@@ -12,15 +12,20 @@ using System.Buffers.Text;
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// An identifier a client polls with - a device code, an auth_req_id - carrying the instant it expires, so the
-/// server can tell an expired one from one it never issued after the record behind it is gone.
+/// A device code carrying the instant it expires, so the server can tell an expired one from one it never issued
+/// after the record behind it is gone.
 /// </summary>
 /// <remarks>
-/// The instant needs no protection: the answer drawn from it - expired_token when it has passed, invalid_grant
-/// otherwise - depends only on what the client sent, so it tells a guesser nothing about what was ever issued.
-/// A client only sends either identifier back: an auth_req_id "MUST be treated as opaque by the client", with '.'
-/// among the characters it may hold (CIBA Core section 7.3), and a device code is echoed to the token endpoint and
-/// never shown to the user (RFC 8628 sections 3.2 and 3.4).
+/// <para>
+/// The instant is not protected, so a client can write any instant it likes. The answer drawn from it -
+/// expired_token when it has passed, invalid_grant otherwise - depends only on what the client sent, so it tells a
+/// guesser nothing about what was ever issued. The device code is echoed to the token endpoint and never shown to
+/// the user (RFC 8628 sections 3.2 and 3.4).
+/// </para>
+/// <para>
+/// An auth_req_id does not carry one: CIBA Core section 11 requires invalid_grant for an auth_req_id that is
+/// invalid, and one written by the client with a past instant is exactly that.
+/// </para>
 /// </remarks>
 internal static class ExpiringIdentifier
 {

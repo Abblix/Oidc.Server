@@ -439,8 +439,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             PublicSubjects());
 
     /// <summary>
-    /// An auth_req_id the storage does not hold and that carries no instant of expiry is invalid, and CIBA Core
-    /// section 11 requires invalid_grant for it:
+    /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
     /// "If the auth_req_id is invalid or was issued to another Client, an invalid_grant error MUST be returned".
     /// </summary>
     [Fact]
@@ -461,16 +460,14 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// A request whose record is gone is told expired_token once the instant its auth_req_id carries has come,
-    /// and invalid_grant before it.
+    /// An auth_req_id shaped like a device code carrying a past expiry is still one this server does not hold, and
+    /// CIBA Core section 11 requires invalid_grant for it: the instant is the client's to write, so reading it
+    /// would answer expired_token to an id nobody issued.
     /// </summary>
-    [Theory]
-    [InlineData(-1, ErrorCodes.ExpiredToken)]
-    [InlineData(0, ErrorCodes.ExpiredToken)]
-    [InlineData(1, ErrorCodes.InvalidGrant)]
-    public async Task RequestNotFound_IsAnsweredByTheExpiryItsIdCarries(int secondsLeft, string expectedError)
+    [Fact]
+    public async Task RequestNotFound_CarryingAPastInstant_IsStillAnInvalidGrant()
     {
-        var authReqId = ExpiringIdentifier.Compose(AuthReqId, _currentTime.AddSeconds(secondsLeft));
+        var authReqId = ExpiringIdentifier.Compose(AuthReqId, _currentTime.AddMinutes(-1));
         _storage.Setup(s => s.TryGetAsync(authReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         var result = await _handler.AuthorizeAsync(
@@ -479,7 +476,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(expectedError, error.Error);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>

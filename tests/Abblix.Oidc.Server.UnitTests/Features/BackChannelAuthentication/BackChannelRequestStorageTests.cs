@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Moq;
@@ -105,22 +104,6 @@ public class BackChannelRequestStorageTests
         };
 
         return (sut, request);
-    }
-
-    /// <summary>
-    /// The auth_req_id carries the instant the request expires, so a poll after the record is evicted can still
-    /// be told it expired, and the record is found under that same id.
-    /// </summary>
-    [Fact]
-    public async Task TheIdHandedOut_CarriesTheRequestsExpiry_AndFindsIt()
-    {
-        var (sut, request) = CreateSut();
-
-        var id = await sut.StoreAsync(request, TimeSpan.FromMinutes(5));
-
-        Assert.True(ExpiringIdentifier.TryReadExpiry(id, out var expiresAt));
-        Assert.Equal(request.ExpiresAt, expiresAt);
-        Assert.NotNull(await sut.TryGetAsync(id));
     }
 
     /// <summary>
