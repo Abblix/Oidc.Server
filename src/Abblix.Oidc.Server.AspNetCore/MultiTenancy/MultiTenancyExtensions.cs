@@ -52,6 +52,7 @@ public static class MultiTenancyExtensions
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSettingsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantRegistriesValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantOwnedOptionsValidator>(),
         ]);
 

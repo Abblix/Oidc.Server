@@ -21,6 +21,8 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -239,6 +241,46 @@ public class MultiTenancyRegistrationTests
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
         Assert.Contains($"Tenant '{tenant.Id}': ", refusal.Message, StringComparison.Ordinal);
         Assert.Contains(mistake, refusal.Message, StringComparison.Ordinal);
+    }
+
+    public static TheoryData<Type, object> HostsOwnRegistries => new()
+    {
+        { typeof(IClientInfoProvider), Moq.Mock.Of<IClientInfoProvider>() },
+        { typeof(IClientInfoManager), Moq.Mock.Of<IClientInfoManager>() },
+        { typeof(IScopeManager), Moq.Mock.Of<IScopeManager>() },
+        { typeof(IResourceManager), Moq.Mock.Of<IResourceManager>() },
+        { typeof(ISubjectTypeConverter), Moq.Mock.Of<ISubjectTypeConverter>() },
+    };
+
+    /// <summary>
+    /// A registry the host brings itself keeps one set of clients, scopes, resources or pairwise keys for every
+    /// tenant, since nothing tells it which tenant a request is for, so startup refuses it, naming the service.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(HostsOwnRegistries))]
+    public void AHostsOwnRegistry_IsRefusedAtStartup(Type service, object registry)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(service, registry);
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"{service.Name} is the host's own", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheServersOwnRegistries_PassTheStartupCheck()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddClientInformation().AddUserInfo();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Single(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
     }
 
     [Fact]
