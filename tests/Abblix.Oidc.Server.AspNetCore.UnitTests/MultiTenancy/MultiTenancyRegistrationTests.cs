@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
@@ -100,6 +101,55 @@ public class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<InvalidOperationException>(
             () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
         Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A second call would wrap the storage again and change every key it holds, losing what was stored
+    /// before, so it is refused.
+    /// </summary>
+    [Fact]
+    public void ASecondCallToAddMultiTenancy_IsRefused()
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
+        Assert.Contains("already", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A host wrapping the storage itself after multi-tenancy is refused too, and told what to move rather than
+    /// that something replaced the storage.
+    /// </summary>
+    [Fact]
+    public void AStorageDecoratedAfterMultiTenancy_IsRefused_NamingTheOrder()
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.Decorate<IEntityStorage, PassThroughStorage>();
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("registered or decorated after", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A host's own storage wrapper, adding nothing.</summary>
+    private sealed class PassThroughStorage(IEntityStorage inner) : IEntityStorage
+    {
+        public Task SetAsync<T>(string key, T value, StorageOptions options, System.Threading.CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, System.Threading.CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, System.Threading.CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task RemoveAsync(string key, System.Threading.CancellationToken? token = null)
+            => inner.RemoveAsync(key, token);
     }
 
     [Fact]

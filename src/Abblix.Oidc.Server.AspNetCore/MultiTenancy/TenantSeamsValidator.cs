@@ -29,9 +29,9 @@ internal sealed class TenantSeamsValidator(IServiceProvider serviceProvider) : I
         var shared = TenantSeams.All
             .Select(seam => seam.FindShared(serviceProvider))
             .OfType<string>()
-            .Select(service => $"{service} is not kept per tenant: a registration made after " +
-                               $"{nameof(MultiTenancyExtensions.AddMultiTenancy)}() replaced it, and its data would " +
-                               "be shared between tenants.")
+            .Select(service => $"{service} is not kept per tenant: it was registered or decorated after " +
+                               $"{nameof(MultiTenancyExtensions.AddMultiTenancy)}(), so its data would be shared " +
+                               $"between tenants. Call {nameof(MultiTenancyExtensions.AddMultiTenancy)}() after it.")
             .ToList();
 
         return shared.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(shared);

@@ -34,12 +34,19 @@ public static class MultiTenancyExtensions
     /// <see cref="OidcOptions.Issuer"/> must be left unset, and startup refuses it otherwise.
     /// Call this after <c>AddOidcServices</c> and every other <c>Add*</c> of the server: it keeps each tenant's
     /// data apart by wrapping the services those calls registered, so it refuses when one is not registered yet,
-    /// and startup refuses a server in which a later registration replaced a wrapper.
+    /// and startup refuses a server in which a later registration replaced or wrapped a wrapper. Call it once.
     /// </remarks>
     public static IServiceCollection AddMultiTenancy(
         this IServiceCollection services,
         Action<MultiTenancyOptions> configure)
     {
+        // A second call would wrap the storage again, and every key it holds would change.
+        if (services.Any(descriptor => descriptor.ImplementationType == typeof(TenantSeamsValidator)))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(AddMultiTenancy)}() has already been called; configure every tenant in that one call.");
+        }
+
         services.AddOptions<MultiTenancyOptions>().Configure(configure).ValidateOnStart();
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
