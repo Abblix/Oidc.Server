@@ -20,7 +20,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// surfaces at registration with a clear <c>invalid_client_metadata</c> diagnostic instead of as a
 /// per-request rejection the client has to reverse-engineer later. Whether a client is held to a
 /// profile is a server-side policy decision: a dynamically registered client cannot declare one, so it
-/// inherits the server-wide <see cref="OidcOptions.DefaultSecurityProfile"/>.
+/// inherits the default profile of the issuer it registers with: <see cref="OidcOptions.DefaultSecurityProfile"/>
+/// for a server without tenants, the tenant's own under multi-tenancy.
 /// </summary>
 /// <param name="issuerSettings">Provides the issuer's default profile a registered client inherits.</param>
 public class SecurityProfileValidator(IIssuerSettings issuerSettings) : SyncClientRegistrationContextValidator

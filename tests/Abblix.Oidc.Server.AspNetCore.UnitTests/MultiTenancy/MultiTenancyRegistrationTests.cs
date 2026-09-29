@@ -407,38 +407,21 @@ public class MultiTenancyRegistrationTests
         Assert.Contains(nameof(OidcOptions.Issuer), refusal.Message, StringComparison.Ordinal);
     }
 
-    public static TheoryData<string, Action<OidcOptions>> ServerWideSettingsATenantDeclares => new()
-    {
-        { nameof(OidcOptions.Clients), options => options.Clients = [new ClientInfo("client")] },
-        { nameof(OidcOptions.Scopes), options => options.Scopes = [] },
-        { nameof(OidcOptions.Resources), options => options.Resources = [] },
-        {
-            nameof(OidcOptions.DefaultResourceIndicator),
-            options => options.DefaultResourceIndicator = new Uri("https://api.example.com")
-        },
-        { nameof(OidcOptions.AccountSelectionUri), options => options.AccountSelectionUri = new Uri("/select", UriKind.Relative) },
-        { nameof(OidcOptions.ConsentUri), options => options.ConsentUri = new Uri("/consent", UriKind.Relative) },
-        { nameof(OidcOptions.InteractionUri), options => options.InteractionUri = new Uri("/interact", UriKind.Relative) },
-        { nameof(OidcOptions.LoginUri), options => options.LoginUri = new Uri("/login", UriKind.Relative) },
-        { nameof(OidcOptions.RegistrationUri), options => options.RegistrationUri = new Uri("/register", UriKind.Relative) },
-        {
-            nameof(OidcOptions.DefaultSecurityProfile),
-            options => options.DefaultSecurityProfile = ClientSecurityProfile.Fapi2
-        },
-    };
-
-    [Theory]
-    [MemberData(nameof(ServerWideSettingsATenantDeclares))]
-    public void AServerWideSettingATenantDeclares_IsRefusedAtStartup(string setting, Action<OidcOptions> configure)
+    /// <summary>
+    /// A setting a tenant declares, set for the whole server, is refused at startup. Which settings those are is
+    /// held by the core's own tests of the refusal; this one holds that multi-tenancy puts the refusal in force.
+    /// </summary>
+    [Fact]
+    public void ServerWideClients_AreRefusedAtStartup()
     {
         var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(configure);
+        services.AddOptions<OidcOptions>().Configure(options => options.Clients = [new ClientInfo("client")]);
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{nameof(OidcOptions)}.{setting} ", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)} ", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

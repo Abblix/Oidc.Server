@@ -6,9 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
@@ -30,32 +31,26 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed class TenantOwnedOptionsValidator(PairwiseSubjectSettings? pairwiseSubject = null)
     : IValidateOptions<OidcOptions>
 {
+    /// <summary>
+    /// The settings a tenant declares that the server's options carry under the same name.
+    /// </summary>
+    private static readonly PropertyInfo[] TenantOwned = (
+        from tenantProperty in typeof(TenantDefinition).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        let serverProperty = typeof(OidcOptions).GetProperty(tenantProperty.Name)
+        where serverProperty is not null
+        select serverProperty
+    ).ToArray();
+
+    private static readonly OidcOptions Defaults = new();
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        // Each setting is named after the tenant's, which OidcOptions spells the same way
-        (bool IsSet, string Setting)[] serverWide =
-        [
-            (options.Issuer is not null, nameof(TenantDefinition.Issuer)),
-            (options.Clients?.Any() == true, nameof(TenantDefinition.Clients)),
-            (options.Scopes is not null, nameof(TenantDefinition.Scopes)),
-            (options.Resources is not null, nameof(TenantDefinition.Resources)),
-            (options.DefaultResourceIndicator is not null, nameof(TenantDefinition.DefaultResourceIndicator)),
-            (options.AccountSelectionUri is not null, nameof(TenantDefinition.AccountSelectionUri)),
-            (options.ConsentUri is not null, nameof(TenantDefinition.ConsentUri)),
-            (options.InteractionUri is not null, nameof(TenantDefinition.InteractionUri)),
-            (options.LoginUri is not null, nameof(TenantDefinition.LoginUri)),
-            (options.RegistrationUri is not null, nameof(TenantDefinition.RegistrationUri)),
-            (
-                options.DefaultSecurityProfile != ClientSecurityProfile.None,
-                nameof(TenantDefinition.DefaultSecurityProfile)),
-        ];
-
         var failures = (
-            from setting in serverWide
-            where setting.IsSet
-            select $"{nameof(OidcOptions)}.{setting.Setting} applies to the whole server; under multi-tenancy each " +
-                   $"tenant declares its own in {nameof(TenantDefinition)}.{setting.Setting}, so leave it unset."
+            from setting in TenantOwned
+            where IsSet(setting.GetValue(options), setting.GetValue(Defaults))
+            select $"{nameof(OidcOptions)}.{setting.Name} applies to the whole server; under multi-tenancy each " +
+                   $"tenant declares its own in {nameof(TenantDefinition)}.{setting.Name}, so leave it unset."
         ).ToList();
 
         if (pairwiseSubject is not null)
@@ -68,4 +63,15 @@ public sealed class TenantOwnedOptionsValidator(PairwiseSubjectSettings? pairwis
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
+
+    /// <summary>
+    /// Whether a setting holds something other than what a fresh <see cref="OidcOptions"/> holds; a collection
+    /// holding nothing declares nothing, whichever instance it is.
+    /// </summary>
+    private static bool IsSet(object? value, object? defaultValue) => value switch
+    {
+        null => false,
+        IEnumerable collection and not string => collection.Cast<object?>().Any(),
+        _ => !Equals(value, defaultValue),
+    };
 }
