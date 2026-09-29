@@ -20,9 +20,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// scope entered here and, outside any, with the tenant the request was resolved to; entered within a request, a
 /// scope takes precedence over it. The scope flows across awaits and ends when disposed:
 /// <code>
-/// var tenant = await catalog.FindByIdAsync("acme", cancellationToken);
+/// var tenant = await catalog.FindByIdAsync("acme", cancellationToken)
+///     ?? throw new InvalidOperationException("No tenant is registered under the id acme.");
+///
 /// using (TenantScope.Enter(tenant))
-///     await tokenRevoker.RevokeSubjectAsync(subject, cancellationToken);
+///     await tokenRevoker.RevokeSubjectAsync(subject, cancellationToken: cancellationToken);
 /// </code>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
