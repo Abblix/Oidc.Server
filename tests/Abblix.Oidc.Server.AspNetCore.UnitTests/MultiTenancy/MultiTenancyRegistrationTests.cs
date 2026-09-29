@@ -263,6 +263,29 @@ public class MultiTenancyRegistrationTests
         Assert.Contains(mistake, refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A mistake in the server's own settings is reported by those settings, and does not hide what is wrong with the
+    /// tenant list.
+    /// </summary>
+    [Fact]
+    public void InvalidServerSettings_LeaveTheTenantListsOwnRefusalsVisible()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = "https://auth.example.com");
+        services.AddServerStorage().AddMultiTenancy(options =>
+        {
+            options.Tenants.Add(Acme);
+            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/other" });
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Equal(typeof(MultiTenancyOptions), refusal.OptionsType);
+        Assert.Contains("The tenant id 'acme' is declared more than once.", refusal.Failures);
+        Assert.DoesNotContain(refusal.Failures, failure => failure.Contains(nameof(OidcOptions.Issuer), StringComparison.Ordinal));
+    }
+
     public static TheoryData<Type, object> HostsOwnRegistries => new()
     {
         { typeof(IClientInfoProvider), Moq.Mock.Of<IClientInfoProvider>() },

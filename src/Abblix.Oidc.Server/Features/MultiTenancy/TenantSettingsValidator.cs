@@ -42,9 +42,20 @@ public sealed class TenantSettingsValidator(
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions tenants)
     {
+        OidcOptions server;
+        try
+        {
+            server = options.Value;
+        }
+        catch (OptionsValidationException)
+        {
+            // The server's settings report their own refusal; thrown from here it would replace the tenant list's
+            return ValidateOptionsResult.Skip;
+        }
+
         var failures = (
             from tenant in tenants.Tenants
-            let servedWith = ServedWith(tenant)
+            let servedWith = ServedWith(server, tenant)
             from validator in validators
 
             // It refuses exactly the settings a tenant's view carries
@@ -58,9 +69,9 @@ public sealed class TenantSettingsValidator(
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    private OidcOptions ServedWith(TenantDefinition tenant)
+    private static OidcOptions ServedWith(OidcOptions server, TenantDefinition tenant)
     {
-        var servedWith = options.Value with { };
+        var servedWith = server with { };
         foreach (var (tenantProperty, serverProperty) in TenantOwned)
             serverProperty.SetValue(servedWith, tenantProperty.GetValue(tenant));
 
