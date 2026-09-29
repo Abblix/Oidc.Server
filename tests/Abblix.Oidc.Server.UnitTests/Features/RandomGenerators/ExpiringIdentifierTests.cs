@@ -7,13 +7,15 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Buffers.Binary;
+using System.Buffers.Text;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.RandomGenerators;
 
 /// <summary>
-/// An identifier a client polls with - a device code, an auth_req_id - carrying the instant it expires.
+/// A device code carrying the instant it expires.
 /// </summary>
 public class ExpiringIdentifierTests
 {
@@ -43,4 +45,29 @@ public class ExpiringIdentifierTests
     [InlineData("")]
     public void AnIdentifierNotCarryingAnInstant_StatesNoExpiry(string identifier)
         => Assert.False(ExpiringIdentifier.TryReadExpiry(identifier, out _));
+
+    /// <summary>
+    /// The first and last instants a date can hold are read back, and one second past either is no instant.
+    /// </summary>
+    [Fact]
+    public void TheInstantsAtTheEdgesOfTheDates_AreReadAndThoseBeyondAreNot()
+    {
+        var first = DateTimeOffset.MinValue.ToUnixTimeSeconds();
+        var last = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
+
+        Assert.True(ExpiringIdentifier.TryReadExpiry(WithSeconds(first), out var earliest));
+        Assert.Equal(first, earliest.ToUnixTimeSeconds());
+        Assert.True(ExpiringIdentifier.TryReadExpiry(WithSeconds(last), out var latest));
+        Assert.Equal(last, latest.ToUnixTimeSeconds());
+
+        Assert.False(ExpiringIdentifier.TryReadExpiry(WithSeconds(first - 1), out _));
+        Assert.False(ExpiringIdentifier.TryReadExpiry(WithSeconds(last + 1), out _));
+    }
+
+    private static string WithSeconds(long seconds)
+    {
+        Span<byte> instant = stackalloc byte[sizeof(long)];
+        BinaryPrimitives.WriteInt64BigEndian(instant, seconds);
+        return "random-part." + Base64Url.EncodeToString(instant);
+    }
 }
