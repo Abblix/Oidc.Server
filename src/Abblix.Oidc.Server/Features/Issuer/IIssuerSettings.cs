@@ -42,4 +42,29 @@ public interface IIssuerSettings
     /// The resource a token is issued for when the request names none.
     /// </summary>
     Uri? DefaultResourceIndicator { get; }
+
+    /// <summary>
+    /// The page a user picks an account on.
+    /// </summary>
+    Uri? AccountSelectionUri { get; }
+
+    /// <summary>
+    /// The page a user gives consent on.
+    /// </summary>
+    Uri? ConsentUri { get; }
+
+    /// <summary>
+    /// The page a user completes a required interaction on.
+    /// </summary>
+    Uri? InteractionUri { get; }
+
+    /// <summary>
+    /// The page a user signs in on.
+    /// </summary>
+    Uri? LoginUri { get; }
+
+    /// <summary>
+    /// The page a user creates an account on.
+    /// </summary>
+    Uri? RegistrationUri { get; }
 }

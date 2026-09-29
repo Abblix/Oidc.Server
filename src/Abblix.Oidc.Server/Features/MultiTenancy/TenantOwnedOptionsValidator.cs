@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// for itself.
 /// </summary>
 /// <remarks>
-/// Each tenant declares its own issuer, clients, scopes and resources in its <see cref="TenantDefinition"/>, and those are the ones
+/// Each tenant declares its own issuer, clients, scopes, resources and user-facing pages in its <see cref="TenantDefinition"/>, and those are the ones
 /// its requests are served with, so the same setting on <see cref="OidcOptions"/> would be ignored while reading
 /// as if it applied to every tenant.
 /// </remarks>
@@ -47,6 +47,21 @@ public sealed class TenantOwnedOptionsValidator : IValidateOptions<OidcOptions>
                 nameof(OidcOptions.DefaultResourceIndicator),
                 nameof(TenantDefinition.DefaultResourceIndicator)));
         }
+
+        if (options.AccountSelectionUri is not null)
+            failures.Add(Refusal(nameof(OidcOptions.AccountSelectionUri), nameof(TenantDefinition.AccountSelectionUri)));
+
+        if (options.ConsentUri is not null)
+            failures.Add(Refusal(nameof(OidcOptions.ConsentUri), nameof(TenantDefinition.ConsentUri)));
+
+        if (options.InteractionUri is not null)
+            failures.Add(Refusal(nameof(OidcOptions.InteractionUri), nameof(TenantDefinition.InteractionUri)));
+
+        if (options.LoginUri is not null)
+            failures.Add(Refusal(nameof(OidcOptions.LoginUri), nameof(TenantDefinition.LoginUri)));
+
+        if (options.RegistrationUri is not null)
+            failures.Add(Refusal(nameof(OidcOptions.RegistrationUri), nameof(TenantDefinition.RegistrationUri)));
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }

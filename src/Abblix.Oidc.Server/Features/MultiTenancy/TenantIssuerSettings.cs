@@ -35,5 +35,20 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor) : IIssu
     /// <inheritdoc />
     public Uri? DefaultResourceIndicator => Tenant.DefaultResourceIndicator;
 
+    /// <inheritdoc />
+    public Uri? AccountSelectionUri => Tenant.AccountSelectionUri;
+
+    /// <inheritdoc />
+    public Uri? ConsentUri => Tenant.ConsentUri;
+
+    /// <inheritdoc />
+    public Uri? InteractionUri => Tenant.InteractionUri;
+
+    /// <inheritdoc />
+    public Uri? LoginUri => Tenant.LoginUri;
+
+    /// <inheritdoc />
+    public Uri? RegistrationUri => Tenant.RegistrationUri;
+
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

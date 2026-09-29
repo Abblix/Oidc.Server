@@ -61,4 +61,34 @@ public sealed class TenantDefinition
     /// this tenant's <see cref="Resources"/>.
     /// </summary>
     public Uri? DefaultResourceIndicator { get; init; }
+
+    /// <summary>
+    /// The page a user picks an account on, as <see cref="OidcOptions.AccountSelectionUri"/> is for a server
+    /// without tenants. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? AccountSelectionUri { get; init; }
+
+    /// <summary>
+    /// The page a user gives consent on, as <see cref="OidcOptions.ConsentUri"/> is for a server without tenants.
+    /// A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? ConsentUri { get; init; }
+
+    /// <summary>
+    /// The page a user completes a required interaction on, as <see cref="OidcOptions.InteractionUri"/> is for a
+    /// server without tenants. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? InteractionUri { get; init; }
+
+    /// <summary>
+    /// The page a user signs in on, as <see cref="OidcOptions.LoginUri"/> is for a server without tenants. A
+    /// relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? LoginUri { get; init; }
+
+    /// <summary>
+    /// The page a user creates an account on, as <see cref="OidcOptions.RegistrationUri"/> is for a server without
+    /// tenants. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? RegistrationUri { get; init; }
 }

@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
@@ -30,6 +31,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
+    IIssuerSettings issuerSettings,
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IParametersProvider parametersProvider,
@@ -42,25 +44,25 @@ public class AuthorizationResponseFormatter(
         {
             case AccountSelectionRequired:
                 return await RedirectAsync(
-                    options.Value.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
+                    issuerSettings.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
 
             case ConsentRequired:
                 return await RedirectAsync(
-                    options.Value.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
+                    issuerSettings.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
 
             case InteractionRequired:
                 return await RedirectAsync(
-                    options.Value.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
+                    issuerSettings.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
 
             case LoginRequired:
                 return await RedirectAsync(
-                    options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
+                    issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
             // prompt=create: a dedicated registration UI when configured, otherwise the login UI - the original
             // request parameters travel in the redirect so a combined page can still branch on them.
             case RegistrationRequired:
                 return await RedirectAsync(
-                    options.Value.RegistrationUri ?? options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
+                    issuerSettings.RegistrationUri ?? issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
                     response.Model);
 
             // JARM (*.jwt): success and error alike deliver the single packed response JWT. Matched first so any

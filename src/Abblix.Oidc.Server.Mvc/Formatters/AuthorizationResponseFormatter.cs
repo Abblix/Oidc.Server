@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -29,8 +30,9 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// response encoder; this formatter maps the encoded response onto the MVC wire DTO and delivers it to the
 /// client's redirect URI via query, fragment or form_post - for both successful and error responses.
 /// </summary>
-/// <param name="options">Provides the configured interaction URIs (login, consent, ...) and request-uri
-/// parameter name used when redirecting the user agent to the authorization server's own UI.</param>
+/// <param name="options">Provides the request-uri parameter name used when redirecting the user agent to the
+/// authorization server's own UI, and how long the stored request lasts.</param>
+/// <param name="issuerSettings">Provides the issuer's own interaction pages (login, consent, ...).</param>
 /// <param name="authorizationRequestStorage">Stores the pending authorization request when redirecting to an
 /// interaction page, returning the request_uri that links back to it.</param>
 /// <param name="sessionManagementService">Supplies the OIDC Session Management cookie appended to a successful
@@ -39,6 +41,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <param name="parametersProvider">Flattens the MVC wire DTO into name/value pairs for delivery.</param>
 public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
+    IIssuerSettings issuerSettings,
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IUriResolver uriResolver,
@@ -62,19 +65,19 @@ public class AuthorizationResponseFormatter(
         {
             case AccountSelectionRequired:
                 return await RedirectAsync(
-                    options.Value.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
+                    issuerSettings.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
 
             case ConsentRequired:
                 return await RedirectAsync(
-                    options.Value.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
+                    issuerSettings.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
 
             case InteractionRequired:
                 return await RedirectAsync(
-                    options.Value.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
+                    issuerSettings.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
 
             case LoginRequired:
                 return await RedirectAsync(
-                    options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
+                    issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
 
             // prompt=create (Initiating User Registration via OpenID Connect 1.0): a dedicated
             // registration UI when the host configured one, otherwise the login UI - the original
@@ -82,8 +85,8 @@ public class AuthorizationResponseFormatter(
             // login/registration page can still branch on them.
             case RegistrationRequired:
                 return await RedirectAsync(
-                    options.Value.RegistrationUri
-                        ?? options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
+                    issuerSettings.RegistrationUri
+                        ?? issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
                     response.Model);
 
             // iss/scope gating and JARM packing are applied upstream by the core response encoder (run from

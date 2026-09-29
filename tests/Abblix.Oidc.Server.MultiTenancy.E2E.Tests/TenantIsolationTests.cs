@@ -82,7 +82,6 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         builder.Services.AddDeviceAuthorization();
         builder.Services.AddOidcServices(options =>
         {
-            options.LoginUri = new Uri("/login", UriKind.Relative);
             options.DeviceAuthorization = new DeviceAuthorizationOptions
             {
                 // Relative, so each tenant's users are sent to the page under that tenant's path
@@ -105,12 +104,14 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 Scopes = [new ScopeDefinition(AcmeScope)],
                 Resources = [new ResourceDefinition(new Uri(AcmeResource), new ScopeDefinition(AcmeScope))],
                 DefaultResourceIndicator = new Uri(AcmeResource),
+                LoginUri = new Uri("/login", UriKind.Relative),
             });
             options.Tenants.Add(new TenantDefinition
             {
                 Id = "globex",
                 Issuer = Host + Globex,
                 Clients = [Client(ClientId)],
+                LoginUri = new Uri("/sign-in", UriKind.Relative),
             });
         });
 
@@ -267,6 +268,30 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         var atAcme = await Http.GetAsync(Acme + query, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.SeeOther, atAcme.StatusCode);
         Assert.StartsWith(Host + Acme + "/login", atAcme.Headers.Location?.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Each tenant sends its users to the sign-in page it declares, under its own path.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_SendsItsUsersToItsOwnSignInPage()
+    {
+        var pushed = await PostAsync(Globex, "/connect/par", new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = "openid",
+            [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+        });
+        var requestUri = (await ReadJsonAsync(pushed))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+
+        var atGlobex = await Http.GetAsync(
+            Globex + $"/connect/authorize?client_id={ClientId}&request_uri={Uri.EscapeDataString(requestUri)}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.SeeOther, atGlobex.StatusCode);
+        Assert.StartsWith(Host + Globex + "/sign-in", atGlobex.Headers.Location?.ToString(), StringComparison.Ordinal);
     }
 
     /// <summary>

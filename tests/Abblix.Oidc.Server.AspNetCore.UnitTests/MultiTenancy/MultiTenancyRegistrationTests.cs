@@ -243,6 +243,11 @@ public class MultiTenancyRegistrationTests
             nameof(OidcOptions.DefaultResourceIndicator),
             options => options.DefaultResourceIndicator = new Uri("https://api.example.com")
         },
+        { nameof(OidcOptions.AccountSelectionUri), options => options.AccountSelectionUri = new Uri("/select", UriKind.Relative) },
+        { nameof(OidcOptions.ConsentUri), options => options.ConsentUri = new Uri("/consent", UriKind.Relative) },
+        { nameof(OidcOptions.InteractionUri), options => options.InteractionUri = new Uri("/interact", UriKind.Relative) },
+        { nameof(OidcOptions.LoginUri), options => options.LoginUri = new Uri("/login", UriKind.Relative) },
+        { nameof(OidcOptions.RegistrationUri), options => options.RegistrationUri = new Uri("/register", UriKind.Relative) },
     };
 
     [Theory]

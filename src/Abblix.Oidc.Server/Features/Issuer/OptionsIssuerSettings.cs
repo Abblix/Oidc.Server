@@ -29,4 +29,19 @@ internal sealed class OptionsIssuerSettings(IOptions<OidcOptions> options) : IIs
 
     /// <inheritdoc />
     public Uri? DefaultResourceIndicator => options.Value.DefaultResourceIndicator;
+
+    /// <inheritdoc />
+    public Uri? AccountSelectionUri => options.Value.AccountSelectionUri;
+
+    /// <inheritdoc />
+    public Uri? ConsentUri => options.Value.ConsentUri;
+
+    /// <inheritdoc />
+    public Uri? InteractionUri => options.Value.InteractionUri;
+
+    /// <inheritdoc />
+    public Uri? LoginUri => options.Value.LoginUri;
+
+    /// <inheritdoc />
+    public Uri? RegistrationUri => options.Value.RegistrationUri;
 }
