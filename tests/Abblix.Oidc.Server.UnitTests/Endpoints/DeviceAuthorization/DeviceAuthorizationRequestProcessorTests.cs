@@ -86,12 +86,17 @@ public class DeviceAuthorizationRequestProcessorTests
 
     /// <summary>
     /// The user authenticates on the page, so one resolved under an issuer without TLS is refused, as an absolute
-    /// one without it is when configured.
+    /// one without it is when configured. The refusal comes before anything is stored, so a request refused this way
+    /// leaves no code behind.
     /// </summary>
     [Fact]
-    public async Task ARelativeVerificationUriUnderAnIssuerWithoutTls_IsRefused()
-        => await Assert.ThrowsAsync<InvalidOperationException>(
+    public async Task ARelativeVerificationUriUnderAnIssuerWithoutTls_IsRefused_BeforeACodeIsStored()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => ProcessAsync(new Uri("device", UriKind.Relative), "http://auth.example.com/tenants/acme"));
+
+        Assert.Null(_storedUnder);
+    }
 
     /// <summary>
     /// An absolute verification page is where the host put it, whatever the issuer.

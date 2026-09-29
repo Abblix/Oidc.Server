@@ -46,6 +46,9 @@ public class DeviceAuthorizationRequestProcessor(
 
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
+        // Before anything is stored, so a request refused for the page leaves no code behind
+        var verificationUri = VerificationUri(deviceAuthOptions.VerificationUri);
+
         // The code carries its own expiry, so a poll after the record is evicted is still told expired_token
         var deviceCode = ExpiringIdentifier.Compose(
             deviceCodeGenerator.GenerateDeviceCode(),
@@ -73,7 +76,6 @@ public class DeviceAuthorizationRequestProcessor(
 
         await storage.StoreAsync(deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
 
-        var verificationUri = VerificationUri(deviceAuthOptions.VerificationUri);
         return new DeviceAuthorizationResponse
         {
             DeviceCode = deviceCode,
