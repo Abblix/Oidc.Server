@@ -42,6 +42,11 @@ public sealed record TenantAddress(string Host, string Path)
     /// path are compared in: RFC 3986 section 2.1 makes the case of an escape insignificant, and the server keeps
     /// an encoded slash as the client wrote it.
     /// </summary>
+    /// <remarks>
+    /// Used to compare, never to address: the addresses built from a request stay in the spelling the client
+    /// sent, which is what a client assertion's audience and a DPoP proof are bound to. The length never changes,
+    /// so a position found in this form is the same position in the original.
+    /// </remarks>
     public static string CanonicalPath(string path)
         => path.Replace(EncodedSlash, EncodedSlash, StringComparison.OrdinalIgnoreCase);
 
@@ -56,7 +61,7 @@ public sealed record TenantAddress(string Host, string Path)
         {
             decoded
                 .Append(Uri.UnescapeDataString(escapedPath[start..slash]))
-                .Append(EncodedSlash);
+                .Append(escapedPath, slash, EncodedSlash.Length);
             start = slash + EncodedSlash.Length;
         }
 
@@ -68,6 +73,12 @@ public sealed record TenantAddress(string Host, string Path)
     /// <c>/tenants/acme</c> covers <c>/tenants/acme/connect/token</c> and not <c>/tenants/acme2</c>.
     /// </summary>
     public bool Covers(string path)
-        => path.StartsWith(Path, StringComparison.Ordinal) &&
+        => CanonicalPath(path).StartsWith(CanonicalPath(Path), StringComparison.Ordinal) &&
            (path.Length == Path.Length || path[Path.Length] == '/');
+
+    /// <summary>
+    /// This address with its path in the form it is compared in, so two addresses no request can tell apart are
+    /// equal.
+    /// </summary>
+    public TenantAddress Canonical() => this with { Path = CanonicalPath(Path) };
 }

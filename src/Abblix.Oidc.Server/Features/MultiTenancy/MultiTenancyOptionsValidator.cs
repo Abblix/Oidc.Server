@@ -51,7 +51,7 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
         failures.AddRange(
             from tenant in options.Tenants
             where IsIssuer(tenant.Issuer)
-            group tenant.Id by TenantAddress.Of(tenant.Issuer) into same
+            group tenant.Id by TenantAddress.Of(tenant.Issuer).Canonical() into same
             where same.Count() > 1
             select $"The tenants {string.Join(", ", same)} are served at the same address " +
                    $"{same.Key.Host}{same.Key.Path}.");

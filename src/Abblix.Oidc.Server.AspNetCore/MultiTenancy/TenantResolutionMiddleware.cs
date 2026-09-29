@@ -95,15 +95,18 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
         HttpRequest request,
         CancellationToken cancellationToken)
     {
-        var fullPath = TenantAddress.CanonicalPath(request.PathBase.Add(request.Path).Value ?? string.Empty);
+        var fullPath = request.PathBase.Add(request.Path).Value ?? string.Empty;
         if (await catalog.FindByAddressAsync(request.Host.Host, fullPath, cancellationToken) is not { } tenant)
             return null;
 
-        var issuerPath = new PathString(TenantAddress.Of(tenant.Issuer).Path);
-        if (!issuerPath.StartsWithSegments(request.PathBase, StringComparison.Ordinal))
+        var issuerPathLength = TenantAddress.Of(tenant.Issuer).Path.Length;
+        var issuerPath = new PathString(TenantAddress.CanonicalPath(fullPath[..issuerPathLength]));
+        var pathBase = new PathString(TenantAddress.CanonicalPath(request.PathBase.Value ?? string.Empty));
+        if (!issuerPath.StartsWithSegments(pathBase, StringComparison.Ordinal))
             return null;
 
-        return (tenant, issuerPath, new PathString(fullPath[issuerPath.Value!.Length..]));
+        // Cut from the request's own string, so the addresses built from it are the ones the client sent.
+        return (tenant, new PathString(fullPath[..issuerPathLength]), new PathString(fullPath[issuerPathLength..]));
     }
 
     /// <summary>
@@ -124,14 +127,15 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
             return null;
         }
 
-        var value = TenantAddress.CanonicalPath(afterWellKnown.Value ?? string.Empty);
+        var value = afterWellKnown.Value ?? string.Empty;
         var suffixEnd = value.IndexOf('/', 1);
         if (suffixEnd < 0)
             return null;
 
         var issuerPath = value[suffixEnd..];
         if (await catalog.FindByAddressAsync(request.Host.Host, issuerPath, cancellationToken) is not { } tenant ||
-            TenantAddress.Of(tenant.Issuer).Path != issuerPath)
+            TenantAddress.CanonicalPath(TenantAddress.Of(tenant.Issuer).Path) !=
+            TenantAddress.CanonicalPath(issuerPath))
         {
             return null;
         }

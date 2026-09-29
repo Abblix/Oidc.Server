@@ -42,6 +42,7 @@ public class TenantResolutionMiddlewareTests
             new TenantDefinition { Id = "spaced", Issuer = "https://auth.example.com/tenants/a b" },
             new TenantDefinition { Id = "slashed", Issuer = "https://auth.example.com/tenants/a%2Fb" },
             new TenantDefinition { Id = "slashed-lower", Issuer = "https://auth.example.com/tenants/c%2fd" },
+            new TenantDefinition { Id = "mounted", Issuer = "https://idp.example.com/x%2fy/mounted" },
             new TenantDefinition { Id = "loopback6", Issuer = "https://[::1]:8443/" },
             new TenantDefinition { Id = "loopback4", Issuer = "https://127.0.0.1/tenants/local" },
         ],
@@ -174,9 +175,10 @@ public class TenantResolutionMiddlewareTests
     [InlineData("/tenants/société/connect/token", "societe", "/tenants/société")]
     [InlineData("/tenants/a b/connect/token", "spaced", "/tenants/a b")]
     [InlineData("/tenants/a%2Fb/connect/token", "slashed", "/tenants/a%2Fb")]
-    [InlineData("/tenants/a%2fb/connect/token", "slashed", "/tenants/a%2Fb")]
-    [InlineData("/.well-known/openid-configuration/tenants/a%2fb", "slashed", "/tenants/a%2Fb")]
+    [InlineData("/tenants/a%2fb/connect/token", "slashed", "/tenants/a%2fb")]
+    [InlineData("/.well-known/openid-configuration/tenants/a%2fb", "slashed", "/tenants/a%2fb")]
     [InlineData("/tenants/c%2Fd/connect/token", "slashed-lower", "/tenants/c%2Fd")]
+    [InlineData("/tenants/c%2fd/connect/token", "slashed-lower", "/tenants/c%2fd")]
     [InlineData("/.well-known/openid-configuration/tenants/société", "societe", "/tenants/société")]
     public async Task AnIssuerPathWithEncodedCharacters_MatchesTheDecodedRequestPath(
         string path, string tenantId, string pathBase)
@@ -185,6 +187,32 @@ public class TenantResolutionMiddlewareTests
 
         Assert.Equal(tenantId, seen?.TenantId);
         Assert.Equal(pathBase, seen?.PathBase);
+    }
+
+    /// <summary>
+    /// The case of an encoded slash only decides the match: the path base and the path handed on keep the
+    /// spelling the client sent, since the request address a client assertion's audience is checked against is
+    /// built from them.
+    /// </summary>
+    [Fact]
+    public async Task AnEncodedSlash_KeepsTheClientsSpelling_InThePathHandedOn()
+    {
+        var (_, seen) = await RunAsync(SharedHost, "/tenants/c%2fd/files/x%2fy");
+
+        Assert.Equal(new Seen("slashed-lower", "/tenants/c%2fd", "/files/x%2fy"), seen);
+    }
+
+    /// <summary>
+    /// A path base the host set in either case of an encoded slash is extended by the issuer's path.
+    /// </summary>
+    [Theory]
+    [InlineData("/x%2fy")]
+    [InlineData("/x%2Fy")]
+    public async Task APathBaseWithAnEncodedSlash_IsExtendedByTheIssuersPath(string pathBase)
+    {
+        var (_, seen) = await RunAsync(MountedHost, "/mounted/connect/token", pathBase: pathBase);
+
+        Assert.Equal(new Seen("mounted", pathBase + "/mounted", "/connect/token"), seen);
     }
 
     /// <summary>
