@@ -25,7 +25,8 @@ public static class TenantKey
     /// with key <c>b:x</c> and tenant <c>a:b</c> with key <c>x</c> would be one entry.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// No tenant is resolved: a value kept in a space no tenant owns is readable by every tenant.
+    /// No tenant is resolved: a tenant's operation that lost its tenant on the way - work carried on after the
+    /// request ended - would write where its tenant never reads, and the tenant would silently miss its data.
     /// </exception>
     public static string Of(ITenantAccessor accessor, string key)
     {

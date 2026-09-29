@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
@@ -21,5 +22,9 @@ internal static class ServerStorageRegistration
     /// what multi-tenancy has to wrap.
     /// </summary>
     public static IServiceCollection AddServerStorage(this IServiceCollection services)
-        => services.AddLogging().AddDistributedMemoryCache().AddCommonServices();
+        => services
+            .AddLogging()
+            .AddDistributedMemoryCache()
+            .AddCommonServices()
+            .AddReplayPrevention();
 }

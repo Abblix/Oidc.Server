@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.DependencyInjection;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -53,6 +54,7 @@ public static class MultiTenancyExtensions
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
         services.DecorateForTenants<IEntityStorage, TenantEntityStorage>();
+        services.DecorateForTenants<IReplayCache, TenantReplayCache>();
         return services;
     }
 
