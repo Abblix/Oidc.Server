@@ -127,7 +127,8 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
         HttpRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.PathBase.HasValue ||
+        // A forwarded prefix of "/" still leaves the request at the root of the host.
+        if ((request.PathBase.Value ?? string.Empty).TrimEnd('/').Length > 0 ||
             !request.Path.StartsWithSegments(WellKnown, StringComparison.Ordinal, out var afterWellKnown))
         {
             return null;

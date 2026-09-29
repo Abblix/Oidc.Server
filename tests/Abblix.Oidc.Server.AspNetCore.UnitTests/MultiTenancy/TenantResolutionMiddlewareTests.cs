@@ -47,6 +47,7 @@ public class TenantResolutionMiddlewareTests
             new TenantDefinition { Id = "mounted", Issuer = "https://idp.example.com/x%2fy/mounted" },
             new TenantDefinition { Id = "proxied", Issuer = "https://proxy.example.com/idp" },
             new TenantDefinition { Id = "proxy-root", Issuer = "https://proxy-root.example.com" },
+            new TenantDefinition { Id = "proxy-root-acme", Issuer = "https://proxy-root.example.com/tenants/acme" },
             new TenantDefinition { Id = "loopback6", Issuer = "https://[::1]:8443/" },
             new TenantDefinition { Id = "loopback4", Issuer = "https://127.0.0.1/tenants/local" },
         ],
@@ -201,6 +202,8 @@ public class TenantResolutionMiddlewareTests
     [InlineData("proxy.example.com", "/idp/", "/connect/token", "proxied", "/idp", "/connect/token")]
     [InlineData("proxy.example.com", "/idp/", "", "proxied", "/idp", "/")]
     [InlineData("proxy-root.example.com", "/", "/connect/token", "proxy-root", "", "/connect/token")]
+    [InlineData("proxy-root.example.com", "/", "/.well-known/openid-configuration/tenants/acme",
+        "proxy-root-acme", "/tenants/acme", "/.well-known/openid-configuration")]
     public async Task APathBaseEndingInASlash_StillReachesTheIssuerAtIt(
         string host, string pathBase, string path, string tenantId, string expectedPathBase, string expectedPath)
     {
