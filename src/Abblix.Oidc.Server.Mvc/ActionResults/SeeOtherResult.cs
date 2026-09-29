@@ -15,8 +15,8 @@ namespace Abblix.Oidc.Server.Mvc.ActionResults;
 /// Redirects the user agent with HTTP 303 See Other instead of the framework-default 302 Found.
 /// A 303 forces the follow-up request to use GET and never re-sends the original request body, so the
 /// authorization endpoint (which accepts POST and may carry the user's credentials) never leaks that body
-/// to the redirect target. This is why the OAuth 2.0 Security Best Current Practice mandates 303 here and
-/// forbids the body-preserving 307 (RFC 9700, Section 4.12).
+/// to the redirect target. RFC 9700 Section 4.12 says such a server "MUST NOT use the HTTP 307" and
+/// "SHOULD use HTTP status code 303 (See Other)": 307 is forbidden, and 303 is the recommended choice.
 /// </summary>
 internal sealed class SeeOtherResult : ActionResult
 {
