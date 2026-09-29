@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Options;
 
@@ -19,4 +20,13 @@ internal sealed class OptionsIssuerSettings(IOptions<OidcOptions> options) : IIs
 {
     /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => options.Value.Clients;
+
+    /// <inheritdoc />
+    public ScopeDefinition[]? Scopes => options.Value.Scopes;
+
+    /// <inheritdoc />
+    public ResourceDefinition[]? Resources => options.Value.Resources;
+
+    /// <inheritdoc />
+    public Uri? DefaultResourceIndicator => options.Value.DefaultResourceIndicator;
 }

@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Reflection;
+using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -52,6 +53,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string ClientId = "shared-client-id";
     private const string AcmeOnlyClientId = "acme-only-client-id";
     private const string ClientSecret = "shared-client-secret";
+    private const string AcmeScope = "acme:read";
+    private const string AcmeResource = "https://api.acme.example";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
@@ -99,6 +102,9 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 Id = "acme",
                 Issuer = Host + Acme,
                 Clients = [Client(ClientId), Client(AcmeOnlyClientId)],
+                Scopes = [new ScopeDefinition(AcmeScope)],
+                Resources = [new ResourceDefinition(new Uri(AcmeResource), new ScopeDefinition(AcmeScope))],
+                DefaultResourceIndicator = new Uri(AcmeResource),
             });
             options.Tenants.Add(new TenantDefinition
             {
@@ -198,6 +204,39 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A scope and a resource one tenant defines are granted there, and the other tenant, which never defined them,
+    /// refuses a request naming either.
+    /// </summary>
+    [Fact]
+    public async Task AScopeAndAResourceOfOneTenant_AreUnknownToTheOther()
+    {
+        Dictionary<string, string> Push(string scope, string? resource = null)
+        {
+            var form = new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+                [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+                [AuthorizationRequest.Parameters.Scope] = scope,
+                [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+            };
+            if (resource is not null)
+                form[AuthorizationRequest.Parameters.Resource] = resource;
+            return form;
+        }
+
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync(Acme, "/connect/par", Push("openid " + AcmeScope))).StatusCode);
+        var scopeAtGlobex = await PostAsync(Globex, "/connect/par", Push("openid " + AcmeScope));
+        Assert.Equal(ErrorCodes.InvalidScope, (await ReadJsonAsync(scopeAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await PostAsync(Acme, "/connect/par", Push("openid " + AcmeScope, AcmeResource))).StatusCode);
+        var resourceAtGlobex = await PostAsync(Globex, "/connect/par", Push("openid", AcmeResource));
+        Assert.Equal(ErrorCodes.InvalidTarget, (await ReadJsonAsync(resourceAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// A pushed authorization request registered with one tenant is not found by the other: its request_uri
     /// names a request the other tenant never received.
     /// </summary>
@@ -258,7 +297,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
     /// <summary>
     /// A device flow completes: the device is sent to its own tenant's verification page, the user code entered
-    /// there is approved, and the device then gets its tokens. The other tenant's page does not know the code.
+    /// there is approved, and the device then gets its tokens, issued for the resource that tenant names as its
+    /// default. The other tenant's page does not know the code.
     /// </summary>
     [Fact]
     public async Task ADeviceFlow_CompletesOnItsOwnTenantsVerificationPage()
@@ -286,7 +326,9 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             [TokenRequest.Parameters.DeviceCode] = deviceCode,
         });
         Assert.Equal(HttpStatusCode.OK, tokens.StatusCode);
-        Assert.NotNull((await ReadJsonAsync(tokens))[ResponseParameters.AccessToken]);
+        var accessToken = (await ReadJsonAsync(tokens))[ResponseParameters.AccessToken]!.GetValue<string>();
+        var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
+        Assert.Contains(AcmeResource, payload[IanaClaimTypes.Aud]!.ToJsonString(), StringComparison.Ordinal);
     }
 
     /// <summary>

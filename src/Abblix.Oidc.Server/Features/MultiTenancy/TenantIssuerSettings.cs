@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 
@@ -23,5 +24,16 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor) : IIssuerSettings
 {
     /// <inheritdoc />
-    public IEnumerable<ClientInfo> Clients => TenantKey.CurrentTenant(tenantAccessor).Clients;
+    public IEnumerable<ClientInfo> Clients => Tenant.Clients;
+
+    /// <inheritdoc />
+    public ScopeDefinition[]? Scopes => Tenant.Scopes;
+
+    /// <inheritdoc />
+    public ResourceDefinition[]? Resources => Tenant.Resources;
+
+    /// <inheritdoc />
+    public Uri? DefaultResourceIndicator => Tenant.DefaultResourceIndicator;
+
+    private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

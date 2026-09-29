@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -36,8 +38,27 @@ public sealed class TenantDefinition
     public required string Issuer { get; init; }
 
     /// <summary>
-    /// The clients registered with this tenant. A client is known only at the tenant that lists it, so two
-    /// tenants may each register a client under the same id.
+    /// The clients registered with this tenant. A client is known only at the tenant that lists it, or at which it
+    /// was registered dynamically, so two tenants may each register a client under the same id.
     /// </summary>
     public IEnumerable<ClientInfo> Clients { get; init; } = [];
+
+    /// <summary>
+    /// The scopes this tenant defines beyond the standard ones, as <see cref="OidcOptions.Scopes"/> does for a
+    /// server without tenants.
+    /// </summary>
+    public ScopeDefinition[]? Scopes { get; init; }
+
+    /// <summary>
+    /// The resources this tenant issues tokens for, as <see cref="OidcOptions.Resources"/> does for a server
+    /// without tenants.
+    /// </summary>
+    public ResourceDefinition[]? Resources { get; init; }
+
+    /// <summary>
+    /// The resource a token is issued for when the request names none, as
+    /// <see cref="OidcOptions.DefaultResourceIndicator"/> does for a server without tenants; it must be one of
+    /// this tenant's <see cref="Resources"/>.
+    /// </summary>
+    public Uri? DefaultResourceIndicator { get; init; }
 }

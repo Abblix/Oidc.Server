@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// for itself.
 /// </summary>
 /// <remarks>
-/// Each tenant declares its own issuer and clients in its <see cref="TenantDefinition"/>, and those are the ones
+/// Each tenant declares its own issuer, clients, scopes and resources in its <see cref="TenantDefinition"/>, and those are the ones
 /// its requests are served with, so the same setting on <see cref="OidcOptions"/> would be ignored while reading
 /// as if it applied to every tenant.
 /// </remarks>
@@ -34,6 +34,19 @@ public sealed class TenantOwnedOptionsValidator : IValidateOptions<OidcOptions>
 
         if (options.Clients?.Any() == true)
             failures.Add(Refusal(nameof(OidcOptions.Clients), nameof(TenantDefinition.Clients)));
+
+        if (options.Scopes is not null)
+            failures.Add(Refusal(nameof(OidcOptions.Scopes), nameof(TenantDefinition.Scopes)));
+
+        if (options.Resources is not null)
+            failures.Add(Refusal(nameof(OidcOptions.Resources), nameof(TenantDefinition.Resources)));
+
+        if (options.DefaultResourceIndicator is not null)
+        {
+            failures.Add(Refusal(
+                nameof(OidcOptions.DefaultResourceIndicator),
+                nameof(TenantDefinition.DefaultResourceIndicator)));
+        }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }

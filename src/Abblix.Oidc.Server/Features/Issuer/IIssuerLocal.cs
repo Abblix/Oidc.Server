@@ -13,7 +13,8 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// <see cref="IIssuerSettings"/>.
 /// </summary>
 /// <remarks>
-/// Each service that asks for one gets its own, so two services keeping values of the same type never share them.
+/// Each service that asks for one gets its own, so two services keeping values of the same type never share them,
+/// and the values last as long as that service does: one registered per request builds them for every request.
 /// </remarks>
 /// <typeparam name="T">The type of the value.</typeparam>
 public interface IIssuerLocal<T> where T : class

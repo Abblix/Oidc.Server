@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Features.Issuer;
@@ -26,4 +27,19 @@ public interface IIssuerSettings
     /// The clients registered with the issuer.
     /// </summary>
     IEnumerable<ClientInfo> Clients { get; }
+
+    /// <summary>
+    /// The scopes the issuer defines beyond the standard ones.
+    /// </summary>
+    ScopeDefinition[]? Scopes { get; }
+
+    /// <summary>
+    /// The resources the issuer issues tokens for.
+    /// </summary>
+    ResourceDefinition[]? Resources { get; }
+
+    /// <summary>
+    /// The resource a token is issued for when the request names none.
+    /// </summary>
+    Uri? DefaultResourceIndicator { get; }
 }

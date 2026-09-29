@@ -234,17 +234,29 @@ public class MultiTenancyRegistrationTests
         Assert.Contains(nameof(OidcOptions.Issuer), refusal.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ServerWideClients_AreRefusedAtStartup()
+    public static TheoryData<string, Action<OidcOptions>> ServerWideSettingsATenantDeclares => new()
+    {
+        { nameof(OidcOptions.Clients), options => options.Clients = [new ClientInfo("client")] },
+        { nameof(OidcOptions.Scopes), options => options.Scopes = [] },
+        { nameof(OidcOptions.Resources), options => options.Resources = [] },
+        {
+            nameof(OidcOptions.DefaultResourceIndicator),
+            options => options.DefaultResourceIndicator = new Uri("https://api.example.com")
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(ServerWideSettingsATenantDeclares))]
+    public void AServerWideSettingATenantDeclares_IsRefusedAtStartup(string setting, Action<OidcOptions> configure)
     {
         var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Clients = [new ClientInfo("client")]);
+        services.AddOptions<OidcOptions>().Configure(configure);
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)}", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"{nameof(OidcOptions)}.{setting} ", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
