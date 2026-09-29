@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -97,4 +98,10 @@ public sealed class TenantDefinition
     /// <see cref="OidcOptions.DefaultSecurityProfile"/> is for a server without tenants.
     /// </summary>
     public ClientSecurityProfile DefaultSecurityProfile { get; init; } = ClientSecurityProfile.None;
+
+    /// <summary>
+    /// The key sealing this tenant's pairwise subject identifiers, or null when its clients take public ones only.
+    /// Each tenant keeps its own, so the pseudonyms two tenants give one user cannot be matched to each other.
+    /// </summary>
+    public PairwiseSubjectSettings? PairwiseSubject { get; init; }
 }

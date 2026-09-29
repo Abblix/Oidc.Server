@@ -600,7 +600,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddUserInfo(this IServiceCollection services)
     {
         services.TryAddScoped<IUserClaimsProvider, UserClaimsProvider>();
-        services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
+        services.TryAddSingleton<ISubjectTypeConverter, IssuerSubjectTypeConverter>();
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();
         services.TryAddSingleton<IResourceManager, ResourceManager>();

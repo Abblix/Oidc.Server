@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Storages;
@@ -152,6 +153,46 @@ public class MultiTenancyRegistrationTests
 
         public Task RemoveAsync(string key, System.Threading.CancellationToken? token = null)
             => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
+    /// A tenant's pairwise key that cannot seal is refused at startup, naming the tenant, rather than by a 500 the
+    /// first time one of its clients is given a pairwise identifier.
+    /// </summary>
+    [Fact]
+    public void ATenantsUnusablePairwiseKey_IsRefusedAtStartup()
+    {
+        var tooShort = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[16]) },
+        };
+        var services = new ServiceCollection().AddServerStorage();
+        services.AddMultiTenancy(options => options.Tenants.Add(tooShort));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("Tenant 'acme': The pairwise salt must decode to at least", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A pairwise key registered for the whole server would be ignored under multi-tenancy, so startup refuses it.
+    /// </summary>
+    [Fact]
+    public void AServerWidePairwiseKey_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddPairwiseSubjectIdentifiers(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"A {nameof(PairwiseSubjectSettings)} registered for the whole server", refusal.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]

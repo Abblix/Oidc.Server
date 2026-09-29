@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Issuer;
@@ -16,7 +17,12 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// <summary>
 /// The settings of the one issuer a deployment without multi-tenancy serves, taken from <see cref="OidcOptions"/>.
 /// </summary>
-internal sealed class OptionsIssuerSettings(IOptions<OidcOptions> options) : IIssuerSettings
+/// <param name="options">The options holding the issuer's settings.</param>
+/// <param name="pairwiseSubject">The pairwise key, registered apart from the options, or null when there is none.
+/// </param>
+internal sealed class OptionsIssuerSettings(
+    IOptions<OidcOptions> options,
+    PairwiseSubjectSettings? pairwiseSubject = null) : IIssuerSettings
 {
     /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => options.Value.Clients;
@@ -47,4 +53,7 @@ internal sealed class OptionsIssuerSettings(IOptions<OidcOptions> options) : IIs
 
     /// <inheritdoc />
     public ClientSecurityProfile DefaultSecurityProfile => options.Value.DefaultSecurityProfile;
+
+    /// <inheritdoc />
+    public PairwiseSubjectSettings? PairwiseSubject => pairwiseSubject;
 }

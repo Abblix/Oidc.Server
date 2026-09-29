@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 namespace Abblix.Oidc.Server.Features.Issuer;
 
@@ -72,4 +73,9 @@ public interface IIssuerSettings
     /// The security profile every client of the issuer is held to at the least.
     /// </summary>
     ClientSecurityProfile DefaultSecurityProfile { get; }
+
+    /// <summary>
+    /// The key sealing the issuer's pairwise subject identifiers, or null when its clients take public ones only.
+    /// </summary>
+    PairwiseSubjectSettings? PairwiseSubject { get; }
 }

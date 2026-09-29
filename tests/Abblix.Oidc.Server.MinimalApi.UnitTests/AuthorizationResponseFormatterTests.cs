@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -113,6 +114,7 @@ public class AuthorizationResponseFormatterTests
         public Uri? LoginUri { get; init; } = new(Base + "login");
         public Uri? RegistrationUri { get; init; } = new(Base + "registration");
         public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
+        public PairwiseSubjectSettings? PairwiseSubject => null;
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

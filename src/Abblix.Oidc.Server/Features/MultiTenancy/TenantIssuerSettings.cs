@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -52,6 +53,9 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor) : IIssu
 
     /// <inheritdoc />
     public ClientSecurityProfile DefaultSecurityProfile => Tenant.DefaultSecurityProfile;
+
+    /// <inheritdoc />
+    public PairwiseSubjectSettings? PairwiseSubject => Tenant.PairwiseSubject;
 
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }
