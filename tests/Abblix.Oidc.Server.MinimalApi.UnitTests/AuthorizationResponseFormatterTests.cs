@@ -115,6 +115,7 @@ public class AuthorizationResponseFormatterTests
         public Uri? RegistrationUri { get; init; } = new(Base + "registration");
         public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
         public PairwiseSubjectSettings? PairwiseSubject => null;
+        public string CheckSessionCookieName => "session";
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

@@ -78,4 +78,9 @@ public interface IIssuerSettings
     /// The key sealing the issuer's pairwise subject identifiers, or null when its clients take public ones only.
     /// </summary>
     PairwiseSubjectSettings? PairwiseSubject { get; }
+
+    /// <summary>
+    /// The name of the cookie carrying the user's session at the issuer, which its check-session page reads.
+    /// </summary>
+    string CheckSessionCookieName { get; }
 }

@@ -80,6 +80,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
         // Grant features before AddOidcServices, which composes the grant handlers.
         builder.Services.AddDeviceAuthorization();
+        builder.Services.AddCheckSession();
         builder.Services.AddOidcServices(options =>
         {
             options.DeviceAuthorization = new DeviceAuthorizationOptions
@@ -92,6 +93,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 UserCodeLength = 8,
             };
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+            options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.CheckSession;
         });
         builder.Services.AddMultiTenancy(options =>
         {
@@ -293,6 +295,20 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
         var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
         return payload[IanaClaimTypes.Sub]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Each tenant's session cookie carries a name of its own, so two tenants on one host, whose cookies share the
+    /// host and the path, do not overwrite each other's, and each tenant's check-session page reads its own.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_ReadsASessionCookieOfItsOwn()
+    {
+        var atAcme = await Http.GetStringAsync(Acme + "/connect/checksession", TestContext.Current.CancellationToken);
+        var atGlobex = await Http.GetStringAsync(Globex + "/connect/checksession", TestContext.Current.CancellationToken);
+
+        Assert.Contains("\"Abblix.SessionId.acme\"", atAcme, StringComparison.Ordinal);
+        Assert.Contains("\"Abblix.SessionId.globex\"", atGlobex, StringComparison.Ordinal);
     }
 
     /// <summary>

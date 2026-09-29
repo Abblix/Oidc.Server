@@ -56,4 +56,7 @@ internal sealed class OptionsIssuerSettings(
 
     /// <inheritdoc />
     public PairwiseSubjectSettings? PairwiseSubject => pairwiseSubject;
+
+    /// <inheritdoc />
+    public string CheckSessionCookieName => options.Value.CheckSessionCookie.Name;
 }

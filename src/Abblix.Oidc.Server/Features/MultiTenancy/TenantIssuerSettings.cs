@@ -7,10 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -21,8 +23,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// Outside any tenant there are no settings to read, and each one refuses rather than answer with another
 /// tenant's or with the server-wide value.
 /// </remarks>
+/// <param name="tenantAccessor">Resolves the current tenant.</param>
+/// <param name="options">The server-wide settings a tenant's own are derived from.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor) : IIssuerSettings
+public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOptions<OidcOptions> options)
+    : IIssuerSettings
 {
     /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
@@ -56,6 +61,15 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor) : IIssu
 
     /// <inheritdoc />
     public PairwiseSubjectSettings? PairwiseSubject => Tenant.PairwiseSubject;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The configured name with the tenant's id after it, since tenants sharing a host share its cookies and each
+    /// would otherwise overwrite the session the others' check-session pages read. The id is escaped to the
+    /// characters a cookie name may hold.
+    /// </remarks>
+    public string CheckSessionCookieName
+        => $"{options.Value.CheckSessionCookie.Name}.{Uri.EscapeDataString(Tenant.Id)}";
 
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

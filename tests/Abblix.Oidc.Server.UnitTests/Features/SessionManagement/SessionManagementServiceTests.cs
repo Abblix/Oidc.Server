@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -60,6 +61,26 @@ public class SessionManagementServiceTests
         _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
     }
 
+    private SessionManagementService Service(IOptionsSnapshot<OidcOptions> options, IIssuerSettings? issuerSettings = null)
+        => new(options, issuerSettings ?? new OptionsIssuerSettings(options), _requestInfoProvider.Object);
+
+    /// <summary>
+    /// The cookie is named as the issuer serving the request names it, which under multi-tenancy is a name of the
+    /// tenant's own rather than the one the whole server configures.
+    /// </summary>
+    [Fact]
+    public void GetSessionCookie_IsNamedAsTheIssuerNamesIt()
+    {
+        _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
+        _requestInfoProvider.Setup(r => r.PathBase).Returns(string.Empty);
+        var issuerSettings = new Mock<IIssuerSettings>();
+        issuerSettings.Setup(s => s.CheckSessionCookieName).Returns("Abblix.SessionId.acme");
+
+        var cookie = Service(_optionsSnapshot.Object, issuerSettings.Object).GetSessionCookie();
+
+        Assert.Equal("Abblix.SessionId.acme", cookie.Name);
+    }
+
     /// <summary>
     /// Verifies that Enabled returns true when CheckSession endpoint is enabled.
     /// This is required per OIDC Session Management spec to indicate session management support.
@@ -69,7 +90,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         _oidcOptions.EnabledEndpoints = OidcEndpoints.CheckSession;
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var result = service.Enabled;
@@ -87,7 +108,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         _oidcOptions.EnabledEndpoints = OidcEndpoints.Token | OidcEndpoints.Authorize;
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var result = service.Enabled;
@@ -105,7 +126,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         _oidcOptions.EnabledEndpoints = OidcEndpoints.Authorize | OidcEndpoints.Token | OidcEndpoints.CheckSession | OidcEndpoints.UserInfo;
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var result = service.Enabled;
@@ -123,7 +144,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         _oidcOptions.EnabledEndpoints = 0;
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var result = service.Enabled;
@@ -142,7 +163,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -161,7 +182,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -180,7 +201,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -199,7 +220,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -219,7 +240,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(false);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -252,7 +273,7 @@ public class SessionManagementServiceTests
 
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -272,7 +293,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -291,7 +312,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie = service.GetSessionCookie();
@@ -310,7 +331,7 @@ public class SessionManagementServiceTests
         // Arrange
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var cookie1 = service.GetSessionCookie();
@@ -330,7 +351,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var sessionState = service.GetSessionState(request, SessionId);
@@ -353,7 +374,7 @@ public class SessionManagementServiceTests
         // Arrange
         var request1 = CreateRequest(clientId: "client_1");
         var request2 = CreateRequest(clientId: "client_2");
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var state1 = service.GetSessionState(request1, SessionId);
@@ -373,7 +394,7 @@ public class SessionManagementServiceTests
         // Arrange
         var request1 = CreateRequest(redirectUri: new Uri("https://client1.example.com/callback"));
         var request2 = CreateRequest(redirectUri: new Uri("https://client2.example.com/callback"));
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var state1 = service.GetSessionState(request1, SessionId);
@@ -392,7 +413,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var state1 = service.GetSessionState(request, "session_1");
@@ -411,7 +432,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var sessionState = service.GetSessionState(request, SessionId);
@@ -431,7 +452,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var state1 = service.GetSessionState(request, SessionId);
@@ -452,7 +473,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var state1 = service.GetSessionState(request, SessionId);
@@ -473,7 +494,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var sessionState = service.GetSessionState(request, SessionId);
@@ -499,7 +520,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var sessionState = service.GetSessionState(request, SessionId);
@@ -521,7 +542,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var sessionState = service.GetSessionState(request, SessionId);
@@ -540,7 +561,7 @@ public class SessionManagementServiceTests
     {
         // Arrange
         var request = CreateRequest();
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var sessionState = service.GetSessionState(request, SessionId);
@@ -562,7 +583,7 @@ public class SessionManagementServiceTests
             ClientId = ClientId,
             RedirectUri = null
         };
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act & Assert
         Assert.Throws<InvalidOperationException>(() => service.GetSessionState(request, SessionId));
@@ -576,7 +597,7 @@ public class SessionManagementServiceTests
     public async Task GetCheckSessionResponseAsync_ReturnsCheckSessionResponse()
     {
         // Arrange
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var response = await service.GetCheckSessionResponseAsync();
@@ -593,7 +614,7 @@ public class SessionManagementServiceTests
     public async Task GetCheckSessionResponseAsync_ReturnsHtmlContent()
     {
         // Arrange
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var response = await service.GetCheckSessionResponseAsync();
@@ -612,7 +633,7 @@ public class SessionManagementServiceTests
     public async Task GetCheckSessionResponseAsync_ContainsCheckSessionJavaScript()
     {
         // Arrange
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var response = await service.GetCheckSessionResponseAsync();
@@ -629,7 +650,7 @@ public class SessionManagementServiceTests
     public async Task GetCheckSessionResponseAsync_ReplacesCookieNamePlaceholder()
     {
         // Arrange
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var response = await service.GetCheckSessionResponseAsync();
@@ -656,7 +677,7 @@ public class SessionManagementServiceTests
         };
         var optionsSnapshot = new Mock<IOptionsSnapshot<OidcOptions>>(MockBehavior.Strict);
         optionsSnapshot.Setup(o => o.Value).Returns(options);
-        var service = new SessionManagementService(optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(optionsSnapshot.Object);
 
         // Act
         var response = await service.GetCheckSessionResponseAsync();
@@ -674,7 +695,7 @@ public class SessionManagementServiceTests
     public async Task GetCheckSessionResponseAsync_IncludesCorrectCookieName()
     {
         // Arrange
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var response = await service.GetCheckSessionResponseAsync();
@@ -691,7 +712,7 @@ public class SessionManagementServiceTests
     public async Task GetCheckSessionResponseAsync_ReadsEmbeddedResourceEachCall()
     {
         // Arrange
-        var service = new SessionManagementService(_optionsSnapshot.Object, _requestInfoProvider.Object);
+        var service = Service(_optionsSnapshot.Object);
 
         // Act
         var response1 = await service.GetCheckSessionResponseAsync();
@@ -720,7 +741,7 @@ public class SessionManagementServiceTests
         };
         var optionsSnapshot1 = new Mock<IOptionsSnapshot<OidcOptions>>(MockBehavior.Strict);
         optionsSnapshot1.Setup(o => o.Value).Returns(options1);
-        var service1 = new SessionManagementService(optionsSnapshot1.Object, _requestInfoProvider.Object);
+        var service1 = Service(optionsSnapshot1.Object);
         var response1 = await service1.GetCheckSessionResponseAsync();
 
         var options2 = new OidcOptions
@@ -733,7 +754,7 @@ public class SessionManagementServiceTests
         };
         var optionsSnapshot2 = new Mock<IOptionsSnapshot<OidcOptions>>(MockBehavior.Strict);
         optionsSnapshot2.Setup(o => o.Value).Returns(options2);
-        var service2 = new SessionManagementService(optionsSnapshot2.Object, _requestInfoProvider.Object);
+        var service2 = Service(optionsSnapshot2.Object);
         var response2 = await service2.GetCheckSessionResponseAsync();
 
         // Assert
