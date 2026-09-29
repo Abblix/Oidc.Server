@@ -70,7 +70,7 @@ public class ClientJwtValidatorTests
             _clientKeysProvider.Object,
             issuerProvider.Object,
             _serviceKeysProvider.Object,
-            new OptionsIssuerSettings(Options.Create(new OidcOptions())),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
             TimeProvider.System);
     }
 

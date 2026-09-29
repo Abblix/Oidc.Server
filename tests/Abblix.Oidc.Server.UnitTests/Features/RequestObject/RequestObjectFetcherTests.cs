@@ -82,7 +82,7 @@ public class RequestObjectFetcherTests
     private RequestObjectFetcher CreateFetcher()
     {
         return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object,
-            new OptionsIssuerSettings(_options.Object));
+            SingleIssuer.SettingsOf(_options.Object));
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);

@@ -46,7 +46,7 @@ public class PushedRequestFetcherTests
 
         return new PushedRequestFetcher(
             snapshot.Object,
-            new OptionsIssuerSettings(snapshot.Object),
+            SingleIssuer.SettingsOf(snapshot.Object),
             _storage.Object,
             _clientInfoProvider.Object);
     }

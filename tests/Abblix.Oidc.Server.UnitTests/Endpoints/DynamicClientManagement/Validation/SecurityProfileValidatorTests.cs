@@ -28,7 +28,7 @@ public class SecurityProfileValidatorTests
 {
     private static SecurityProfileValidator CreateValidator(
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => new(new OptionsIssuerSettings(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile })));
+        => new(SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile })));
 
     private static ClientRegistrationValidationContext CreateContext(string[][] responseTypes)
     {

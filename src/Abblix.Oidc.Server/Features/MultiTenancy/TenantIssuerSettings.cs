@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="tenantAccessor">Resolves the current tenant.</param>
 /// <param name="options">The server-wide settings a tenant's own are derived from.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOptions<OidcOptions> options)
+public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOptionsMonitor<OidcOptions> options)
     : IIssuerSettings
 {
     /// <inheritdoc />
@@ -72,7 +72,7 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
     /// characters a cookie name may hold.
     /// </remarks>
     public string CheckSessionCookieName
-        => $"{options.Value.CheckSessionCookie.Name}.{Uri.EscapeDataString(Tenant.Id)}";
+        => $"{options.CurrentValue.CheckSessionCookie.Name}.{Uri.EscapeDataString(Tenant.Id)}";
 
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

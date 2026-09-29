@@ -42,7 +42,7 @@ public class SecurityProfileClientAuthenticatorTests
         var inner = new Mock<IClientAuthenticator>();
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
-            new OptionsIssuerSettings(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultProfile })),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultProfile })),
             logger);
 
         return (authenticator, inner);

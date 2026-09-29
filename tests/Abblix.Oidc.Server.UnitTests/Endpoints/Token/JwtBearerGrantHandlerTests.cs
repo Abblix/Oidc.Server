@@ -650,7 +650,7 @@ public class JwtBearerGrantHandlerTests
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
 			timeProvider,
-			new OptionsIssuerSettings(Options.Create(new OidcOptions())));
+			SingleIssuer.SettingsOf(Options.Create(new OidcOptions())));
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}

@@ -70,7 +70,7 @@ public class AccessTokenServiceTests
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions()),
-            new OptionsIssuerSettings(Options.Create(new OidcOptions())),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
             new AudienceKeyResolver(NoResources, NoResourceKeys));
     }
 
@@ -514,7 +514,7 @@ public class AccessTokenServiceTests
             Mock.Of<IAuthServiceJwtFormatter>(),
             converter,
             Options.Create(new OidcOptions()),
-            new OptionsIssuerSettings(Options.Create(new OidcOptions())),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
             new AudienceKeyResolver(NoResources, NoResourceKeys));
 
         var presentingClient = new ClientInfo(ClientId)
@@ -628,7 +628,7 @@ public class AccessTokenServiceTests
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
-            new OptionsIssuerSettings(Options.Create(new OidcOptions())),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
             new AudienceKeyResolver(manager.Object, keys.Object));
     }
 

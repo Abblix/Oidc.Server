@@ -75,7 +75,7 @@ public class RefreshTokenServiceTests
             _tokenRegistry.Object,
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions()),
-            new OptionsIssuerSettings(Options.Create(new OidcOptions())));
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())));
     }
 
     /// <summary>

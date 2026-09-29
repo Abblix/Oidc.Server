@@ -70,7 +70,7 @@ public class ClientSecretJwtAuthenticatorTests
             _clock,
             _replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == "https://issuer.example.com"),
-            new OptionsIssuerSettings(Options.Create(new OidcOptions())));
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())));
     }
 
     /// <summary>

@@ -62,7 +62,7 @@ public class SessionManagementServiceTests
     }
 
     private SessionManagementService Service(IOptionsSnapshot<OidcOptions> options, IIssuerSettings? issuerSettings = null)
-        => new(options, issuerSettings ?? new OptionsIssuerSettings(options), _requestInfoProvider.Object);
+        => new(options, issuerSettings ?? SingleIssuer.SettingsOf(options), _requestInfoProvider.Object);
 
     /// <summary>
     /// The cookie is named as the issuer serving the request names it, which under multi-tenancy is a name of the

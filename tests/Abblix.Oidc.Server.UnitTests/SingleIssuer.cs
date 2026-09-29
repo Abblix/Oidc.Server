@@ -22,11 +22,29 @@ namespace Abblix.Oidc.Server.UnitTests;
 /// </summary>
 internal static class SingleIssuer
 {
-    public static IIssuerSettings Settings => new OptionsIssuerSettings(Options.Create(new OidcOptions()));
+    public static IIssuerSettings Settings => SettingsOf(Options.Create(new OidcOptions()));
+
+    /// <summary>
+    /// The settings of the one issuer <paramref name="options"/> configure, read at each use as a reload would be.
+    /// </summary>
+    public static IIssuerSettings SettingsOf(IOptions<OidcOptions> options)
+        => new OptionsIssuerSettings(new CurrentOptions(options));
 
     public static ScopeManager ScopeManager(IOptions<OidcOptions> options)
-        => new(new OptionsIssuerSettings(options), new SingleIssuerLocal<Dictionary<string, ScopeDefinition>>());
+        => new(SettingsOf(options), new SingleIssuerLocal<Dictionary<string, ScopeDefinition>>());
 
     public static ResourceManager ResourceManager(IOptions<OidcOptions> options)
-        => new(new OptionsIssuerSettings(options), new SingleIssuerLocal<Dictionary<Uri, ResourceDefinition>>());
+        => new(SettingsOf(options), new SingleIssuerLocal<Dictionary<Uri, ResourceDefinition>>());
+
+    /// <summary>
+    /// Options that never change, served as the monitor the settings read them through.
+    /// </summary>
+    private sealed class CurrentOptions(IOptions<OidcOptions> options) : IOptionsMonitor<OidcOptions>
+    {
+        public OidcOptions CurrentValue => options.Value;
+
+        public OidcOptions Get(string? name) => options.Value;
+
+        public IDisposable? OnChange(Action<OidcOptions, string?> listener) => null;
+    }
 }

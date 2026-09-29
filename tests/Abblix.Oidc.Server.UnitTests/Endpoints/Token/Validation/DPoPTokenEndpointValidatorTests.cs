@@ -69,7 +69,7 @@ public class DPoPTokenEndpointValidatorTests
             _proofValidator.Object,
             _nonceService.Object,
             _options.Object,
-            new OptionsIssuerSettings(Options.Create(_options.Object.CurrentValue)));
+            SingleIssuer.SettingsOf(Options.Create(_options.Object.CurrentValue)));
     }
 
     [Fact]

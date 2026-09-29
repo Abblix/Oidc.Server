@@ -44,7 +44,7 @@ public class SoftwareStatementValidatorTests
             NullLogger<SoftwareStatementValidator>.Instance,
             _jwtValidator.Object,
             optionsMonitor.Object,
-            new OptionsIssuerSettings(Options.Create(optionsMonitor.Object.CurrentValue)),
+            SingleIssuer.SettingsOf(Options.Create(optionsMonitor.Object.CurrentValue)),
             _secureFetcher.Object);
     }
 

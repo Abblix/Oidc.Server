@@ -17,49 +17,50 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// <summary>
 /// The settings of the one issuer a deployment without multi-tenancy serves, taken from <see cref="OidcOptions"/>.
 /// </summary>
-/// <param name="options">The options holding the issuer's settings.</param>
+/// <param name="options">The options holding the issuer's settings, read as they are now, so a reload reaches them.
+/// </param>
 /// <param name="pairwiseSubject">The pairwise key, registered apart from the options, or null when there is none.
 /// </param>
 internal sealed class OptionsIssuerSettings(
-    IOptions<OidcOptions> options,
+    IOptionsMonitor<OidcOptions> options,
     PairwiseSubjectSettings? pairwiseSubject = null) : IIssuerSettings
 {
     /// <inheritdoc />
     public string Id => string.Empty;
 
     /// <inheritdoc />
-    public IEnumerable<ClientInfo> Clients => options.Value.Clients;
+    public IEnumerable<ClientInfo> Clients => options.CurrentValue.Clients;
 
     /// <inheritdoc />
-    public ScopeDefinition[]? Scopes => options.Value.Scopes;
+    public ScopeDefinition[]? Scopes => options.CurrentValue.Scopes;
 
     /// <inheritdoc />
-    public ResourceDefinition[]? Resources => options.Value.Resources;
+    public ResourceDefinition[]? Resources => options.CurrentValue.Resources;
 
     /// <inheritdoc />
-    public Uri? DefaultResourceIndicator => options.Value.DefaultResourceIndicator;
+    public Uri? DefaultResourceIndicator => options.CurrentValue.DefaultResourceIndicator;
 
     /// <inheritdoc />
-    public Uri? AccountSelectionUri => options.Value.AccountSelectionUri;
+    public Uri? AccountSelectionUri => options.CurrentValue.AccountSelectionUri;
 
     /// <inheritdoc />
-    public Uri? ConsentUri => options.Value.ConsentUri;
+    public Uri? ConsentUri => options.CurrentValue.ConsentUri;
 
     /// <inheritdoc />
-    public Uri? InteractionUri => options.Value.InteractionUri;
+    public Uri? InteractionUri => options.CurrentValue.InteractionUri;
 
     /// <inheritdoc />
-    public Uri? LoginUri => options.Value.LoginUri;
+    public Uri? LoginUri => options.CurrentValue.LoginUri;
 
     /// <inheritdoc />
-    public Uri? RegistrationUri => options.Value.RegistrationUri;
+    public Uri? RegistrationUri => options.CurrentValue.RegistrationUri;
 
     /// <inheritdoc />
-    public ClientSecurityProfile DefaultSecurityProfile => options.Value.DefaultSecurityProfile;
+    public ClientSecurityProfile DefaultSecurityProfile => options.CurrentValue.DefaultSecurityProfile;
 
     /// <inheritdoc />
     public PairwiseSubjectSettings? PairwiseSubject => pairwiseSubject;
 
     /// <inheritdoc />
-    public string CheckSessionCookieName => options.Value.CheckSessionCookie.Name;
+    public string CheckSessionCookieName => options.CurrentValue.CheckSessionCookie.Name;
 }
