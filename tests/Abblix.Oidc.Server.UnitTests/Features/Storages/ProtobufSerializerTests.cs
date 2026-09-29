@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -51,6 +52,22 @@ public class ProtobufSerializerTests
 
         Assert.NotNull(result);
         Assert.Equal(instant, result.NextPollAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// The secret a rotation bucket's nonces are signed with survives a round trip byte for byte; a secret read
+    /// back different would refuse every nonce issued before it.
+    /// </summary>
+    [Fact]
+    public void Serialize_NonceSecret_RoundTrip()
+    {
+        var secret = ByteString.CopyFrom([1, 2, 3, 250, 0, 7]);
+
+        var bytes = _serializer.Serialize(new NonceSecret { Value = secret });
+        var result = _serializer.Deserialize<NonceSecret>(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal(secret, result.Value);
     }
 
     /// <summary>
@@ -198,6 +215,8 @@ public class ProtobufSerializerTests
             composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
         composite.Deserialize<LogoutConfirmation>(
             composite.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
+        composite.Deserialize<NonceSecret>(
+            composite.Serialize(new NonceSecret { Value = ByteString.CopyFromUtf8("a-rotation-secret") }));
 
         Assert.Empty(recorder.Entries);
     }

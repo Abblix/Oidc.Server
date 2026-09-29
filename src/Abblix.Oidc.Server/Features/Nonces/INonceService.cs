@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// </summary>
 /// <remarks>
 /// The default implementation is stateless modulo a short-lived rotating HMAC
-/// secret stored in <c>IDistributedCache</c>. No per-nonce state is kept, so
+/// secret kept in the entity storage. No per-nonce state is kept, so
 /// <see cref="ValidateAsync"/> does not enforce single-use; replay protection
 /// at the proof level is handled separately by the <c>jti</c> replay cache.
 /// </remarks>

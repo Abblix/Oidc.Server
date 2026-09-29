@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// </summary>
 /// <remarks>
 /// The nonce service is stateless: nonces themselves are not stored. Only a
-/// short-lived rotating HMAC secret lives in <c>IDistributedCache</c>, keyed
+/// short-lived rotating HMAC secret lives in the entity storage, keyed
 /// by time bucket so multiple server instances can validate each other's
 /// nonces without coordination. Per RFC 9449 section 11.3 a nonce mismatch is
 /// recoverable - the client receives a fresh nonce and retries - so the

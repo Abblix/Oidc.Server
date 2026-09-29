@@ -136,4 +136,8 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <inheritdoc />
     public string LogoutConfirmationKey(string sessionId)
         => $"Abblix.Oidc.Server:LogoutConfirmation:{sessionId}";
+
+    /// <inheritdoc />
+    public string NonceSecretKey(long bucket)
+        => $"Abblix.Oidc.Server:NonceSecret:{bucket}";
 }

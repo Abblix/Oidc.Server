@@ -26,5 +26,7 @@ internal static class ServerStorageRegistration
             .AddLogging()
             .AddDistributedMemoryCache()
             .AddCommonServices()
+            .AddStorages()
+            .AddNonces()
             .AddReplayPrevention();
 }

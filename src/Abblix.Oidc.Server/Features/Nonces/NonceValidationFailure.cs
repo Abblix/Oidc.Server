@@ -36,9 +36,9 @@ public enum NonceValidationFailure
     /// <summary>
     /// The HMAC tag does not match what the server would compute for the
     /// embedded timestamp under any in-rotation secret. Indicates either
-    /// tampering, a nonce minted by a different deployment, or a brief
-    /// rotation race window where the issuing instance's secret has not yet
-    /// propagated through <c>IDistributedCache</c>.
+    /// tampering, a nonce minted by a different deployment or a different tenant,
+    /// or a brief rotation race window where the issuing instance's secret has not
+    /// yet propagated through the entity storage.
     /// </summary>
     BadSignature,
 }
