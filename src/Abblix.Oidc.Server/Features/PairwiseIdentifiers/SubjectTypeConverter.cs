@@ -44,15 +44,17 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     }
 
     /// <summary>
-    /// The two OIDC Core Section 8 subject types this converter implements: <c>public</c> (passes the local
-    /// subject through unchanged) and <c>pairwise</c> (a reversible, per-sector sealed identifier).
+    /// The OIDC Core Section 8 subject types this converter can issue: <c>public</c> (passes the local subject
+    /// through unchanged) always, and <c>pairwise</c> (a reversible, per-sector sealed identifier) when it holds
+    /// the key to seal one, so no client is offered or registered for a pseudonym it would never get.
     /// </summary>
     public IEnumerable<string> SubjectTypesSupported
     {
         get
         {
             yield return SubjectTypes.Public;
-            yield return SubjectTypes.Pairwise;
+            if (_encryptor != null)
+                yield return SubjectTypes.Pairwise;
         }
     }
 
@@ -102,7 +104,8 @@ public class SubjectTypeConverter : ISubjectTypeConverter
 
     private DeterministicAeadEncryptor Encryptor(ClientInfo clientInfo)
         => _encryptor ?? throw new InvalidOperationException(
-            "PairwiseSubjectSettings must be configured to use pairwise subject identifiers (client " +
+            "A pairwise key must be configured to use pairwise subject identifiers - PairwiseSubjectSettings for " +
+            "a server without tenants, the tenant's PairwiseSubject under multi-tenancy (client " +
             $"'{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType}).");
 
     /// <summary>

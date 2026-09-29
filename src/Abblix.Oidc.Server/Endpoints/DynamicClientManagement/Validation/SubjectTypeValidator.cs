@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
@@ -29,9 +30,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <param name="logger">Logger used for warnings about sector-identifier mismatches.</param>
 /// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
+/// <param name="subjectTypeConverter">Tells which subject types the issuer can issue, as its discovery document
+/// does.</param>
 public partial class SubjectTypeValidator(
     ILogger<SubjectTypeValidator> logger,
-    ISecureHttpFetcher secureHttpFetcher): IClientRegistrationContextValidator
+    ISecureHttpFetcher secureHttpFetcher,
+    ISubjectTypeConverter subjectTypeConverter): IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -39,6 +43,13 @@ public partial class SubjectTypeValidator(
         var request = context.Request;
         if (request.SubjectType != SubjectTypes.Pairwise)
             return null;
+
+        // A client registered for pseudonyms the issuer has no key to seal would fail every token request
+        if (!subjectTypeConverter.SubjectTypesSupported.Contains(SubjectTypes.Pairwise))
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"{Parameters.SubjectType} {SubjectTypes.Pairwise} is not supported by this issuer");
+        }
 
         var sectorIdentifierUri = request.SectorIdentifierUri;
         if (sectorIdentifierUri != null)
