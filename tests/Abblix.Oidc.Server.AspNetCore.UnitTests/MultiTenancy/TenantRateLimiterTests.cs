@@ -359,6 +359,27 @@ public sealed class TenantRateLimiterTests : IDisposable
         Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A budget registered per scope or per resolution starts afresh on every request and limits nothing; kept per
+    /// tenant, each copy would also see one tenant only, so a limiter it shared would never be caught.
+    /// </summary>
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public void AHostsLimiterLivingShorterThanTheProcess_IsRefused(ServiceLifetime lifetime)
+    {
+        IServiceCollection services = new ServiceCollection();
+        services.Add(ServiceDescriptor.DescribeKeyed(
+            typeof(PartitionedRateLimiter<string>),
+            CallerRateLimiters.AuthenticationFailures,
+            (_, _) => PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)),
+            lifetime));
+        services.AddServerStorage();
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => services.AddMultiTenancy(_ => { }));
+        Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
+    }
+
     private static DefaultHttpContext InTenant(string tenantId)
     {
         var context = new DefaultHttpContext();

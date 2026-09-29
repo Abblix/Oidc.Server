@@ -39,6 +39,13 @@ internal sealed class RateLimiterTenantSeam<TResource>(object key, bool required
                 $"{nameof(MultiTenancyExtensions.AddMultiTenancy)}() can build one for each tenant.");
         }
 
+        if (registered.Lifetime != ServiceLifetime.Singleton)
+        {
+            throw new InvalidOperationException(
+                $"{Name} is registered as {registered.Lifetime}, so the budget starts afresh with every " +
+                "request and limits nothing. Register it as a singleton.");
+        }
+
         services[index] = ServiceDescriptor.DescribeKeyed(
             registered.ServiceType,
             registered.ServiceKey,
