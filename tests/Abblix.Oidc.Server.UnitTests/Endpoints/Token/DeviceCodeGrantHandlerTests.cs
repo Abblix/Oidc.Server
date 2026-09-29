@@ -496,11 +496,11 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the device code is not found in storage (expired or never existed),
-    /// the handler returns an ExpiredToken error.
+    /// A device code the storage does not hold - never issued, or issued and evicted on expiry, which the
+    /// server cannot tell apart - is an invalid grant (RFC 6749 section 5.2).
     /// </summary>
     [Fact]
-    public async Task DeviceCodeNotFound_ShouldReturnExpiredTokenError()
+    public async Task DeviceCodeNotFound_ShouldReturnInvalidGrantError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -513,8 +513,7 @@ public class DeviceCodeGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
-        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>

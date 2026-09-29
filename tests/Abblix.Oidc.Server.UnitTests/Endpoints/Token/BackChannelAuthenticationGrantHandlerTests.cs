@@ -438,11 +438,11 @@ public class BackChannelAuthenticationGrantHandlerTests
             PublicSubjects());
 
     /// <summary>
-    /// Verifies that when the authentication request is not found in storage (expired or never existed),
-    /// the handler returns an ExpiredToken error.
+    /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
+    /// "If the auth_req_id is invalid or was issued to another Client, an invalid_grant error MUST be returned".
     /// </summary>
     [Fact]
-    public async Task RequestNotFound_ShouldReturnExpiredTokenError()
+    public async Task RequestNotFound_ShouldReturnInvalidGrantError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
@@ -455,8 +455,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
-        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>

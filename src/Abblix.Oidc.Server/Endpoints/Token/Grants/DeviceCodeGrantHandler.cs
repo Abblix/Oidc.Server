@@ -105,9 +105,11 @@ public partial class DeviceCodeGrantHandler(
 
         switch (deviceRequest)
         {
-            // Device code not found or expired
+            // A code the storage does not hold is an invalid grant (RFC 6749 section 5.2). A code issued and evicted
+            // on expiry reads the same, since the two cannot be told apart - which also keeps this endpoint from
+            // confirming which guessed codes once existed. A code still held past its lifetime is expired_token below.
             case null:
-                return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
+                return new OidcError(ErrorCodes.InvalidGrant, "The device code is not recognized");
 
             // Device code belongs to different client
             case { ClientId: var clientId } when clientId != clientInfo.ClientId:

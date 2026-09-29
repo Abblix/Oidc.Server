@@ -261,8 +261,9 @@ public partial class BackChannelAuthenticationGrantHandler(
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch
         {
-            // If the request is not found or has expired, return an error indicating token expiration
-            null => new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired"),
+            // CIBA Core section 11: "If the auth_req_id is invalid or was issued to another Client, an
+            // invalid_grant error MUST be returned". One evicted on expiry cannot be told from one never issued.
+            null => new OidcError(ErrorCodes.InvalidGrant, "The authentication request is not recognized"),
 
             // If the client making the request is not the same as the one that initiated the authentication
             // This validation MUST occur before any status-specific processing for security
