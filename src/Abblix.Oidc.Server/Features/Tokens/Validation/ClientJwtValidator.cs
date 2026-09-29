@@ -43,7 +43,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the options carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
+    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the issuer's settings carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,

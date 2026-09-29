@@ -54,6 +54,9 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string PairwiseClientId = "pairwise-client-id";
     private const string ClientSecret = "shared-client-secret";
     private const string AcmeScope = "acme:read";
+    private const string PushPath = "/connect/par";
+    private const string TokenPath = "/connect/token";
+    private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
     private const string AcmeResource = "https://api.acme.example";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
@@ -205,15 +208,15 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         {
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = "openid",
-            [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
         };
 
-        var atAcme = await PostAsync(Acme, "/connect/par", AcmeOnlyClientId, Push());
+        var atAcme = await PostAsync(Acme, PushPath, AcmeOnlyClientId, Push());
         Assert.Equal(HttpStatusCode.Created, atAcme.StatusCode);
 
-        var atGlobex = await PostAsync(Globex, "/connect/par", AcmeOnlyClientId, Push());
+        var atGlobex = await PostAsync(Globex, PushPath, AcmeOnlyClientId, Push());
         Assert.Equal(HttpStatusCode.Unauthorized, atGlobex.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
     }
@@ -232,7 +235,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = scope,
-                [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+                [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
                 [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
             };
             if (resource is not null)
@@ -240,14 +243,14 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             return form;
         }
 
-        Assert.Equal(HttpStatusCode.Created, (await PostAsync(Acme, "/connect/par", Push("openid " + AcmeScope))).StatusCode);
-        var scopeAtGlobex = await PostAsync(Globex, "/connect/par", Push("openid " + AcmeScope));
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync(Acme, PushPath, Push("openid " + AcmeScope))).StatusCode);
+        var scopeAtGlobex = await PostAsync(Globex, PushPath, Push("openid " + AcmeScope));
         Assert.Equal(ErrorCodes.InvalidScope, (await ReadJsonAsync(scopeAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
 
         Assert.Equal(
             HttpStatusCode.Created,
-            (await PostAsync(Acme, "/connect/par", Push("openid " + AcmeScope, AcmeResource))).StatusCode);
-        var resourceAtGlobex = await PostAsync(Globex, "/connect/par", Push("openid", AcmeResource));
+            (await PostAsync(Acme, PushPath, Push("openid " + AcmeScope, AcmeResource))).StatusCode);
+        var resourceAtGlobex = await PostAsync(Globex, PushPath, Push(Scopes.OpenId, AcmeResource));
         Assert.Equal(ErrorCodes.InvalidTarget, (await ReadJsonAsync(resourceAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
     }
 
@@ -273,7 +276,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private async Task<string> SubjectOfADeviceFlowAsync(string tenant)
     {
         var authorization = await ReadJsonAsync(await PostAsync(tenant, "/connect/deviceauthorization", PairwiseClientId,
-            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = "openid" }));
+            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId }));
 
         var approved = await Http.PostAsync(
             authorization[DeviceAuthorizationResponse.Parameters.VerificationUri]!.GetValue<string>(),
@@ -285,7 +288,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
 
-        var tokens = await ReadJsonAsync(await PostAsync(tenant, "/connect/token", PairwiseClientId,
+        var tokens = await ReadJsonAsync(await PostAsync(tenant, TokenPath, PairwiseClientId,
             new Dictionary<string, string>
             {
                 [TokenRequest.Parameters.GrantType] = GrantTypes.DeviceAuthorization,
@@ -318,12 +321,12 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     [Fact]
     public async Task APushedRequestOfOneTenant_IsUnknownToTheOther()
     {
-        var pushed = await PostAsync(Acme, "/connect/par", new Dictionary<string, string>
+        var pushed = await PostAsync(Acme, PushPath, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = "openid",
-            [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
         });
         Assert.Equal(HttpStatusCode.Created, pushed.StatusCode);
@@ -350,12 +353,12 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     [Fact]
     public async Task EachTenant_SendsItsUsersToItsOwnSignInPage()
     {
-        var pushed = await PostAsync(Globex, "/connect/par", new Dictionary<string, string>
+        var pushed = await PostAsync(Globex, PushPath, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = "openid",
-            [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
         });
         var requestUri = (await ReadJsonAsync(pushed))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
@@ -376,7 +379,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     {
         var authorization = await PostAsync(Acme, "/connect/deviceauthorization", new Dictionary<string, string>
         {
-            [DeviceAuthorizationRequest.Parameters.Scope] = "openid",
+            [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
         });
         Assert.Equal(HttpStatusCode.OK, authorization.StatusCode);
         var deviceCode = (await ReadJsonAsync(authorization))[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>();
@@ -387,10 +390,10 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             [TokenRequest.Parameters.DeviceCode] = deviceCode,
         };
 
-        var atGlobex = await PostAsync(Globex, "/connect/token", new Dictionary<string, string>(poll));
+        var atGlobex = await PostAsync(Globex, TokenPath, new Dictionary<string, string>(poll));
         Assert.Equal(ErrorCodes.InvalidGrant, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
 
-        var atAcme = await PostAsync(Acme, "/connect/token", new Dictionary<string, string>(poll));
+        var atAcme = await PostAsync(Acme, TokenPath, new Dictionary<string, string>(poll));
         Assert.Equal(ErrorCodes.AuthorizationPending, (await ReadJsonAsync(atAcme))[ResponseParameters.Error]?.GetValue<string>());
     }
 
@@ -403,7 +406,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     public async Task ADeviceFlow_CompletesOnItsOwnTenantsVerificationPage()
     {
         var authorization = await ReadJsonAsync(await PostAsync(Acme, "/connect/deviceauthorization",
-            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = "openid" }));
+            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId }));
         var verificationUri = authorization[DeviceAuthorizationResponse.Parameters.VerificationUri]!.GetValue<string>();
         var userCode = authorization[DeviceAuthorizationResponse.Parameters.UserCode]!.GetValue<string>();
         var deviceCode = authorization[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>();
@@ -419,7 +422,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             verificationUri, new FormUrlEncodedContent(entered), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, atAcme.StatusCode);
 
-        var tokens = await PostAsync(Acme, "/connect/token", new Dictionary<string, string>
+        var tokens = await PostAsync(Acme, TokenPath, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.DeviceAuthorization,
             [TokenRequest.Parameters.DeviceCode] = deviceCode,

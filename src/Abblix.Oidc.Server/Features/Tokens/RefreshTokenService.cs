@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -40,6 +41,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
 /// </param>
 /// <param name="issuerSettings">Provides the issuer's default security profile.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency is used: the token's issuer, clock, identifier, format, registry and subject each come from their own service, the server's options carry the service-token policy, and the issuer's settings the security profile that decides rotation.")]
 public class RefreshTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,

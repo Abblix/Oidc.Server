@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -46,6 +47,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// issued for when the request names none.</param>
 /// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
 /// token can be encrypted to the resource it is minted for.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, and the audience keys the encryption target.")]
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
