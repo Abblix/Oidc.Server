@@ -150,6 +150,9 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                            ?? await atGlobex.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains(ErrorCodes.InvalidRequestUri, globexAnswer, StringComparison.Ordinal);
 
+        // 303 rather than 302: the authorization endpoint also accepts POST, whose body may carry the user's
+        // credentials, and 303 makes the user agent follow with a GET that never re-sends that body. RFC 9700
+        // section 4.12: such a server "MUST NOT use the HTTP 307" and "SHOULD use HTTP status code 303 (See Other)".
         var atAcme = await Http.GetAsync(Acme + query, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.SeeOther, atAcme.StatusCode);
         Assert.StartsWith(Host + Acme + "/login", atAcme.Headers.Location?.ToString(), StringComparison.Ordinal);
