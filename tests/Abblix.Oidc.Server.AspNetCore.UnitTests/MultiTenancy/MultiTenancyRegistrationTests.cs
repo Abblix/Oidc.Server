@@ -195,6 +195,52 @@ public class MultiTenancyRegistrationTests
             StringComparison.Ordinal);
     }
 
+    public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
+    {
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                DefaultResourceIndicator = new Uri("https://api.acme.example"),
+            },
+            nameof(OidcOptions.DefaultResourceIndicator)
+        },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+                Clients = [new ClientInfo("public") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None }],
+            },
+            "Client 'public'"
+        },
+    };
+
+    /// <summary>
+    /// What a tenant declares passes the checks the server's own settings pass at startup, so a tenant's mistake is
+    /// refused there, naming the tenant, rather than surfacing on the first request that meets it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TenantsTheServersChecksRefuse))]
+    public void ATenantsSettings_PassTheServersOwnChecks(TenantDefinition tenant, string mistake)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.TryAddEnumerable([
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>(),
+        ]);
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"Tenant '{tenant.Id}': ", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(mistake, refusal.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheServersOwnComposition_PassesTheStartupCheck()
     {

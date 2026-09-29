@@ -32,7 +32,9 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// </summary>
 /// <remarks>
 /// A server of its own rather than the isolation suite's, because a strict profile refuses the plain client that
-/// suite relies on at every tenant that declares it.
+/// suite relies on at every tenant that declares it. That refusal comes at startup for a client a tenant declares,
+/// so the client here reaches the strict tenant the way a stored registration does: added after the server
+/// starts, as one registered dynamically before the profile was put in force.
 /// </remarks>
 public sealed class TenantSecurityProfileTests : IAsyncLifetime
 {
@@ -44,6 +46,13 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
+
+    private static readonly TenantDefinition GlobexTenant = new()
+    {
+        Id = "globex",
+        Issuer = Host + Globex,
+        DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+    };
 
     private WebApplication? _app;
     private HttpClient? _http;
@@ -64,13 +73,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddMultiTenancy(options =>
         {
             options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = Host + Acme, Clients = [Client()] });
-            options.Tenants.Add(new TenantDefinition
-            {
-                Id = "globex",
-                Issuer = Host + Globex,
-                Clients = [Client()],
-                DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
-            });
+            options.Tenants.Add(GlobexTenant);
         });
 
         _app = builder.Build();
@@ -78,6 +81,9 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         _app.UseAuthorization();
         _app.MapOidcEndpoints();
         await _app.StartAsync(TestContext.Current.CancellationToken);
+
+        using (TenantScope.Enter(GlobexTenant))
+            await _app.Services.GetRequiredService<IClientInfoManager>().AddClientAsync(Client());
 
         _http = _app.GetTestClient();
         _http.BaseAddress = new Uri(Host);
