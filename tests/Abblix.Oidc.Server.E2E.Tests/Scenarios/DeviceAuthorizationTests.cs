@@ -96,9 +96,8 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
 
         var response = await PollAsync(client, discovery, device, "a-device-code-this-server-never-issued");
 
-        // invalid_grant, the answer RFC 6749 section 5.2 gives an invalid grant. A code minted and evicted on
-        // expiry is answered alike, since the server cannot tell the two apart - which also keeps the endpoint
-        // from becoming an oracle that confirms which guessed codes once existed.
+        // invalid_grant, the answer RFC 6749 section 5.2 gives an invalid grant. The answer depends only on
+        // the code sent, so the endpoint confirms nothing about which guessed codes once existed.
         await AssertRefusedAsync(response, ErrorCodes.InvalidGrant);
     }
 

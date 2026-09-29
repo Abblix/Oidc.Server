@@ -497,8 +497,8 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// A device code the storage does not hold - never issued, or issued and evicted on expiry, which the
-    /// server cannot tell apart - is an invalid grant (RFC 6749 section 5.2).
+    /// A device code the storage does not hold and that carries no instant of expiry is an invalid grant
+    /// (RFC 6749 section 5.2).
     /// </summary>
     [Fact]
     public async Task DeviceCodeNotFound_ShouldReturnInvalidGrantError()

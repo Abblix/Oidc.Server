@@ -439,7 +439,8 @@ public class BackChannelAuthenticationGrantHandlerTests
             PublicSubjects());
 
     /// <summary>
-    /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
+    /// An auth_req_id the storage does not hold and that carries no instant of expiry is invalid, and CIBA Core
+    /// section 11 requires invalid_grant for it:
     /// "If the auth_req_id is invalid or was issued to another Client, an invalid_grant error MUST be returned".
     /// </summary>
     [Fact]
