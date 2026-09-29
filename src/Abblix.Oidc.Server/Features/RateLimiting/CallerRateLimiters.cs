@@ -52,6 +52,11 @@ public static class CallerRateLimiters
     /// partitioned by that address and spent by every endpoint that authenticates a client, since a sender
     /// hammering any of them is the same sender.
     /// </summary>
+    /// <remarks>
+    /// A server serving several tenants gives each tenant its own budget per address, so one sender gets it once
+    /// per tenant. That is the price of the other outcome: with one shared budget, failures against one tenant
+    /// would lock out every user behind the same address - a shared network or proxy - from all the others.
+    /// </remarks>
     public const string AuthenticationFailures = "Abblix.Oidc.Server.AuthenticationFailures.RateLimit";
 
     /// <summary>
