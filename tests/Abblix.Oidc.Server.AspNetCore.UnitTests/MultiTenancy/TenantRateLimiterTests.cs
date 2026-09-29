@@ -232,6 +232,64 @@ public sealed class TenantRateLimiterTests : IDisposable
     }
 
     /// <summary>
+    /// The same factory met by two tenants' first calls at once: both builds are in progress together, and still
+    /// one of the two is refused, since neither tenant's limiter is finished when the other one checks.
+    /// </summary>
+    /// <remarks>
+    /// Which build finishes first is the scheduler's choice and cannot be held from the factory, so the meeting is
+    /// repeated: a check that reads only finished builds lets both through in a few of every hundred.
+    /// </remarks>
+    [Fact]
+    public async System.Threading.Tasks.Task AFactoryHandingOutOneLimiter_IsRefusedWhenTwoTenantsBuildAtOnce()
+    {
+        const int meetings = 500;
+        var bothServed = 0;
+        for (var meeting = 0; meeting < meetings; meeting++)
+        {
+            if (await BothServedWhenBuildingAtOnceAsync())
+                bothServed++;
+        }
+
+        Assert.Equal(0, bothServed);
+    }
+
+    private static async System.Threading.Tasks.Task<bool> BothServedWhenBuildingAtOnceAsync()
+    {
+        var shared = PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address));
+        var arrived = 0;
+        using var bothBuilding = new System.Threading.ManualResetEventSlim();
+        var httpContextAccessor = new HttpContextAccessor();
+        var budget = new TenantPartitionedRateLimiter<string>(
+            () =>
+            {
+                if (System.Threading.Interlocked.Increment(ref arrived) == 2)
+                    bothBuilding.Set();
+
+                bothBuilding.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+                return shared;
+            },
+            new HttpContextTenantAccessor(httpContextAccessor));
+
+        var calls = new[] { "acme", "globex" }.Select(tenantId => System.Threading.Tasks.Task.Run(() =>
+        {
+            httpContextAccessor.HttpContext = InTenant(tenantId);
+            budget.AttemptAcquire(Address).Dispose();
+        }, TestContext.Current.CancellationToken)).ToArray();
+
+        try
+        {
+            await System.Threading.Tasks.Task.WhenAll(calls);
+        }
+        catch (InvalidOperationException)
+        {
+            // The refusal expected of one of the two
+        }
+
+        Assert.Equal(2, arrived);
+        return calls.All(call => call.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
     /// A host's limiter registered by its type is built per tenant in the same way.
     /// </summary>
     [Fact]

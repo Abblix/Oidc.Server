@@ -34,6 +34,10 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     private readonly ConcurrentDictionary<string, Lazy<PartitionedRateLimiter<TResource>>> _limiters =
         new(StringComparer.Ordinal);
 
+    // Every limiter handed to a tenant, by identity: adding to it is the check, so two tenants building at once
+    // cannot both find it absent
+    private readonly ConcurrentDictionary<object, byte> _handedOut = new(ReferenceEqualityComparer.Instance);
+
     private PartitionedRateLimiter<TResource> Current
         => _limiters.GetOrAdd(TenantKey.CurrentTenantId(tenantAccessor), _ => new(Build)).Value;
 
@@ -47,7 +51,7 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     private PartitionedRateLimiter<TResource> Build()
     {
         var limiter = createLimiter();
-        if (Built.Any(other => ReferenceEquals(other, limiter)))
+        if (!_handedOut.TryAdd(limiter, default))
         {
             throw new InvalidOperationException(
                 "The registration of this budget handed out a limiter it had already given another tenant, so the " +
@@ -79,7 +83,7 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     {
         if (disposing)
         {
-            foreach (var limiter in Built)
+            foreach (var limiter in HandedOut)
                 limiter.Dispose();
         }
 
@@ -89,10 +93,10 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     /// <inheritdoc />
     protected override async ValueTask DisposeAsyncCore()
     {
-        foreach (var limiter in Built)
+        foreach (var limiter in HandedOut)
             await limiter.DisposeAsync();
     }
 
-    private IEnumerable<PartitionedRateLimiter<TResource>> Built
-        => _limiters.Values.Where(limiter => limiter.IsValueCreated).Select(limiter => limiter.Value);
+    private IEnumerable<PartitionedRateLimiter<TResource>> HandedOut
+        => _handedOut.Keys.Cast<PartitionedRateLimiter<TResource>>();
 }
