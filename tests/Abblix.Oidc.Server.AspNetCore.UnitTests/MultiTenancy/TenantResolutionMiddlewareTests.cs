@@ -45,6 +45,8 @@ public class TenantResolutionMiddlewareTests
             new TenantDefinition { Id = "slashed", Issuer = "https://auth.example.com/tenants/a%2Fb" },
             new TenantDefinition { Id = "slashed-lower", Issuer = "https://auth.example.com/tenants/c%2fd" },
             new TenantDefinition { Id = "mounted", Issuer = "https://idp.example.com/x%2fy/mounted" },
+            new TenantDefinition { Id = "proxied", Issuer = "https://proxy.example.com/idp" },
+            new TenantDefinition { Id = "proxy-root", Issuer = "https://proxy-root.example.com" },
             new TenantDefinition { Id = "loopback6", Issuer = "https://[::1]:8443/" },
             new TenantDefinition { Id = "loopback4", Issuer = "https://127.0.0.1/tenants/local" },
         ],
@@ -192,13 +194,33 @@ public class TenantResolutionMiddlewareTests
     }
 
     /// <summary>
-    /// A catalog of the host's own may match by a rule of its own; a tenant whose issuer does not cover the
-    /// request is not the request's, and the request passes on without one rather than failing.
+    /// A proxy forwarding a prefix can leave a path base ending in a slash; the issuer at that prefix is still
+    /// the one the request is addressed to.
     /// </summary>
-    [Fact]
-    public async Task ATenantFromACatalogWhoseIssuerDoesNotCoverTheRequest_IsNotTaken()
+    [Theory]
+    [InlineData("proxy.example.com", "/idp/", "/connect/token", "proxied", "/idp", "/connect/token")]
+    [InlineData("proxy.example.com", "/idp/", "", "proxied", "/idp", "/")]
+    [InlineData("proxy-root.example.com", "/", "/connect/token", "proxy-root", "", "/connect/token")]
+    public async Task APathBaseEndingInASlash_StillReachesTheIssuerAtIt(
+        string host, string pathBase, string path, string tenantId, string expectedPathBase, string expectedPath)
     {
-        var acme = new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" };
+        var (_, seen) = await RunAsync(host, path, pathBase: pathBase);
+
+        Assert.Equal(new Seen(tenantId, expectedPathBase, expectedPath), seen);
+    }
+
+    /// <summary>
+    /// A catalog of the host's own may match by a rule of its own; a tenant whose issuer does not name the
+    /// request's host and cover its path is not the request's, and the request passes on without one rather
+    /// than failing.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/tenants/acme", "/tenants")]
+    [InlineData("https://other.example.org/tenants", "/tenants/connect/token")]
+    [InlineData("https://other.example.org/tenants", "/.well-known/openid-configuration/tenants")]
+    public async Task ATenantFromACatalogWhoseIssuerIsNotTheRequestsAddress_IsNotTaken(string issuer, string path)
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = issuer };
         var catalog = new Mock<ITenantCatalog>();
         catalog
             .Setup(c => c.FindByAddressAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -218,11 +240,11 @@ public class TenantResolutionMiddlewareTests
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Host = new HostString(SharedHost);
-        httpContext.Request.Path = "/tenants";
+        httpContext.Request.Path = path;
 
         await middleware.InvokeAsync(httpContext);
 
-        Assert.Equal(new Seen(null, string.Empty, "/tenants"), seen);
+        Assert.Equal(new Seen(null, string.Empty, path), seen);
     }
 
     /// <summary>

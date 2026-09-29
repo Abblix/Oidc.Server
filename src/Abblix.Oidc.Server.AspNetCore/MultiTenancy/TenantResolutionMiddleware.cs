@@ -101,13 +101,14 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
 
         // A catalog of the host's own may match by a rule of its own, and the cut below needs this one.
         var address = TenantAddress.Of(tenant.Issuer);
-        if (!address.Covers(fullPath))
+        if (!IsOnRequestHost(address, request) || !address.Covers(fullPath))
             return null;
 
-        // The full path starts with the path base and both end at a segment boundary, so an issuer path covering
-        // the full path extends the path base exactly when it is not shorter.
+        // The full path starts with the path base, which past its trailing slash - a forwarded prefix can carry
+        // one - ends at a segment boundary, so an issuer path covering the full path extends the path base
+        // exactly when it is not shorter.
         var issuerPathLength = address.Path.Length;
-        if (issuerPathLength < (request.PathBase.Value ?? string.Empty).Length)
+        if (issuerPathLength < (request.PathBase.Value ?? string.Empty).TrimEnd('/').Length)
             return null;
 
         // Cut from the request's own string, so an encoded slash stays as the client wrote it.
@@ -138,13 +139,23 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
             return null;
 
         var issuerPath = value[suffixEnd..];
-        if (await catalog.FindByAddressAsync(request.Host.Host, issuerPath, cancellationToken) is not { } tenant ||
-            TenantAddress.CanonicalPath(TenantAddress.Of(tenant.Issuer).Path) !=
-            TenantAddress.CanonicalPath(issuerPath))
+        if (await catalog.FindByAddressAsync(request.Host.Host, issuerPath, cancellationToken) is not { } tenant)
+            return null;
+
+        var address = TenantAddress.Of(tenant.Issuer);
+        if (!IsOnRequestHost(address, request) ||
+            TenantAddress.CanonicalPath(address.Path) != TenantAddress.CanonicalPath(issuerPath))
         {
             return null;
         }
 
         return (tenant, new PathString(issuerPath), WellKnown.Add(new PathString(value[..suffixEnd])));
     }
+
+    /// <summary>
+    /// Whether <paramref name="address"/> names the host <paramref name="request"/> reached, as it names the path:
+    /// a tenant served under another host's name would publish an issuer that is not where it was fetched from.
+    /// </summary>
+    private static bool IsOnRequestHost(TenantAddress address, HttpRequest request)
+        => address.Host == TenantHost.Normalize(request.Host.Host);
 }
