@@ -78,6 +78,7 @@
     <ProjectReference Include="..\Abblix.Oidc.Server.E2E.Tests\Abblix.Oidc.Server.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.TestHost\Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.Tests\Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MultiTenancy.E2E.Tests\Abblix.Oidc.Server.MultiTenancy.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.UnitTests\Abblix.Oidc.Server.MinimalApi.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.Mvc.UnitTests\Abblix.Oidc.Server.Mvc.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.SecurityEvents.CAEP.UnitTests\Abblix.SecurityEvents.CAEP.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
