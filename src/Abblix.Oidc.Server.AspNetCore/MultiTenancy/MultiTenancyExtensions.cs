@@ -7,9 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -32,6 +34,9 @@ public static class MultiTenancyExtensions
     /// <remarks>
     /// Each tenant declares its issuer in <see cref="TenantDefinition.Issuer"/>, so
     /// <see cref="OidcOptions.Issuer"/> must be left unset, and startup refuses it otherwise.
+    /// Call this after <c>AddOidcServices</c> and every other <c>Add*</c> of the server: it keeps each tenant's
+    /// stored data apart by wrapping the storage those calls registered, so it refuses when one is not
+    /// registered yet.
     /// </remarks>
     public static IServiceCollection AddMultiTenancy(
         this IServiceCollection services,
@@ -47,7 +52,22 @@ public static class MultiTenancyExtensions
         services.TryAddSingleton<ITenantCatalog, OptionsTenantCatalog>();
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
+        services.DecorateForTenants<IEntityStorage, TenantEntityStorage>();
         return services;
+    }
+
+    private static void DecorateForTenants<TService, TDecorator>(this IServiceCollection services)
+        where TService : class
+        where TDecorator : class, TService
+    {
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(TService)))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(AddMultiTenancy)}() must come after AddOidcServices() and the server's other Add* calls: " +
+                $"{typeof(TService).Name} is not registered yet, so its data cannot be kept per tenant.");
+        }
+
+        services.Decorate<TService, TDecorator>();
     }
 
     /// <summary>

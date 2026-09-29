@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,18 +36,15 @@ public class MultiTenancyRegistrationTests
 
     private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = AcmeIssuer };
 
-    private static ServiceProvider BuildProvider(bool multiTenancyFirst = false)
+    private static ServiceProvider BuildProvider()
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        if (multiTenancyFirst)
-            services.AddMultiTenancy(options => options.Tenants.Add(Acme));
 
         // The library's own issuer registration, not a stand-in, since it is what AddMultiTenancy has to win over.
         services.AddIssuer();
-
-        if (!multiTenancyFirst)
-            services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
 
         return services.BuildServiceProvider();
     }
@@ -60,18 +58,35 @@ public class MultiTenancyRegistrationTests
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
     }
 
-    /// <summary>
-    /// The issuer is the one the tenant declares, whichever order the host registers the two in.
-    /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void UnderATenant_TheIssuerIsTheOneItDeclares(bool multiTenancyFirst)
+    [Fact]
+    public void UnderATenant_TheIssuerIsTheOneItDeclares()
     {
-        using var provider = BuildProvider(multiTenancyFirst);
+        using var provider = BuildProvider();
         EnterTenant(provider, Acme);
 
         Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer());
+    }
+
+    /// <summary>
+    /// Multi-tenancy keeps each tenant's data apart by wrapping the storage the server registered, so a call
+    /// placed before that storage would leave it shared - it is refused, naming the order.
+    /// </summary>
+    [Fact]
+    public void AddMultiTenancy_BeforeTheServersStorage_IsRefused()
+    {
+        var services = new ServiceCollection();
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
+        Assert.Contains("after AddOidcServices()", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheStorageTheServerResolves_IsKeptPerTenant()
+    {
+        using var provider = BuildProvider();
+
+        Assert.IsType<TenantEntityStorage>(provider.GetRequiredService<IEntityStorage>());
     }
 
     /// <summary>
@@ -95,7 +110,7 @@ public class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>().Configure(options => options.Issuer = "https://auth.example.com");
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
@@ -107,7 +122,7 @@ public class MultiTenancyRegistrationTests
     public async Task TheCatalog_FindsATenantByIdExactly_AndByItsIssuersAddress()
     {
         var services = new ServiceCollection();
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         await using var provider = services.BuildServiceProvider();
         var catalog = provider.GetRequiredService<ITenantCatalog>();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -131,7 +146,7 @@ public class MultiTenancyRegistrationTests
         var logs = new EventRecorder();
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(logs);
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         await using var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };
@@ -206,7 +221,7 @@ public class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<ITenantAccessor>(new FixedTenantAccessor(Acme));
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };
