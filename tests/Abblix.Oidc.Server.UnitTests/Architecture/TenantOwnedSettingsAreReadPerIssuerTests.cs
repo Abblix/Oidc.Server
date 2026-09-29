@@ -47,7 +47,11 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         // The server without tenants: its one issuer and the settings it serves from these options
         typeof(OptionsIssuerSettings).FullName!,
         typeof(PreconfiguredIssuerProvider).FullName!,
-        typeof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions).FullName!,
+        $"{typeof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions).FullName}.{nameof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddIssuer)}",
+
+        // The issuer's session cookie name, derived from the configured one
+        typeof(TenantIssuerSettings).FullName!,
+        typeof(CheckSessionCookieOptions).FullName!,
 
         // Startup judging the configured values
         typeof(ClientIdsOptionsValidator).FullName!,
@@ -66,12 +70,14 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         Assert.NotEmpty(getters);
 
         var readers = (
-            from method in MethodsOf(typeof(OidcOptions).Assembly)
+            from assembly in Assemblies
+            from method in MethodsOf(assembly)
             from called in CalledMethods(method)
             where getters.Contains(called)
-            let reader = OwnerOf(method)
-            where !ServerWideReaders.Contains(reader)
-            select $"{reader} reads {nameof(OidcOptions)}.{called.Name["get_".Length..]}"
+            let owner = OwnerOf(method)
+            let reader = $"{owner}.{OriginOf(method)}"
+            where !ServerWideReaders.Contains(owner) && !ServerWideReaders.Contains(reader)
+            select $"{reader} reads {called.DeclaringType!.Name}.{called.Name["get_".Length..]}"
         ).Distinct().OrderBy(line => line, StringComparer.Ordinal).ToArray();
 
         Assert.True(readers.Length == 0, string.Join(Environment.NewLine, readers));
@@ -89,6 +95,17 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         Assert.Contains(CalledMethods(reader), getters.Contains);
     }
 
+    /// <summary>
+    /// The server and the two transports built on it, where a request's settings are read.
+    /// </summary>
+    private static readonly Assembly[] Assemblies =
+    [
+        typeof(OidcOptions).Assembly,
+        typeof(Abblix.Oidc.Server.AspNetCore.MultiTenancy.MultiTenancyExtensions).Assembly,
+        typeof(Abblix.Oidc.Server.Mvc.Formatters.AuthorizationResponseFormatter).Assembly,
+        typeof(Abblix.Oidc.Server.MinimalApi.Formatters.AuthorizationResponseFormatter).Assembly,
+    ];
+
     private static HashSet<MethodInfo> TenantOwnedGetters()
     {
         var tenantSettings = typeof(TenantDefinition)
@@ -100,7 +117,17 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(property => tenantSettings.Contains(property.Name) && property.GetMethod is not null)
             .Select(property => property.GetMethod!)
+            .Append(typeof(CheckSessionCookieOptions).GetProperty(nameof(CheckSessionCookieOptions.Name))!.GetMethod!)
             .ToHashSet();
+    }
+
+    /// <summary>
+    /// The member a method was written in: a lambda and an async body are compiled under names that carry it.
+    /// </summary>
+    private static string OriginOf(MethodBase method)
+    {
+        var name = method.Name.StartsWith('<') ? method.Name : method.DeclaringType!.Name;
+        return name.StartsWith('<') ? name[1..name.IndexOf('>')] : method.Name;
     }
 
     /// <summary>
