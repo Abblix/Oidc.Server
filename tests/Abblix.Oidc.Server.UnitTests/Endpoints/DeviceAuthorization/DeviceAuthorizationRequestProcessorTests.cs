@@ -15,8 +15,10 @@ using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -33,9 +35,12 @@ public class DeviceAuthorizationRequestProcessorTests
 {
     private const string ClientId = "device_client";
     private const string RandomPart = "random-device-code";
+    private const string UserCode = "12345678";
 
     private static readonly DateTimeOffset Now = new(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(10);
+
+    private string? _storedUnder;
 
     /// <summary>
     /// The device code carries the instant it expires, and the record is kept under that same code, so a poll
@@ -44,17 +49,57 @@ public class DeviceAuthorizationRequestProcessorTests
     [Fact]
     public async Task TheDeviceCode_CarriesItsExpiry_AndNamesTheStoredRecord()
     {
+        var response = await ProcessAsync(new Uri("https://auth.example.com/device"), TestConstants.DefaultIssuer.OriginalString);
+
+        Assert.True(ExpiringIdentifier.TryReadExpiry(response.DeviceCode, out var expiresAt));
+        Assert.Equal(Now + CodeLifetime, expiresAt);
+        Assert.Equal(response.DeviceCode, _storedUnder);
+    }
+
+    /// <summary>
+    /// A relative verification page is one under the issuer, so a tenant's users are sent to that tenant's page,
+    /// whose path resolves the tenant their user code was issued in.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/tenants/acme")]
+    [InlineData("https://auth.example.com/tenants/acme/")]
+    public async Task ARelativeVerificationUri_IsAPageUnderTheIssuer(string issuer)
+    {
+        var response = await ProcessAsync(new Uri("device", UriKind.Relative), issuer);
+
+        Assert.Equal(new Uri("https://auth.example.com/tenants/acme/device"), response.VerificationUri);
+        Assert.Equal(
+            new Uri($"https://auth.example.com/tenants/acme/device?user_code={UserCode}"),
+            response.VerificationUriComplete);
+    }
+
+    /// <summary>
+    /// An absolute verification page is where the host put it, whatever the issuer.
+    /// </summary>
+    [Fact]
+    public async Task AnAbsoluteVerificationUri_IsKeptAsConfigured()
+    {
+        var response = await ProcessAsync(
+            new Uri("https://device.example.com/activate"), "https://auth.example.com/tenants/acme");
+
+        Assert.Equal(new Uri("https://device.example.com/activate"), response.VerificationUri);
+        Assert.Equal(
+            new Uri($"https://device.example.com/activate?user_code={UserCode}"),
+            response.VerificationUriComplete);
+    }
+
+    private async Task<DeviceAuthorizationResponse> ProcessAsync(Uri verificationUri, string issuer)
+    {
         var storage = new Mock<IDeviceAuthorizationStorage>();
-        string? storedUnder = null;
         storage
             .Setup(s => s.StoreAsync(It.IsAny<string>(), It.IsAny<StoredRequest>(), CodeLifetime))
-            .Callback<string, StoredRequest, TimeSpan>((deviceCode, _, _) => storedUnder = deviceCode)
+            .Callback<string, StoredRequest, TimeSpan>((deviceCode, _, _) => _storedUnder = deviceCode)
             .Returns(Task.CompletedTask);
 
         var deviceCodes = new Mock<IDeviceCodeGenerator>();
         deviceCodes.Setup(g => g.GenerateDeviceCode()).Returns(RandomPart);
         var userCodes = new Mock<IUserCodeGenerator>();
-        userCodes.Setup(g => g.GenerateUserCode()).Returns("12345678");
+        userCodes.Setup(g => g.GenerateUserCode()).Returns(UserCode);
 
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.SetupGet(o => o.Value).Returns(new OidcOptions
@@ -65,12 +110,20 @@ public class DeviceAuthorizationRequestProcessorTests
                 PollingInterval = TimeSpan.FromSeconds(5),
                 DeviceCodeLength = 32,
                 UserCodeLength = 8,
-                VerificationUri = new Uri("https://auth.example.com/device"),
+                VerificationUri = verificationUri,
             },
         });
 
+        var issuerProvider = new Mock<IIssuerProvider>();
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(issuer);
+
         var processor = new DeviceAuthorizationRequestProcessor(
-            storage.Object, deviceCodes.Object, userCodes.Object, options.Object, new FakeTimeProvider(Now));
+            storage.Object,
+            deviceCodes.Object,
+            userCodes.Object,
+            options.Object,
+            new FakeTimeProvider(Now),
+            issuerProvider.Object);
 
         var result = await processor.ProcessAsync(new ValidDeviceAuthorizationRequest(
             new DeviceAuthorizationValidationContext(
@@ -81,8 +134,6 @@ public class DeviceAuthorizationRequestProcessorTests
             }));
 
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.True(ExpiringIdentifier.TryReadExpiry(response.DeviceCode, out var expiresAt));
-        Assert.Equal(Now + CodeLifetime, expiresAt);
-        Assert.Equal(response.DeviceCode, storedUnder);
+        return response;
     }
 }

@@ -127,9 +127,15 @@ public record DeviceAuthorizationOptions
     /// <summary>
     /// The user-facing URI where users can enter their user code.
     /// This should be short and easy to remember as users will manually type it.
-    /// Must use HTTPS. RFC 8628 does not say so for verification_uri; the requirement is RFC 6749
-    /// Section 3.1's, which asks for TLS wherever the user authenticates.
+    /// An absolute one must use HTTPS. RFC 8628 does not say so for verification_uri; the requirement is
+    /// RFC 6749 Section 3.1's, which asks for TLS wherever the user authenticates.
     /// </summary>
+    /// <remarks>
+    /// A relative one names a page under the issuer, resolved against the issuer taken as a directory: with the
+    /// issuer <c>https://auth.example.com/tenants/acme</c>, <c>device</c> is
+    /// <c>https://auth.example.com/tenants/acme/device</c>. Under multi-tenancy that sends each tenant's users to
+    /// a page whose path resolves the tenant their user code was issued in.
+    /// </remarks>
     public required Uri VerificationUri
     {
         // `required` is a compiler obligation on an object initialiser and nothing more: the configuration
@@ -143,7 +149,8 @@ public record DeviceAuthorizationOptions
             + "of the response.");
         set
         {
-            if (!string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            if (value.IsAbsoluteUri &&
+                !string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
                     "The verification_uri must use HTTPS: the user authenticates there, and RFC 6749 "

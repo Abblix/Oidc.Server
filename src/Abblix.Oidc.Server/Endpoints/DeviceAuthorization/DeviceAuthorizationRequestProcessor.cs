@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
@@ -28,12 +29,14 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
 /// <param name="timeProvider">Dates the instant the device code carries.</param>
+/// <param name="issuerProvider">The issuer a relative verification page is under.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
     IOptionsSnapshot<OidcOptions> options,
-    TimeProvider timeProvider) : IDeviceAuthorizationRequestProcessor
+    TimeProvider timeProvider,
+    IIssuerProvider issuerProvider) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
@@ -70,12 +73,27 @@ public class DeviceAuthorizationRequestProcessor(
 
         await storage.StoreAsync(deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
 
+        var verificationUri = VerificationUri(deviceAuthOptions.VerificationUri);
         return new DeviceAuthorizationResponse
         {
             DeviceCode = deviceCode,
             UserCode = userCode,
+            VerificationUri = verificationUri,
+
+            // RFC 8628 section 3.2: verification_uri_complete lets capable devices render a direct link or QR
+            // code, so the user skips typing the code
+            VerificationUriComplete = new Uri(
+                verificationUri.AddToQuery([(DeviceAuthorizationResponse.Parameters.UserCode, userCode)])),
+
             ExpiresIn = deviceAuthOptions.CodeLifetime,
             Interval = deviceAuthOptions.PollingInterval,
         };
     }
+
+    /// <summary>
+    /// The page the user enters the code on: <paramref name="configured"/> resolved against the issuer taken as a
+    /// directory, which leaves an absolute one as it is (RFC 3986 section 5.2.2).
+    /// </summary>
+    private Uri VerificationUri(Uri configured)
+        => new(new Uri(issuerProvider.GetIssuer().AppendTrailingSlash()), configured);
 }

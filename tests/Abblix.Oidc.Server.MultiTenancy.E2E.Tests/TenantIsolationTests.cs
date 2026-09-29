@@ -13,18 +13,24 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.Model;
+using ValidUserCode = Abblix.Oidc.Server.Features.DeviceAuthorization.ValidUserCode;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -72,7 +78,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             options.LoginUri = new Uri("/login", UriKind.Relative);
             options.DeviceAuthorization = new DeviceAuthorizationOptions
             {
-                VerificationUri = new Uri(Host + "/device"),
+                // Relative, so each tenant's users are sent to the page under that tenant's path
+                VerificationUri = new Uri("device", UriKind.Relative),
                 CodeLifetime = TimeSpan.FromMinutes(15),
                 PollingInterval = TimeSpan.FromSeconds(5),
                 DeviceCodeLength = 32,
@@ -102,6 +109,27 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         _app.UseCors();
         _app.UseAuthorization();
         _app.MapOidcEndpoints();
+
+        // The host's page the user enters the code on; the tenant comes from the path it is reached under
+        _app.MapPost("/device", async (HttpContext context, IUserCodeVerificationService verification) =>
+        {
+            var userCode = (await context.Request.ReadFormAsync())[DeviceAuthorizationResponse.Parameters.UserCode]
+                .ToString();
+
+            if (await verification.VerifyAsync(userCode) is not ValidUserCode valid)
+                return Results.BadRequest();
+
+            var grant = new AuthorizedGrant(
+                new AuthSession(
+                    "alice",
+                    "session-1",
+                    context.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow(),
+                    "local"),
+                new AuthorizationContext(valid.ClientId, valid.Scope, null));
+
+            return await verification.ApproveAsync(userCode, grant) ? Results.Ok() : Results.Conflict();
+        });
+
         await _app.StartAsync(TestContext.Current.CancellationToken);
 
         _http = _app.GetTestClient();
@@ -182,6 +210,39 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
         var atAcme = await PostAsync(Acme, "/connect/token", new Dictionary<string, string>(poll));
         Assert.Equal(ErrorCodes.AuthorizationPending, (await ReadJsonAsync(atAcme))[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A device flow completes: the device is sent to its own tenant's verification page, the user code entered
+    /// there is approved, and the device then gets its tokens. The other tenant's page does not know the code.
+    /// </summary>
+    [Fact]
+    public async Task ADeviceFlow_CompletesOnItsOwnTenantsVerificationPage()
+    {
+        var authorization = await ReadJsonAsync(await PostAsync(Acme, "/connect/deviceauthorization",
+            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = "openid" }));
+        var verificationUri = authorization[DeviceAuthorizationResponse.Parameters.VerificationUri]!.GetValue<string>();
+        var userCode = authorization[DeviceAuthorizationResponse.Parameters.UserCode]!.GetValue<string>();
+        var deviceCode = authorization[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>();
+        Assert.Equal(Host + Acme + "/device", verificationUri);
+
+        var entered = new Dictionary<string, string> { [DeviceAuthorizationResponse.Parameters.UserCode] = userCode };
+
+        var atGlobex = await Http.PostAsync(
+            Host + Globex + "/device", new FormUrlEncodedContent(entered), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, atGlobex.StatusCode);
+
+        var atAcme = await Http.PostAsync(
+            verificationUri, new FormUrlEncodedContent(entered), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, atAcme.StatusCode);
+
+        var tokens = await PostAsync(Acme, "/connect/token", new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.DeviceAuthorization,
+            [TokenRequest.Parameters.DeviceCode] = deviceCode,
+        });
+        Assert.Equal(HttpStatusCode.OK, tokens.StatusCode);
+        Assert.NotNull((await ReadJsonAsync(tokens))[ResponseParameters.AccessToken]);
     }
 
     /// <summary>

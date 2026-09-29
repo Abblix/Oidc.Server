@@ -38,6 +38,26 @@ public class DeviceAuthorizationOptionsTests
         Assert.Equal(lengthInBytes, options.DeviceCodeLength);
     }
 
+    /// <summary>
+    /// The user authenticates on the verification page, so an absolute address of it must use TLS.
+    /// </summary>
+    [Fact]
+    public void AnAbsoluteVerificationUri_WithoutTls_IsRefused()
+        => Assert.Throws<ArgumentException>(() => CreateOptions(32).VerificationUri = new Uri("http://auth.example.com/device"));
+
+    /// <summary>
+    /// A relative one names a page under the issuer, which is how each tenant's users reach a page of their own.
+    /// </summary>
+    [Fact]
+    public void ARelativeVerificationUri_IsAccepted()
+    {
+        var options = CreateOptions(32);
+
+        options.VerificationUri = new Uri("device", UriKind.Relative);
+
+        Assert.Equal(new Uri("device", UriKind.Relative), options.VerificationUri);
+    }
+
     private static DeviceAuthorizationOptions CreateOptions(int deviceCodeLength) => new()
     {
         CodeLifetime = TimeSpan.FromMinutes(5),
