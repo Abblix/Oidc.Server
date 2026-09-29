@@ -134,7 +134,8 @@ public record DeviceAuthorizationOptions
     /// A relative one names a page under the issuer, resolved against the issuer taken as a directory: with the
     /// issuer <c>https://auth.example.com/tenants/acme</c>, <c>device</c> is
     /// <c>https://auth.example.com/tenants/acme/device</c>. Under multi-tenancy that sends each tenant's users to
-    /// a page whose path resolves the tenant their user code was issued in.
+    /// a page whose path resolves the tenant their user code was issued in. One that resolves outside the issuer,
+    /// such as <c>/device</c>, or under an issuer without HTTPS is refused when the response is built.
     /// </remarks>
     public required Uri VerificationUri
     {

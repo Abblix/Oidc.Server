@@ -94,6 +94,32 @@ public class DeviceAuthorizationRequestProcessor(
     /// The page the user enters the code on: <paramref name="configured"/> resolved against the issuer taken as a
     /// directory, which leaves an absolute one as it is (RFC 3986 section 5.2.2).
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// A relative page resolves outside the issuer, where under multi-tenancy it resolves no tenant, or under an
+    /// issuer without TLS, where the user would authenticate in the clear.
+    /// </exception>
     private Uri VerificationUri(Uri configured)
-        => new(new Uri(issuerProvider.GetIssuer().AppendTrailingSlash()), configured);
+    {
+        var issuer = new Uri(issuerProvider.GetIssuer().AppendTrailingSlash());
+        var resolved = new Uri(issuer, configured);
+
+        if (configured.IsAbsoluteUri)
+            return resolved;
+
+        if (!issuer.IsBaseOf(resolved))
+        {
+            throw new InvalidOperationException(
+                $"The relative {nameof(DeviceAuthorizationOptions.VerificationUri)} '{configured}' resolves to " +
+                $"{resolved}, outside the issuer {issuer}. Name a page under the issuer, such as 'device'.");
+        }
+
+        if (!string.Equals(resolved.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The relative {nameof(DeviceAuthorizationOptions.VerificationUri)} resolves to {resolved}, which " +
+                "does not use HTTPS: the user authenticates there, and RFC 6749 Section 3.1 requires TLS for that.");
+        }
+
+        return resolved;
+    }
 }

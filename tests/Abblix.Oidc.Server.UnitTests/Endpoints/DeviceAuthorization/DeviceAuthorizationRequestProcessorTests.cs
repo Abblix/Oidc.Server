@@ -74,6 +74,26 @@ public class DeviceAuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// A relative page that resolves outside the issuer - from the host's root, or up out of the issuer's path -
+    /// is not a page of this issuer, and under multi-tenancy resolves no tenant; it is refused rather than sent.
+    /// </summary>
+    [Theory]
+    [InlineData("/device")]
+    [InlineData("../device")]
+    public async Task ARelativeVerificationUriLeavingTheIssuer_IsRefused(string relative)
+        => await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ProcessAsync(new Uri(relative, UriKind.Relative), "https://auth.example.com/tenants/acme"));
+
+    /// <summary>
+    /// The user authenticates on the page, so one resolved under an issuer without TLS is refused, as an absolute
+    /// one without it is when configured.
+    /// </summary>
+    [Fact]
+    public async Task ARelativeVerificationUriUnderAnIssuerWithoutTls_IsRefused()
+        => await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ProcessAsync(new Uri("device", UriKind.Relative), "http://auth.example.com/tenants/acme"));
+
+    /// <summary>
     /// An absolute verification page is where the host put it, whatever the issuer.
     /// </summary>
     [Fact]
