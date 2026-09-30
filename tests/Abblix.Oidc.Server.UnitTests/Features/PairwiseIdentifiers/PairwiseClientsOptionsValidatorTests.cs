@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -101,6 +102,50 @@ public class PairwiseClientsOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains("could not be resolved at startup", result.FailureMessage, StringComparison.Ordinal);
         Assert.Contains(nameof(ISubjectTypeConverter), result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant accessor a host registers for its own reasons does not make the server one serving tenants, so the
+    /// check still runs.
+    /// </summary>
+    [Fact]
+    public void AHostsOwnTenantAccessor_WithoutMultiTenancy_LeavesTheCheckOn()
+    {
+        var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
+        using var provider = new ServiceCollection()
+            .AddSingleton<ISubjectTypeConverter>(new SubjectTypeConverter())
+            .AddSingleton(Mock.Of<ITenantAccessor>())
+            .BuildServiceProvider();
+
+        Assert.True(new PairwiseClientsOptionsValidator(provider).Validate(null, options).Failed);
+    }
+
+    /// <summary>
+    /// Under multi-tenancy the tenant list's check judges each tenant's key, and this one stands aside.
+    /// </summary>
+    [Fact]
+    public void UnderMultiTenancy_TheCheckStandsAside()
+    {
+        var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
+        using var provider = new ServiceCollection()
+            .AddSingleton<ISubjectTypeConverter>(new SubjectTypeConverter())
+            .AddSingleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>()
+            .BuildServiceProvider();
+
+        Assert.True(new PairwiseClientsOptionsValidator(provider).Validate(null, options).Succeeded);
+    }
+
+    /// <summary>
+    /// A container that cannot say which services it holds is taken for one without tenants.
+    /// </summary>
+    [Fact]
+    public void AContainerThatCannotSayWhatItHolds_LeavesTheCheckOn()
+    {
+        var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
+        var provider = new Mock<IServiceProvider>();
+        provider.Setup(p => p.GetService(typeof(ISubjectTypeConverter))).Returns(new SubjectTypeConverter());
+
+        Assert.True(new PairwiseClientsOptionsValidator(provider.Object).Validate(null, options).Failed);
     }
 
     [Fact]
