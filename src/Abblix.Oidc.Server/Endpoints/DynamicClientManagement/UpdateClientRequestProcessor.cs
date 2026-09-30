@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
-    IRegistrationAccessTokenStore registrationAccessTokenStore,
     ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock) : IUpdateClientRequestProcessor
 {
@@ -44,9 +43,15 @@ public class UpdateClientRequestProcessor(
         var model = request.RegistrationRequest;
         var existingClient = request.ClientInfo;
 
+        // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
+        // on the client invalidates every token issued before this update, limiting the exposure
+        // window of a leaked token to the period between rotations.
+        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+
         // Create updated client info, preserving immutable fields
         var updatedClient = new ClientInfo(existingClient.ClientId)
         {
+            RegistrationAccessTokenId = registrationAccessTokenId,
             // Preserve client secrets (cannot be updated per RFC 7592)
             ClientSecrets = existingClient.ClientSecrets,
 
@@ -170,12 +175,6 @@ public class UpdateClientRequestProcessor(
         // answer - RFC 7592 section 3 asks the client to be able to verify that the full replacement
         // took effect.
         await clientInfoManager.UpdateClientAsync(updatedClient);
-
-        // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
-        // invalidates every token issued before this update, limiting the exposure window of a
-        // leaked token to the period between rotations.
-        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
-        await registrationAccessTokenStore.SetTokenIdAsync(updatedClient.ClientId, registrationAccessTokenId);
 
         // Generate response with new registration_access_token, embedding the freshly rotated jti.
         var issuedAt = clock.GetUtcNow();

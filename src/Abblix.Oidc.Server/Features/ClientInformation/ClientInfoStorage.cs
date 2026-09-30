@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Concurrent;
-using System.Collections.Frozen;
 using Abblix.Oidc.Server.Features.Issuer;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -26,27 +25,12 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <param name="clients">The clients of each issuer.</param>
 internal class ClientInfoStorage(
     IIssuerSettings settings,
-    IIssuerLocal<IssuerClients> clients) : IClientInfoProvider, IClientInfoManager, IConfiguredClientLookup
+    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> clients) : IClientInfoProvider, IClientInfoManager
 {
     // Built once for each issuer, whatever its settings become
-    private IssuerClients Issuer => clients.GetOrCreate(null, () =>
-    {
-        var configured = settings.Clients;
-        return new IssuerClients(
-            new ConcurrentDictionary<string, ClientInfo>(
-                configured.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-                StringComparer.OrdinalIgnoreCase),
-            configured.Select(client => client.ClientId).ToFrozenSet(StringComparer.OrdinalIgnoreCase));
-    });
-
-    private ConcurrentDictionary<string, ClientInfo> Clients => Issuer.Clients;
-
-    /// <inheritdoc />
-    public ClientInfo? TryFindRegisteredClient(string clientId)
-    {
-        var issuer = Issuer;
-        return issuer.ConfiguredIds.Contains(clientId) ? null : issuer.Clients.GetValueOrDefault(clientId);
-    }
+    private ConcurrentDictionary<string, ClientInfo> Clients => clients.GetOrCreate(null, () => new(
+        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
+        StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

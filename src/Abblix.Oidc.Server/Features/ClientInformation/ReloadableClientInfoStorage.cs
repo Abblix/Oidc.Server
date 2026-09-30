@@ -35,7 +35,7 @@ internal partial class ReloadableClientInfoStorage(
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
     IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> registered)
-    : IClientInfoProvider, IClientInfoManager, IConfiguredClientLookup
+    : IClientInfoProvider, IClientInfoManager
 {
     private Dictionary<string, ClientInfo> Configured
     {
@@ -80,10 +80,6 @@ internal partial class ReloadableClientInfoStorage(
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
     private bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
-
-    /// <inheritdoc />
-    public ClientInfo? TryFindRegisteredClient(string clientId)
-        => IsConfigured(clientId) ? null : Registered.GetValueOrDefault(clientId);
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

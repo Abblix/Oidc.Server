@@ -128,7 +128,6 @@ public class EntityStorageKeyFactoryTests
             Factory.AddressRateLimitAttemptKey(identifier, 1, 1),
             Factory.AuthorizedGrantKey(identifier),
             Factory.JsonWebTokenStatusKey(identifier),
-            Factory.RegistrationAccessTokenKey(identifier),
             Factory.AuthorizationValueReuseKey(identifier, "code_challenge", "a-hash"),
         };
 

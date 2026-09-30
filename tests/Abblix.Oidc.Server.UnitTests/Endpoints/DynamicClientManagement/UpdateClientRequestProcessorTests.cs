@@ -28,8 +28,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 public class UpdateClientRequestProcessorTests
 {
     private static (UpdateClientRequestProcessor processor, Mock<IClientInfoManager> manager,
-        Mock<IRegistrationAccessTokenService> tokenService, Mock<IRegistrationAccessTokenStore> tokenStore,
-        Mock<ITokenIdGenerator> idGenerator)
+        Mock<IRegistrationAccessTokenService> tokenService, Mock<ITokenIdGenerator> idGenerator)
         CreateProcessor(Action<ClientInfo> onSave)
     {
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
@@ -44,13 +43,12 @@ public class UpdateClientRequestProcessorTests
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
-        var tokenStore = new Mock<IRegistrationAccessTokenStore>(MockBehavior.Loose);
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, tokenStore.Object, idGenerator.Object, TimeProvider.System);
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System);
 
-        return (processor, clientInfoManager, tokenService, tokenStore, idGenerator);
+        return (processor, clientInfoManager, tokenService, idGenerator);
     }
 
     [Fact]
@@ -58,7 +56,7 @@ public class UpdateClientRequestProcessorTests
     {
         // Arrange
         ClientInfo? saved = null;
-        var (processor, _, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -89,7 +87,7 @@ public class UpdateClientRequestProcessorTests
     {
         // Arrange
         ClientInfo? saved = null;
-        var (processor, _, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -119,14 +117,15 @@ public class UpdateClientRequestProcessorTests
 
     /// <summary>
     /// Verifies the update rotates the registration access token jti: a freshly generated id is
-    /// recorded in the binding store and embedded in the issued token. Because the validator binds
-    /// the token to the stored jti, this invalidates every token issued before the update (RFC 7592 section 5).
+    /// recorded on the stored client and embedded in the issued token. Because the validator binds
+    /// the token to the client's jti, this invalidates every token issued before the update (RFC 7592 section 5).
     /// </summary>
     [Fact]
     public async Task Update_RotatesRegistrationAccessTokenId()
     {
         // Arrange
-        var (processor, _, tokenService, tokenStore, idGenerator) = CreateProcessor(_ => { });
+        ClientInfo? saved = null;
+        var (processor, _, tokenService, idGenerator) = CreateProcessor(client => saved = client);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
 
         var model = new ClientRegistrationRequest
@@ -141,7 +140,7 @@ public class UpdateClientRequestProcessorTests
         await processor.ProcessAsync(request);
 
         // Assert
-        tokenStore.Verify(s => s.SetTokenIdAsync("client-1", "rotated-jti"), Times.Once);
+        Assert.Equal("rotated-jti", saved?.RegistrationAccessTokenId);
         tokenService.Verify(
             s => s.IssueTokenAsync("client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
             Times.Once);
@@ -156,7 +155,7 @@ public class UpdateClientRequestProcessorTests
     public async Task Update_ResponseEchoesGrantResponseTypesAndScope()
     {
         // Arrange
-        var (processor, _, _, _, idGenerator) = CreateProcessor(_ => { });
+        var (processor, _, _, idGenerator) = CreateProcessor(_ => { });
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest

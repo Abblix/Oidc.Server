@@ -163,7 +163,7 @@ public class IssuerReloadTests
             Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
         });
         var clients = ClientsOf(options);
-        Assert.Null(clients.TryFindRegisteredClient("partner-app"));
+        Assert.NotNull(await clients.TryFindClientAsync("partner-app"));
 
         var written = new ClientInfo("partner-app") { ClientName = "registered" };
         if (added)
@@ -193,7 +193,6 @@ public class IssuerReloadTests
         await clients.RemoveClientAsync("app");
 
         Assert.Equal("configured", (await clients.TryFindClientAsync("app"))?.ClientName);
-        Assert.Null(clients.TryFindRegisteredClient("app"));
     }
 
     [Fact]
@@ -207,7 +206,6 @@ public class IssuerReloadTests
         await clients.AddClientAsync(new ClientInfo("app") { ClientName = "registered" });
 
         Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
-        Assert.Equal("registered", clients.TryFindRegisteredClient("app")?.ClientName);
     }
 
     [Fact]
@@ -258,30 +256,13 @@ public class IssuerReloadTests
         var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
         var clients = new ClientInfoStorage(
             new OptionsIssuerSettings(options),
-            new SingleIssuerLocal<IssuerClients>());
+            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("added")] });
 
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
-        Assert.Null(clients.TryFindRegisteredClient("configured"));
         Assert.Null(await clients.TryFindClientAsync("added"));
-    }
-
-    /// <summary>
-    /// The default store tells the clients it read from the settings from the ones registration added.
-    /// </summary>
-    [Fact]
-    public async Task TheDefaultStore_TellsARegistrationFromAConfiguredClient()
-    {
-        var clients = new ClientInfoStorage(
-            new OptionsIssuerSettings(new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("app")] })),
-            new SingleIssuerLocal<IssuerClients>());
-
-        await clients.AddClientAsync(new ClientInfo("registered"));
-
-        Assert.Null(clients.TryFindRegisteredClient("APP"));
-        Assert.NotNull(clients.TryFindRegisteredClient("registered"));
     }
 
     /// <summary>

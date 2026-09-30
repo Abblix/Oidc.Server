@@ -19,18 +19,15 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
 /// Default <see cref="IClientRequestValidator"/> for the RFC 7592 client configuration endpoint.
-/// First verifies the registration access token is bound to the requested <c>client_id</c>, then
-/// loads the corresponding <see cref="Features.ClientInformation.ClientInfo"/> from storage and
-/// rejects the request when no record exists.
+/// Loads the addressed <see cref="Features.ClientInformation.ClientInfo"/> and accepts the registration
+/// access token only when it carries the jti the client's record holds.
 /// </summary>
 /// <param name="clientInfoProvider">Store consulted for the addressed client.</param>
 /// <param name="registrationAccessTokenValidator">Validator for the bearer registration access token.</param>
-/// <param name="registrationAccessTokenStore">Store holding the jti of each client's current token.</param>
 /// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class ClientRequestValidator(
     IClientInfoProvider clientInfoProvider,
     IRegistrationAccessTokenValidator registrationAccessTokenValidator,
-    IRegistrationAccessTokenStore registrationAccessTokenStore,
     IIssuerSettings issuerSettings) : IClientRequestValidator
 {
     /// <inheritdoc />
@@ -38,12 +35,14 @@ public class ClientRequestValidator(
     {
         var clientId = request.ClientId.NotNull(nameof(request.ClientId));
 
-        // The expected jti is the value recorded when this client's current registration access
-        // token was issued; it binds the token so a rotated token invalidates its predecessors.
-        // Every token this server issues is bound, so with no binding there is no registration the
-        // token could manage.
-        var expectedTokenId = await registrationAccessTokenStore.GetTokenIdAsync(clientId);
-        if (expectedTokenId == null)
+        // RFC 7592 section 5: the token manages the registration whose record carries its jti, so a rotated token
+        // invalidates its predecessors. A client that no longer exists, and one the settings configure, which no
+        // registration made, carry none: every token for them is refused, which is also the revocation RFC 7592
+        // section 2.3 asks for once the client is gone. The error is invalid_token, not invalid_client: this
+        // endpoint authenticates with a Bearer token (RFC 6750), and invalid_client would be formatted as a Basic
+        // challenge.
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        if (clientInfo is not { RegistrationAccessTokenId: { } expectedTokenId })
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
         var headerErrorDescription = await registrationAccessTokenValidator.ValidateAsync(
@@ -54,39 +53,7 @@ public class ClientRequestValidator(
         if (headerErrorDescription != null)
             return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
-        // A registration access token manages a registration, and a client the store serves as one the settings
-        // configure is none: a binding that outlived its registration across a restart reaches nothing.
-        var clientInfo = await TryFindRegisteredClientAsync(clientId).WithLicenseCheck(issuerSettings);
-        if (clientInfo == null)
-        {
-            // RFC 7592 section 2.3: when the addressed client does not exist, the server responds
-            // 401 Unauthorized and the registration access token MUST be immediately revoked.
-            // The error is invalid_token, not invalid_client: this endpoint authenticates with a
-            // Bearer token (RFC 6750), and invalid_client would be formatted as a Basic challenge -
-            // an authentication scheme the configuration endpoint never accepts.
-            await registrationAccessTokenStore.RemoveAsync(clientId);
-            return new OidcError(ErrorCodes.InvalidToken, "Client does not exist on this server");
-        }
-
+        clientInfo.CheckClientLicense(issuerSettings);
         return new ValidClientRequest(request, clientInfo, expectedTokenId);
-    }
-
-    /// <summary>
-    /// Finds the client registration under <paramref name="clientId"/>, if the id is not one the settings configure.
-    /// A built-in store tells the two apart itself, since the default one keeps serving the clients it read at
-    /// startup after the settings change; a store that cannot - a host's own, or a built-in one behind a host's
-    /// decorator - is judged by the settings as they stand, which errs towards refusing a registrant rather than
-    /// handing it a configured client.
-    /// </summary>
-    private async Task<ClientInfo?> TryFindRegisteredClientAsync(string clientId)
-    {
-        if (clientInfoProvider is IConfiguredClientLookup lookup)
-            return lookup.TryFindRegisteredClient(clientId);
-
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
-        return issuerSettings.Clients.Any(client =>
-            string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase))
-            ? null
-            : clientInfo;
     }
 }

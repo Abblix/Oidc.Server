@@ -27,40 +27,43 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
 /// A registration access token manages the registration it was issued for and nothing else: once the settings
-/// configure the id it was issued under, it manages nothing, however the registrant replays it.
+/// configure the id it was issued under, it manages nothing, however the registrant replays it, and whichever store
+/// serves the clients.
 /// </summary>
 public class RegistrationManagementAcrossReloadTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
 
     private readonly Reloadable _options = new(new OidcOptions());
-    private readonly ReloadableClientInfoStorage _clients;
-    private readonly ClientRequestValidator _management;
-    private readonly Bindings _bindings = new();
+    private readonly OptionsIssuerSettings _settings;
 
     public RegistrationManagementAcrossReloadTests()
     {
-        var settings = new OptionsIssuerSettings(_options);
-        _clients = new ReloadableClientInfoStorage(
-            NullLogger<ReloadableClientInfoStorage>.Instance,
-            settings,
-            new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
-        _management = new ClientRequestValidator(_clients, new JtiMatches(), _bindings, settings);
+        _settings = new OptionsIssuerSettings(_options);
     }
 
-    private async Task RegisterAsync(string tokenId)
+    private ReloadableClientInfoStorage ReloadableStore() => new(
+        NullLogger<ReloadableClientInfoStorage>.Instance,
+        _settings,
+        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
+        new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
+
+    private ClientInfoStorage DefaultStore()
+        => new(_settings, new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
+
+    private static Task RegisterAsync(IClientInfoManager clients, string tokenId)
+        => clients.AddClientAsync(new ClientInfo(ClientId) { ClientName = "registered", RegistrationAccessTokenId = tokenId });
+
+    private async Task<ValidClientRequest?> ManagesAsync(IClientInfoProvider clients, string tokenId)
     {
-        await _clients.AddClientAsync(new ClientInfo(ClientId) { ClientName = "registered" });
-        await _bindings.SetTokenIdAsync(ClientId, tokenId);
+        var result = await new ClientRequestValidator(clients, new JtiMatches(), _settings).ValidateAsync(
+            new ClientRequest
+            {
+                ClientId = ClientId,
+                AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, tokenId),
+            });
+        return result.TryGetSuccess(out var request) ? request : null;
     }
-
-    private async Task<bool> ManagesAsync(string tokenId)
-        => (await _management.ValidateAsync(new ClientRequest
-        {
-            ClientId = ClientId,
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, tokenId),
-        })).TryGetSuccess(out _);
 
     private OidcOptions Configuring() => new()
     {
@@ -70,45 +73,31 @@ public class RegistrationManagementAcrossReloadTests
     [Fact]
     public async Task ATokenOfARegistrationTheSettingsTakeOver_ManagesNothing()
     {
-        await RegisterAsync("first");
-        Assert.True(await ManagesAsync("first"));
+        var clients = ReloadableStore();
+        await RegisterAsync(clients, "first");
+        Assert.NotNull(await ManagesAsync(clients, "first"));
 
         _options.Reload(Configuring());
 
-        Assert.False(await ManagesAsync("first"));
-        Assert.Null(await _bindings.GetTokenIdAsync(ClientId));
-        Assert.False(await ManagesAsync("first"));
-        Assert.Equal("configured", (await _clients.TryFindClientAsync(ClientId))?.ClientName);
+        Assert.Null(await ManagesAsync(clients, "first"));
+        Assert.Equal("configured", (await clients.TryFindClientAsync(ClientId))?.ClientName);
     }
 
     [Fact]
     public async Task OnceTheSettingsLetTheIdGo_OnlyAFreshRegistrationManagesIt()
     {
-        await RegisterAsync("first");
+        var clients = ReloadableStore();
+        await RegisterAsync(clients, "first");
         _options.Reload(Configuring());
-        Assert.False(await ManagesAsync("first"));
+        Assert.Null(await ManagesAsync(clients, "first"));
 
         _options.Reload(new OidcOptions());
-        Assert.Null(await _clients.TryFindClientAsync(ClientId));
-        Assert.False(await ManagesAsync("first"));
+        Assert.Null(await clients.TryFindClientAsync(ClientId));
+        Assert.Null(await ManagesAsync(clients, "first"));
 
-        await RegisterAsync("second");
-        Assert.True(await ManagesAsync("second"));
-        Assert.False(await ManagesAsync("first"));
-    }
-
-    /// <summary>
-    /// The shape the default store meets across a restart: the binding outlives the registration, and the settings
-    /// meanwhile configure the id.
-    /// </summary>
-    [Fact]
-    public async Task ABindingLeftForAnIdTheSettingsConfigure_IsRevoked()
-    {
-        _options.Reload(Configuring());
-        await _bindings.SetTokenIdAsync(ClientId, "left over");
-
-        Assert.False(await ManagesAsync("left over"));
-        Assert.Null(await _bindings.GetTokenIdAsync(ClientId));
+        await RegisterAsync(clients, "second");
+        Assert.NotNull(await ManagesAsync(clients, "second"));
+        Assert.Null(await ManagesAsync(clients, "first"));
     }
 
     /// <summary>
@@ -118,21 +107,48 @@ public class RegistrationManagementAcrossReloadTests
     [Fact]
     public async Task UnderTheDefaultStore_ARegistrationItStillServes_StaysManaged()
     {
-        var settings = new OptionsIssuerSettings(_options);
-        var clients = new ClientInfoStorage(settings, new SingleIssuerLocal<IssuerClients>());
-        var management = new ClientRequestValidator(clients, new JtiMatches(), _bindings, settings);
-        await clients.AddClientAsync(new ClientInfo(ClientId) { ClientName = "registered" });
-        await _bindings.SetTokenIdAsync(ClientId, "first");
+        var clients = DefaultStore();
+        await RegisterAsync(clients, "first");
 
         _options.Reload(Configuring());
 
-        var result = await management.ValidateAsync(new ClientRequest
-        {
-            ClientId = ClientId,
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "first"),
-        });
-        Assert.True(result.TryGetSuccess(out var request));
-        Assert.Equal("registered", request.ClientInfo.ClientName);
+        Assert.Equal("registered", (await ManagesAsync(clients, "first"))?.ClientInfo.ClientName);
+    }
+
+    /// <summary>
+    /// The shape a restart leaves: the registration is gone with the memory that held it, the settings now configure
+    /// its id, and the registrant still holds its token. The configured client carries no token id, so the token
+    /// manages nothing - under the default store, and under the reloading one, which the settings reach on reload
+    /// as well, whether the client was served before the reload or not.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ATokenOutlivingItsRegistration_ManagesNoConfiguredClient(bool defaultStore)
+    {
+        _options.Reload(Configuring());
+        IClientInfoProvider clients = defaultStore ? DefaultStore() : ReloadableStore();
+
+        Assert.Null(await ManagesAsync(clients, "left over"));
+
+        _options.Reload(new OidcOptions { Clients = [new ClientInfo(ClientId) { ClientName = "changed" }] });
+        Assert.Null(await ManagesAsync(clients, "left over"));
+    }
+
+    /// <summary>
+    /// A store of the host's own, or a built-in one behind a host's decorator, reaches the same answer: the binding
+    /// is on the client's record, so the endpoint needs to know nothing about the store to refuse.
+    /// </summary>
+    [Fact]
+    public async Task BehindAHostsDecorator_AConfiguredClient_IsManagedByNoToken()
+    {
+        _options.Reload(Configuring());
+        var clients = new Decorated(DefaultStore());
+
+        Assert.Null(await ManagesAsync(clients, "left over"));
+
+        _options.Reload(new OidcOptions());
+        Assert.Null(await ManagesAsync(clients, "left over"));
     }
 
     private sealed class Reloadable(OidcOptions initial) : IOptionsMonitor<OidcOptions>
@@ -144,31 +160,19 @@ public class RegistrationManagementAcrossReloadTests
     }
 
     /// <summary>
-    /// A token is the id it was issued under; it is valid while that is the id the binding records.
+    /// A host's decorator over a client store, which tells nothing of the store it wraps.
+    /// </summary>
+    private sealed class Decorated(IClientInfoProvider inner) : IClientInfoProvider
+    {
+        public Task<ClientInfo?> TryFindClientAsync(string clientId) => inner.TryFindClientAsync(clientId);
+    }
+
+    /// <summary>
+    /// A token is the id it was issued under; it is valid while that is the id the client's record carries.
     /// </summary>
     private sealed class JtiMatches : IRegistrationAccessTokenValidator
     {
         public Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string expectedTokenId)
             => Task.FromResult(header?.Parameter == expectedTokenId ? null : "The access token unauthorized");
-    }
-
-    private sealed class Bindings : IRegistrationAccessTokenStore
-    {
-        private readonly ConcurrentDictionary<string, string> _tokenIds = new(StringComparer.Ordinal);
-
-        public Task SetTokenIdAsync(string clientId, string tokenId)
-        {
-            _tokenIds[clientId] = tokenId;
-            return Task.CompletedTask;
-        }
-
-        public Task<string?> GetTokenIdAsync(string clientId)
-            => Task.FromResult(_tokenIds.TryGetValue(clientId, out var tokenId) ? tokenId : null);
-
-        public Task RemoveAsync(string clientId)
-        {
-            _tokenIds.TryRemove(clientId, out _);
-            return Task.CompletedTask;
-        }
     }
 }
