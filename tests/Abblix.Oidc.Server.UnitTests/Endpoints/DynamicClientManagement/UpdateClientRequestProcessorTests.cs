@@ -29,13 +29,13 @@ public class UpdateClientRequestProcessorTests
 {
     private static (UpdateClientRequestProcessor processor, Mock<IClientInfoManager> manager,
         Mock<IRegistrationAccessTokenService> tokenService, Mock<ITokenIdGenerator> idGenerator)
-        CreateProcessor(Action<ClientInfo> onSave)
+        CreateProcessor(Action<RegisteredClient> onSave, bool registrationHeld = true)
     {
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
-            .Setup(m => m.UpdateClientAsync(It.IsAny<ClientInfo>()))
-            .Callback(onSave)
-            .Returns(Task.CompletedTask);
+            .Setup(m => m.TryUpdateClientAsync(It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
+            .Callback((RegisteredClient _, RegisteredClient updated) => onSave(updated))
+            .ReturnsAsync(registrationHeld);
 
         var tokenService = new Mock<IRegistrationAccessTokenService>(MockBehavior.Loose);
         tokenService
@@ -56,7 +56,7 @@ public class UpdateClientRequestProcessorTests
     {
         // Arrange
         ClientInfo? saved = null;
-        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -64,9 +64,8 @@ public class UpdateClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
             Scope = [Scopes.OpenId, Scopes.Profile],
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
         await processor.ProcessAsync(request);
@@ -87,7 +86,7 @@ public class UpdateClientRequestProcessorTests
     {
         // Arrange
         ClientInfo? saved = null;
-        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -99,9 +98,8 @@ public class UpdateClientRequestProcessorTests
             IntrospectionEncryptedResponseAlg = "RSA-OAEP",
             IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
         await processor.ProcessAsync(request);
@@ -124,7 +122,7 @@ public class UpdateClientRequestProcessorTests
     public async Task Update_RotatesRegistrationAccessTokenId()
     {
         // Arrange
-        ClientInfo? saved = null;
+        RegisteredClient? saved = null;
         var (processor, _, tokenService, idGenerator) = CreateProcessor(client => saved = client);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
 
@@ -132,9 +130,8 @@ public class UpdateClientRequestProcessorTests
         {
             RedirectUris = [new Uri("https://client.example.com/cb")],
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
         await processor.ProcessAsync(request);
@@ -145,6 +142,37 @@ public class UpdateClientRequestProcessorTests
             s => s.IssueTokenAsync("client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
             Times.Once);
     }
+
+    /// <summary>
+    /// An update decided on a registration the store no longer holds - rotated by another update, or removed - is
+    /// refused as the token it was decided with, and issues no token.
+    /// </summary>
+    [Fact]
+    public async Task Update_OfARegistrationNoLongerHeld_ReturnsInvalidTokenAndIssuesNone()
+    {
+        // Arrange
+        var (processor, _, tokenService, idGenerator) = CreateProcessor(_ => { }, registrationHeld: false);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
+
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        // Act
+        var result = await processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+        tokenService.Verify(
+            s => s.IssueTokenAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    private static RegisteredClient Existing() => new(new ClientInfo("client-1"), "jti-current");
 
     /// <summary>
     /// Verifies the update response carries grant_types, response_types and scope per RFC 7592 section 3:
@@ -165,9 +193,8 @@ public class UpdateClientRequestProcessorTests
             ResponseTypes = [[ResponseTypes.Code]],
             Scope = [Scopes.OpenId, Scopes.Profile],
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
         var result = await processor.ProcessAsync(request);

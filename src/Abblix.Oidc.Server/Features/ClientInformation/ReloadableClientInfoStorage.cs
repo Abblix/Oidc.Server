@@ -15,16 +15,15 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <summary>
 /// The client store a host opts into with <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>:
 /// each issuer serves the clients its <see cref="IIssuerSettings"/> configure as they are after every reload, and a
-/// client added, changed or removed later is so only at the issuer it happened at.
+/// client registered, changed or removed later is so only at the issuer it happened at.
 /// </summary>
 /// <remarks>
 /// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
-/// what registration did since. The settings own every id they configure, and the store keeps nothing under one: a
-/// client added or changed there is dropped once written, which also catches a write decided just before a reload
-/// that configures its id, a removal leaves the configured client in place, and a registration already stored under
-/// an id the settings come to configure is dropped the first time the store reads them. So a registrant choosing an
-/// id ahead of the administrator is never served in the configured client's place, and does not come back once the
-/// settings let the id go.
+/// what registration did since. The settings own every id they configure, and the store keeps no registration under
+/// one: a registration written there is dropped once written, which also catches a write decided just before a
+/// reload that configures its id, and a registration already stored under an id the settings come to configure is
+/// dropped the first time the store reads them. So a registrant choosing an id ahead of the administrator is never
+/// served in the configured client's place, and does not come back once the settings let the id go.
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
@@ -34,7 +33,7 @@ internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
-    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> registered)
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered)
     : IClientInfoProvider, IClientInfoManager
 {
     private Dictionary<string, ClientInfo> Configured
@@ -59,24 +58,29 @@ internal partial class ReloadableClientInfoStorage(
         return clients;
     }
 
-    private void Evict(KeyValuePair<string, ClientInfo> registration)
+    private void Evict(KeyValuePair<string, RegisteredClient> registration)
     {
         if (Registered.TryRemove(registration))
             LogRegistrationEvicted(registration.Key);
     }
 
     /// <summary>
-    /// Drops a client just stored under an id the settings configure, including one they came to configure after the
-    /// write was decided.
+    /// Drops a registration just stored under an id the settings configure, including one they came to configure after
+    /// the write was decided.
     /// </summary>
-    private void Recheck(ClientInfo clientInfo)
+    /// <returns>Whether the settings configure the id, and so the registration is not kept - dropped here, or already
+    /// by the eviction reading them brought about.</returns>
+    private bool Recheck(RegisteredClient client)
     {
-        if (IsConfigured(clientInfo.ClientId))
-            Evict(new KeyValuePair<string, ClientInfo>(clientInfo.ClientId, clientInfo));
+        if (!IsConfigured(client.ClientInfo.ClientId))
+            return false;
+
+        Evict(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
+        return true;
     }
 
     // Built once for each issuer, whatever its settings become
-    private ConcurrentDictionary<string, ClientInfo> Registered
+    private ConcurrentDictionary<string, RegisteredClient> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
     private bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
@@ -91,46 +95,40 @@ internal partial class ReloadableClientInfoStorage(
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        return Task.FromResult(
-            Configured.TryGetValue(clientId, out var client) ? client : Registered.GetValueOrDefault(clientId));
+        return Task.FromResult(Configured.TryGetValue(clientId, out var client)
+            ? client
+            : Registered.GetValueOrDefault(clientId)?.ClientInfo);
     }
 
     /// <summary>
-    /// Adds the provided client information to the storage asynchronously, unless a client is already known under
-    /// its id; of two added at once, the first is kept.
+    /// Adds a registered client, unless a client is already known under its id; of two added at once, the first is
+    /// kept.
     /// </summary>
-    /// <param name="clientInfo">The client information to be added.</param>
-    /// <returns>A task that completes when the client is added.</returns>
-    public Task AddClientAsync(ClientInfo clientInfo)
+    /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
+    public Task AddClientAsync(RegisteredClient client)
     {
-        if (Registered.TryAdd(clientInfo.ClientId, clientInfo))
-            Recheck(clientInfo);
+        if (Registered.TryAdd(client.ClientInfo.ClientId, client))
+            Recheck(client);
 
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Updates a registered client's information in the storage asynchronously; a client the settings configure
-    /// stays as they configure it.
-    /// </summary>
-    /// <param name="clientInfo">The updated client information.</param>
-    /// <returns>A task that completes when the client is updated.</returns>
-    public Task UpdateClientAsync(ClientInfo clientInfo)
+    /// <inheritdoc />
+    public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
     {
-        Registered[clientInfo.ClientId] = clientInfo;
-        Recheck(clientInfo);
-        return Task.CompletedTask;
+        // The settings are read last, so the answer is theirs as they stand once the registration was read: a reload
+        // configuring the id before that drops the registration, or hides it here
+        var client = Registered.GetValueOrDefault(clientId);
+        return Task.FromResult(client is null || IsConfigured(clientId) ? null : client);
     }
 
-    /// <summary>
-    /// Removes the registered client identified by the given client ID from the storage asynchronously; a client the
-    /// settings configure stays.
-    /// </summary>
-    /// <param name="clientId">The unique identifier of the client to be removed.</param>
-    /// <returns>A task that completes when the client is removed.</returns>
-    public Task RemoveClientAsync(string clientId)
+    /// <inheritdoc />
+    public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
     {
-        Registered.TryRemove(clientId, out _);
-        return Task.CompletedTask;
+        return Task.FromResult(Registered.TryReplace(current, updated) && !Recheck(updated));
     }
+
+    /// <inheritdoc />
+    public Task<bool> TryRemoveClientAsync(RegisteredClient current)
+        => Task.FromResult(Registered.TryRemove(current));
 }

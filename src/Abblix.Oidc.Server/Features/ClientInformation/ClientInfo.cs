@@ -623,15 +623,4 @@ public record ClientInfo(string ClientId)
     /// Implements pseudo-sliding expiration: TTL is reset on each access.
     /// </summary>
     public TimeSpan? ExpiresAfter { get; set; }
-
-    /// <summary>
-    /// The identifier (<c>jti</c>) of the registration access token that manages this client through the client
-    /// configuration endpoint (RFC 7592), recorded by dynamic registration when it issues or rotates the token.
-    /// A client without one, as any client the settings configure, is not managed through that endpoint.
-    /// </summary>
-    /// <remarks>
-    /// A store of the host's own keeps it with the rest of the client; a store that drops it leaves the registrant
-    /// unable to manage the client once the store reads the client back.
-    /// </remarks>
-    public string? RegistrationAccessTokenId { get; set; }
 }

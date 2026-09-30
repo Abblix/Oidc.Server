@@ -48,14 +48,15 @@ public class RegisterClientRequestProcessor(
 
         var issuedAt = clock.GetUtcNow();
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
-        // The client's record carries the jti of its registration access token, so the management
-        // endpoint accepts that token for this registration alone (RFC 7592 section 5).
+        var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
+
+        // The registration holds the jti of its registration access token, so the management endpoint
+        // accepts that token for this registration alone (RFC 7592 section 5).
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
-        var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier, registrationAccessTokenId);
 
         // The response echoes the registered metadata, so what the store now holds is the answer -
         // RFC 7591 section 3.2.1 asks for the server-assigned defaults to be visible to the client.
-        await clientInfoManager.AddClientAsync(clientInfo);
+        await clientInfoManager.AddClientAsync(new RegisteredClient(clientInfo, registrationAccessTokenId));
 
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             credentials.ClientId,
@@ -125,12 +126,10 @@ public class RegisterClientRequestProcessor(
     private static ClientInfo ToClientInfo(
         ClientRegistrationRequest model,
         ClientCredentials credentials,
-        string? sectorIdentifier,
-        string registrationAccessTokenId)
+        string? sectorIdentifier)
     {
         var clientInfo = new ClientInfo(credentials.ClientId)
         {
-            RegistrationAccessTokenId = registrationAccessTokenId,
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
             AllowedGrantTypes = model.GrantTypes,

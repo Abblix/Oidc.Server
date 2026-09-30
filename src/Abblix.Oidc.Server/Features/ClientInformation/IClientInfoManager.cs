@@ -9,44 +9,45 @@
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// Defines operations for managing the lifecycle and information of OAuth 2.0 clients in a storage system.
+/// Keeps the clients dynamic client registration adds (RFC 7591), each with the identifier of the registration
+/// access token that manages it through the client configuration endpoint (RFC 7592).
 /// </summary>
 /// <remarks>
-/// Implementations of this interface are responsible for adding, updating, and removing client information,
-/// supporting dynamic client registration and management in OAuth 2.0 and OpenID Connect environments.
+/// The token identifier lives and dies with its registration, so a token outliving its client matches nothing, and a
+/// client the settings configure, which no registration made, has none. A change or removal names the registration
+/// it was decided on, and takes effect only while the store still holds that registration's token identifier: one
+/// decided on a registration since rotated or removed changes nothing.
 /// </remarks>
 public interface IClientInfoManager
 {
     /// <summary>
-    /// Asynchronously adds a new client and its corresponding information to the storage system.
+    /// Adds a registered client, unless a client is already known under its id.
     /// </summary>
-    /// <param name="clientInfo">The detailed information about the client to be added.</param>
-    /// <returns>A task representing the asynchronous operation, indicating the completion of the addition process.</returns>
-    /// <remarks>
-    /// This operation typically involves persisting the <paramref name="clientInfo"/> to a database or another form of storage,
-    /// making the client available for OAuth 2.0 and OpenID Connect authentication and authorization processes.
-    /// </remarks>
-    Task AddClientAsync(ClientInfo clientInfo);
+    /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
+    Task AddClientAsync(RegisteredClient client);
 
     /// <summary>
-    /// Asynchronously updates an existing client's information in the storage system.
+    /// Finds the client registration added under <paramref name="clientId"/>.
     /// </summary>
-    /// <param name="clientInfo">The updated client information.</param>
-    /// <returns>A task representing the asynchronous operation, indicating the completion of the update process.</returns>
-    /// <remarks>
-    /// This operation updates the client metadata per RFC 7592 Section 2 (Client Update Request).
-    /// The client must already exist in the storage system.
-    /// </remarks>
-    Task UpdateClientAsync(ClientInfo clientInfo);
+    /// <param name="clientId">The client id to look up.</param>
+    /// <returns>The registration, or <c>null</c> when none is held under the id, as for a client the settings
+    /// configure.</returns>
+    Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId);
 
     /// <summary>
-    /// Asynchronously removes an existing client and its information from the storage system.
+    /// Replaces a registration, per RFC 7592 section 2.2, provided the store still holds the token identifier of
+    /// <paramref name="current"/>.
     /// </summary>
-    /// <param name="clientId">The unique identifier of the client to be removed.</param>
-    /// <returns>A task representing the asynchronous operation, indicating the completion of the removal process.</returns>
-    /// <remarks>
-    /// The removal process is critical for maintaining the integrity and security of the client registration system,
-    /// allowing administrators to effectively manage the lifecycle of client applications.
-    /// </remarks>
-    Task RemoveClientAsync(string clientId);
+    /// <param name="current">The registration the change was decided on.</param>
+    /// <param name="updated">The registration replacing it, with the identifier of the rotated token.</param>
+    /// <returns>Whether the registration was replaced.</returns>
+    Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated);
+
+    /// <summary>
+    /// Removes a registration, per RFC 7592 section 2.3, provided the store still holds the token identifier of
+    /// <paramref name="current"/>.
+    /// </summary>
+    /// <param name="current">The registration the removal was decided on.</param>
+    /// <returns>Whether the registration was removed.</returns>
+    Task<bool> TryRemoveClientAsync(RegisteredClient current);
 }

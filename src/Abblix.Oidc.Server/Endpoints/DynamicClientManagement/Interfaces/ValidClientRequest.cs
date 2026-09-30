@@ -13,10 +13,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// A client configuration endpoint request (RFC 7592) that has been authenticated via the
-/// registration access token, paired with the resolved <see cref="ClientInfo"/> from storage.
+/// registration access token, paired with the registration the token manages.
 /// </summary>
 /// <param name="Model">The original request.</param>
-/// <param name="ClientInfo">The currently stored configuration of the addressed client.</param>
-/// <param name="RegistrationAccessTokenId">The jti of the registration access token the request was authenticated
-/// with, which a token issued in reply carries unless the reply rotates it.</param>
-public record ValidClientRequest(ClientRequest Model, ClientInfo ClientInfo, string RegistrationAccessTokenId);
+/// <param name="Client">The registration of the addressed client, with the jti of the token the request was
+/// authenticated with.</param>
+public record ValidClientRequest(ClientRequest Model, RegisteredClient Client);

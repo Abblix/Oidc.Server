@@ -29,14 +29,14 @@ public class ReadClientRequestProcessor(
     /// <inheritdoc />
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
-        var client = request.ClientInfo;
+        var client = request.Client.ClientInfo;
 
         var issuedAt = clock.GetUtcNow();
         // Reuse the jti the request was authenticated with, so the token the client just presented
         // stays valid; only update rotates it (read is idempotent). Read from the store again instead,
         // a request racing a rotation would hand the holder of the old token a current one.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
-            client.ClientId, issuedAt, null, request.RegistrationAccessTokenId);
+            client.ClientId, issuedAt, null, request.Client.RegistrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse
         {

@@ -41,17 +41,11 @@ public class UpdateClientRequestProcessor(
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidUpdateClientRequest request)
     {
         var model = request.RegistrationRequest;
-        var existingClient = request.ClientInfo;
-
-        // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
-        // on the client invalidates every token issued before this update, limiting the exposure
-        // window of a leaked token to the period between rotations.
-        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+        var existingClient = request.Client.ClientInfo;
 
         // Create updated client info, preserving immutable fields
         var updatedClient = new ClientInfo(existingClient.ClientId)
         {
-            RegistrationAccessTokenId = registrationAccessTokenId,
             // Preserve client secrets (cannot be updated per RFC 7592)
             ClientSecrets = existingClient.ClientSecrets,
 
@@ -174,7 +168,17 @@ public class UpdateClientRequestProcessor(
         // The response echoes the post-update registered state, so what the store now holds is the
         // answer - RFC 7592 section 3 asks the client to be able to verify that the full replacement
         // took effect.
-        await clientInfoManager.UpdateClientAsync(updatedClient);
+        // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
+        // invalidates every token issued before this update, limiting the exposure window of a
+        // leaked token to the period between rotations. The replacement takes effect only on the
+        // registration this request was authenticated against: one rotated or removed meanwhile is
+        // left as it is, and the token that decided the change no longer manages anything.
+        var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
+        if (!await clientInfoManager.TryUpdateClientAsync(
+                request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
+        {
+            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
+        }
 
         // Generate response with new registration_access_token, embedding the freshly rotated jti.
         var issuedAt = clock.GetUtcNow();

@@ -47,7 +47,7 @@ public class ReadClientRequestProcessorTests
     public async Task Read_IssuesTheTokenUnderTheJtiTheRequestWasAuthenticatedWith()
     {
         var processor = CreateProcessor();
-        var request = new ValidClientRequest(new ClientRequest(), new ClientInfo("client-1"), TokenId);
+        var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(new ClientInfo("client-1"), TokenId));
 
         await processor.ProcessAsync(request);
 
@@ -68,7 +68,7 @@ public class ReadClientRequestProcessorTests
             TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
             TokenExchangeAllowedAudiences = ["https://api.example.com"],
         };
-        var request = new ValidClientRequest(new ClientRequest(), client, TokenId);
+        var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(client, TokenId));
 
         // Act
         var result = await processor.ProcessAsync(request);

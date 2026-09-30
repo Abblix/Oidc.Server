@@ -48,7 +48,7 @@ public class UpdateClientRequestValidator(
         var clientInfo = validClientRequest.GetSuccess();
 
         // RFC 7592 Section 2.2: client_id in request body must match authenticated client
-        if (request.RegistrationRequest.ClientId != clientInfo.ClientInfo.ClientId)
+        if (request.RegistrationRequest.ClientId != clientInfo.Client.ClientInfo.ClientId)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
@@ -61,7 +61,7 @@ public class UpdateClientRequestValidator(
         return registrationValidation.MapSuccess(
             validRegistration => new ValidUpdateClientRequest(
                 request,
-                clientInfo.ClientInfo,
+                clientInfo.Client,
                 validRegistration.Model));
     }
 }

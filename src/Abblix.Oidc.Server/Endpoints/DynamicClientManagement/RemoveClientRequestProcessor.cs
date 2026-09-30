@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
@@ -29,8 +30,12 @@ public class RemoveClientRequestProcessor(
     /// <param name="request">A request whose authentication and target client have been validated.</param>
     public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
-        var clientId = request.ClientInfo.ClientId;
-        await clientInfoManager.RemoveClientAsync(clientId);
+        var clientId = request.Client.ClientInfo.ClientId;
+
+        // Only the registration this request was authenticated against: one rotated meanwhile is left
+        // to whoever holds the rotated token.
+        if (!await clientInfoManager.TryRemoveClientAsync(request.Client))
+            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
         return new RemoveClientSuccessfulResponse(
             ClientId: clientId,

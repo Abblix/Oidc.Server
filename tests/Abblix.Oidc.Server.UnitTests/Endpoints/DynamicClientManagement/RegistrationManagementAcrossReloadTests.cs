@@ -11,6 +11,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
@@ -19,6 +20,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -26,9 +28,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// A registration access token manages the registration it was issued for and nothing else: once the settings
-/// configure the id it was issued under, it manages nothing, however the registrant replays it, and whichever store
-/// serves the clients.
+/// A registration access token manages the registration holding its jti and nothing else: a client the settings
+/// configure is held by no registration, so no token manages it, and a registration the reloading store drops when
+/// the settings come to configure its id takes its token's reach with it.
 /// </summary>
 public class RegistrationManagementAcrossReloadTests
 {
@@ -46,17 +48,19 @@ public class RegistrationManagementAcrossReloadTests
         NullLogger<ReloadableClientInfoStorage>.Instance,
         _settings,
         new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
+        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
 
-    private ClientInfoStorage DefaultStore()
-        => new(_settings, new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
+    private ClientInfoStorage DefaultStore() => new(
+        _settings,
+        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
+        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
 
     private static Task RegisterAsync(IClientInfoManager clients, string tokenId)
-        => clients.AddClientAsync(new ClientInfo(ClientId) { ClientName = "registered", RegistrationAccessTokenId = tokenId });
+        => clients.AddClientAsync(new RegisteredClient(new ClientInfo(ClientId) { ClientName = "registered" }, tokenId));
 
-    private async Task<ValidClientRequest?> ManagesAsync(IClientInfoProvider clients, string tokenId)
+    private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {
-        var result = await new ClientRequestValidator(clients, new JtiMatches(), _settings).ValidateAsync(
+        var result = await new ClientRequestValidator(clients, new TokenIsItsJti(), _settings).ValidateAsync(
             new ClientRequest
             {
                 ClientId = ClientId,
@@ -112,14 +116,13 @@ public class RegistrationManagementAcrossReloadTests
 
         _options.Reload(Configuring());
 
-        Assert.Equal("registered", (await ManagesAsync(clients, "first"))?.ClientInfo.ClientName);
+        Assert.Equal("registered", (await ManagesAsync(clients, "first"))?.Client.ClientInfo.ClientName);
     }
 
     /// <summary>
     /// The shape a restart leaves: the registration is gone with the memory that held it, the settings now configure
-    /// its id, and the registrant still holds its token. The configured client carries no token id, so the token
-    /// manages nothing - under the default store, and under the reloading one, which the settings reach on reload
-    /// as well, whether the client was served before the reload or not.
+    /// its id, and the registrant still holds its token. No registration is held under the id, so the token manages
+    /// nothing, before and after the settings change again.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -127,27 +130,11 @@ public class RegistrationManagementAcrossReloadTests
     public async Task ATokenOutlivingItsRegistration_ManagesNoConfiguredClient(bool defaultStore)
     {
         _options.Reload(Configuring());
-        IClientInfoProvider clients = defaultStore ? DefaultStore() : ReloadableStore();
+        IClientInfoManager clients = defaultStore ? DefaultStore() : ReloadableStore();
 
         Assert.Null(await ManagesAsync(clients, "left over"));
 
         _options.Reload(new OidcOptions { Clients = [new ClientInfo(ClientId) { ClientName = "changed" }] });
-        Assert.Null(await ManagesAsync(clients, "left over"));
-    }
-
-    /// <summary>
-    /// A store of the host's own, or a built-in one behind a host's decorator, reaches the same answer: the binding
-    /// is on the client's record, so the endpoint needs to know nothing about the store to refuse.
-    /// </summary>
-    [Fact]
-    public async Task BehindAHostsDecorator_AConfiguredClient_IsManagedByNoToken()
-    {
-        _options.Reload(Configuring());
-        var clients = new Decorated(DefaultStore());
-
-        Assert.Null(await ManagesAsync(clients, "left over"));
-
-        _options.Reload(new OidcOptions());
         Assert.Null(await ManagesAsync(clients, "left over"));
     }
 
@@ -160,19 +147,11 @@ public class RegistrationManagementAcrossReloadTests
     }
 
     /// <summary>
-    /// A host's decorator over a client store, which tells nothing of the store it wraps.
+    /// A token is the jti it was issued under.
     /// </summary>
-    private sealed class Decorated(IClientInfoProvider inner) : IClientInfoProvider
+    private sealed class TokenIsItsJti : IRegistrationAccessTokenValidator
     {
-        public Task<ClientInfo?> TryFindClientAsync(string clientId) => inner.TryFindClientAsync(clientId);
-    }
-
-    /// <summary>
-    /// A token is the id it was issued under; it is valid while that is the id the client's record carries.
-    /// </summary>
-    private sealed class JtiMatches : IRegistrationAccessTokenValidator
-    {
-        public Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string expectedTokenId)
-            => Task.FromResult(header?.Parameter == expectedTokenId ? null : "The access token unauthorized");
+        public Task<Result<string, OidcError>> ValidateAsync(AuthenticationHeaderValue? header, string clientId)
+            => Task.FromResult<Result<string, OidcError>>(header.NotNull(nameof(header)).Parameter.NotNull(nameof(header)));
     }
 }

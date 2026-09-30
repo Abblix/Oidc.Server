@@ -19,18 +19,23 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <remarks>
 /// The clients are read from the settings once for each issuer, so a reload of the settings does not reach them;
 /// a host that wants it registers <see cref="ReloadableClientInfoStorage"/> through
-/// <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>.
+/// <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>. Registrations are kept apart from them,
+/// each with the identifier of the token that manages it, and never under an id the settings configured.
 /// </remarks>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
-/// <param name="clients">The clients of each issuer.</param>
+/// <param name="configured">The clients each issuer's settings configured when it first read them.</param>
+/// <param name="registered">The clients registration added at each issuer.</param>
 internal class ClientInfoStorage(
     IIssuerSettings settings,
-    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> clients) : IClientInfoProvider, IClientInfoManager
+    IIssuerLocal<Dictionary<string, ClientInfo>> configured,
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : IClientInfoProvider, IClientInfoManager
 {
     // Built once for each issuer, whatever its settings become
-    private ConcurrentDictionary<string, ClientInfo> Clients => clients.GetOrCreate(null, () => new(
-        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-        StringComparer.OrdinalIgnoreCase));
+    private Dictionary<string, ClientInfo> Configured => configured.GetOrCreate(null, () =>
+        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase));
+
+    private ConcurrentDictionary<string, RegisteredClient> Registered
+        => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -42,39 +47,29 @@ internal class ClientInfoStorage(
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        return Task.FromResult(Clients.GetValueOrDefault(clientId));
+        return Task.FromResult(Configured.TryGetValue(clientId, out var client)
+            ? client
+            : Registered.GetValueOrDefault(clientId)?.ClientInfo);
     }
 
-    /// <summary>
-    /// Adds the provided client information to the storage asynchronously.
-    /// </summary>
-    /// <param name="clientInfo">The client information to be added.</param>
-    /// <returns>A task that completes when the client is added.</returns>
-    public Task AddClientAsync(ClientInfo clientInfo)
+    /// <inheritdoc />
+    public Task AddClientAsync(RegisteredClient client)
     {
-        Clients.TryAdd(clientInfo.ClientId, clientInfo);
+        if (!Configured.ContainsKey(client.ClientInfo.ClientId))
+            Registered.TryAdd(client.ClientInfo.ClientId, client);
+
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Updates an existing client's information in the storage asynchronously.
-    /// </summary>
-    /// <param name="clientInfo">The updated client information.</param>
-    /// <returns>A task that completes when the client is updated.</returns>
-    public Task UpdateClientAsync(ClientInfo clientInfo)
-    {
-        Clients[clientInfo.ClientId] = clientInfo;
-        return Task.CompletedTask;
-    }
+    /// <inheritdoc />
+    public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
+        => Task.FromResult(Registered.GetValueOrDefault(clientId));
 
-    /// <summary>
-    /// Removes the client identified by the given client ID from the storage asynchronously.
-    /// </summary>
-    /// <param name="clientId">The unique identifier of the client to be removed.</param>
-    /// <returns>A task that completes when the client is removed.</returns>
-    public Task RemoveClientAsync(string clientId)
-    {
-        Clients.TryRemove(clientId, out _);
-        return Task.CompletedTask;
-    }
+    /// <inheritdoc />
+    public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
+        => Task.FromResult(Registered.TryReplace(current, updated));
+
+    /// <inheritdoc />
+    public Task<bool> TryRemoveClientAsync(RegisteredClient current)
+        => Task.FromResult(Registered.TryRemove(current));
 }
