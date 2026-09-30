@@ -50,7 +50,7 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         $"{typeof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions).FullName}.{nameof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddIssuer)}",
 
         // The issuer's session cookie name, derived from the configured one
-        typeof(TenantIssuerSettings).FullName!,
+        $"{typeof(TenantIssuerSettings).FullName}.get_{nameof(TenantIssuerSettings.CheckSessionCookieName)}",
         typeof(CheckSessionCookieOptions).FullName!,
 
         // Startup judging the configured values
