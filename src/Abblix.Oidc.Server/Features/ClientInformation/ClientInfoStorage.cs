@@ -42,7 +42,11 @@ internal class ClientInfoStorage(
     private ConcurrentDictionary<string, ClientInfo> Clients => Issuer.Clients;
 
     /// <inheritdoc />
-    public bool IsConfigured(string clientId) => Issuer.ConfiguredIds.Contains(clientId);
+    public ClientInfo? TryFindRegisteredClient(string clientId)
+    {
+        var issuer = Issuer;
+        return issuer.ConfiguredIds.Contains(clientId) ? null : issuer.Clients.GetValueOrDefault(clientId);
+    }
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

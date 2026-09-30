@@ -15,8 +15,11 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 internal interface IConfiguredClientLookup
 {
     /// <summary>
-    /// Whether the store serves the client under <paramref name="clientId"/> as one the settings configure.
+    /// Finds the client registration added under <paramref name="clientId"/>, answered from one look at the
+    /// settings, so that no reload can fall between telling whose the id is and reading the client.
     /// </summary>
     /// <param name="clientId">The client id to look up.</param>
-    bool IsConfigured(string clientId);
+    /// <returns>The registered client, or <c>null</c> when there is none or the store serves the id as one the
+    /// settings configure.</returns>
+    ClientInfo? TryFindRegisteredClient(string clientId);
 }

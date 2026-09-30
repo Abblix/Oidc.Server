@@ -54,11 +54,10 @@ public class ClientRequestValidator(
         if (headerErrorDescription != null)
             return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
-
         // A registration access token manages a registration, and a client the store serves as one the settings
         // configure is none: a binding that outlived its registration across a restart reaches nothing.
-        if (clientInfo == null || IsConfigured(clientId))
+        var clientInfo = await TryFindRegisteredClientAsync(clientId).WithLicenseCheck(issuerSettings);
+        if (clientInfo == null)
         {
             // RFC 7592 section 2.3: when the addressed client does not exist, the server responds
             // 401 Unauthorized and the registration access token MUST be immediately revoked.
@@ -73,13 +72,21 @@ public class ClientRequestValidator(
     }
 
     /// <summary>
-    /// Whether the client under <paramref name="clientId"/> is one the settings configure. A built-in store says so
-    /// itself, since the default one keeps serving the clients it read at startup after the settings change; a store
-    /// that cannot say - a host's own, or a built-in one behind a host's decorator - is judged by the settings as
-    /// they stand, which errs towards refusing a registrant rather than handing it a configured client.
+    /// Finds the client registration under <paramref name="clientId"/>, if the id is not one the settings configure.
+    /// A built-in store tells the two apart itself, since the default one keeps serving the clients it read at
+    /// startup after the settings change; a store that cannot - a host's own, or a built-in one behind a host's
+    /// decorator - is judged by the settings as they stand, which errs towards refusing a registrant rather than
+    /// handing it a configured client.
     /// </summary>
-    private bool IsConfigured(string clientId) => clientInfoProvider is IConfiguredClientLookup lookup
-        ? lookup.IsConfigured(clientId)
-        : issuerSettings.Clients.Any(client =>
-            string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
+    private async Task<ClientInfo?> TryFindRegisteredClientAsync(string clientId)
+    {
+        if (clientInfoProvider is IConfiguredClientLookup lookup)
+            return lookup.TryFindRegisteredClient(clientId);
+
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        return issuerSettings.Clients.Any(client =>
+            string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase))
+            ? null
+            : clientInfo;
+    }
 }

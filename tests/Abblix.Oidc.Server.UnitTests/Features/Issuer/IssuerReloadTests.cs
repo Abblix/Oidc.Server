@@ -163,7 +163,7 @@ public class IssuerReloadTests
             Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
         });
         var clients = ClientsOf(options);
-        Assert.True(clients.IsConfigured("partner-app"));
+        Assert.Null(clients.TryFindRegisteredClient("partner-app"));
 
         var written = new ClientInfo("partner-app") { ClientName = "registered" };
         if (added)
@@ -193,7 +193,7 @@ public class IssuerReloadTests
         await clients.RemoveClientAsync("app");
 
         Assert.Equal("configured", (await clients.TryFindClientAsync("app"))?.ClientName);
-        Assert.True(clients.IsConfigured("app"));
+        Assert.Null(clients.TryFindRegisteredClient("app"));
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public class IssuerReloadTests
         await clients.AddClientAsync(new ClientInfo("app") { ClientName = "registered" });
 
         Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
-        Assert.False(clients.IsConfigured("app"));
+        Assert.Equal("registered", clients.TryFindRegisteredClient("app")?.ClientName);
     }
 
     [Fact]
@@ -264,9 +264,8 @@ public class IssuerReloadTests
         options.Reload(new OidcOptions { Clients = [new ClientInfo("added")] });
 
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
-        Assert.True(clients.IsConfigured("configured"));
+        Assert.Null(clients.TryFindRegisteredClient("configured"));
         Assert.Null(await clients.TryFindClientAsync("added"));
-        Assert.False(clients.IsConfigured("added"));
     }
 
     /// <summary>
@@ -281,8 +280,8 @@ public class IssuerReloadTests
 
         await clients.AddClientAsync(new ClientInfo("registered"));
 
-        Assert.True(clients.IsConfigured("APP"));
-        Assert.False(clients.IsConfigured("registered"));
+        Assert.Null(clients.TryFindRegisteredClient("APP"));
+        Assert.NotNull(clients.TryFindRegisteredClient("registered"));
     }
 
     /// <summary>

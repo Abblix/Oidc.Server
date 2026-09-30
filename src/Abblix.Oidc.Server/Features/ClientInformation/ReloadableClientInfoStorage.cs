@@ -79,8 +79,11 @@ internal partial class ReloadableClientInfoStorage(
     private ConcurrentDictionary<string, ClientInfo> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
+    private bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
+
     /// <inheritdoc />
-    public bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
+    public ClientInfo? TryFindRegisteredClient(string clientId)
+        => IsConfigured(clientId) ? null : Registered.GetValueOrDefault(clientId);
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
