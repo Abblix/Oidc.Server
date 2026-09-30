@@ -44,9 +44,9 @@ public class ClientRequestValidator(
             return error;
 
         // RFC 7592 section 5: the token manages the registration holding its jti, so a rotated token invalidates
-        // its predecessors. A client that no longer exists, and one the settings configure, which no registration
-        // made, hold none: every token for them is refused, which is also the revocation RFC 7592 section 2.3 asks
-        // for once the client is gone. The error is invalid_token, not invalid_client: this endpoint authenticates
+        // its predecessors. A client that no longer exists, and one the store serves from the settings, which no
+        // registration made, hold none: every token for them is refused, which is also the revocation RFC 7592
+        // section 2.3 asks for once the client is gone. The error is invalid_token, not invalid_client: this endpoint authenticates
         // with a Bearer token (RFC 6750), and invalid_client would be formatted as a Basic challenge.
         var client = await clientInfoManager.TryFindRegisteredClientAsync(clientId);
         if (client == null || client.RegistrationAccessTokenId != tokenValidation.GetSuccess())

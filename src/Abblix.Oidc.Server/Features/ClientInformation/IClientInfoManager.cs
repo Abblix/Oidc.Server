@@ -13,10 +13,17 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// access token that manages it through the client configuration endpoint (RFC 7592).
 /// </summary>
 /// <remarks>
-/// The token identifier lives and dies with its registration, so a token outliving its client matches nothing, and a
-/// client the settings configure, which no registration made, has none. A change or removal names the registration
-/// it was decided on, and takes effect only while the store still holds that registration's token identifier: one
-/// decided on a registration since rotated or removed changes nothing.
+/// The client configuration endpoint relies on an implementation for what a registration access token reaches, so
+/// one of the host's own must keep these guarantees:
+/// <list type="bullet">
+/// <item>The token identifier lives and dies with its registration, so a token outliving its client matches
+/// nothing.</item>
+/// <item>No registration is held, and none found, under an id the store serves as a client the settings configure,
+/// so no token manages such a client.</item>
+/// <item>An addition, change or removal names the registration it is about, and takes effect only while the store
+/// still allows it: an addition only where no client is known under the id, a change or removal only while the store
+/// holds the token identifier of the registration it was decided on. It answers whether it took effect.</item>
+/// </list>
 /// </remarks>
 public interface IClientInfoManager
 {
@@ -24,14 +31,15 @@ public interface IClientInfoManager
     /// Adds a registered client, unless a client is already known under its id.
     /// </summary>
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
-    Task AddClientAsync(RegisteredClient client);
+    /// <returns>Whether the client was added.</returns>
+    Task<bool> TryAddClientAsync(RegisteredClient client);
 
     /// <summary>
     /// Finds the client registration added under <paramref name="clientId"/>.
     /// </summary>
     /// <param name="clientId">The client id to look up.</param>
-    /// <returns>The registration, or <c>null</c> when none is held under the id, as for a client the settings
-    /// configure.</returns>
+    /// <returns>The registration, or <c>null</c> when none is held under the id, as for a client the store serves
+    /// from the settings.</returns>
     Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId);
 
     /// <summary>

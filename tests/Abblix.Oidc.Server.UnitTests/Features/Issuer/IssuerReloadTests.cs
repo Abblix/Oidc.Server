@@ -69,7 +69,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
         var clients = ClientsOf(options);
-        await clients.AddClientAsync(Registration("registered"));
+        await clients.TryAddClientAsync(Registration("registered"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
 
@@ -118,7 +118,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
-        await clients.AddClientAsync(Registration("partner-app", "registered"));
+        await clients.TryAddClientAsync(Registration("partner-app", "registered"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
 
@@ -134,7 +134,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
-        await clients.AddClientAsync(Registration("partner-app", "registered"));
+        await clients.TryAddClientAsync(Registration("partner-app", "registered"));
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
@@ -149,7 +149,7 @@ public class IssuerReloadTests
         var logger = new CapturingLogger<ReloadableClientInfoStorage>();
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options, logger);
-        await clients.AddClientAsync(Registration("partner-app"));
+        await clients.TryAddClientAsync(Registration("partner-app"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app")] });
         await clients.TryFindClientAsync("partner-app");
@@ -174,7 +174,7 @@ public class IssuerReloadTests
         var clients = ClientsOf(options);
         Assert.NotNull(await clients.TryFindClientAsync("partner-app"));
 
-        await clients.AddClientAsync(Registration("partner-app", "registered"));
+        await clients.TryAddClientAsync(Registration("partner-app", "registered"));
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
         options.Reload(new OidcOptions());
@@ -191,7 +191,7 @@ public class IssuerReloadTests
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
         var registration = Registration("partner-app", "registered");
-        await clients.AddClientAsync(registration);
+        await clients.TryAddClientAsync(registration);
         options.Reload(new OidcOptions
         {
             Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
@@ -218,7 +218,7 @@ public class IssuerReloadTests
         });
         var clients = StoreOf(reloadable, options);
 
-        await clients.AddClientAsync(Registration("app", "added"));
+        Assert.False(await clients.TryAddClientAsync(Registration("app", "added")));
 
         Assert.Null(await clients.TryFindRegisteredClientAsync("app"));
         Assert.False(await clients.TryUpdateClientAsync(Registration("app"), Registration("app", "updated", "jti-2")));
@@ -234,7 +234,7 @@ public class IssuerReloadTests
         Assert.NotNull(await clients.TryFindClientAsync("app"));
         options.Reload(new OidcOptions());
 
-        await clients.AddClientAsync(Registration("app", "registered"));
+        await clients.TryAddClientAsync(Registration("app", "registered"));
 
         Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
     }
@@ -245,7 +245,7 @@ public class IssuerReloadTests
     public async Task ARemovedRegistration_IsNoLongerKnown(bool reloadable)
     {
         var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
-        await clients.AddClientAsync(Registration("app"));
+        await clients.TryAddClientAsync(Registration("app"));
 
         Assert.True(await clients.TryRemoveClientAsync(Registration("app")));
 
@@ -263,7 +263,7 @@ public class IssuerReloadTests
     {
         var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
         var first = Registration("app", "first");
-        await clients.AddClientAsync(first);
+        await clients.TryAddClientAsync(first);
         var second = Registration("app", "second", "jti-2");
 
         Assert.True(await clients.TryUpdateClientAsync(first, second));
@@ -285,22 +285,24 @@ public class IssuerReloadTests
     {
         var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
         var registration = Registration("app");
-        await clients.AddClientAsync(registration);
+        await clients.TryAddClientAsync(registration);
         Assert.True(await clients.TryRemoveClientAsync(registration));
 
         Assert.False(await clients.TryUpdateClientAsync(registration, Registration("app", "updated", "jti-2")));
         Assert.Null(await clients.TryFindRegisteredClientAsync("app"));
     }
 
-    [Fact]
-    public async Task TwoRegistrationsUnderOneId_KeepTheFirst()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TwoRegistrationsUnderOneId_KeepTheFirst(bool reloadable)
     {
-        var clients = ClientsOf(new ReloadableOptions(new OidcOptions()));
+        var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
 
-        await clients.AddClientAsync(Registration("app", "first"));
-        await clients.AddClientAsync(Registration("app", "second"));
+        Assert.True(await clients.TryAddClientAsync(Registration("app", "first")));
+        Assert.False(await clients.TryAddClientAsync(Registration("app", "second")));
 
-        Assert.Equal("first", (await clients.TryFindClientAsync("app"))?.ClientName);
+        Assert.Equal("first", (await clients.TryFindRegisteredClientAsync("app"))?.ClientInfo.ClientName);
     }
 
     /// <summary>
@@ -312,7 +314,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
-        await clients.AddClientAsync(Registration("app"));
+        await clients.TryAddClientAsync(Registration("app"));
         await clients.TryRemoveClientAsync(Registration("app"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("app")] });

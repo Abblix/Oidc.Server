@@ -105,13 +105,9 @@ internal partial class ReloadableClientInfoStorage(
     /// kept.
     /// </summary>
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
-    public Task AddClientAsync(RegisteredClient client)
-    {
-        if (Registered.TryAdd(client.ClientInfo.ClientId, client))
-            Recheck(client);
-
-        return Task.CompletedTask;
-    }
+    /// <returns>Whether the client was added and kept.</returns>
+    public Task<bool> TryAddClientAsync(RegisteredClient client)
+        => Task.FromResult(Registered.TryAdd(client.ClientInfo.ClientId, client) && !Recheck(client));
 
     /// <inheritdoc />
     public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)

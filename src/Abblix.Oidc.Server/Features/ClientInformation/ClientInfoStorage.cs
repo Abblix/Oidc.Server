@@ -53,13 +53,10 @@ internal class ClientInfoStorage(
     }
 
     /// <inheritdoc />
-    public Task AddClientAsync(RegisteredClient client)
-    {
-        if (!Configured.ContainsKey(client.ClientInfo.ClientId))
-            Registered.TryAdd(client.ClientInfo.ClientId, client);
-
-        return Task.CompletedTask;
-    }
+    public Task<bool> TryAddClientAsync(RegisteredClient client)
+        => Task.FromResult(
+            !Configured.ContainsKey(client.ClientInfo.ClientId) &&
+            Registered.TryAdd(client.ClientInfo.ClientId, client));
 
     /// <inheritdoc />
     public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)

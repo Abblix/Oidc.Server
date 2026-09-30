@@ -28,8 +28,8 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// A registration access token manages the registration holding its jti and nothing else: a client the settings
-/// configure is held by no registration, so no token manages it, and a registration the reloading store drops when
+/// A registration access token manages the registration holding its jti and nothing else: a client the store
+/// serves from the settings is held by no registration, so no token manages it, and a registration the reloading store drops when
 /// the settings come to configure its id takes its token's reach with it.
 /// </summary>
 public class RegistrationManagementAcrossReloadTests
@@ -56,7 +56,7 @@ public class RegistrationManagementAcrossReloadTests
         new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
 
     private static Task RegisterAsync(IClientInfoManager clients, string tokenId)
-        => clients.AddClientAsync(new RegisteredClient(new ClientInfo(ClientId) { ClientName = "registered" }, tokenId));
+        => clients.TryAddClientAsync(new RegisteredClient(new ClientInfo(ClientId) { ClientName = "registered" }, tokenId));
 
     private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {

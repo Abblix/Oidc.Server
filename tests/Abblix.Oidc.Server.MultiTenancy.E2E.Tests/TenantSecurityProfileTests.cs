@@ -84,7 +84,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
 
         using (TenantScope.Enter(GlobexTenant))
             await _app.Services.GetRequiredService<IClientInfoManager>()
-                .AddClientAsync(new RegisteredClient(Client(), "registration-access-token-id"));
+                .TryAddClientAsync(new RegisteredClient(Client(), "registration-access-token-id"));
 
         _http = _app.GetTestClient();
         _http.BaseAddress = new Uri(Host);

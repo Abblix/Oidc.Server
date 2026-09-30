@@ -55,8 +55,14 @@ public class RegisterClientRequestProcessor(
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
 
         // The response echoes the registered metadata, so what the store now holds is the answer -
-        // RFC 7591 section 3.2.1 asks for the server-assigned defaults to be visible to the client.
-        await clientInfoManager.AddClientAsync(new RegisteredClient(clientInfo, registrationAccessTokenId));
+        // RFC 7591 section 3.2.1 asks for the server-assigned defaults to be visible to the client. A
+        // registration the store did not keep - one racing another under the same id, or an id the
+        // settings came to configure meanwhile - is refused as a taken id is, and issues nothing.
+        if (!await clientInfoManager.TryAddClientAsync(new RegisteredClient(clientInfo, registrationAccessTokenId)))
+        {
+            return Validation.ErrorFactory.InvalidClientMetadata(
+                $"The client with id={credentials.ClientId} is already registered");
+        }
 
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             credentials.ClientId,
