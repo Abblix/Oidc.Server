@@ -36,7 +36,7 @@ public class TenantSettingsMirrorTests
     /// server without tenants registers beside its options rather than in them.
     /// </summary>
     private static readonly HashSet<string> TenantOnly =
-        [nameof(TenantDefinition.Id), nameof(TenantDefinition.PairwiseSubject)];
+        [nameof(TenantDefinition.Id), nameof(TenantDefinition.PairwiseSubject), nameof(TenantDefinition.CustodianKeys)];
 
     public static TheoryData<string> Mirrored => new(
         typeof(TenantDefinition).GetProperties(BindingFlags.Public | BindingFlags.Instance)

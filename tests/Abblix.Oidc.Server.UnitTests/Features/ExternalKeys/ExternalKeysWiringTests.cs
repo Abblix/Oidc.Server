@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -58,6 +59,23 @@ public class ExternalKeysWiringTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
+    }
+
+    /// <summary>
+    /// A server without tenants whose keys are held by a custodian and that names none there has nothing to sign
+    /// with, so startup refuses it rather than the first token.
+    /// </summary>
+    [Fact]
+    public void ACustodianPlacementNamingNoKey_IsRefusedAtStartup()
+    {
+        var services = AnOidcHost();
+        services.RequireKeyPlacement().UseKeysInCustodian();
+
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(ExternalKeysProvider.NoKeyNamed, refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

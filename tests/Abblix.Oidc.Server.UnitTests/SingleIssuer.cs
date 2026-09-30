@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt.ExternalKeys;
 using System;
 using System.Collections.Generic;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -27,8 +28,8 @@ internal static class SingleIssuer
     /// <summary>
     /// The settings of the one issuer <paramref name="options"/> configure, read at each use as a reload would be.
     /// </summary>
-    public static IIssuerSettings SettingsOf(IOptions<OidcOptions> options)
-        => new OptionsIssuerSettings(new CurrentOptions(options));
+    public static IIssuerSettings SettingsOf(IOptions<OidcOptions> options, CustodianHeldKeys? custodianKeys = null)
+        => new OptionsIssuerSettings(new CurrentOptions(options), custodianKeys: custodianKeys);
 
     public static ScopeManager ScopeManager(IOptions<OidcOptions> options)
         => new(SettingsOf(options), new SingleIssuerLocal<Dictionary<string, ScopeDefinition>>());

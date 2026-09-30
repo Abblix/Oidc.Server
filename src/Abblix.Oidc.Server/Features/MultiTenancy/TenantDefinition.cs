@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -118,4 +119,10 @@ public sealed class TenantDefinition
     /// without tenants. Each tenant keeps its own, so what a client encrypts to one tenant no other can read.
     /// </summary>
     public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; init; } = [];
+
+    /// <summary>
+    /// The custodian's keys this tenant produces with, when the server keeps its keys in a custodian: each tenant
+    /// names keys of its own there, as it declares its own <see cref="SigningKeys"/> otherwise.
+    /// </summary>
+    public CustodianHeldKeys? CustodianKeys { get; init; }
 }

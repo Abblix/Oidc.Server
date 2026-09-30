@@ -100,6 +100,18 @@ public static class ExternalKeysServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Keeps the private halves out of this process, and leaves naming the custodian's keys to whoever consumes them,
+    /// which names them per issuer: an OpenID Provider serving several tenants names each tenant's own, so no two of
+    /// them sign with one key. A host with one issuer names its keys with
+    /// <see cref="UseKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/>; see that overload for what this
+    /// placement means and when to call it.
+    /// </summary>
+    /// <param name="builder">The builder returned by the custodian registration.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection UseKeysInCustodian(this IKeyCustodianBuilder builder)
+        => ChoosePlacement(builder, KeyPlacement.Custodian, nameof(UseKeysInCustodian));
+
+    /// <summary>
     /// Keeps the private halves out of this process, reading the key selection from a service instead of a literal.
     /// Suits a host whose key names come from its configuration; a host with literal names uses
     /// <see cref="UseKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/>. See that overload for what this

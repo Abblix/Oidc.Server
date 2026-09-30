@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -32,22 +33,32 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 public sealed partial class ExternalKeysProvider(
     ILogger<ExternalKeysProvider> logger,
     IKeyCustodian custodian,
-    CustodianHeldKeys keys,
+    IIssuerSettings settings,
     IOptions<OidcOptions> options,
     TimeProvider timeProvider)
     : IAuthServiceKeysProvider
 {
+    /// <summary>
+    /// The refusal of a custodian placement that names no key to produce with.
+    /// </summary>
+    internal const string NoKeyNamed =
+        "The keys are held by a custodian, and none is named to produce with: pass the custodian's key names to " +
+        "UseKeysInCustodian, or, under multi-tenancy, name each tenant's in TenantDefinition.CustodianKeys.";
+
+    // The names of the issuer serving the request: each tenant's own under multi-tenancy
+    private CustodianHeldKeys Keys => settings.CustodianKeys ?? throw new InvalidOperationException(NoKeyNamed);
+
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-        => PublishAsync(keys.SigningKeyName, PublicKeyUsages.Signature, keys.SigningAlgorithm);
+        => PublishAsync(Keys.SigningKeyName, PublicKeyUsages.Signature, Keys.SigningAlgorithm);
 
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
         // A provider that issues no encrypted token names no encryption key, and then there is nothing to publish.
         // Asking the custodian for a guessed name instead would fail against a custodian that holds only a signing
         // key, which is the common high-assurance setup.
-        => keys.EncryptionKeyName is { } encryptionKeyName
-            ? PublishAsync(encryptionKeyName, PublicKeyUsages.Encryption, keys.EncryptionAlgorithm)
+        => Keys.EncryptionKeyName is { } encryptionKeyName
+            ? PublishAsync(encryptionKeyName, PublicKeyUsages.Encryption, Keys.EncryptionAlgorithm)
             : AsyncEnumerable.Empty<JsonWebKey>();
 
     // The last enumeration that succeeded, per key name. It is not an optimization: the published set is what

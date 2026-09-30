@@ -9,6 +9,7 @@
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -42,12 +43,20 @@ internal sealed class SigningKeysPresenceValidator(IServiceProvider serviceProvi
         // fully built, and the same resolution completes without re-entering it.
         // Under multi-tenancy each tenant declares its keys and the server's own carry none; the tenant list's
         // check judges each tenant's
-        if (MultiTenancyDetection.IsActive(serviceProvider) || !KeysComeFromSettings(serviceProvider))
+        if (MultiTenancyDetection.IsActive(serviceProvider))
             return ValidateOptionsResult.Success;
 
-        return options.SigningKeys.Count > 0
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(NoSigningKey);
+        if (KeysComeFromSettings(serviceProvider))
+        {
+            return options.SigningKeys.Count > 0
+                ? ValidateOptionsResult.Success
+                : ValidateOptionsResult.Fail(NoSigningKey);
+        }
+
+        return serviceProvider.GetService<IAuthServiceKeysProvider>() is ExternalKeysProvider &&
+               serviceProvider.GetService<CustodianHeldKeys>() is null
+            ? ValidateOptionsResult.Fail(ExternalKeysProvider.NoKeyNamed)
+            : ValidateOptionsResult.Success;
     }
 
     /// <summary>

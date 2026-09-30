@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Security.Cryptography;
 using System;
 using System.Collections.Generic;
 using System.Threading.RateLimiting;
@@ -288,6 +289,117 @@ public class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
+    private static TenantDefinition NamingInTheCustodian(string id, string signingKeyName) => new()
+    {
+        Id = id,
+        Issuer = $"https://auth.example.com/tenants/{id}",
+        CustodianKeys = new CustodianHeldKeys { SigningKeyName = signingKeyName },
+    };
+
+    /// <summary>
+    /// A container keeping its keys in a custodian that publishes, under each key name, a key whose id is the name.
+    /// </summary>
+    private static ServiceProvider KeysInACustodian(
+        IEnumerable<TenantDefinition> tenants,
+        CustodianHeldKeys? serverWideKeys = null)
+    {
+        var custodian = new Moq.Mock<IKeyCustodian>();
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns((string keyName, CancellationToken _) =>
+            {
+                using var rsa = RSA.Create(2048);
+                var key = new RsaJsonWebKey().Apply(rsa.ExportParameters(false)) with { KeyId = keyName };
+                return new[] { new KeyVersion(key, DateTimeOffset.MinValue) }.ToAsyncEnumerable();
+            });
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(custodian.Object);
+        services.AddJsonWebTokens();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        if (serverWideKeys is null)
+            services.RequireKeyPlacement().UseKeysInCustodian();
+        else
+            services.RequireKeyPlacement().UseKeysInCustodian(serverWideKeys);
+        services.AddServerStorage().AddMultiTenancy(options =>
+        {
+            foreach (var tenant in tenants)
+                options.Tenants.Add(tenant);
+        });
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// With the keys held by a custodian, each tenant produces with the keys it names there.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_PublishesTheCustodianKeysItNames()
+    {
+        var acme = NamingInTheCustodian("acme", "acme-sign");
+        var globex = NamingInTheCustodian("globex", "globex-sign");
+        using var provider = KeysInACustodian([acme, globex]);
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+
+        EnterTenant(provider, acme);
+        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        EnterTenant(provider, globex);
+        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("acme-sign", Assert.Single(atAcme).KeyId);
+        Assert.Equal("globex-sign", Assert.Single(atGlobex).KeyId);
+    }
+
+    /// <summary>
+    /// A tenant naming no key in the custodian has nothing to produce with, and is refused at startup, named.
+    /// </summary>
+    [Fact]
+    public void ATenantNamingNoCustodianKey_IsRefusedAtStartup()
+    {
+        using var provider = KeysInACustodian([Acme]);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("Tenant 'acme': The keys are held by a custodian, and none is named", refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Two tenants naming one custodian key would share it, so a party trusting one's keys verifies the other's
+    /// tokens; startup refuses them, naming the key and both tenants.
+    /// </summary>
+    [Fact]
+    public void TwoTenantsNamingOneCustodianKey_AreRefusedAtStartup()
+    {
+        using var provider = KeysInACustodian(
+            [NamingInTheCustodian("acme", "shared-sign"), NamingInTheCustodian("globex", "shared-sign")]);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("The custodian key 'shared-sign' is named by the tenants 'acme', 'globex'", refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Custodian keys named for the whole server would be ignored under multi-tenancy, so startup refuses them.
+    /// </summary>
+    [Fact]
+    public void CustodianKeysNamedForTheWholeServer_AreRefusedAtStartup()
+    {
+        using var provider = KeysInACustodian(
+            [NamingInTheCustodian("acme", "acme-sign")],
+            new CustodianHeldKeys { SigningKeyName = "server-sign" });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains("The custodian's keys named for the whole server are not used under multi-tenancy",
+            refusal.Message, StringComparison.Ordinal);
     }
 
     public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()

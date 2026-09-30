@@ -119,6 +119,7 @@ public class AuthorizationResponseFormatterTests
         public string CheckSessionCookieName => "session";
         public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> SigningKeys => [];
         public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> EncryptionKeys => [];
+        public Abblix.Jwt.ExternalKeys.CustodianHeldKeys? CustodianKeys => null;
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

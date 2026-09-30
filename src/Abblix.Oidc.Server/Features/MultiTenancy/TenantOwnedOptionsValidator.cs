@@ -8,6 +8,7 @@
 
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
@@ -26,8 +27,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="pairwiseSubject">The pairwise key registered for the whole server, or null when there is none.
 /// </param>
+/// <param name="custodianKeys">The custodian's keys named for the whole server, or null when none are.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantOwnedOptionsValidator(PairwiseSubjectSettings? pairwiseSubject = null)
+public sealed class TenantOwnedOptionsValidator(
+    PairwiseSubjectSettings? pairwiseSubject = null,
+    CustodianHeldKeys? custodianKeys = null)
     : IValidateOptions<OidcOptions>
 {
     private static readonly OidcOptions Defaults = new();
@@ -48,6 +52,14 @@ public sealed class TenantOwnedOptionsValidator(PairwiseSubjectSettings? pairwis
                 $"A {nameof(PairwiseSubjectSettings)} registered for the whole server is not used under " +
                 $"multi-tenancy; each tenant declares its own in {nameof(TenantDefinition)}." +
                 $"{nameof(TenantDefinition.PairwiseSubject)}, so leave it out.");
+        }
+
+        if (custodianKeys is not null)
+        {
+            failures.Add(
+                $"The custodian's keys named for the whole server are not used under multi-tenancy; each tenant " +
+                $"names its own in {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}, so choose " +
+                "the custodian placement without naming keys.");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);

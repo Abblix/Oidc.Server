@@ -8,13 +8,17 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// Refuses at startup a tenant that, with its keys coming from its settings, declares no key to sign with, or none
-/// to encrypt a service token the server's settings ask to encrypt.
+/// to encrypt a service token the server's settings ask to encrypt; and, with its keys held by a custodian, one that
+/// names no key there, or names one another tenant names.
 /// </summary>
 /// <remarks>
 /// The same refusals a server without tenants meets for its own settings, for each tenant: under multi-tenancy the
@@ -29,6 +33,9 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider, IOptio
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions tenants)
     {
+        if (serviceProvider.GetService<IAuthServiceKeysProvider>() is ExternalKeysProvider)
+            return CustodianKeysOf(tenants);
+
         if (!SigningKeysPresenceValidator.KeysComeFromSettings(serviceProvider))
             return ValidateOptionsResult.Success;
 
@@ -50,6 +57,31 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider, IOptio
             select $"Tenant '{tenant.Id}': {failure}"
         ).ToList();
 
+        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// Each tenant names keys in the custodian, and no key is named by two tenants: sharing one would let a party
+    /// trusting one tenant's keys verify the other's tokens, which keys of their own exist to prevent.
+    /// </summary>
+    private static ValidateOptionsResult CustodianKeysOf(MultiTenancyOptions tenants)
+    {
+        var unnamed =
+            from tenant in tenants.Tenants
+            where tenant.CustodianKeys is null
+            select $"Tenant '{tenant.Id}': {ExternalKeysProvider.NoKeyNamed}";
+
+        var shared =
+            from tenant in tenants.Tenants
+            where tenant.CustodianKeys is not null
+            from keyName in new[] { tenant.CustodianKeys!.SigningKeyName, tenant.CustodianKeys.EncryptionKeyName }
+            where keyName is not null
+            group tenant.Id by keyName into namers
+            where namers.Count() > 1
+            select $"The custodian key '{namers.Key}' is named by the tenants {string.Join(", ", namers.Select(id => $"'{id}'"))}; " +
+                   "each tenant produces with keys of its own.";
+
+        var failures = unnamed.Concat(shared).ToList();
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 

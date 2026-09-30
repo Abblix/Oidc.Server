@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -80,6 +81,9 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
 
     /// <inheritdoc />
     public IReadOnlyCollection<JsonWebKey> EncryptionKeys => Tenant.EncryptionKeys;
+
+    /// <inheritdoc />
+    public CustodianHeldKeys? CustodianKeys => Tenant.CustodianKeys;
 
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }
