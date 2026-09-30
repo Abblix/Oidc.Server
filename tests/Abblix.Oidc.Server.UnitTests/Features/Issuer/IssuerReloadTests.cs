@@ -116,6 +116,42 @@ public class IssuerReloadTests
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
     }
 
+    /// <summary>
+    /// The registrant whose client a configured one now shadows still holds the means to manage its registration,
+    /// and what it changes or removes is its own registration, never the configured client.
+    /// </summary>
+    [Fact]
+    public async Task ManagingAShadowedRegistration_LeavesTheConfiguredClientServed()
+    {
+        var options = new ReloadableOptions(new OidcOptions());
+        var clients = ClientsOf(options);
+        await clients.AddClientAsync(new ClientInfo("partner-app") { ClientName = "registered" });
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
+
+        await clients.UpdateClientAsync(new ClientInfo("partner-app") { ClientName = "changed by the registrant" });
+        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+
+        await clients.RemoveClientAsync("partner-app");
+        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+    }
+
+    /// <summary>
+    /// A configured client's removal, remembered while the settings configure it, does not refuse a client registered
+    /// under its id once they no longer do.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationAfterAConfiguredClientLeaves_IsKept()
+    {
+        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("app")] });
+        var clients = ClientsOf(options);
+        await clients.RemoveClientAsync("app");
+        options.Reload(new OidcOptions());
+
+        await clients.AddClientAsync(new ClientInfo("app") { ClientName = "registered" });
+
+        Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
+    }
+
     [Fact]
     public async Task AnUpdateOfAConfiguredClient_OutlivesAReload()
     {

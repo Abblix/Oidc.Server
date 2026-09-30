@@ -19,8 +19,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <remarks>
 /// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
 /// what registration did since. A configured client wins over one registration merely added under its id, so a
-/// registrant choosing an id ahead of the administrator is not served in the configured client's place; a change or
-/// removal made to a configured client itself keeps winning over the settings.
+/// registrant choosing an id ahead of the administrator is not served in the configured client's place, and managing
+/// that registration afterwards changes or removes the registration alone. A change or removal made to a configured
+/// client itself keeps winning over the settings.
 /// </remarks>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
 /// <param name="configured">The clients each issuer's settings configure.</param>
@@ -54,6 +55,13 @@ internal class ReloadableClientInfoStorage(
     private ConcurrentDictionary<string, Registration> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Whether registration added a client under this id before the settings configured one: whoever manages it
+    /// manages that registration, which the configured client shadows, and never the configured client.
+    /// </summary>
+    private bool IsShadowed(string clientId)
+        => Registered.TryGetValue(clientId, out var registration) && registration is { OfConfigured: false };
+
     private ClientInfo? Find(string clientId)
     {
         Registered.TryGetValue(clientId, out var registration);
@@ -85,14 +93,16 @@ internal class ReloadableClientInfoStorage(
     public Task AddClientAsync(ClientInfo clientInfo)
     {
         var clientId = clientInfo.ClientId;
-        if (!Configured.ContainsKey(clientId))
+        var isConfigured = Configured.ContainsKey(clientId);
+        if (Registered.TryGetValue(clientId, out var removal) && removal is { OfConfigured: true, Client: null })
+        {
+            // A configured client that was removed makes room for one added under its id, and so does the removal
+            // left behind once the settings stopped configuring it
+            Registered.TryUpdate(clientId, new Registration(clientInfo, isConfigured), removal);
+        }
+        else if (!isConfigured)
         {
             Registered.TryAdd(clientId, new Registration(clientInfo, OfConfigured: false));
-        }
-        else if (Registered.TryGetValue(clientId, out var removal) && removal is { OfConfigured: true, Client: null })
-        {
-            // A configured client that was removed makes room for one added under its id
-            Registered.TryUpdate(clientId, removal with { Client = clientInfo }, removal);
         }
 
         return Task.CompletedTask;
@@ -106,7 +116,8 @@ internal class ReloadableClientInfoStorage(
     public Task UpdateClientAsync(ClientInfo clientInfo)
     {
         var clientId = clientInfo.ClientId;
-        Registered[clientId] = new Registration(clientInfo, Configured.ContainsKey(clientId));
+        var ofConfigured = !IsShadowed(clientId) && Configured.ContainsKey(clientId);
+        Registered[clientId] = new Registration(clientInfo, ofConfigured);
         return Task.CompletedTask;
     }
 
@@ -118,7 +129,7 @@ internal class ReloadableClientInfoStorage(
     public Task RemoveClientAsync(string clientId)
     {
         // Only a configured client needs its removal remembered: the settings would bring it back otherwise
-        if (Configured.ContainsKey(clientId))
+        if (!IsShadowed(clientId) && Configured.ContainsKey(clientId))
             Registered[clientId] = new Registration(null, OfConfigured: true);
         else
             Registered.TryRemove(clientId, out _);
