@@ -48,6 +48,14 @@ internal sealed class KeyRings(
     public KeyRing Ring(string partition)
     {
         var partitions = options.Value.Partitions;
+        if (partition == KeyRingOptions.DefaultPartition && !partitions.Contains(partition, StringComparer.Ordinal))
+        {
+            // Asked through IKeyRing, which names no partition, by code written for a ring serving one issuer
+            throw new InvalidOperationException(
+                $"The key ring keeps a partition for each issuer and none for a single one, so there is no one " +
+                $"{nameof(IKeyRing)} to serve: take the ring of an issuer from {nameof(IKeyRings)}.{nameof(IKeyRings.For)}.");
+        }
+
         if (!partitions.Contains(partition, StringComparer.Ordinal))
         {
             throw new InvalidOperationException(

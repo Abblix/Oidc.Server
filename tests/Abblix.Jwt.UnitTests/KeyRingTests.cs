@@ -828,6 +828,29 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
+    /// A ring keeping a partition for each issuer has no one ring to serve as <see cref="IKeyRing"/>, and says to
+    /// take an issuer's ring instead of naming a partition nobody declared.
+    /// </summary>
+    [Fact]
+    public void TheSingleRing_OfARingKeepingAPartitionForEachIssuer_PointsToTheRingsOfTheIssuers()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(new FakeStore());
+        services.ComposeExternalKeyBackends();
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName });
+        services.Configure<KeyRingOptions>(options => options.Partitions = ["acme", "globex"]);
+
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IKeyRing>());
+        Assert.Contains($"{nameof(IKeyRings)}.{nameof(IKeyRings.For)}", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The partitions refreshed in one round share one read of the store, so a tick costs the same read however
     /// many issuers the ring keeps partitions for.
     /// </summary>
