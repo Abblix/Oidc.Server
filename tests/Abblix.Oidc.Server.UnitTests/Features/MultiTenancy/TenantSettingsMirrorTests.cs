@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -92,6 +93,8 @@ public class TenantSettingsMirrorTests
             return Array.CreateInstance(type.GetElementType()!, 1);
         if (type.IsAssignableFrom(typeof(ClientInfo[])))
             return new[] { new ClientInfo("client") };
+        if (type.IsAssignableFrom(typeof(JsonWebKey[])))
+            return new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
 
         throw new NotSupportedException($"No sample of {type} to set; add one here.");
     }

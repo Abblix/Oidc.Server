@@ -62,6 +62,8 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         typeof(OidcOptionsSecurityProfileValidator).FullName!,
         typeof(PairwiseClientsOptionsValidator).FullName!,
         typeof(ResourceDefinitionsValidator).FullName!,
+        typeof(ServiceTokensAlgorithmsValidator).FullName!,
+        typeof(SigningKeysPresenceValidator).FullName!,
         typeof(TenantOwnedOptionsValidator).FullName!,
     ];
 

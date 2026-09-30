@@ -104,6 +104,7 @@ public class SigningKeysPresenceValidatorTests
         var services = new ServiceCollection();
         services.AddOptions();
         configure?.Invoke(services);
+        services.AddIssuer();
         services.AddAuthServiceJwt();
         return services.BuildServiceProvider();
     }

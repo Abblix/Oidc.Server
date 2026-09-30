@@ -44,6 +44,7 @@ public class ExternalKeysWiringTests
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
+        services.AddIssuer();
         services.AddAuthServiceJwt();
         return services;
     }
@@ -84,6 +85,7 @@ public class ExternalKeysWiringTests
         // The placement runs BEFORE the server's own registration. Reading the choice at resolve is what permits
         // that: nothing here has to be ordered against the placement call.
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
+        services.AddIssuer();
         services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();
@@ -102,6 +104,7 @@ public class ExternalKeysWiringTests
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
+        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
 
@@ -145,6 +148,7 @@ public class ExternalKeysWiringTests
         services.AddOptions<OidcOptions>().Configure(options => options.SigningKeys = [signingKey]);
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
+        services.AddIssuer();
         services.AddAuthServiceJwt();
 
         await using var provider = services.BuildServiceProvider();

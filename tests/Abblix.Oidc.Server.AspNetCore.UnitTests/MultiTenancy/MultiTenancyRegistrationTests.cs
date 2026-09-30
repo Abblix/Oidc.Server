@@ -11,6 +11,9 @@ using System.Collections.Generic;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 using Abblix.DependencyInjection;
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -197,6 +200,96 @@ public class MultiTenancyRegistrationTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A container serving keys from each tenant's settings, as a host that keeps its keys in configuration has.
+    /// </summary>
+    private static ServiceProvider KeysFromSettings(TenantDefinition tenant, Action<OidcOptions>? configure = null)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => configure?.Invoke(options));
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// A tenant whose keys come from its settings and that declares none to sign with is refused at startup, naming
+    /// the tenant, rather than issuing no token and publishing an empty JWKS.
+    /// </summary>
+    [Fact]
+    public void ATenantWithoutASigningKey_IsRefusedAtStartup()
+    {
+        using var provider = KeysFromSettings(Acme);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("Tenant 'acme': No signing key is configured", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant with no key to encrypt a service token the server's settings ask to encrypt is refused at startup,
+    /// naming the tenant and the token.
+    /// </summary>
+    [Fact]
+    public void ATenantWithoutAnEncryptionKey_IsRefused_WhenAServiceTokenIsEncrypted()
+    {
+        using var provider = KeysFromSettings(
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            },
+            options => options.ServiceTokens.AccessToken.Encrypt = true);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("Tenant 'acme': ServiceTokens.AccessToken.Encrypt is true", refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant declaring its keys starts, and the server's own settings, which under multi-tenancy carry none, are
+    /// not refused for it by any of the server's checks.
+    /// </summary>
+    [Fact]
+    public void ATenantWithItsKeys_Starts()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
+        services.AddMemoryCache();
+        services.AddOidcCore(options => options.ServiceTokens.AccessToken.Encrypt = true);
+        services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
+        }));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotNull(provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+    }
+
+    /// <summary>
+    /// Keys held by a custodian do not come from a tenant's settings, so none are demanded of them.
+    /// </summary>
+    [Fact]
+    public void KeysHeldByACustodian_AreNotDemandedOfATenantsSettings()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddSingleton(Moq.Mock.Of<IKeyCustodian>());
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
     public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
     {
         {
@@ -314,6 +407,7 @@ public class MultiTenancyRegistrationTests
         { typeof(IScopeManager), Moq.Mock.Of<IScopeManager>() },
         { typeof(IResourceManager), Moq.Mock.Of<IResourceManager>() },
         { typeof(ISubjectTypeConverter), Moq.Mock.Of<ISubjectTypeConverter>() },
+        { typeof(IAuthServiceKeysProvider), Moq.Mock.Of<IAuthServiceKeysProvider>() },
     };
 
     /// <summary>

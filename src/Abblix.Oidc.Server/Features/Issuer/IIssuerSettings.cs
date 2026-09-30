@@ -11,6 +11,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
+using Abblix.Jwt;
+
 namespace Abblix.Oidc.Server.Features.Issuer;
 
 /// <summary>
@@ -89,4 +91,14 @@ public interface IIssuerSettings
     /// The name of the cookie carrying the user's session at the issuer, which its check-session page reads.
     /// </summary>
     string CheckSessionCookieName { get; }
+
+    /// <summary>
+    /// The keys the issuer signs with and publishes, when they come from its settings.
+    /// </summary>
+    IReadOnlyCollection<JsonWebKey> SigningKeys { get; }
+
+    /// <summary>
+    /// The keys clients encrypt to the issuer with, when they come from its settings.
+    /// </summary>
+    IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; }
 }

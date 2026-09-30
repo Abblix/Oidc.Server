@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -27,10 +28,34 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// only, and is never called here: it answers where the keys come from without reading them, and without
 /// reading the options that are still being created. Injecting the key provider instead would re-enter
 /// <see cref="IOptions{TOptions}.Value"/> from inside its own creation.</param>
+/// <param name="services">Tells whether the server serves tenants, whose encryption keys the tenant list's check
+/// judges instead.</param>
 public sealed class ServiceTokensAlgorithmsValidator(
     IJsonWebTokenCreator jwtCreator,
-    IKeyCustodian? custodian = null) : IValidateOptions<OidcOptions>
+    IKeyCustodian? custodian = null,
+    IServiceProvider? services = null) : IValidateOptions<OidcOptions>
 {
+    /// <summary>
+    /// The service tokens the settings ask to encrypt, by name.
+    /// </summary>
+    internal static IEnumerable<string> EncryptedTokens(ServiceTokensOptions serviceTokens)
+    {
+        if (serviceTokens.AccessToken.Encrypt == true)
+            yield return nameof(serviceTokens.AccessToken);
+        if (serviceTokens.RefreshToken.Encrypt == true)
+            yield return nameof(serviceTokens.RefreshToken);
+        if (serviceTokens.RegistrationAccessToken.Encrypt == true)
+            yield return nameof(serviceTokens.RegistrationAccessToken);
+        if (serviceTokens.InitialAccessToken.Encrypt == true)
+            yield return nameof(serviceTokens.InitialAccessToken);
+    }
+
+    internal static string NoEncryptionKey(string tokenType)
+        => $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
+           $"{nameof(OidcOptions.EncryptionKeys)} is empty and no external key custodian is registered. " +
+           $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
+           $"this token as a signed JWS.";
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
@@ -39,6 +64,9 @@ public sealed class ServiceTokensAlgorithmsValidator(
 
         var failures = new List<string>();
         var serviceTokens = options.ServiceTokens;
+
+        // Under multi-tenancy each tenant declares its encryption keys and the server's own carry none
+        var keysJudgedHere = custodian is null && (services is null || !MultiTenancyDetection.IsActive(services));
 
         Check(failures, nameof(serviceTokens.AccessToken), serviceTokens.AccessToken);
         Check(failures, nameof(serviceTokens.RefreshToken), serviceTokens.RefreshToken);
@@ -74,14 +102,8 @@ public sealed class ServiceTokensAlgorithmsValidator(
             // states nothing, and a host that never touched the setting must keep starting and issuing a signed
             // JWS exactly as before. The key set is only knowable here when it comes from the options; with a
             // custodian registered the keys live outside them, so the emptiness above says nothing.
-            if (token.Encrypt == true && custodian is null && options.EncryptionKeys.Count == 0)
-            {
-                results.Add(
-                    $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
-                    $"{nameof(OidcOptions.EncryptionKeys)} is empty and no external key custodian is registered. " +
-                    $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
-                    $"this token as a signed JWS.");
-            }
+            if (token.Encrypt == true && keysJudgedHere && options.EncryptionKeys.Count == 0)
+                results.Add(NoEncryptionKey(tokenType));
         }
     }
 }

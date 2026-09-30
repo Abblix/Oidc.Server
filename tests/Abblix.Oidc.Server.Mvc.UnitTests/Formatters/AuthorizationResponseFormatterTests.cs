@@ -129,6 +129,8 @@ public class AuthorizationResponseFormatterTests
         public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
         public PairwiseSubjectSettings? PairwiseSubject => null;
         public string CheckSessionCookieName => "session";
+        public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> SigningKeys => [];
+        public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> EncryptionKeys => [];
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

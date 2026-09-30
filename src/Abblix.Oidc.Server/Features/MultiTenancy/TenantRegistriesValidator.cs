@@ -7,7 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Implementation;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
@@ -16,7 +19,8 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses at startup a registry of clients, scopes, resources or pairwise keys that the host brought itself.
+/// Refuses at startup a registry of clients, scopes, resources, pairwise keys or signing and encryption keys that
+/// the host brought itself.
 /// </summary>
 /// <remarks>
 /// The server's own registries keep one set for each tenant, built from what the tenant declares. One the host
@@ -35,6 +39,8 @@ public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) 
         (typeof(IScopeManager), [typeof(ScopeManager)]),
         (typeof(IResourceManager), [typeof(ResourceManager)]),
         (typeof(ISubjectTypeConverter), [typeof(IssuerSubjectTypeConverter)]),
+        (typeof(IAuthServiceKeysProvider),
+            [typeof(OidcOptionsKeysProvider), typeof(ExternalKeysProvider), typeof(MintedKeysProvider)]),
     ];
 
     /// <inheritdoc />

@@ -52,6 +52,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         Id = "globex",
         Issuer = Host + Globex,
         DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+        SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
 
     private WebApplication? _app;
@@ -68,11 +69,16 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
-        builder.Services.AddOidcServices(options =>
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)]);
+        builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options =>
         {
-            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = Host + Acme, Clients = [Client()] });
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = Host + Acme,
+                Clients = [Client()],
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            });
             options.Tenants.Add(GlobexTenant);
         });
 

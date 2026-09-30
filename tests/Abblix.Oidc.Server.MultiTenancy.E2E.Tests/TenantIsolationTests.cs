@@ -11,6 +11,7 @@ using System.Net;
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
@@ -95,7 +96,6 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 DeviceCodeLength = 32,
                 UserCodeLength = 8,
             };
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.CheckSession;
         });
         builder.Services.AddMultiTenancy(options =>
@@ -111,6 +111,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 Resources = [new ResourceDefinition(new Uri(AcmeResource), new ScopeDefinition(AcmeScope))],
                 DefaultResourceIndicator = new Uri(AcmeResource),
                 LoginUri = new Uri("/login", UriKind.Relative),
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             });
             options.Tenants.Add(new TenantDefinition
             {
@@ -118,6 +119,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 Issuer = Host + Globex,
                 Clients = [Client(ClientId), PairwiseClient()],
                 LoginUri = new Uri("/sign-in", UriKind.Relative),
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
                 PairwiseSubject = new PairwiseSubjectSettings
                 {
                     Salt = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
@@ -270,10 +272,69 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A party trusting one tenant's published keys verifies that tenant's tokens and no other's: each tenant signs
+    /// with keys of its own.
+    /// </summary>
+    [Fact]
+    public async Task ATokenOfOneTenant_IsVerifiedByThatTenantsKeysAlone()
+    {
+        var token = await AccessTokenOfADeviceFlowAsync(Acme);
+
+        Assert.True(SignedByOneOf(token, await PublishedKeysAsync(Acme)));
+        Assert.False(SignedByOneOf(token, await PublishedKeysAsync(Globex)));
+    }
+
+    /// <summary>
+    /// The keys <paramref name="tenant"/> publishes at the JWKS address its discovery document names.
+    /// </summary>
+    private async Task<RsaJsonWebKey[]> PublishedKeysAsync(string tenant)
+    {
+        var configuration = JsonNode.Parse(await Http.GetStringAsync(
+            tenant + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+        var jwks = await Http.GetStringAsync(
+            configuration[ConfigurationResponse.Parameters.JwksUri]!.GetValue<string>(),
+            TestContext.Current.CancellationToken);
+
+        var keys = JsonSerializer.Deserialize<JsonWebKeySet>(jwks)!.Keys.OfType<RsaJsonWebKey>().ToArray();
+        Assert.NotEmpty(keys);
+        return keys;
+    }
+
+    /// <summary>
+    /// Whether one of <paramref name="keys"/> verifies the RS256 signature of <paramref name="token"/>, as a party
+    /// holding only those keys would check it.
+    /// </summary>
+    private static bool SignedByOneOf(string token, RsaJsonWebKey[] keys)
+    {
+        var parts = token.Split('.');
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(parts[0]))!;
+        Assert.Equal(SigningAlgorithms.RS256, header[JwtClaimTypes.Algorithm]!.GetValue<string>());
+
+        var signed = Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]);
+        var signature = Base64Url.DecodeFromChars(parts[2]);
+        return keys.Any(key =>
+        {
+            using var rsa = RSA.Create(new RSAParameters { Modulus = key.Modulus, Exponent = key.Exponent });
+            return rsa.VerifyData(signed, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        });
+    }
+
+    /// <summary>
     /// The subject of the access token the pairwise client gets at <paramref name="tenant"/> once the user the
     /// verification page signs in approves its device.
     /// </summary>
     private async Task<string> SubjectOfADeviceFlowAsync(string tenant)
+    {
+        var accessToken = await AccessTokenOfADeviceFlowAsync(tenant);
+        var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
+        return payload[IanaClaimTypes.Sub]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// The access token the pairwise client gets at <paramref name="tenant"/> once the user the verification page
+    /// signs in approves its device.
+    /// </summary>
+    private async Task<string> AccessTokenOfADeviceFlowAsync(string tenant)
     {
         var authorization = await ReadJsonAsync(await PostAsync(tenant, "/connect/deviceauthorization", PairwiseClientId,
             new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId }));
@@ -295,9 +356,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 [TokenRequest.Parameters.DeviceCode] =
                     authorization[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>(),
             }));
-        var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
-        var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
-        return payload[IanaClaimTypes.Sub]!.GetValue<string>();
+        return tokens[ResponseParameters.AccessToken]!.GetValue<string>();
     }
 
     /// <summary>

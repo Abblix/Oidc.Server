@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -63,4 +64,10 @@ internal sealed class OptionsIssuerSettings(
 
     /// <inheritdoc />
     public string CheckSessionCookieName => options.CurrentValue.CheckSessionCookie.Name;
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<JsonWebKey> SigningKeys => options.CurrentValue.SigningKeys;
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<JsonWebKey> EncryptionKeys => options.CurrentValue.EncryptionKeys;
 }

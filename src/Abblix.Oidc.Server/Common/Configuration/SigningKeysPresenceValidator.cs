@@ -9,6 +9,7 @@
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -39,20 +40,28 @@ internal sealed class SigningKeysPresenceValidator(IServiceProvider serviceProvi
         // container cannot see through the provider's factory lambda - it overflows the stack
         // instead of reporting a circular dependency. By the time Validate runs the factory is
         // fully built, and the same resolution completes without re-entering it.
-        var keysProvider = serviceProvider.GetRequiredService<IAuthServiceKeysProvider>();
-        var custodian = serviceProvider.GetService<IKeyCustodian>();
-
-        if (keysProvider is not OidcOptionsKeysProvider || custodian is not null)
+        // Under multi-tenancy each tenant declares its keys and the server's own carry none; the tenant list's
+        // check judges each tenant's
+        if (MultiTenancyDetection.IsActive(serviceProvider) || !KeysComeFromSettings(serviceProvider))
             return ValidateOptionsResult.Success;
 
-        if (options.SigningKeys.Count > 0)
-            return ValidateOptionsResult.Success;
-
-        return ValidateOptionsResult.Fail(
-            $"No signing key is configured, so the server cannot issue a single token and publishes an empty JWKS. " +
-            $"The library does not generate keys: supply at least one JWK with a private part in " +
-            $"{nameof(OidcOptions)}.{nameof(OidcOptions.SigningKeys)}, or register your own " +
-            $"{nameof(IAuthServiceKeysProvider)} that reads keys from where your deployment keeps them " +
-            "(the Vault and Azure key packages ship such providers).");
+        return options.SigningKeys.Count > 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(NoSigningKey);
     }
+
+    /// <summary>
+    /// Whether the keys come from the settings: the resolved provider is the library's static one and no custodian
+    /// is wired.
+    /// </summary>
+    internal static bool KeysComeFromSettings(IServiceProvider serviceProvider)
+        => serviceProvider.GetService<IAuthServiceKeysProvider>() is OidcOptionsKeysProvider &&
+           serviceProvider.GetService<IKeyCustodian>() is null;
+
+    internal static string NoSigningKey
+        => $"No signing key is configured, so the server cannot issue a single token and publishes an empty JWKS. " +
+           $"The library does not generate keys: supply at least one JWK with a private part in " +
+           $"{nameof(OidcOptions)}.{nameof(OidcOptions.SigningKeys)}, or register your own " +
+           $"{nameof(IAuthServiceKeysProvider)} that reads keys from where your deployment keeps them " +
+           "(the Vault and Azure key packages ship such providers).";
 }

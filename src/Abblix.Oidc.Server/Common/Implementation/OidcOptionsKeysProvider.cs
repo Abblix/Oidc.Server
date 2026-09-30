@@ -8,8 +8,8 @@
 
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Microsoft.Extensions.Options;
 
 
@@ -23,8 +23,12 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 /// It is recommended to implement a dynamic resolution mechanism in production environments
 /// to enable seamless certificate replacement without the need for service reloading.
 /// </remarks>
+/// <param name="settings">The settings of the issuer serving the request, holding its keys: each tenant's own under
+/// multi-tenancy, so no two tenants sign or decrypt with one key.</param>
+/// <param name="placement">Where the host said its keys live.</param>
+/// <param name="custodian">The custodian the host registered, if any.</param>
 internal class OidcOptionsKeysProvider(
-	IOptions<OidcOptions> options,
+	IIssuerSettings settings,
 	IOptions<KeyPlacementChoice> placement,
 	IKeyCustodian? custodian = null) : IAuthServiceKeysProvider
 {
@@ -61,7 +65,7 @@ internal class OidcOptionsKeysProvider(
 		RefuseIfPlacementNotChosen();
 
 		var jsonWebKeys =
-			from jwk in options.Value.EncryptionKeys
+			from jwk in settings.EncryptionKeys
 			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
@@ -77,7 +81,7 @@ internal class OidcOptionsKeysProvider(
 		RefuseIfPlacementNotChosen();
 
 		var jsonWebKeys =
-			from jwk in options.Value.SigningKeys
+			from jwk in settings.SigningKeys
 			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
