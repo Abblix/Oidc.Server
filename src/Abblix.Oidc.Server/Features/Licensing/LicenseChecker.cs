@@ -91,7 +91,7 @@ public static partial class LicenseChecker
                 if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
                     !_knownClientIds.ContainsKey(client))
                 {
-                    if (LicenseLogger.Instance.IsAllowed(new { clientInfo.ClientId }, utcNow, TimeSpan.FromMinutes(1)))
+                    if (LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(1)))
                     {
                         LogClientLimitExceededByMargin(
                             LicenseLogger.Instance,
@@ -105,7 +105,7 @@ public static partial class LicenseChecker
 
                 _knownClientIds.TryAdd(client, null!);
                 if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
-                    LicenseLogger.Instance.IsAllowed(new { clientInfo.ClientId }, utcNow, TimeSpan.FromMinutes(15)))
+                    LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
                 {
                     LogClientLimitExceeded(
                         LicenseLogger.Instance,

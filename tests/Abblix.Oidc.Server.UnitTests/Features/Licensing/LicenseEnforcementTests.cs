@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -281,6 +282,45 @@ public sealed class LicenseEnforcementTests : IDisposable
         _ = new ClientInfo("mobile").CheckClientLicense(acme);
 
         Assert.Null(new ClientInfo("mobile").CheckClientLicense(globex));
+    }
+
+    [Fact]
+    public void A_refusal_is_recorded_for_each_tenant_refusing_a_client_of_one_id()
+    {
+        // The record of a refusal is throttled per client, so a client is named with its tenant there too: counted
+        // by the bare id, the second tenant's refusal would be taken in silence for the first one's record.
+        TestLicense.ClearChecker();
+        TestLicense.ClearLogThrottle();
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = 1,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
+        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+        _ = new ClientInfo("first").CheckClientLicense(acme);
+        _ = new ClientInfo("second").CheckClientLicense(acme);
+
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Null(new ClientInfo("web").CheckClientLicense(acme));
+            Assert.Null(new ClientInfo("web").CheckClientLicense(globex));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var refusals = records.Entries
+            .Where(record => record.EventId.Id == LogEvents.Licensing.LicenseChecker.ClientLimitExceededByMargin)
+            .Select(record => record.Message)
+            .ToArray();
+        Assert.Equal(2, refusals.Length);
+        Assert.Contains(refusals, message => message.Contains("acme/web", StringComparison.Ordinal));
+        Assert.Contains(refusals, message => message.Contains("globex/web", StringComparison.Ordinal));
     }
 
     [Fact]
