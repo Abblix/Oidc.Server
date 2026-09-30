@@ -85,9 +85,8 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
     }
 
     /// <remarks>
-    /// OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 make the issuer an https URL; http is let
-    /// through for a server run locally. The scheme is checked by name because on Unix a bare path parses as an
-    /// absolute file address, whose empty host a request without a Host header would match.
+    /// Only the host is named: the aliases keep the issuer's path there, so a path of its own would move them to
+    /// an address no request resolves to the tenant. A client presents its certificate over TLS, so https alone.
     /// </remarks>
     private static bool IsMtlsHost(Uri value)
         => value.IsAbsoluteUri &&
@@ -96,6 +95,11 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
            string.IsNullOrEmpty(value.Query) &&
            string.IsNullOrEmpty(value.Fragment);
 
+    /// <remarks>
+    /// OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 make the issuer an https URL; http is let
+    /// through for a server run locally. The scheme is checked by name because on Unix a bare path parses as an
+    /// absolute file address, whose empty host a request without a Host header would match.
+    /// </remarks>
     private static bool IsIssuer(string? value)
         => Uri.TryCreate(value, UriKind.Absolute, out var issuer) &&
            (issuer.Scheme == Uri.UriSchemeHttps || issuer.Scheme == Uri.UriSchemeHttp) &&

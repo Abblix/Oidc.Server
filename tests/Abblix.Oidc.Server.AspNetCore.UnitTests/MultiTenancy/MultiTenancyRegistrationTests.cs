@@ -6,9 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Security.Cryptography;
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 using Abblix.DependencyInjection;
@@ -28,6 +28,8 @@ using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -280,6 +282,69 @@ public class MultiTenancyRegistrationTests
 
         Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
         Assert.NotNull(provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+    }
+
+    /// <summary>
+    /// Each tenant decrypts with its own encryption keys only, so a token encrypted to one tenant is read there and
+    /// by no other.
+    /// </summary>
+    [Fact]
+    public async Task ATokenEncryptedToOneTenant_IsReadThere_AndByNoOther()
+    {
+        TenantDefinition TenantWithKeys(string id) => new()
+        {
+            Id = id,
+            Issuer = $"https://auth.example.com/tenants/{id}",
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
+        };
+
+        var acme = TenantWithKeys("acme");
+        var globex = TenantWithKeys("globex");
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddServerStorage().AddMultiTenancy(options =>
+        {
+            options.Tenants.Add(acme);
+            options.Tenants.Add(globex);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        EnterTenant(provider, acme);
+        var encrypted = await provider.GetRequiredService<IAuthServiceJwtFormatter>().FormatAsync(
+            new JsonWebToken
+            {
+                Header = { Algorithm = SigningAlgorithms.RS256 },
+                Payload = { Subject = "user123", Issuer = acme.Issuer },
+            },
+            new ServiceJwtEncryption(
+                Encrypt: true,
+                EncryptionAlgorithms.KeyManagement.RsaOaep256,
+                KeyId: null,
+                EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512));
+
+        var atAcme = await ReadAsync();
+        Assert.True(atAcme.TryGetSuccess(out _), atAcme.TryGetFailure(out var failure) ? failure.ErrorDescription : null);
+        EnterTenant(provider, globex);
+        var atGlobex = await ReadAsync();
+        Assert.True(atGlobex.TryGetFailure(out var refusal), "Another tenant read the token.");
+        Assert.Contains("decryption", refusal.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+
+        // Read as the tenant current in the container, with the keys it decrypts and verifies with
+        Task<Result<JsonWebToken, JwtValidationError>> ReadAsync()
+        {
+            var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+            return provider.GetRequiredService<IJsonWebTokenValidator>().ValidateAsync(
+                encrypted,
+                new ValidationParameters
+                {
+                    Options = ValidationOptions.RequireValidSignedTokens,
+                    ResolveIssuerSigningKeys = _ => keys.GetSigningKeys(),
+                    ResolveTokenDecryptionKeys = _ => keys.GetEncryptionKeys(true),
+                });
+        }
     }
 
     /// <summary>

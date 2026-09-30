@@ -6,13 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-
-using Abblix.Jwt;
-using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Oidc.Server.Features.Issuer;
 
@@ -102,6 +101,7 @@ public interface IIssuerSettings
     /// The keys clients encrypt to the issuer with, when they come from its settings.
     /// </summary>
     IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; }
+
     /// <summary>
     /// The custodian's keys the issuer produces with, when its keys are held by a custodian; null when none are named.
     /// </summary>
