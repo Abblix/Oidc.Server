@@ -275,6 +275,47 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// Each tenant decrypts with its own encryption keys only, so what a client encrypted to one tenant no other can
+    /// read, and signs with its own signing keys.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_DecryptsAndSignsWithItsOwnKeysOnly()
+    {
+        TenantDefinition TenantWithKeys(string id) => new()
+        {
+            Id = id,
+            Issuer = $"https://auth.example.com/tenants/{id}",
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { KeyId = $"{id}-sig" }],
+            EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = $"{id}-enc" }],
+        };
+
+        var acme = TenantWithKeys("acme");
+        var globex = TenantWithKeys("globex");
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddServerStorage().AddMultiTenancy(options =>
+        {
+            options.Tenants.Add(acme);
+            options.Tenants.Add(globex);
+        });
+        using var provider = services.BuildServiceProvider();
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+        var ct = TestContext.Current.CancellationToken;
+
+        EnterTenant(provider, acme);
+        var acmeDecrypts = await keys.GetEncryptionKeys(includePrivateKeys: true).ToArrayAsync(ct);
+        var acmeSigns = await keys.GetSigningKeys(includePrivateKeys: true).ToArrayAsync(ct);
+        EnterTenant(provider, globex);
+        var globexDecrypts = await keys.GetEncryptionKeys(includePrivateKeys: true).ToArrayAsync(ct);
+
+        Assert.Equal("acme-enc", Assert.Single(acmeDecrypts).KeyId);
+        Assert.Equal("acme-sig", Assert.Single(acmeSigns).KeyId);
+        Assert.Equal("globex-enc", Assert.Single(globexDecrypts).KeyId);
+    }
+
+    /// <summary>
     /// Keys held by a custodian do not come from a tenant's settings, so none are demanded of them.
     /// </summary>
     [Fact]
