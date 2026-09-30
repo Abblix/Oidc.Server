@@ -67,6 +67,24 @@ public class PairwiseClientsOptionsValidatorTests
         Assert.True(CheckWith(converter.Object).Validate(null, options).Succeeded);
     }
 
+    /// <summary>
+    /// A converter that cannot be asked at startup - one reading the options being checked, or one scoped to a
+    /// request - is named in the refusal instead of failing the startup some other way.
+    /// </summary>
+    [Fact]
+    public void AConverterThatCannotBeAsked_IsNamedInTheRefusal()
+    {
+        var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
+        var converter = new Mock<ISubjectTypeConverter>();
+        converter.Setup(c => c.SubjectTypesSupported).Throws(new InvalidOperationException("reads the options"));
+
+        var result = CheckWith(converter.Object).Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(converter.Object.GetType().FullName!, result.FailureMessage, StringComparison.Ordinal);
+        Assert.Contains("reads the options", result.FailureMessage, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ATenantsPairwiseClient_WithoutTheTenantsKey_IsRefused_NamingTheTenant()
     {

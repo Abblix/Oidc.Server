@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -33,17 +34,39 @@ public sealed class PairwiseClientsOptionsValidator(IServiceProvider serviceProv
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        // The converter is asked only when a client takes pairwise identifiers, as few deployments have one
+        // The converter is asked only when a client takes pairwise identifiers, as few deployments have one. Under
+        // multi-tenancy the tenant list judges each tenant's clients by the tenant's key, and the server's own
+        // clients are refused as server-wide, so there is nothing here to ask the tenants' converter about.
         var pairwise = PairwiseClients(options.Clients);
-        if (pairwise.Length == 0 ||
-            serviceProvider.GetService<ISubjectTypeConverter>() is not { } subjectTypeConverter ||
-            subjectTypeConverter.SubjectTypesSupported.Contains(SubjectTypes.Pairwise))
-        {
+#pragma warning disable ABXMT001
+        if (pairwise.Length == 0 || serviceProvider.GetService<ITenantAccessor>() is not null)
             return ValidateOptionsResult.Success;
+#pragma warning restore ABXMT001
+
+        ISubjectTypeConverter? subjectTypeConverter = null;
+        try
+        {
+            subjectTypeConverter = serviceProvider.GetService<ISubjectTypeConverter>();
+            if (subjectTypeConverter is null ||
+                subjectTypeConverter.SubjectTypesSupported.Contains(SubjectTypes.Pairwise))
+                return ValidateOptionsResult.Success;
+        }
+        catch (InvalidOperationException exception)
+        {
+            return ValidateOptionsResult.Fail(
+                $"The clients {string.Join(", ", pairwise)} take pairwise subject identifiers, and the subject type " +
+                $"converter{Named(subjectTypeConverter)} could not be asked at startup whether it issues them: " +
+                $"{exception.Message}");
         }
 
-        return ValidateOptionsResult.Fail(Refusal(pairwise));
+        return ValidateOptionsResult.Fail(
+            $"The clients {string.Join(", ", pairwise)} take pairwise subject identifiers, which the subject type " +
+            $"converter{Named(subjectTypeConverter)} does not issue: configure a pairwise key for the server's own " +
+            "converter, or register one that issues them.");
     }
+
+    private static string Named(ISubjectTypeConverter? subjectTypeConverter)
+        => subjectTypeConverter is null ? string.Empty : $" ({subjectTypeConverter.GetType().FullName})";
 
     /// <summary>
     /// Why <paramref name="clients"/> cannot be served with <paramref name="pairwiseSubject"/> as the key sealing

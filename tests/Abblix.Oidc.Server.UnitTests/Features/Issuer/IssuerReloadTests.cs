@@ -25,8 +25,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.Issuer;
 
 /// <summary>
-/// What is built once from the issuer's settings - its clients, scopes and resources - is built again when a reload
-/// brings other settings, so it never disagrees with the settings read beside it.
+/// What is built from the issuer's settings - its scopes and resources, and its clients in the reloading store - is
+/// built again when a reload brings other settings, so it never disagrees with the settings read beside it. The
+/// default client store keeps the clients it started with.
 /// </summary>
 public class IssuerReloadTests
 {

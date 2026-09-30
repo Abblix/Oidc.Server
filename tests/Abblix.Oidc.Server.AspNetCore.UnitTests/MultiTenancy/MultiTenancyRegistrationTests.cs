@@ -286,6 +286,27 @@ public class MultiTenancyRegistrationTests
         Assert.DoesNotContain(refusal.Failures, failure => failure.Contains(nameof(OidcOptions.Issuer), StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// A pairwise client set for the whole server under multi-tenancy gets the refusal of server-wide clients, not a
+    /// failure from asking a tenant's settings outside any tenant.
+    /// </summary>
+    [Fact]
+    public void AServerWidePairwiseClient_UnderMultiTenancy_IsRefusedAsServerWide()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options =>
+            options.Clients = [new ClientInfo("pairwise") { SubjectType = SubjectTypes.Pairwise }]);
+        services.AddIssuer();
+        services.AddClientInformation().AddUserInfo();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)} applies to the whole server",
+            refusal.Message, StringComparison.Ordinal);
+    }
+
     public static TheoryData<Type, object> HostsOwnRegistries => new()
     {
         { typeof(IClientInfoProvider), Moq.Mock.Of<IClientInfoProvider>() },

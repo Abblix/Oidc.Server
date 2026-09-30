@@ -26,6 +26,10 @@ public interface ISubjectTypeConverter
     /// publishes them, and dynamic registration refuses a pairwise client when pairwise is not among them. Listing
     /// pairwise without being able to issue it registers a client whose every token request then fails.
     /// </summary>
+    /// <remarks>
+    /// It is read at startup while the server's options are being checked, when a configured client takes pairwise
+    /// identifiers, so it must not read those options itself.
+    /// </remarks>
     IEnumerable<string> SubjectTypesSupported { get; }
 
     /// <summary>
