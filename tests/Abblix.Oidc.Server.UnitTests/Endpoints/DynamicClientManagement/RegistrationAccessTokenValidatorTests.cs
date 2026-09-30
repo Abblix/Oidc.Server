@@ -94,13 +94,13 @@ public class RegistrationAccessTokenValidatorTests
     }
 
     [Fact]
-    public async Task NullExpectation_SkipsBinding()
+    public async Task NullExpectation_Rejects()
     {
-        // Statically configured or pre-existing client with no recorded jti: binding not enforced.
+        // No binding recorded: no registration is managed under this id, whatever token is presented.
         var validator = CreateValidator(CreateToken("any-jti"));
 
         var error = await validator.ValidateAsync(Bearer, ClientId, expectedTokenId: null);
 
-        Assert.Null(error);
+        Assert.NotNull(error);
     }
 }

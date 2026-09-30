@@ -50,8 +50,15 @@ public class ClientRequestValidator(
         if (headerErrorDescription != null)
             return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
+        // Asked before the settings are: a store following their reloads drops, as it reads them, a registration
+        // under an id they took over, which would otherwise come back once they let the id go
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
-        if (clientInfo == null)
+
+        // The settings own every id they configure, and a registration access token manages a registration, of
+        // which there is none under such an id: the registrant of one the settings took over, or of one whose
+        // binding outlived it across a restart, reaches nothing.
+        if (clientInfo == null || issuerSettings.Clients.Any(client =>
+                string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase)))
         {
             // RFC 7592 section 2.3: when the addressed client does not exist, the server responds
             // 401 Unauthorized and the registration access token MUST be immediately revoked.

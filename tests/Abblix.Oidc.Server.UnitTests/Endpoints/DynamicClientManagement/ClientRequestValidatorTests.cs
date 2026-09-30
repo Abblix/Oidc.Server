@@ -8,12 +8,14 @@
 
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -100,6 +102,34 @@ public class ClientRequestValidatorTests
         _tokenStore.Setup(s => s.RemoveAsync(ClientId)).Returns(Task.CompletedTask);
 
         var result = await _validator.ValidateAsync(Request());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+        _tokenStore.Verify(s => s.RemoveAsync(ClientId), Times.Once);
+    }
+
+    /// <summary>
+    /// The settings own every id they configure, so a token bound to one - a registration they took over, or a
+    /// binding that outlived its registration across a restart - reaches nothing and is revoked, the same answer
+    /// as for a client that does not exist. The id is configured in another case, as client ids compare.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ClientTheSettingsConfigure_ReturnsInvalidTokenAndRevokesBinding()
+    {
+        var configured = new ClientInfo(ClientId.ToUpperInvariant());
+        var validator = new ClientRequestValidator(
+            _clientInfoProvider.Object,
+            _tokenValidator.Object,
+            _tokenStore.Object,
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { Clients = [configured] })));
+        _tokenStore.Setup(s => s.GetTokenIdAsync(ClientId)).ReturnsAsync(TokenId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<AuthenticationHeaderValue?>(), ClientId, TokenId))
+            .ReturnsAsync((string?)null);
+        _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(configured);
+        _tokenStore.Setup(s => s.RemoveAsync(ClientId)).Returns(Task.CompletedTask);
+
+        var result = await validator.ValidateAsync(Request());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);

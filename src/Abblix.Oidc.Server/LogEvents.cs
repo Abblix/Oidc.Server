@@ -926,4 +926,21 @@ internal static class LogEvents
 
     // Range 10500-10599 is taken by Abblix.Oidc.Server.AspNetCore's own LogEvents (multi-tenancy): the two
     // assemblies log into one process, so an id here must not repeat one there.
+
+    /// <summary>
+    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own.
+    /// </summary>
+    public static class ClientInformation
+    {
+        /// <summary>
+        /// <c>Features/ClientInformation/ReloadableClientInfoStorage.cs</c> - a registration dropped because the
+        /// settings came to configure its client id (sub-range 10600-10619).
+        /// </summary>
+        public static class ReloadableClientInfoStorage
+        {
+            private const int Base = 10600;
+
+            public const int RegistrationEvicted = Base;
+        }
+    }
 }

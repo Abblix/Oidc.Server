@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -97,6 +98,7 @@ public class IssuerReloadTests
     }
 
     private static ReloadableClientInfoStorage ClientsOf(IOptionsMonitor<OidcOptions> options) => new(
+        NullLogger<ReloadableClientInfoStorage>.Instance,
         new OptionsIssuerSettings(options),
         new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>(),
         new SingleIssuerLocal<ConcurrentDictionary<string, ReloadableClientInfoStorage.Registration>>());
@@ -118,22 +120,21 @@ public class IssuerReloadTests
     }
 
     /// <summary>
-    /// The registrant whose client a configured one now shadows still holds the means to manage its registration,
-    /// and what it changes or removes is its own registration, never the configured client.
+    /// A registration under an id a reload configures is dropped rather than hidden, so it does not come back once
+    /// the settings let the id go.
     /// </summary>
     [Fact]
-    public async Task ManagingAShadowedRegistration_LeavesTheConfiguredClientServed()
+    public async Task ARegistrationUnderAnIdAReloadConfigures_IsDropped()
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
         await clients.AddClientAsync(new ClientInfo("partner-app") { ClientName = "registered" });
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
-
-        await clients.UpdateClientAsync(new ClientInfo("partner-app") { ClientName = "changed by the registrant" });
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
-        await clients.RemoveClientAsync("partner-app");
-        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+        options.Reload(new OidcOptions());
+
+        Assert.Null(await clients.TryFindClientAsync("partner-app"));
     }
 
     /// <summary>
@@ -221,6 +222,7 @@ public class IssuerReloadTests
     public void TheReloadableStore_ServesClientsWhereverItIsAskedFor(bool beforeTheServer)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddOptions<OidcOptions>();
         services.AddIssuer();
         if (beforeTheServer)

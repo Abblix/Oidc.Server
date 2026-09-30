@@ -39,10 +39,7 @@ public class ReadClientRequestProcessorTests
             .Setup(s => s.GetTokenIdAsync(It.IsAny<string>()))
             .ReturnsAsync("jti-1");
 
-        var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Loose);
-
-        return new ReadClientRequestProcessor(
-            tokenService.Object, tokenStore.Object, idGenerator.Object, TimeProvider.System);
+        return new ReadClientRequestProcessor(tokenService.Object, tokenStore.Object, TimeProvider.System);
     }
 
     [Fact]

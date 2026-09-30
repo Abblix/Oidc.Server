@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.Issuer;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -18,15 +19,18 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </summary>
 /// <remarks>
 /// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
-/// what registration did since. A configured client wins over one registration merely added under its id, so a
-/// registrant choosing an id ahead of the administrator is not served in the configured client's place, and managing
-/// that registration afterwards changes or removes the registration alone. A change or removal made to a configured
-/// client itself keeps winning over the settings.
+/// what registration did since. The settings own every id they configure: a client registration merely added under
+/// an id they come to configure is dropped the first time the store reads them, which it does before serving any
+/// client, so a registrant choosing an id ahead of the administrator is never served in the configured client's
+/// place, and does not come back once the settings let the id go. A change or removal made to a configured client
+/// itself keeps winning over the settings.
 /// </remarks>
+/// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
 /// <param name="configured">The clients each issuer's settings configure.</param>
 /// <param name="registered">What registration added, changed or removed at each issuer.</param>
-internal class ReloadableClientInfoStorage(
+internal partial class ReloadableClientInfoStorage(
+    ILogger<ReloadableClientInfoStorage> logger,
     IIssuerSettings settings,
     IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> configured,
     IIssuerLocal<ConcurrentDictionary<string, ReloadableClientInfoStorage.Registration>> registered)
@@ -45,22 +49,33 @@ internal class ReloadableClientInfoStorage(
         get
         {
             var clients = settings.Clients;
-            return configured.GetOrCreate(clients, () => new(
+            return configured.GetOrCreate(clients, () => Evicting(new ConcurrentDictionary<string, ClientInfo>(
                 clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-                StringComparer.OrdinalIgnoreCase));
+                StringComparer.OrdinalIgnoreCase)));
         }
+    }
+
+    /// <summary>
+    /// Drops every registration merely added under an id <paramref name="clients"/> configure, as the store first
+    /// reads them.
+    /// </summary>
+    private ConcurrentDictionary<string, ClientInfo> Evicting(ConcurrentDictionary<string, ClientInfo> clients)
+    {
+        foreach (var (clientId, registration) in Registered)
+        {
+            if (registration is { OfConfigured: false } && clients.ContainsKey(clientId) &&
+                Registered.TryRemove(new KeyValuePair<string, Registration>(clientId, registration)))
+            {
+                LogRegistrationEvicted(clientId);
+            }
+        }
+
+        return clients;
     }
 
     // Built once for each issuer, whatever its settings become
     private ConcurrentDictionary<string, Registration> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
-
-    /// <summary>
-    /// Whether registration added a client under this id before the settings configured one: whoever manages it
-    /// manages that registration, which the configured client shadows, and never the configured client.
-    /// </summary>
-    private bool IsShadowed(string clientId)
-        => Registered.TryGetValue(clientId, out var registration) && registration is { OfConfigured: false };
 
     private ClientInfo? Find(string clientId)
     {
@@ -116,7 +131,7 @@ internal class ReloadableClientInfoStorage(
     public Task UpdateClientAsync(ClientInfo clientInfo)
     {
         var clientId = clientInfo.ClientId;
-        var ofConfigured = !IsShadowed(clientId) && Configured.ContainsKey(clientId);
+        var ofConfigured = Configured.ContainsKey(clientId);
         Registered[clientId] = new Registration(clientInfo, ofConfigured);
         return Task.CompletedTask;
     }
@@ -129,7 +144,7 @@ internal class ReloadableClientInfoStorage(
     public Task RemoveClientAsync(string clientId)
     {
         // Only a configured client needs its removal remembered: the settings would bring it back otherwise
-        if (!IsShadowed(clientId) && Configured.ContainsKey(clientId))
+        if (Configured.ContainsKey(clientId))
             Registered[clientId] = new Registration(null, OfConfigured: true);
         else
             Registered.TryRemove(clientId, out _);
