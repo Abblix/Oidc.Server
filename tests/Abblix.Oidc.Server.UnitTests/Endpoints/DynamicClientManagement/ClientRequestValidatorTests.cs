@@ -140,6 +140,34 @@ public class ClientRequestValidatorTests
     }
 
     /// <summary>
+    /// A store that cannot say which of its clients came from the settings - a host's own, or the built-in one
+    /// behind a host's decorator - is judged by the settings instead, so a binding that outlived its registration
+    /// still reaches no client they configure.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_StoreThatCannotTell_ClientTheSettingsConfigure_ReturnsInvalidTokenAndRevokesBinding()
+    {
+        var configured = new ClientInfo(ClientId.ToUpperInvariant());
+        var validator = new ClientRequestValidator(
+            _clientInfoProvider.Object,
+            _tokenValidator.Object,
+            _tokenStore.Object,
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { Clients = [configured] })));
+        _tokenStore.Setup(s => s.GetTokenIdAsync(ClientId)).ReturnsAsync(TokenId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<AuthenticationHeaderValue?>(), ClientId, TokenId))
+            .ReturnsAsync((string?)null);
+        _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(configured);
+        _tokenStore.Setup(s => s.RemoveAsync(ClientId)).Returns(Task.CompletedTask);
+
+        var result = await validator.ValidateAsync(Request());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+        _tokenStore.Verify(s => s.RemoveAsync(ClientId), Times.Once);
+    }
+
+    /// <summary>
     /// Every token this server issues is recorded, so with no record there is no registration a token could manage,
     /// and the token is not even read.
     /// </summary>
