@@ -313,10 +313,12 @@ public class TenantResolutionMiddlewareTests
     /// The mutual-TLS host is the declaring tenant's alone: a path another tenant of the issuer's host would take
     /// there resolves to no tenant of its own.
     /// </summary>
-    [Fact]
-    public async Task ATenantsMutualTlsHost_ServesNoTenantThatDoesNotDeclareIt()
+    [Theory]
+    [InlineData("/connect/token")] // the path of the tenant served at the issuer host's root
+    [InlineData("/tenants/a%20b/connect/token")] // the path of another tenant of the issuer's host
+    public async Task ATenantsMutualTlsHost_ServesNoTenantThatDoesNotDeclareIt(string path)
     {
-        var (_, seen) = await RunAsync("mtls.example.com", "/connect/token");
+        var (_, seen) = await RunAsync("mtls.example.com", path);
 
         Assert.Null(seen?.TenantId);
     }

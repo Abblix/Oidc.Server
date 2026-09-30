@@ -303,6 +303,13 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         var atTheAliasHost = JsonNode.Parse(await Http.GetStringAsync(
             MtlsHost + Acme + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
         Assert.Equal(Host + Acme, atTheAliasHost[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
+
+        // Fetched on the mutual-TLS host, the document still sends a client without a certificate to the issuer's
+        var tokenEndpoint = atTheAliasHost[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
+        Assert.Equal(new Uri(Host + Acme + TokenPath), new Uri(tokenEndpoint));
+        var aliasThere = atTheAliasHost[ConfigurationResponse.Parameters.MtlsEndpointAliases]!
+            [ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
+        Assert.Equal(new Uri(MtlsHost + Acme + TokenPath), new Uri(aliasThere));
     }
 
     /// <summary>

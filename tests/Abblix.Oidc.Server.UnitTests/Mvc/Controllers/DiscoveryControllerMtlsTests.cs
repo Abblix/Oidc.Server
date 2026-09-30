@@ -88,6 +88,26 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
+    /// A document fetched on the mutual-TLS host names the ordinary endpoints on the issuer's host, so a client
+    /// without a certificate that follows it is not sent to the host demanding one; the aliases stay on the
+    /// mutual-TLS host.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentFetchedOnTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost()
+    {
+        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _endpointResolverMock
+            .Setup(x => x.Resolve("Token", "Token"))
+            .Returns(new Uri("https://mtls.example.com/token"));
+
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
+
+        Assert.NotNull(result.Value);
+        Assert.Equal(new Uri("https://example.com/token"), result.Value.TokenEndpoint);
+        Assert.Equal(new Uri("https://mtls.example.com/token"), result.Value.MtlsEndpointAliases?.TokenEndpoint);
+    }
+
+    /// <summary>
     /// Verifies mTLS aliases are auto-computed when only MtlsBaseUri is configured.
     /// Tests RFC 8705 auto-computation feature.
     /// </summary>
