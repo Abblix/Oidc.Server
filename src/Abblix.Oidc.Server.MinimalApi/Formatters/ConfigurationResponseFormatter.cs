@@ -159,10 +159,16 @@ public class ConfigurationResponseFormatter(
     /// own host: a client without a certificate follows the ordinary endpoints, and only the aliases may name the host
     /// that demands one.
     /// </summary>
+    /// <remarks>
+    /// The host alone is compared, as a tenant is resolved by it: a request reaching the mutual-TLS host on another
+    /// port or scheme is still that host's. A server without tenants whose issuer names another host than the one
+    /// serving its endpoints has them named on the issuer's host too, when the document is fetched on the mutual-TLS
+    /// host.
+    /// </remarks>
     private Uri? OnIssuersHost(Uri? endpoint, string issuer)
         => endpoint is not null &&
            issuerSettings.MtlsBaseUri is { } mtlsBaseUri &&
-           Uri.Compare(endpoint, mtlsBaseUri, UriComponents.SchemeAndServer, UriFormat.Unescaped,
+           Uri.Compare(endpoint, mtlsBaseUri, UriComponents.Host, UriFormat.Unescaped,
                StringComparison.OrdinalIgnoreCase) == 0
             ? Rebase(endpoint, new Uri(new Uri(issuer).GetLeftPart(UriPartial.Authority)))
             : endpoint;

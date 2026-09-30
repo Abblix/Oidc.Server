@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -369,7 +370,10 @@ public class MultiTenancyRegistrationTests
         var atAcme = await ReadAsync();
         Assert.True(atAcme.TryGetSuccess(out _), atAcme.TryGetFailure(out var failure) ? failure.ErrorDescription : null);
         EnterTenant(provider, globex);
-        var atGlobex = await ReadAsync();
+
+        // Refused by the check the server reads its own tokens with. Read with it at acme too, the token would have
+        // it count acme's issuer against the license, which this suite does not lift.
+        var atGlobex = await provider.GetRequiredService<IAuthServiceJwtValidator>().ValidateAsync(encrypted);
         Assert.True(atGlobex.TryGetFailure(out var refusal), "Another tenant read the token.");
         Assert.Contains("decryption", refusal.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 

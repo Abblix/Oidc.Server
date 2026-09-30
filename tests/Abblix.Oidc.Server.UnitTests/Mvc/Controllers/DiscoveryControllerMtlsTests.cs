@@ -92,13 +92,15 @@ public class DiscoveryControllerMtlsTests
     /// without a certificate that follows it is not sent to the host demanding one; the aliases stay on the
     /// mutual-TLS host.
     /// </summary>
-    [Fact]
-    public async Task ADocumentFetchedOnTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost()
+    [Theory]
+    [InlineData("https://mtls.example.com/token")]
+    [InlineData("https://mtls.example.com:8443/token")] // reached on another port, still the mutual-TLS host
+    public async Task ADocumentFetchedOnTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost(string resolved)
     {
         _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
         _endpointResolverMock
             .Setup(x => x.Resolve("Token", "Token"))
-            .Returns(new Uri("https://mtls.example.com/token"));
+            .Returns(new Uri(resolved));
 
         var result = await _formatter.FormatResponseAsync(MinimalResponse());
 
