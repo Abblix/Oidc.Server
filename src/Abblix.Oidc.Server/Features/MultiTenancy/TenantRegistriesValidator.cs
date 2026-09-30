@@ -42,13 +42,34 @@ public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) 
     {
         var failures = (
             from registry in Registries
-            let registered = serviceProvider.GetService(registry.Service)
-            where registered is not null && registered.GetType() != registry.PerTenant
-            select $"{registry.Service.Name} is the host's own ({registered.GetType().FullName}), which keeps one " +
-                   "set for every tenant, so each tenant would see the others'. Under multi-tenancy leave it to " +
-                   "the server, which keeps one for each tenant from what the tenant declares."
+            let found = Find(registry.Service)
+            where found.Registered is not null && found.Registered.GetType() != registry.PerTenant ||
+                  found.Failure is not null
+            let whose = found.Registered is { } registered
+                ? $"({registered.GetType().FullName})"
+                : $"(it could not be resolved at startup: {found.Failure})"
+            select $"{registry.Service.Name} is the host's own {whose}, which keeps one set for every tenant, so " +
+                   "each tenant would see the others'; a wrapper around the server's own counts as the host's too. " +
+                   "Under multi-tenancy leave it to the server, which keeps one for each tenant from what the " +
+                   "tenant declares."
         ).ToList();
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// The registered service, or why it could not be resolved here: the server's own resolve from the root, so a
+    /// failure is a registration of the host's - one scoped to a request, for one.
+    /// </summary>
+    private (object? Registered, string? Failure) Find(Type service)
+    {
+        try
+        {
+            return (serviceProvider.GetService(service), null);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return (null, exception.Message);
+        }
     }
 }

@@ -313,6 +313,23 @@ public class MultiTenancyRegistrationTests
         Assert.Contains($"{service.Name} is the host's own", refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A registry the host scopes to a request cannot be resolved at startup, and that failure is reported as the
+    /// refusal, naming the service, rather than replacing every refusal of the tenant list with a container error.
+    /// </summary>
+    [Fact]
+    public void AHostsRegistryScopedToARequest_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped(_ => Moq.Mock.Of<IClientInfoProvider>());
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"{nameof(IClientInfoProvider)} is the host's own", refusal.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheServersOwnRegistries_PassTheStartupCheck()
     {
