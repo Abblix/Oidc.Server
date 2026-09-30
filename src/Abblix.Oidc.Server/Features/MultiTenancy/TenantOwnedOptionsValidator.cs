@@ -8,7 +8,6 @@
 
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
@@ -31,23 +30,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed class TenantOwnedOptionsValidator(PairwiseSubjectSettings? pairwiseSubject = null)
     : IValidateOptions<OidcOptions>
 {
-    /// <summary>
-    /// The settings a tenant declares that the server's options carry under the same name.
-    /// </summary>
-    private static readonly PropertyInfo[] TenantOwned = (
-        from tenantProperty in typeof(TenantDefinition).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-        let serverProperty = typeof(OidcOptions).GetProperty(tenantProperty.Name)
-        where serverProperty is not null
-        select serverProperty
-    ).ToArray();
-
     private static readonly OidcOptions Defaults = new();
 
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
         var failures = (
-            from setting in TenantOwned
+            from setting in TenantOwnedSettings.All.Select(setting => setting.Server)
             where IsSet(setting.GetValue(options), setting.GetValue(Defaults))
             select $"{nameof(OidcOptions)}.{setting.Name} applies to the whole server; under multi-tenancy each " +
                    $"tenant declares its own in {nameof(TenantDefinition)}.{setting.Name}, so leave it unset."

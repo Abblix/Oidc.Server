@@ -42,17 +42,14 @@ public class TenantSettingsMirrorTests
             .Select(property => property.Name)
             .Where(name => !TenantOnly.Contains(name)));
 
+    /// <summary>
+    /// Every tenant setting but the tenant-only ones is found by the startup checks, so none is left out for a name
+    /// the server's options spell otherwise or a type they cannot hold.
+    /// </summary>
     [Theory]
     [MemberData(nameof(Mirrored))]
-    public void ATenantSetting_HasACounterpartTheServersOptionsCanHold(string setting)
-    {
-        var tenantProperty = typeof(TenantDefinition).GetProperty(setting)!;
-        var serverProperty = typeof(OidcOptions).GetProperty(setting);
-
-        Assert.NotNull(serverProperty);
-        Assert.True(serverProperty.CanWrite);
-        Assert.True(serverProperty.PropertyType.IsAssignableFrom(tenantProperty.PropertyType));
-    }
+    public void ATenantSetting_IsOneTheStartupChecksFind(string setting)
+        => Assert.Contains(TenantOwnedSettings.All, owned => owned.Tenant.Name == setting);
 
     [Theory]
     [MemberData(nameof(Mirrored))]

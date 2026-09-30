@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
@@ -32,14 +31,6 @@ public sealed class TenantSettingsValidator(
     IOptions<OidcOptions> options,
     IEnumerable<IValidateOptions<OidcOptions>> validators) : IValidateOptions<MultiTenancyOptions>
 {
-    private static readonly (PropertyInfo Tenant, PropertyInfo Server)[] TenantOwned = (
-        from tenantProperty in typeof(TenantDefinition).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-        let serverProperty = typeof(OidcOptions).GetProperty(tenantProperty.Name)
-        where serverProperty is { CanWrite: true } &&
-              serverProperty.PropertyType.IsAssignableFrom(tenantProperty.PropertyType)
-        select (tenantProperty, serverProperty)
-    ).ToArray();
-
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions tenants)
     {
@@ -74,7 +65,7 @@ public sealed class TenantSettingsValidator(
     private static OidcOptions ServedWith(OidcOptions server, TenantDefinition tenant)
     {
         var servedWith = server with { };
-        foreach (var (tenantProperty, serverProperty) in TenantOwned)
+        foreach (var (tenantProperty, serverProperty) in TenantOwnedSettings.All)
             serverProperty.SetValue(servedWith, tenantProperty.GetValue(tenant));
 
         return servedWith;
