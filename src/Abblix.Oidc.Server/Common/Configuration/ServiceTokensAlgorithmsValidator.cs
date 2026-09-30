@@ -28,31 +28,16 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// only, and is never called here: it answers where the keys come from without reading them, and without
 /// reading the options that are still being created. Injecting the key provider instead would re-enter
 /// <see cref="IOptions{TOptions}.Value"/> from inside its own creation.</param>
-/// <param name="services">Tells whether the server serves tenants, whose encryption keys the tenant list's check
-/// judges instead.</param>
+/// <param name="services">Tells whether the server serves tenants, whose own settings carry no keys while each
+/// tenant's carry its own.</param>
 public sealed class ServiceTokensAlgorithmsValidator(
     IJsonWebTokenCreator jwtCreator,
     IKeyCustodian? custodian = null,
     IServiceProvider? services = null) : IValidateOptions<OidcOptions>
 {
-    /// <summary>
-    /// The service tokens the settings ask to encrypt, by name.
-    /// </summary>
-    internal static IEnumerable<string> EncryptedTokens(ServiceTokensOptions serviceTokens)
-    {
-        if (serviceTokens.AccessToken.Encrypt == true)
-            yield return nameof(serviceTokens.AccessToken);
-        if (serviceTokens.RefreshToken.Encrypt == true)
-            yield return nameof(serviceTokens.RefreshToken);
-        if (serviceTokens.RegistrationAccessToken.Encrypt == true)
-            yield return nameof(serviceTokens.RegistrationAccessToken);
-        if (serviceTokens.InitialAccessToken.Encrypt == true)
-            yield return nameof(serviceTokens.InitialAccessToken);
-    }
-
-    internal static string NoEncryptionKey(string tokenType)
+    private static string NoEncryptionKey(string tokenType, string keysSetting)
         => $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
-           $"{nameof(OidcOptions.EncryptionKeys)} is empty and no external key custodian is registered. " +
+           $"{keysSetting} is empty and no external key custodian is registered. " +
            $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
            $"this token as a signed JWS.";
 
@@ -65,8 +50,16 @@ public sealed class ServiceTokensAlgorithmsValidator(
         var failures = new List<string>();
         var serviceTokens = options.ServiceTokens;
 
-        // Under multi-tenancy each tenant declares its encryption keys and the server's own carry none
-        var keysJudgedHere = custodian is null && (services is null || !MultiTenancyDetection.IsActive(services));
+        // Under multi-tenancy the server's own settings carry no keys, and each tenant's, validated under its id,
+        // carry its own
+        var ofTenant = MultiTenancyDetection.IsTenantsOwn(name);
+        var keysJudgedHere = custodian is null &&
+                             (ofTenant || services is null || !MultiTenancyDetection.IsActive(services));
+#pragma warning disable ABXMT001
+        var keysSetting = ofTenant
+            ? $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)}"
+            : $"{nameof(OidcOptions)}.{nameof(OidcOptions.EncryptionKeys)}";
+#pragma warning restore ABXMT001
 
         Check(failures, nameof(serviceTokens.AccessToken), serviceTokens.AccessToken);
         Check(failures, nameof(serviceTokens.RefreshToken), serviceTokens.RefreshToken);
@@ -103,7 +96,7 @@ public sealed class ServiceTokensAlgorithmsValidator(
             // JWS exactly as before. The key set is only knowable here when it comes from the options; with a
             // custodian registered the keys live outside them, so the emptiness above says nothing.
             if (token.Encrypt == true && keysJudgedHere && options.EncryptionKeys.Count == 0)
-                results.Add(NoEncryptionKey(tokenType));
+                results.Add(NoEncryptionKey(tokenType, keysSetting));
         }
     }
 }

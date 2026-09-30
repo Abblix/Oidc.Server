@@ -277,7 +277,7 @@ public static class ExternalKeysServiceCollectionExtensions
         services.AddOptions<KeyRingOptions>().Validate(
             ring => ring.Partitions.Count > 0 &&
                     ring.Partitions.Distinct(StringComparer.Ordinal).Count() == ring.Partitions.Count &&
-                    ring.Partitions.All(partition => partition.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')),
+                    ring.Partitions.All(KeyRingOptions.IsPartitionName),
             $"{nameof(KeyRingOptions)}.{nameof(KeyRingOptions.Partitions)} must name at least one partition, each " +
             "once, and each of letters, digits, '-' and '_' only: a partition's name goes in front of its entries' " +
             "ids in the store.");

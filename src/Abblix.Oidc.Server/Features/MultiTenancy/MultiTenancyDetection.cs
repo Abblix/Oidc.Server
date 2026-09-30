@@ -26,4 +26,11 @@ internal static class MultiTenancyDetection
 #pragma warning disable ABXMT001
            services.IsService(typeof(IValidateOptions<MultiTenancyOptions>));
 #pragma warning restore ABXMT001
+
+    /// <summary>
+    /// Whether the settings validated under <paramref name="name"/> are a tenant's: the check of the tenant list
+    /// validates each tenant's settings under the tenant's id, and the server's own are validated under the
+    /// default name.
+    /// </summary>
+    public static bool IsTenantsOwn(string? name) => !string.IsNullOrEmpty(name);
 }

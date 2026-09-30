@@ -41,10 +41,16 @@ internal sealed class SigningKeysPresenceValidator(IServiceProvider serviceProvi
         // container cannot see through the provider's factory lambda - it overflows the stack
         // instead of reporting a circular dependency. By the time Validate runs the factory is
         // fully built, and the same resolution completes without re-entering it.
-        // Under multi-tenancy each tenant declares its keys and the server's own carry none; the tenant list's
-        // check judges each tenant's
+        // Under multi-tenancy the server's own settings carry no keys, and each tenant's, validated under its id,
+        // carry its own; the custodian's key names are a tenant's own and judged with the tenant list
         if (MultiTenancyDetection.IsActive(serviceProvider))
-            return ValidateOptionsResult.Success;
+        {
+            return MultiTenancyDetection.IsTenantsOwn(name) &&
+                   KeysComeFromSettings(serviceProvider) &&
+                   options.SigningKeys.Count == 0
+                ? ValidateOptionsResult.Fail(NoTenantSigningKey)
+                : ValidateOptionsResult.Success;
+        }
 
         if (KeysComeFromSettings(serviceProvider))
         {
@@ -67,7 +73,14 @@ internal sealed class SigningKeysPresenceValidator(IServiceProvider serviceProvi
         => serviceProvider.GetService<IAuthServiceKeysProvider>() is OidcOptionsKeysProvider &&
            serviceProvider.GetService<IKeyCustodian>() is null;
 
-    internal static string NoSigningKey
+#pragma warning disable ABXMT001
+    private static string NoTenantSigningKey
+        => "No signing key is declared, so the tenant cannot issue a single token and publishes an empty JWKS. " +
+           $"Supply at least one JWK with a private part in {nameof(TenantDefinition)}." +
+           $"{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a custodian or minted by the server.";
+#pragma warning restore ABXMT001
+
+    private static string NoSigningKey
         => $"No signing key is configured, so the server cannot issue a single token and publishes an empty JWKS. " +
            $"The library does not generate keys: supply at least one JWK with a private part in " +
            $"{nameof(OidcOptions)}.{nameof(OidcOptions.SigningKeys)}, or register your own " +

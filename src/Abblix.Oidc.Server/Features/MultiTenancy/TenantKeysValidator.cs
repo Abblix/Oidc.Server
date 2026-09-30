@@ -7,8 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -16,84 +17,96 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses at startup a tenant that, with its keys coming from its settings, declares no key to sign with, or none
-/// to encrypt a service token the server's settings ask to encrypt; and, with its keys held by a custodian, one that
-/// names no key there, or names one another tenant names.
+/// Refuses at startup a tenant declaring keys its server's placement never reads, and, with the keys held by a
+/// custodian, a tenant naming no key there or one another tenant names; with the keys minted by the server, a tenant
+/// whose id cannot name its part of the store.
 /// </summary>
 /// <remarks>
-/// The same refusals a server without tenants meets for its own settings, for each tenant: under multi-tenancy the
-/// server's own settings carry no keys, so the checks of those settings leave the keys to this one.
+/// Whether a tenant whose keys come from its settings declares enough of them is judged with the rest of its
+/// settings, by the checks of the server's settings (<see cref="TenantSettingsValidator"/>).
 /// </remarks>
 /// <param name="serviceProvider">The container the key provider is resolved from, once the settings are built.</param>
-/// <param name="options">The server's own settings, holding which service tokens are encrypted.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantKeysValidator(IServiceProvider serviceProvider, IOptions<OidcOptions> options)
-    : IValidateOptions<MultiTenancyOptions>
+public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IValidateOptions<MultiTenancyOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions tenants)
     {
-        if (serviceProvider.GetService<IAuthServiceKeysProvider>() is ExternalKeysProvider)
-            return CustodianKeysOf(tenants);
-
-        if (!SigningKeysPresenceValidator.KeysComeFromSettings(serviceProvider))
-            return ValidateOptionsResult.Success;
-
-        ServiceTokensOptions serviceTokens;
-        try
+        var failures = (serviceProvider.GetService<IAuthServiceKeysProvider>() switch
         {
-            serviceTokens = options.Value.ServiceTokens;
-        }
-        catch (OptionsValidationException)
-        {
-            // The server's settings report their own refusal; thrown from here it would replace the tenant list's
-            return ValidateOptionsResult.Skip;
-        }
+            OidcOptionsKeysProvider => Unread(tenants, "the keys come from each tenant's settings",
+                nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys)),
 
-        var encrypted = ServiceTokensAlgorithmsValidator.EncryptedTokens(serviceTokens).ToArray();
-        var failures = (
-            from tenant in tenants.Tenants
-            from failure in Failures(tenant, encrypted)
-            select $"Tenant '{tenant.Id}': {failure}"
-        ).ToList();
+            ExternalKeysProvider => Unread(tenants, "the keys are held by a custodian",
+                    nameof(TenantDefinition.CustodianKeys))
+                .Concat(CustodianKeysOf(tenants)),
+
+            MintedKeysProvider => Unread(tenants, "the server mints the keys")
+                .Concat(PartitionsOf(tenants)),
+
+            // A key provider of the host's own is refused under multi-tenancy by the check of the registries
+            _ => [],
+        }).ToList();
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// The key settings a tenant declares that the placement never reads: declared, they read as the keys the
+    /// tenant produces with while it produces with others.
+    /// </summary>
+    private static IEnumerable<string> Unread(MultiTenancyOptions tenants, string placement, params string[] read)
+        =>
+            from tenant in tenants.Tenants
+            from setting in Declared(tenant)
+            where !read.Contains(setting, StringComparer.Ordinal)
+            select $"Tenant '{tenant.Id}': {nameof(TenantDefinition)}.{setting} is declared, but {placement}, " +
+                   "so it is never read.";
+
+    private static IEnumerable<string> Declared(TenantDefinition tenant)
+    {
+        if (tenant.SigningKeys.Count > 0)
+            yield return nameof(TenantDefinition.SigningKeys);
+        if (tenant.EncryptionKeys.Count > 0)
+            yield return nameof(TenantDefinition.EncryptionKeys);
+        if (tenant.CustodianKeys is not null)
+            yield return nameof(TenantDefinition.CustodianKeys);
     }
 
     /// <summary>
     /// Each tenant names keys in the custodian, and no key is named by two tenants: sharing one would let a party
     /// trusting one tenant's keys verify the other's tokens, which keys of their own exist to prevent.
     /// </summary>
-    private static ValidateOptionsResult CustodianKeysOf(MultiTenancyOptions tenants)
+    private static IEnumerable<string> CustodianKeysOf(MultiTenancyOptions tenants)
     {
         var unnamed =
             from tenant in tenants.Tenants
             where tenant.CustodianKeys is null
             select $"Tenant '{tenant.Id}': {ExternalKeysProvider.NoKeyNamed}";
 
+        // A tenant may name one key for both roles, so each tenant counts once per key
         var shared =
             from tenant in tenants.Tenants
             where tenant.CustodianKeys is not null
             from keyName in new[] { tenant.CustodianKeys!.SigningKeyName, tenant.CustodianKeys.EncryptionKeyName }
+                .Distinct(StringComparer.Ordinal)
             where keyName is not null
             group tenant.Id by keyName into namers
             where namers.Count() > 1
             select $"The custodian key '{namers.Key}' is named by the tenants {string.Join(", ", namers.Select(id => $"'{id}'"))}; " +
                    "each tenant produces with keys of its own.";
 
-        var failures = unnamed.Concat(shared).ToList();
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+        return unnamed.Concat(shared);
     }
 
-    private static IEnumerable<string> Failures(TenantDefinition tenant, string[] encrypted)
-    {
-        if (tenant.SigningKeys.Count == 0)
-            yield return SigningKeysPresenceValidator.NoSigningKey;
-
-        if (tenant.EncryptionKeys.Count == 0)
-        {
-            foreach (var tokenType in encrypted)
-                yield return ServiceTokensAlgorithmsValidator.NoEncryptionKey(tokenType);
-        }
-    }
+    /// <summary>
+    /// The server keeps each tenant's minted keys in the store under the tenant's id, so the id must be a name
+    /// the key ring accepts for its part of the store.
+    /// </summary>
+    private static IEnumerable<string> PartitionsOf(MultiTenancyOptions tenants)
+        =>
+            from tenant in tenants.Tenants
+            where !KeyRingOptions.IsPartitionName(tenant.Id)
+            select $"Tenant '{tenant.Id}': the server mints the keys and keeps each tenant's in the store under its " +
+                   "id, so the id may hold only letters, digits, '-' and '_'.";
 }

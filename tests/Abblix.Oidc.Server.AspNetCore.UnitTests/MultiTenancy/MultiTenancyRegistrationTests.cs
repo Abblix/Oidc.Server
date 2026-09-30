@@ -225,7 +225,9 @@ public class MultiTenancyRegistrationTests
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("Tenant 'acme': No signing key is configured", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Tenant 'acme': No signing key is declared", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}", refusal.Message,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -235,18 +237,24 @@ public class MultiTenancyRegistrationTests
     [Fact]
     public void ATenantWithoutAnEncryptionKey_IsRefused_WhenAServiceTokenIsEncrypted()
     {
-        using var provider = KeysFromSettings(
-            new TenantDefinition
-            {
-                Id = "acme",
-                Issuer = AcmeIssuer,
-                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
-            },
-            options => options.ServiceTokens.AccessToken.Encrypt = true);
+        var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
+        services.AddMemoryCache();
+        services.AddOidcCore(options => options.ServiceTokens.AccessToken.Encrypt = true);
+        services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
+        using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("Tenant 'acme': ServiceTokens.AccessToken.Encrypt is true", refusal.Message,
+        Assert.Contains(
+            "Tenant 'acme': ServiceTokens.AccessToken.Encrypt is true, but no encryption key is available: " +
+            $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)} is empty",
+            refusal.Message,
             StringComparison.Ordinal);
     }
 
@@ -428,6 +436,76 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A tenant may name one custodian key for both roles, as a server without tenants may: it shares the key with
+    /// no other tenant.
+    /// </summary>
+    [Fact]
+    public void ATenantNamingOneCustodianKeyForBothRoles_Starts()
+    {
+        using var provider = KeysInACustodian(
+        [
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                CustodianKeys = new CustodianHeldKeys { SigningKeyName = "acme-rsa", EncryptionKeyName = "acme-rsa" },
+            },
+        ]);
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
+    /// <summary>
+    /// Keys a tenant declares for a placement its server does not use are never read, so startup refuses them,
+    /// naming the tenant and the setting, rather than let them read as the keys the tenant produces with.
+    /// </summary>
+    [Fact]
+    public void CustodianKeysOfATenant_WhoseKeysComeFromItsSettings_AreRefusedAtStartup()
+    {
+        using var provider = KeysFromSettings(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            CustodianKeys = new CustodianHeldKeys { SigningKeyName = "acme-sign" },
+        });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains(
+            $"Tenant 'acme': {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)} is declared, " +
+            "but the keys come from each tenant's settings",
+            refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Signing keys a tenant declares while its keys are held by a custodian are never read, so startup refuses them.
+    /// </summary>
+    [Fact]
+    public void SigningKeysOfATenant_WhoseKeysAreHeldByACustodian_AreRefusedAtStartup()
+    {
+        using var provider = KeysInACustodian(
+        [
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+                CustodianKeys = new CustodianHeldKeys { SigningKeyName = "acme-sign" },
+            },
+        ]);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains(
+            $"Tenant 'acme': {nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)} is declared, " +
+            "but the keys are held by a custodian",
+            refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Custodian keys named for the whole server would be ignored under multi-tenancy, so startup refuses them.
     /// </summary>
     [Fact]
@@ -504,6 +582,42 @@ public class MultiTenancyRegistrationTests
 
         Assert.Equal("acme", Assert.Single(atAcme).KeyId);
         Assert.Equal("globex", Assert.Single(atGlobex).KeyId);
+    }
+
+    /// <summary>
+    /// Encryption keys a tenant declares while the server mints its keys are never read, so startup refuses them.
+    /// </summary>
+    [Fact]
+    public void EncryptionKeysOfATenant_WhenTheServerMintsTheKeys_AreRefusedAtStartup()
+    {
+        using var provider = MintingKeys(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
+        });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains(
+            $"Tenant 'acme': {nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)} is declared, " +
+            "but the server mints the keys",
+            refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The server keeps each tenant's minted keys under the tenant's id, so an id the key ring cannot name its part
+    /// of the store by is refused at startup, naming the tenant.
+    /// </summary>
+    [Fact]
+    public void ATenantIdTheKeyRingCannotNameAPartitionBy_IsRefusedAtStartup()
+    {
+        using var provider = MintingKeys(new TenantDefinition { Id = "acme.eu", Issuer = AcmeIssuer });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("Tenant 'acme.eu': the server mints the keys", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

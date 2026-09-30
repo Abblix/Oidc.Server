@@ -43,4 +43,12 @@ public sealed class KeyRingOptions
     /// the default partition keeps only entries whose id has no dot.
     /// </remarks>
     public IReadOnlyCollection<string> Partitions { get; set; } = [DefaultPartition];
+
+    /// <summary>
+    /// Whether <paramref name="partition"/> can name a partition: its name goes in front of its entries' ids in
+    /// the store, so it holds only letters, digits, '-' and '_', which every store accepts and none is a dot.
+    /// </summary>
+    /// <param name="partition">The name to judge.</param>
+    public static bool IsPartitionName(string partition)
+        => partition.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 }
