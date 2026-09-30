@@ -205,8 +205,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     /// <remarks>
     /// It replaces the client store, whichever was registered, so it may be called before or after
-    /// <c>AddOidcServices</c>. A client registration merely added under an id the settings come to configure is
-    /// dropped, while a change or removal registration made to a configured client keeps winning over the settings.
+    /// <c>AddOidcServices</c>. The settings own every id they configure: the store changes nothing under one, and
+    /// a client registered under an id they come to configure is dropped.
     /// </remarks>
     public static IServiceCollection AddReloadableClientInformation(this IServiceCollection services)
     {

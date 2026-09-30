@@ -17,4 +17,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// </summary>
 /// <param name="Model">The original request.</param>
 /// <param name="ClientInfo">The currently stored configuration of the addressed client.</param>
-public record ValidClientRequest(ClientRequest Model, ClientInfo ClientInfo);
+/// <param name="RegistrationAccessTokenId">The jti of the registration access token the request was authenticated
+/// with, which a token issued in reply carries unless the reply rotates it.</param>
+public record ValidClientRequest(ClientRequest Model, ClientInfo ClientInfo, string RegistrationAccessTokenId);

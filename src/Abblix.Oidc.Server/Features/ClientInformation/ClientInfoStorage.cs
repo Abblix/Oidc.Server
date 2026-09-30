@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using Abblix.Oidc.Server.Features.Issuer;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -25,12 +26,23 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <param name="clients">The clients of each issuer.</param>
 internal class ClientInfoStorage(
     IIssuerSettings settings,
-    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> clients) : IClientInfoProvider, IClientInfoManager
+    IIssuerLocal<IssuerClients> clients) : IClientInfoProvider, IClientInfoManager, IConfiguredClientLookup
 {
     // Built once for each issuer, whatever its settings become
-    private ConcurrentDictionary<string, ClientInfo> Clients => clients.GetOrCreate(null, () => new(
-        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-        StringComparer.OrdinalIgnoreCase));
+    private IssuerClients Issuer => clients.GetOrCreate(null, () =>
+    {
+        var configured = settings.Clients;
+        return new IssuerClients(
+            new ConcurrentDictionary<string, ClientInfo>(
+                configured.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase),
+            configured.Select(client => client.ClientId).ToFrozenSet(StringComparer.OrdinalIgnoreCase));
+    });
+
+    private ConcurrentDictionary<string, ClientInfo> Clients => Issuer.Clients;
+
+    /// <inheritdoc />
+    public bool IsConfigured(string clientId) => Issuer.ConfiguredIds.Contains(clientId);
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

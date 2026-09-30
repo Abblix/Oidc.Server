@@ -24,7 +24,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
-    IRegistrationAccessTokenStore registrationAccessTokenStore,
     TimeProvider clock) : IReadClientRequestProcessor
 {
     /// <inheritdoc />
@@ -33,12 +32,11 @@ public class ReadClientRequestProcessor(
         var client = request.ClientInfo;
 
         var issuedAt = clock.GetUtcNow();
-        // Reuse the stored jti so the token the client just presented stays valid; only update
-        // rotates it (read is idempotent). The request passed the token check, which needs one.
-        var registrationAccessTokenId = (await registrationAccessTokenStore.GetTokenIdAsync(client.ClientId))
-            .NotNull(nameof(IRegistrationAccessTokenStore.GetTokenIdAsync));
+        // Reuse the jti the request was authenticated with, so the token the client just presented
+        // stays valid; only update rotates it (read is idempotent). Read from the store again instead,
+        // a request racing a rotation would hand the holder of the old token a current one.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
-            client.ClientId, issuedAt, null, registrationAccessTokenId);
+            client.ClientId, issuedAt, null, request.RegistrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse
         {

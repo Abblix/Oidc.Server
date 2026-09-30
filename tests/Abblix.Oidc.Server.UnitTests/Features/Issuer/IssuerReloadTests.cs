@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -64,25 +65,17 @@ public class IssuerReloadTests
     }
 
     [Fact]
-    public async Task AReloadBringsTheClientsItConfigures_AndKeepsWhatRegistrationChanged()
+    public async Task AReloadBringsTheClientsItConfigures_AndKeepsWhatRegistrationAdded()
     {
-        var options = new ReloadableOptions(new OidcOptions
-        {
-            Clients = [new ClientInfo("configured"), new ClientInfo("retired")],
-        });
+        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
         var clients = ClientsOf(options);
         await clients.AddClientAsync(new ClientInfo("registered"));
-        await clients.RemoveClientAsync("retired");
 
-        options.Reload(new OidcOptions
-        {
-            Clients = [new ClientInfo("configured"), new ClientInfo("retired"), new ClientInfo("added")],
-        });
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
 
         Assert.NotNull(await clients.TryFindClientAsync("added"));
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
         Assert.NotNull(await clients.TryFindClientAsync("registered"));
-        Assert.Null(await clients.TryFindClientAsync("retired"));
     }
 
     [Fact]
@@ -97,11 +90,13 @@ public class IssuerReloadTests
         Assert.Null(await clients.TryFindClientAsync("configured"));
     }
 
-    private static ReloadableClientInfoStorage ClientsOf(IOptionsMonitor<OidcOptions> options) => new(
-        NullLogger<ReloadableClientInfoStorage>.Instance,
+    private static ReloadableClientInfoStorage ClientsOf(
+        IOptionsMonitor<OidcOptions> options,
+        ILogger<ReloadableClientInfoStorage>? logger = null) => new(
+        logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
         new OptionsIssuerSettings(options),
-        new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>(),
-        new SingleIssuerLocal<ConcurrentDictionary<string, ReloadableClientInfoStorage.Registration>>());
+        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
+        new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
 
     /// <summary>
     /// A client registered under an id the settings later configure gives way to the configured one: otherwise a
@@ -137,33 +132,93 @@ public class IssuerReloadTests
         Assert.Null(await clients.TryFindClientAsync("partner-app"));
     }
 
+    [Fact]
+    public async Task ARegistrationAReloadDrops_IsLogged()
+    {
+        var logger = new CapturingLogger<ReloadableClientInfoStorage>();
+        var options = new ReloadableOptions(new OidcOptions());
+        var clients = ClientsOf(options, logger);
+        await clients.AddClientAsync(new ClientInfo("partner-app"));
+
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app")] });
+        await clients.TryFindClientAsync("partner-app");
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Equal(LogEvents.ClientInformation.ReloadableClientInfoStorage.RegistrationEvicted, entry.EventId.Id);
+    }
+
     /// <summary>
-    /// A configured client's removal, remembered while the settings configure it, does not refuse a client registered
-    /// under its id once they no longer do.
+    /// A client added or changed under an id the settings configure - as when a write decided under earlier settings
+    /// lands after a reload that configures its id was served - is not kept: nothing would evict it later, and it
+    /// would come back once the id leaves the settings.
     /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AClientWrittenUnderAConfiguredId_DoesNotComeBackWhenTheIdLeaves(bool added)
+    {
+        var options = new ReloadableOptions(new OidcOptions
+        {
+            Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
+        });
+        var clients = ClientsOf(options);
+        Assert.True(clients.IsConfigured("partner-app"));
+
+        var written = new ClientInfo("partner-app") { ClientName = "registered" };
+        if (added)
+            await clients.AddClientAsync(written);
+        else
+            await clients.UpdateClientAsync(written);
+        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+
+        options.Reload(new OidcOptions());
+        Assert.Null(await clients.TryFindClientAsync("partner-app"));
+    }
+
+    /// <summary>
+    /// The settings own the ids they configure, so the store changes nothing under one.
+    /// </summary>
+    [Fact]
+    public async Task AConfiguredClient_IsNeitherAddedOverNorChangedNorRemoved()
+    {
+        var options = new ReloadableOptions(new OidcOptions
+        {
+            Clients = [new ClientInfo("app") { ClientName = "configured" }],
+        });
+        var clients = ClientsOf(options);
+
+        await clients.AddClientAsync(new ClientInfo("app") { ClientName = "added" });
+        await clients.UpdateClientAsync(new ClientInfo("app") { ClientName = "updated" });
+        await clients.RemoveClientAsync("app");
+
+        Assert.Equal("configured", (await clients.TryFindClientAsync("app"))?.ClientName);
+        Assert.True(clients.IsConfigured("app"));
+    }
+
     [Fact]
     public async Task ARegistrationAfterAConfiguredClientLeaves_IsKept()
     {
         var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("app")] });
         var clients = ClientsOf(options);
-        await clients.RemoveClientAsync("app");
+        Assert.NotNull(await clients.TryFindClientAsync("app"));
         options.Reload(new OidcOptions());
 
         await clients.AddClientAsync(new ClientInfo("app") { ClientName = "registered" });
 
         Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
+        Assert.False(clients.IsConfigured("app"));
     }
 
     [Fact]
-    public async Task AnUpdateOfAConfiguredClient_OutlivesAReload()
+    public async Task ARemovedRegistration_IsNoLongerKnown()
     {
-        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
-        var clients = ClientsOf(options);
-        await clients.UpdateClientAsync(new ClientInfo("configured") { ClientName = "updated" });
+        var clients = ClientsOf(new ReloadableOptions(new OidcOptions()));
+        await clients.AddClientAsync(new ClientInfo("app"));
 
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
+        await clients.RemoveClientAsync("app");
 
-        Assert.Equal("updated", (await clients.TryFindClientAsync("configured"))?.ClientName);
+        Assert.Null(await clients.TryFindClientAsync("app"));
     }
 
     [Fact]
@@ -203,13 +258,31 @@ public class IssuerReloadTests
         var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
         var clients = new ClientInfoStorage(
             new OptionsIssuerSettings(options),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
+            new SingleIssuerLocal<IssuerClients>());
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("added")] });
 
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
+        Assert.True(clients.IsConfigured("configured"));
         Assert.Null(await clients.TryFindClientAsync("added"));
+        Assert.False(clients.IsConfigured("added"));
+    }
+
+    /// <summary>
+    /// The default store tells the clients it read from the settings from the ones registration added.
+    /// </summary>
+    [Fact]
+    public async Task TheDefaultStore_TellsARegistrationFromAConfiguredClient()
+    {
+        var clients = new ClientInfoStorage(
+            new OptionsIssuerSettings(new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("app")] })),
+            new SingleIssuerLocal<IssuerClients>());
+
+        await clients.AddClientAsync(new ClientInfo("registered"));
+
+        Assert.True(clients.IsConfigured("APP"));
+        Assert.False(clients.IsConfigured("registered"));
     }
 
     /// <summary>
@@ -251,5 +324,22 @@ public class IssuerReloadTests
         public OidcOptions Get(string? name) => CurrentValue;
 
         public IDisposable? OnChange(Action<OidcOptions, string?> listener) => null;
+    }
+
+    /// <summary>
+    /// Records the level and event of each entry.
+    /// </summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, EventId EventId)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, eventId));
     }
 }

@@ -25,12 +25,11 @@ public interface IRegistrationAccessTokenValidator
     /// <param name="clientId">The <c>client_id</c> targeted by the management request.</param>
     /// <param name="expectedTokenId">
     /// The jti the token must carry to be accepted - the value stored on the client when its
-    /// current registration access token was issued. When <c>null</c> no registration is bound to the
-    /// client id, and every token is refused.
+    /// current registration access token was issued.
     /// </param>
     /// <returns>
     /// <c>null</c> when the token is valid for the client; otherwise a human-readable description
     /// of the validation failure.
     /// </returns>
-    Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string? expectedTokenId);
+    Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string expectedTokenId);
 }

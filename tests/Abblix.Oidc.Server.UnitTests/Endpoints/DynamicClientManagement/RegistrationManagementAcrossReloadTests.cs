@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -43,8 +44,8 @@ public class RegistrationManagementAcrossReloadTests
         _clients = new ReloadableClientInfoStorage(
             NullLogger<ReloadableClientInfoStorage>.Instance,
             settings,
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>(),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ReloadableClientInfoStorage.Registration>>());
+            new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
+            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
         _management = new ClientRequestValidator(_clients, new JtiMatches(), _bindings, settings);
     }
 
@@ -110,6 +111,30 @@ public class RegistrationManagementAcrossReloadTests
         Assert.Null(await _bindings.GetTokenIdAsync(ClientId));
     }
 
+    /// <summary>
+    /// The default store does not follow a reload, so a registration it still serves stays its registrant's to
+    /// manage when the settings come to configure its id; they take it over at the next start.
+    /// </summary>
+    [Fact]
+    public async Task UnderTheDefaultStore_ARegistrationItStillServes_StaysManaged()
+    {
+        var settings = new OptionsIssuerSettings(_options);
+        var clients = new ClientInfoStorage(settings, new SingleIssuerLocal<IssuerClients>());
+        var management = new ClientRequestValidator(clients, new JtiMatches(), _bindings, settings);
+        await clients.AddClientAsync(new ClientInfo(ClientId) { ClientName = "registered" });
+        await _bindings.SetTokenIdAsync(ClientId, "first");
+
+        _options.Reload(Configuring());
+
+        var result = await management.ValidateAsync(new ClientRequest
+        {
+            ClientId = ClientId,
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "first"),
+        });
+        Assert.True(result.TryGetSuccess(out var request));
+        Assert.Equal("registered", request.ClientInfo.ClientName);
+    }
+
     private sealed class Reloadable(OidcOptions initial) : IOptionsMonitor<OidcOptions>
     {
         public OidcOptions CurrentValue { get; private set; } = initial;
@@ -123,7 +148,7 @@ public class RegistrationManagementAcrossReloadTests
     /// </summary>
     private sealed class JtiMatches : IRegistrationAccessTokenValidator
     {
-        public Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string? expectedTokenId)
+        public Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string expectedTokenId)
             => Task.FromResult(header?.Parameter == expectedTokenId ? null : "The access token unauthorized");
     }
 

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -109,24 +110,26 @@ public class ClientRequestValidatorTests
     }
 
     /// <summary>
-    /// The settings own every id they configure, so a token bound to one - a registration they took over, or a
-    /// binding that outlived its registration across a restart - reaches nothing and is revoked, the same answer
-    /// as for a client that does not exist. The id is configured in another case, as client ids compare.
+    /// A client the store serves as one the settings configure is no registration a token could manage, so a
+    /// binding that outlived its registration across a restart reaches nothing and is revoked, the same answer as
+    /// for a client that does not exist. The id is configured in another case, as client ids compare.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ClientTheSettingsConfigure_ReturnsInvalidTokenAndRevokesBinding()
+    public async Task ValidateAsync_ClientTheStoreServesFromTheSettings_ReturnsInvalidTokenAndRevokesBinding()
     {
-        var configured = new ClientInfo(ClientId.ToUpperInvariant());
+        var settings = SingleIssuer.SettingsOf(Options.Create(new OidcOptions
+        {
+            Clients = [new ClientInfo(ClientId.ToUpperInvariant())],
+        }));
         var validator = new ClientRequestValidator(
-            _clientInfoProvider.Object,
+            new ClientInfoStorage(settings, new SingleIssuerLocal<IssuerClients>()),
             _tokenValidator.Object,
             _tokenStore.Object,
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { Clients = [configured] })));
+            settings);
         _tokenStore.Setup(s => s.GetTokenIdAsync(ClientId)).ReturnsAsync(TokenId);
         _tokenValidator
             .Setup(v => v.ValidateAsync(It.IsAny<AuthenticationHeaderValue?>(), ClientId, TokenId))
             .ReturnsAsync((string?)null);
-        _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(configured);
         _tokenStore.Setup(s => s.RemoveAsync(ClientId)).Returns(Task.CompletedTask);
 
         var result = await validator.ValidateAsync(Request());
@@ -134,5 +137,22 @@ public class ClientRequestValidatorTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
         _tokenStore.Verify(s => s.RemoveAsync(ClientId), Times.Once);
+    }
+
+    /// <summary>
+    /// Every token this server issues is recorded, so with no record there is no registration a token could manage,
+    /// and the token is not even read.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_NoBindingRecorded_ReturnsInvalidToken()
+    {
+        _tokenStore.Setup(s => s.GetTokenIdAsync(ClientId)).ReturnsAsync((string?)null);
+
+        var result = await _validator.ValidateAsync(Request());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+        _tokenValidator.VerifyNoOtherCalls();
+        _clientInfoProvider.VerifyNoOtherCalls();
     }
 }

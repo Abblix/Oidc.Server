@@ -36,7 +36,7 @@ public interface IRegistrationAccessTokenStore
     /// <param name="clientId">The identifier of the client.</param>
     /// <returns>
     /// The stored jti, or <c>null</c> when no binding is recorded - no registration is managed under
-    /// this id, and the validator refuses every token for it.
+    /// this id, and every token for it is refused.
     /// </returns>
     Task<string?> GetTokenIdAsync(string clientId);
 

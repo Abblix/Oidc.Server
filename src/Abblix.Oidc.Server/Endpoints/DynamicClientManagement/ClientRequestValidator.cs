@@ -40,7 +40,11 @@ public class ClientRequestValidator(
 
         // The expected jti is the value recorded when this client's current registration access
         // token was issued; it binds the token so a rotated token invalidates its predecessors.
+        // Every token this server issues is bound, so with no binding there is no registration the
+        // token could manage.
         var expectedTokenId = await registrationAccessTokenStore.GetTokenIdAsync(clientId);
+        if (expectedTokenId == null)
+            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
         var headerErrorDescription = await registrationAccessTokenValidator.ValidateAsync(
             request.AuthorizationHeader,
@@ -50,15 +54,12 @@ public class ClientRequestValidator(
         if (headerErrorDescription != null)
             return new OidcError(ErrorCodes.InvalidToken, headerErrorDescription);
 
-        // Asked before the settings are: a store following their reloads drops, as it reads them, a registration
-        // under an id they took over, which would otherwise come back once they let the id go
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
 
-        // The settings own every id they configure, and a registration access token manages a registration, of
-        // which there is none under such an id: the registrant of one the settings took over, or of one whose
-        // binding outlived it across a restart, reaches nothing.
-        if (clientInfo == null || issuerSettings.Clients.Any(client =>
-                string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase)))
+        // A registration access token manages a registration, and a client the store serves as one the settings
+        // configure is none: a binding that outlived its registration across a restart reaches nothing. The store
+        // is asked rather than the settings, since only it knows which of its clients came from them.
+        if (clientInfo == null || clientInfoProvider is IConfiguredClientLookup lookup && lookup.IsConfigured(clientId))
         {
             // RFC 7592 section 2.3: when the addressed client does not exist, the server responds
             // 401 Unauthorized and the registration access token MUST be immediately revoked.
@@ -69,6 +70,6 @@ public class ClientRequestValidator(
             return new OidcError(ErrorCodes.InvalidToken, "Client does not exist on this server");
         }
 
-        return new ValidClientRequest(request, clientInfo);
+        return new ValidClientRequest(request, clientInfo, expectedTokenId);
     }
 }
