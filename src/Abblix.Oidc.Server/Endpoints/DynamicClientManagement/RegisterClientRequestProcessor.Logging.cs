@@ -16,6 +16,6 @@ public partial class RegisterClientRequestProcessor
     [LoggerMessage(
         EventId = LogEvents.DynamicClientManagement.RegisterClientRequestProcessor.RegistrationNotKept,
         Level = LogLevel.Warning,
-        Message = "The client with id {ClientId} is already registered")]
+        Message = "The client store did not keep the registration of the client with id {ClientId}")]
     private partial void LogRegistrationNotKept(Sanitized ClientId);
 }

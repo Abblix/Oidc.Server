@@ -15,6 +15,6 @@ internal partial class ReloadableClientInfoStorage
     [LoggerMessage(
         EventId = LogEvents.ClientInformation.ReloadableClientInfoStorage.RegistrationEvicted,
         Level = LogLevel.Warning,
-        Message = "The client registration {ClientId} was dropped: the settings now configure a client under its id")]
+        Message = "A client registration under {ClientId} was dropped: the settings configure a client under that id")]
     private partial void LogRegistrationEvicted(string ClientId);
 }

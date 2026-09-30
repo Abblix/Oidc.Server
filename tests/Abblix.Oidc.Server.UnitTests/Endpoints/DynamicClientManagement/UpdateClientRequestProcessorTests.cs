@@ -145,13 +145,13 @@ public class UpdateClientRequestProcessorTests
 
     /// <summary>
     /// An update decided on a registration the store no longer holds - rotated by another update, or removed - is
-    /// refused as the token it was decided with, and issues no token.
+    /// refused as the token it was decided with, and answers with no token.
     /// </summary>
     [Fact]
-    public async Task Update_OfARegistrationNoLongerHeld_ReturnsInvalidTokenAndIssuesNone()
+    public async Task Update_OfARegistrationNoLongerHeld_ReturnsInvalidToken()
     {
         // Arrange
-        var (processor, _, tokenService, idGenerator) = CreateProcessor(_ => { }, registrationHeld: false);
+        var (processor, _, _, idGenerator) = CreateProcessor(_ => { }, registrationHeld: false);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
 
         var model = new ClientRegistrationRequest
@@ -167,8 +167,36 @@ public class UpdateClientRequestProcessorTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-        tokenService.Verify(
-            s => s.IssueTokenAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()),
+    }
+
+    /// <summary>
+    /// A token that cannot be issued leaves the registration as it was, so the token the client holds keeps working
+    /// rather than being rotated away for one never delivered.
+    /// </summary>
+    [Fact]
+    public async Task Update_WhoseTokenCannotBeIssued_LeavesTheRegistrationAsItWas()
+    {
+        // Arrange
+        var (processor, manager, tokenService, idGenerator) = CreateProcessor(_ => { });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
+        tokenService
+            .Setup(s => s.IssueTokenAsync(
+                It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("no signing key"));
+
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        // Act
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(request));
+
+        // Assert
+        manager.Verify(
+            m => m.TryUpdateClientAsync(It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
             Times.Never);
     }
 

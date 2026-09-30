@@ -174,19 +174,22 @@ public class UpdateClientRequestProcessor(
         // registration this request was authenticated against: one rotated or removed meanwhile is
         // left as it is, and the token that decided the change no longer manages anything.
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
-        if (!await clientInfoManager.TryUpdateClientAsync(
-                request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
-        {
-            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
-        }
 
-        // Generate response with new registration_access_token, embedding the freshly rotated jti.
+        // The new registration_access_token, embedding the freshly rotated jti, is issued before the
+        // rotation is stored: issuing stores nothing, so a failure to issue leaves the token the client
+        // holds working rather than rotating it away for one never delivered.
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             updatedClient.ClientId,
             issuedAt,
             null,
             registrationAccessTokenId);
+
+        if (!await clientInfoManager.TryUpdateClientAsync(
+                request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
+        {
+            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
+        }
 
         return new ReadClientSuccessfulResponse
         {

@@ -62,9 +62,9 @@ public partial class RegisterClientRequestProcessor(
         // accepts that token for this registration alone (RFC 7592 section 5).
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
 
-        // Issued before the client is stored, since issuing it only computes it: a failure to issue leaves
-        // no stored client that no token could manage, and a token for a registration the store then
-        // refuses matches nothing.
+        // Issued before the client is stored: issuing stores nothing, though it signs the token, so a
+        // failure to issue leaves no stored client that no token could manage, and a token for a
+        // registration the store then refuses matches nothing and is never answered.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             credentials.ClientId,
             issuedAt,
