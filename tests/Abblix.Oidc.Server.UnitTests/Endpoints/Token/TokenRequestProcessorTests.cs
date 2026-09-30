@@ -53,7 +53,8 @@ public class TokenRequestProcessorTests
             _refreshTokenService.Object,
             _identityTokenService.Object,
             _contextEvaluator.Object,
-            _grantIdGenerator.Object);
+            _grantIdGenerator.Object,
+            SingleIssuer.Settings);
     }
 
     private static TokenRequest CreateTokenRequest() => new()

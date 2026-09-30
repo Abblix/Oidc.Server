@@ -23,9 +23,8 @@ namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 /// instance somebody wrote in code.
 /// </para>
 /// <para>
-/// Downstream, neither is loud either: <see cref="SubjectTypeConverter"/> treats settings it cannot use as
-/// pairwise not being configured, while discovery goes on advertising <c>pairwise</c> as a supported subject
-/// type. So a client registered for it is accepted and fails at the token endpoint.
+/// Downstream, a key that cannot seal surfaces as a 500 from the token endpoint the first time a pairwise
+/// identifier is minted, naming neither the setting nor the deployment that changed it.
 /// </para>
 /// </remarks>
 public sealed class PairwiseSubjectSettingsValidator : IValidateOptions<PairwiseSubjectSettings>

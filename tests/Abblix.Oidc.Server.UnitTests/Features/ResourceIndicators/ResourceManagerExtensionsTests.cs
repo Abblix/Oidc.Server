@@ -42,7 +42,7 @@ public class ResourceManagerExtensionsTests
             Resources = [resource1, resource2]
         });
 
-        _resourceManager = new ResourceManager(options);
+        _resourceManager = SingleIssuer.ResourceManager(options);
     }
 
     /// <summary>
@@ -292,7 +292,7 @@ public class ResourceManagerExtensionsTests
             new ScopeDefinition("api:read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resourceWithQuery] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         var resources = new[] { new Uri("https://api.example.com?version=v1") };
         var scopes = new[] { "api:read" };
@@ -399,7 +399,7 @@ public class ResourceManagerExtensionsTests
             new ScopeDefinition("api:read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resourceWithPort] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         var resources = new[] { new Uri("https://api.example.com:8443") };
         var scopes = new[] { "api:read" };

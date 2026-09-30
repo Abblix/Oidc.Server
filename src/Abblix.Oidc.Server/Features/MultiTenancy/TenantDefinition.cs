@@ -7,6 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -33,4 +37,71 @@ public sealed class TenantDefinition
     /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
     /// </remarks>
     public required string Issuer { get; init; }
+
+    /// <summary>
+    /// The clients registered with this tenant. A client is known only at the tenant that lists it, or at which it
+    /// was registered dynamically, so two tenants may each register a client under the same id.
+    /// </summary>
+    public IEnumerable<ClientInfo> Clients { get; init; } = [];
+
+    /// <summary>
+    /// The scopes this tenant defines beyond the standard ones, as <see cref="OidcOptions.Scopes"/> does for a
+    /// server without tenants.
+    /// </summary>
+    public ScopeDefinition[]? Scopes { get; init; }
+
+    /// <summary>
+    /// The resources this tenant issues tokens for, as <see cref="OidcOptions.Resources"/> does for a server
+    /// without tenants.
+    /// </summary>
+    public ResourceDefinition[]? Resources { get; init; }
+
+    /// <summary>
+    /// The resource a token is issued for when the request names none, as
+    /// <see cref="OidcOptions.DefaultResourceIndicator"/> does for a server without tenants; it must be one of
+    /// this tenant's <see cref="Resources"/>.
+    /// </summary>
+    public Uri? DefaultResourceIndicator { get; init; }
+
+    /// <summary>
+    /// The page a user picks an account on, as <see cref="OidcOptions.AccountSelectionUri"/> is for a server
+    /// without tenants. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? AccountSelectionUri { get; init; }
+
+    /// <summary>
+    /// The page a user gives consent on, as <see cref="OidcOptions.ConsentUri"/> is for a server without tenants.
+    /// A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? ConsentUri { get; init; }
+
+    /// <summary>
+    /// The page a user completes a required interaction on, as <see cref="OidcOptions.InteractionUri"/> is for a
+    /// server without tenants. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? InteractionUri { get; init; }
+
+    /// <summary>
+    /// The page a user signs in on, as <see cref="OidcOptions.LoginUri"/> is for a server without tenants. A
+    /// relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? LoginUri { get; init; }
+
+    /// <summary>
+    /// The page a user creates an account on, as <see cref="OidcOptions.RegistrationUri"/> is for a server without
+    /// tenants. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? RegistrationUri { get; init; }
+
+    /// <summary>
+    /// The security profile every client of this tenant is held to at the least, as
+    /// <see cref="OidcOptions.DefaultSecurityProfile"/> is for a server without tenants.
+    /// </summary>
+    public ClientSecurityProfile DefaultSecurityProfile { get; init; } = ClientSecurityProfile.None;
+
+    /// <summary>
+    /// The key sealing this tenant's pairwise subject identifiers, or null when its clients take public ones only.
+    /// Each tenant keeps its own, so the pseudonyms two tenants give one user cannot be matched to each other.
+    /// </summary>
+    public PairwiseSubjectSettings? PairwiseSubject { get; init; }
 }

@@ -24,23 +24,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
-    IRegistrationAccessTokenStore registrationAccessTokenStore,
-    ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock) : IReadClientRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
     {
-        var client = request.ClientInfo;
+        var client = request.Client.ClientInfo;
 
         var issuedAt = clock.GetUtcNow();
-        // Reuse the stored jti so the token the client just presented stays valid; only update
-        // rotates it (read is idempotent). A legacy client with no recorded jti gets a transient
-        // one - it is not persisted here, so the binding stays unenforced for that client.
-        var registrationAccessTokenId =
-            await registrationAccessTokenStore.GetTokenIdAsync(client.ClientId) ?? tokenIdGenerator.GenerateTokenId();
+        // Reuse the jti the request was authenticated with, so the token the client just presented
+        // stays valid; only update rotates it (read is idempotent). Read from the store again instead,
+        // a request racing a rotation would hand the holder of the old token a current one.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
-            client.ClientId, issuedAt, null, registrationAccessTokenId);
+            client.ClientId, issuedAt, null, request.Client.RegistrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse
         {

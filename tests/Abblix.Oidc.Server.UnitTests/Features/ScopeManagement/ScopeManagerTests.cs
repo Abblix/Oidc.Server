@@ -33,7 +33,7 @@ public class ScopeManagerTests
         var options = Options.Create(new OidcOptions());
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Assert - Standard OIDC scopes
         Assert.True(manager.TryGet(Scopes.OpenId, out var openId));
@@ -71,7 +71,7 @@ public class ScopeManagerTests
         });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Assert
         Assert.True(manager.TryGet("custom:read", out var retrieved));
@@ -99,7 +99,7 @@ public class ScopeManagerTests
         var options = Options.Create(new OidcOptions { Scopes = scopes });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Assert
         Assert.True(manager.TryGet("api:read", out _));
@@ -116,7 +116,7 @@ public class ScopeManagerTests
     {
         // Arrange
         var options = Options.Create(new OidcOptions());
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Act
         var result = manager.TryGet("unknown-scope", out var definition);
@@ -135,7 +135,7 @@ public class ScopeManagerTests
     {
         // Arrange
         var options = Options.Create(new OidcOptions());
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Act & Assert
         Assert.True(manager.TryGet(Scopes.OpenId, out _)); // "openid" - correct case
@@ -160,7 +160,7 @@ public class ScopeManagerTests
         });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Assert
         Assert.True(manager.TryGet(Scopes.Profile, out var retrieved));
@@ -184,7 +184,7 @@ public class ScopeManagerTests
         });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Assert
         Assert.True(manager.TryGet(Scopes.Email, out var retrieved));
@@ -201,7 +201,7 @@ public class ScopeManagerTests
         // Arrange
         var customScope = new ScopeDefinition("custom");
         var options = Options.Create(new OidcOptions { Scopes = [customScope] });
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Act
         var scopes = manager.ToArray();
@@ -229,7 +229,7 @@ public class ScopeManagerTests
         var options = Options.Create(new OidcOptions { Scopes = [] });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
         var scopes = manager.ToArray();
 
         // Assert
@@ -252,7 +252,7 @@ public class ScopeManagerTests
         var options = Options.Create(new OidcOptions { Scopes = null });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
         var scopes = manager.ToArray();
 
         // Assert
@@ -270,7 +270,7 @@ public class ScopeManagerTests
         var customScope = new ScopeDefinition("api:full", "claim1", "claim2", "claim3");
 
         var options = Options.Create(new OidcOptions { Scopes = [customScope] });
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Act
         var result = manager.TryGet("api:full", out var definition);
@@ -293,7 +293,7 @@ public class ScopeManagerTests
     {
         // Arrange
         var options = Options.Create(new OidcOptions());
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Act & Assert - openid scope
         Assert.True(manager.TryGet(Scopes.OpenId, out var openId));
@@ -326,7 +326,7 @@ public class ScopeManagerTests
         var options = Options.Create(new OidcOptions { Scopes = scopes });
 
         // Act
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Assert
         Assert.True(manager.TryGet("duplicate", out var definition));
@@ -348,7 +348,7 @@ public class ScopeManagerTests
         };
 
         var options = Options.Create(new OidcOptions { Scopes = scopes });
-        var manager = new ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager(options);
 
         // Act
         var allScopes = manager.ToArray();

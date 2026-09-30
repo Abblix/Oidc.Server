@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -19,10 +20,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// surfaces at registration with a clear <c>invalid_client_metadata</c> diagnostic instead of as a
 /// per-request rejection the client has to reverse-engineer later. Whether a client is held to a
 /// profile is a server-side policy decision: a dynamically registered client cannot declare one, so it
-/// inherits the server-wide <see cref="OidcOptions.DefaultSecurityProfile"/>.
+/// inherits the default profile of the issuer it registers with: <see cref="OidcOptions.DefaultSecurityProfile"/>
+/// for a server without tenants, the tenant's own under multi-tenancy.
 /// </summary>
-/// <param name="options">Provides the server-wide default profile a registered client inherits.</param>
-public class SecurityProfileValidator(IOptions<OidcOptions> options) : SyncClientRegistrationContextValidator
+/// <param name="issuerSettings">Provides the issuer's default profile a registered client inherits.</param>
+public class SecurityProfileValidator(IIssuerSettings issuerSettings) : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error describing how the requested response types
@@ -34,7 +36,7 @@ public class SecurityProfileValidator(IOptions<OidcOptions> options) : SyncClien
         var violations = SecurityProfileConsistency.FindViolations(
             context.Request.ResponseTypes,
             context.Request.TokenEndpointAuthMethod,
-            SecurityProfileRequirements.Resolve(options.Value.DefaultSecurityProfile));
+            SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile));
 
         return violations.Count == 0
             ? null

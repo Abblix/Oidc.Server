@@ -33,7 +33,7 @@ public class ResourceManagerTests
         var options = Options.Create(new OidcOptions());
 
         // Act
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Assert
         var testUri = new Uri("https://api.example.com");
@@ -60,7 +60,7 @@ public class ResourceManagerTests
         });
 
         // Act
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Assert
         Assert.True(manager.TryGet(resourceUri, out var retrieved));
@@ -95,7 +95,7 @@ public class ResourceManagerTests
         });
 
         // Act
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Assert
         Assert.True(manager.TryGet(new Uri("https://api1.example.com"), out _));
@@ -118,7 +118,7 @@ public class ResourceManagerTests
             new ScopeDefinition("read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act
         var result = manager.TryGet(unregisteredUri, out var definition);
@@ -140,7 +140,7 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceUri, new ScopeDefinition("read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act & Assert - Scheme and host are case-insensitive
         Assert.True(manager.TryGet(new Uri("HTTPS://API.EXAMPLE.COM/v1"), out _));
@@ -164,7 +164,7 @@ public class ResourceManagerTests
             new ScopeDefinition("delete", "delete_claim"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act
         var result = manager.TryGet(resourceUri, out var definition);
@@ -192,7 +192,7 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceWithQuery, new ScopeDefinition("read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act & Assert - Must match exactly including query
         Assert.True(manager.TryGet(resourceWithQuery, out _));
@@ -213,7 +213,7 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceWithPort, new ScopeDefinition("read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act & Assert
         Assert.True(manager.TryGet(resourceWithPort, out _));
@@ -231,7 +231,7 @@ public class ResourceManagerTests
         var options = Options.Create(new OidcOptions { Resources = null });
 
         // Act
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Assert
         Assert.False(manager.TryGet(new Uri("https://api.example.com"), out _));
@@ -248,7 +248,7 @@ public class ResourceManagerTests
         var options = Options.Create(new OidcOptions { Resources = [] });
 
         // Act
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Assert
         Assert.False(manager.TryGet(new Uri("https://api.example.com"), out _));
@@ -269,7 +269,7 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceWithSlash, new ScopeDefinition("read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act & Assert
         Assert.True(manager.TryGet(resourceWithSlash, out _));
@@ -293,7 +293,7 @@ public class ResourceManagerTests
             new ScopeDefinition("read"));
 
         var options = Options.Create(new OidcOptions { Resources = [resource1, resource2] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act & Assert
         Assert.True(manager.TryGet(new Uri("https://api.example.com/v1"), out var def1));
@@ -319,7 +319,7 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceUri, scopes);
 
         var options = Options.Create(new OidcOptions { Resources = [resource] });
-        var manager = new ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager(options);
 
         // Act
         var result = manager.TryGet(resourceUri, out var definition);
@@ -342,24 +342,25 @@ public class ResourceManagerTests
     }
 
     /// <summary>
-    /// Verifies that a non-absolute configured resource URI is rejected at construction, rather than
-    /// becoming a silent dead entry that can never match a request (RFC 8707 Section 2).
+    /// Verifies that a non-absolute configured resource URI is rejected the first time the issuer looks a
+    /// resource up, rather than becoming a silent dead entry that can never match a request (RFC 8707 Section 2).
     /// </summary>
     [Fact]
-    public void Construction_WithNonAbsoluteResourceUri_Throws()
+    public void FirstLookup_WithNonAbsoluteResourceUri_Throws()
     {
         var resource = new ResourceDefinition(new Uri("/relative/api", UriKind.Relative), new ScopeDefinition("read"));
         var options = Options.Create(new OidcOptions { Resources = [resource] });
 
-        Assert.Throws<ArgumentException>(() => new ResourceManager(options));
+        Assert.Throws<ArgumentException>(
+            () => SingleIssuer.ResourceManager(options).TryGet(new Uri("https://api.example.com"), out _));
     }
 
     /// <summary>
-    /// Verifies that two configured resource definitions sharing a URI fail fast at construction with
+    /// Verifies that two configured resource definitions sharing a URI fail on the issuer's first lookup with
     /// a clear error rather than an opaque dictionary exception.
     /// </summary>
     [Fact]
-    public void Construction_WithDuplicateResourceUris_Throws()
+    public void FirstLookup_WithDuplicateResourceUris_Throws()
     {
         var uri = new Uri("https://api.example.com");
         var options = Options.Create(new OidcOptions
@@ -371,6 +372,7 @@ public class ResourceManagerTests
             ],
         });
 
-        Assert.Throws<ArgumentException>(() => new ResourceManager(options));
+        Assert.Throws<ArgumentException>(
+            () => SingleIssuer.ResourceManager(options).TryGet(new Uri("https://api.example.com"), out _));
     }
 }

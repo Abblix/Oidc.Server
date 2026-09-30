@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
-    IRegistrationAccessTokenStore registrationAccessTokenStore,
     ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock) : IUpdateClientRequestProcessor
 {
@@ -42,7 +41,7 @@ public class UpdateClientRequestProcessor(
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidUpdateClientRequest request)
     {
         var model = request.RegistrationRequest;
-        var existingClient = request.ClientInfo;
+        var existingClient = request.Client.ClientInfo;
 
         // Create updated client info, preserving immutable fields
         var updatedClient = new ClientInfo(existingClient.ClientId)
@@ -169,21 +168,28 @@ public class UpdateClientRequestProcessor(
         // The response echoes the post-update registered state, so what the store now holds is the
         // answer - RFC 7592 section 3 asks the client to be able to verify that the full replacement
         // took effect.
-        await clientInfoManager.UpdateClientAsync(updatedClient);
-
         // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
         // invalidates every token issued before this update, limiting the exposure window of a
-        // leaked token to the period between rotations.
+        // leaked token to the period between rotations. The replacement takes effect only on the
+        // registration this request was authenticated against: one rotated or removed meanwhile is
+        // left as it is, and the token that decided the change no longer manages anything.
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
-        await registrationAccessTokenStore.SetTokenIdAsync(updatedClient.ClientId, registrationAccessTokenId);
 
-        // Generate response with new registration_access_token, embedding the freshly rotated jti.
+        // The new registration_access_token, embedding the freshly rotated jti, is issued before the
+        // rotation is stored: issuing stores nothing, so a failure to issue leaves the token the client
+        // holds working rather than rotating it away for one never delivered.
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             updatedClient.ClientId,
             issuedAt,
             null,
             registrationAccessTokenId);
+
+        if (!await clientInfoManager.TryUpdateClientAsync(
+                request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
+        {
+            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
+        }
 
         return new ReadClientSuccessfulResponse
         {

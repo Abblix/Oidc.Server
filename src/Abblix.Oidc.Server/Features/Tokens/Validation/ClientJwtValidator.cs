@@ -38,12 +38,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
-/// <param name="oidcOptions">Carries the security profile every client is held to, and the default
+/// <param name="issuerSettings">Carries the security profile every client is held to, and the default
 /// a client without one of its own falls back to.</param>
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the options carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
+    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the issuer's settings carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
@@ -52,11 +52,11 @@ public partial class ClientJwtValidator(
     IClientKeysProvider clientJwksProvider,
     IIssuerProvider issuerProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
-    IOptions<OidcOptions> oidcOptions,
+    IIssuerSettings issuerSettings,
     TimeProvider timeProvider) : IClientJwtValidator
 {
     private SecurityProfileRequirements Profile
-        => SecurityProfileRequirements.Resolve(oidcOptions.Value.DefaultSecurityProfile);
+        => SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile);
 
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
@@ -73,7 +73,7 @@ public partial class ClientJwtValidator(
         string jwt,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, clientJwksProvider);
+        var context = new ValidationContext(clientInfoProvider, issuerSettings, clientJwksProvider);
 
         var result = await tokenValidator.ValidateAsync(
             jwt,
@@ -107,7 +107,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt).WithLicenseCheck();
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt).WithLicenseCheck(issuerSettings);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -149,7 +149,7 @@ public partial class ClientJwtValidator(
             }
 
             var refusal = SecurityProfileRequirements
-                .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
+                .For(context.ClientInfo, issuerSettings.DefaultSecurityProfile)
                 .ClockSkewOrDefault()
                 .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
 
@@ -192,6 +192,7 @@ public partial class ClientJwtValidator(
     /// </summary>
     private sealed class ValidationContext(
         IClientInfoProvider clientInfoProvider,
+        IIssuerSettings issuerSettings,
         IClientKeysProvider clientJwksProvider)
     {
         /// <summary>
@@ -227,7 +228,7 @@ public partial class ClientJwtValidator(
             if (!_clientLookupPerformed)
             {
                 // Attempt to find the client by issuer
-                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
+                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck(issuerSettings);
                 _clientLookupPerformed = true;
             }
 

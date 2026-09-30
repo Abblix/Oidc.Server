@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -43,6 +44,7 @@ public class SoftwareStatementValidatorTests
             NullLogger<SoftwareStatementValidator>.Instance,
             _jwtValidator.Object,
             optionsMonitor.Object,
+            SingleIssuer.SettingsOf(Options.Create(optionsMonitor.Object.CurrentValue)),
             _secureFetcher.Object);
     }
 

@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -26,10 +27,12 @@ namespace Abblix.Oidc.Server.Features.SessionManagement;
 /// to check and maintain the session state between the client and the server.
 /// </summary>
 /// <param name="options">The options for configuring the OpenID Connect session management service.</param>
+/// <param name="issuerSettings">Names the session cookie of the issuer serving the request.</param>
 /// <param name="requestInfoProvider">The provider for accessing request-related information, such as whether
 /// the current request is over HTTPS and the request's base path.</param>
 public class SessionManagementService(
     IOptionsSnapshot<OidcOptions> options,
+    IIssuerSettings issuerSettings,
     IRequestInfoProvider requestInfoProvider) : ISessionManagementService
 {
     private const string CookieNamePlaceHolder = "\"{{cookieName}}\"";
@@ -59,7 +62,7 @@ public class SessionManagementService(
         var path = cookieOptions.Path;
 
         return new Cookie(
-            cookieOptions.Name,
+            issuerSettings.CheckSessionCookieName,
             new()
             {
                 HttpOnly = false,
@@ -103,7 +106,7 @@ public class SessionManagementService(
         using (var reader = new StreamReader(stream, Encoding.UTF8))
             htmlTemplate = await reader.ReadToEndAsync();
 
-        var cookieName = options.Value.CheckSessionCookie.Name;
+        var cookieName = issuerSettings.CheckSessionCookieName;
         var htmlContent = htmlTemplate.Replace(
             CookieNamePlaceHolder,
             JavaScriptStringEncode(cookieName, true));

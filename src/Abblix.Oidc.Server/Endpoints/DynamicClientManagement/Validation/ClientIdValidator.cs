@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -22,9 +23,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <param name="logger">Logger used for warnings about register/update conflicts.</param>
 /// <param name="clientInfoProvider">Store consulted to check for existing client records.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public partial class ClientIdValidator(
     ILogger<ClientIdValidator> logger,
-    IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
+    IClientInfoProvider clientInfoProvider,
+    IIssuerSettings issuerSettings) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -33,7 +36,7 @@ public partial class ClientIdValidator(
         if (!clientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         switch (context.Operation)
         {
             // For UPDATE: client MUST exist

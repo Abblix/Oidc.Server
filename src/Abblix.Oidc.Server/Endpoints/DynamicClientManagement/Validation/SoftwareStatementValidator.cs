@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,11 +25,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="logger">Logger for recording validation operations.</param>
 /// <param name="jwtValidator">Validates the software statement JWT signature and claims.</param>
 /// <param name="options">OIDC options containing software statement configuration.</param>
+/// <param name="issuerSettings">Provides the issuer's default security profile.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection for retrieving trusted issuer JWKS.</param>
 public partial class SoftwareStatementValidator(
     ILogger<SoftwareStatementValidator> logger,
     IJsonWebTokenValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
+    IIssuerSettings issuerSettings,
     [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher)
     : IClientRegistrationContextValidator
 {
@@ -54,7 +57,7 @@ public partial class SoftwareStatementValidator(
         }
 
         var profile = SecurityProfileRequirements.Resolve(
-            options.CurrentValue.DefaultSecurityProfile);
+            issuerSettings.DefaultSecurityProfile);
 
         var validationParameters = new ValidationParameters
         {

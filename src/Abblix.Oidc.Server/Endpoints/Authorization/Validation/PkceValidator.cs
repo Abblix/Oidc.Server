@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -25,12 +26,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// particularly in public clients. It ensures that the authorization request conforms to
 /// the standards defined in RFC 7636 (specifically, see Section 4.3 for client validation requirements).
 /// </summary>
-/// <param name="options">Provides the server-wide default security profile a client inherits when it
+/// <param name="issuerSettings">Provides the issuer's default security profile a client inherits when it
 /// states none, which tightens PKCE enforcement (mandatory PKCE, S256-only) under a profile.</param>
 /// <param name="reuseDetector">Detects a client repeating a code_challenge across authorization requests
 /// when reuse detection is enabled (RFC 9700 Section 2.1.1).</param>
 public class PkceValidator(
-	IOptions<OidcOptions> options,
+	IIssuerSettings issuerSettings,
 	IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
 	/// <summary>
@@ -45,7 +46,7 @@ public class PkceValidator(
 	/// </returns>
 	public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
 	{
-		var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
+		var profile = SecurityProfileRequirements.For(context.ClientInfo, issuerSettings.DefaultSecurityProfile);
 
 		if (context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue())
 		{

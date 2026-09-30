@@ -158,6 +158,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(new Mock<IIssuerProvider>().Object);
+        services.AddSingleton<IIssuerSettings, OptionsIssuerSettings>();
         services.AddSingleton(new Mock<IReplayCache>().Object);
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
@@ -194,6 +195,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(new Mock<IIssuerProvider>().Object);
+        services.AddSingleton<IIssuerSettings, OptionsIssuerSettings>();
         services.AddSingleton(new Mock<IReplayCache>().Object);
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();

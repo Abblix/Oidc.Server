@@ -607,7 +607,6 @@ public static class ServiceCollectionExtensions
             .AddDefaultInitialAccessTokenRevocationProvider();
 
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
-        services.TryAddScoped<IRegistrationAccessTokenStore, RegistrationAccessTokenStore>();
         services.TryAddTransient(newClientOptionsFactory);
 
         services.TryAddScoped<IClientCredentialFactory, ClientCredentialFactory>();

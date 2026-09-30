@@ -74,7 +74,8 @@ public class RefreshTokenServiceTests
             _jwtFormatter.Object,
             _tokenRegistry.Object,
             new SubjectTypeConverter(),
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())));
     }
 
     /// <summary>

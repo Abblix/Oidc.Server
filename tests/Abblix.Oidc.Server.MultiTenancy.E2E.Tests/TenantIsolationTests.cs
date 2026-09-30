@@ -8,7 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
-using System.Reflection;
+using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -21,8 +21,8 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
@@ -50,7 +50,14 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string Acme = "/tenants/acme";
     private const string Globex = "/tenants/globex";
     private const string ClientId = "shared-client-id";
+    private const string AcmeOnlyClientId = "acme-only-client-id";
+    private const string PairwiseClientId = "pairwise-client-id";
     private const string ClientSecret = "shared-client-secret";
+    private const string AcmeScope = "acme:read";
+    private const string PushPath = "/connect/par";
+    private const string TokenPath = "/connect/token";
+    private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    private const string AcmeResource = "https://api.acme.example";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
@@ -62,7 +69,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await License.Loaded;
+        await TestLicense.Loaded;
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -76,9 +83,9 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
         // Grant features before AddOidcServices, which composes the grant handlers.
         builder.Services.AddDeviceAuthorization();
+        builder.Services.AddCheckSession();
         builder.Services.AddOidcServices(options =>
         {
-            options.LoginUri = new Uri("/login", UriKind.Relative);
             options.DeviceAuthorization = new DeviceAuthorizationOptions
             {
                 // Relative, so each tenant's users are sent to the page under that tenant's path
@@ -89,22 +96,33 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 UserCodeLength = 8,
             };
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-            options.Clients =
-            [
-                new ClientInfo(ClientId)
-                {
-                    ClientSecrets = [new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) }],
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
-                    AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization],
-                    RedirectUris = [new Uri(RedirectUri)],
-                    PkceRequired = true,
-                },
-            ];
+            options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.CheckSession;
         });
         builder.Services.AddMultiTenancy(options =>
         {
-            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = Host + Acme });
-            options.Tenants.Add(new TenantDefinition { Id = "globex", Issuer = Host + Globex });
+            // Both tenants register a client under the same id; only acme registers the second one
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = Host + Acme,
+                Clients = [Client(ClientId), Client(AcmeOnlyClientId), PairwiseClient()],
+                PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) },
+                Scopes = [new ScopeDefinition(AcmeScope)],
+                Resources = [new ResourceDefinition(new Uri(AcmeResource), new ScopeDefinition(AcmeScope))],
+                DefaultResourceIndicator = new Uri(AcmeResource),
+                LoginUri = new Uri("/login", UriKind.Relative),
+            });
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = "globex",
+                Issuer = Host + Globex,
+                Clients = [Client(ClientId), PairwiseClient()],
+                LoginUri = new Uri("/sign-in", UriKind.Relative),
+                PairwiseSubject = new PairwiseSubjectSettings
+                {
+                    Salt = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
+                },
+            });
         });
 
         _app = builder.Build();
@@ -146,9 +164,32 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             await _app.DisposeAsync();
     }
 
-    private Task<HttpResponseMessage> PostAsync(string tenant, string path, Dictionary<string, string> form)
+    private static ClientInfo Client(string clientId) => new(clientId)
     {
-        form[ClientRequest.Parameters.ClientId] = ClientId;
+        ClientSecrets = [new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) }],
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization],
+        RedirectUris = [new Uri(RedirectUri)],
+        PkceRequired = true,
+    };
+
+    private static ClientInfo PairwiseClient()
+    {
+        var client = Client(PairwiseClientId);
+        client.SubjectType = SubjectTypes.Pairwise;
+        return client;
+    }
+
+    private Task<HttpResponseMessage> PostAsync(string tenant, string path, Dictionary<string, string> form)
+        => PostAsync(tenant, path, ClientId, form);
+
+    private Task<HttpResponseMessage> PostAsync(
+        string tenant,
+        string path,
+        string clientId,
+        Dictionary<string, string> form)
+    {
+        form[ClientRequest.Parameters.ClientId] = clientId;
         form[ClientRequest.Parameters.ClientSecret] = ClientSecret;
         return Http.PostAsync(tenant + path, new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
     }
@@ -157,18 +198,135 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
     /// <summary>
+    /// A client one tenant registers authenticates there, and the other tenant, which never registered it, refuses
+    /// it as unknown.
+    /// </summary>
+    [Fact]
+    public async Task AClientOfOneTenant_IsUnknownToTheOther()
+    {
+        Dictionary<string, string> Push() => new()
+        {
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+        };
+
+        var atAcme = await PostAsync(Acme, PushPath, AcmeOnlyClientId, Push());
+        Assert.Equal(HttpStatusCode.Created, atAcme.StatusCode);
+
+        var atGlobex = await PostAsync(Globex, PushPath, AcmeOnlyClientId, Push());
+        Assert.Equal(HttpStatusCode.Unauthorized, atGlobex.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClient, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A scope and a resource one tenant defines are granted there, and the other tenant, which never defined them,
+    /// refuses a request naming either.
+    /// </summary>
+    [Fact]
+    public async Task AScopeAndAResourceOfOneTenant_AreUnknownToTheOther()
+    {
+        Dictionary<string, string> Push(string scope, string? resource = null)
+        {
+            var form = new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+                [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+                [AuthorizationRequest.Parameters.Scope] = scope,
+                [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+            };
+            if (resource is not null)
+                form[AuthorizationRequest.Parameters.Resource] = resource;
+            return form;
+        }
+
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync(Acme, PushPath, Push("openid " + AcmeScope))).StatusCode);
+        var scopeAtGlobex = await PostAsync(Globex, PushPath, Push("openid " + AcmeScope));
+        Assert.Equal(ErrorCodes.InvalidScope, (await ReadJsonAsync(scopeAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await PostAsync(Acme, PushPath, Push("openid " + AcmeScope, AcmeResource))).StatusCode);
+        var resourceAtGlobex = await PostAsync(Globex, PushPath, Push(Scopes.OpenId, AcmeResource));
+        Assert.Equal(ErrorCodes.InvalidTarget, (await ReadJsonAsync(resourceAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The same user signing in to the same pairwise client at two tenants gets a different pseudonym at each, since
+    /// each tenant seals them with its own key.
+    /// </summary>
+    [Fact]
+    public async Task APairwiseSubject_DiffersFromTenantToTenant()
+    {
+        var atAcme = await SubjectOfADeviceFlowAsync(Acme);
+        var atGlobex = await SubjectOfADeviceFlowAsync(Globex);
+
+        Assert.NotEqual("alice", atAcme);
+        Assert.NotEqual("alice", atGlobex);
+        Assert.NotEqual(atAcme, atGlobex);
+    }
+
+    /// <summary>
+    /// The subject of the access token the pairwise client gets at <paramref name="tenant"/> once the user the
+    /// verification page signs in approves its device.
+    /// </summary>
+    private async Task<string> SubjectOfADeviceFlowAsync(string tenant)
+    {
+        var authorization = await ReadJsonAsync(await PostAsync(tenant, "/connect/deviceauthorization", PairwiseClientId,
+            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId }));
+
+        var approved = await Http.PostAsync(
+            authorization[DeviceAuthorizationResponse.Parameters.VerificationUri]!.GetValue<string>(),
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [DeviceAuthorizationResponse.Parameters.UserCode] =
+                    authorization[DeviceAuthorizationResponse.Parameters.UserCode]!.GetValue<string>(),
+            }),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+
+        var tokens = await ReadJsonAsync(await PostAsync(tenant, TokenPath, PairwiseClientId,
+            new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.DeviceAuthorization,
+                [TokenRequest.Parameters.DeviceCode] =
+                    authorization[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>(),
+            }));
+        var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
+        var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
+        return payload[IanaClaimTypes.Sub]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Each tenant's session cookie carries a name of its own, so two tenants on one host, whose cookies share the
+    /// host and the path, do not overwrite each other's, and each tenant's check-session page reads its own.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_ReadsASessionCookieOfItsOwn()
+    {
+        var atAcme = await Http.GetStringAsync(Acme + "/connect/checksession", TestContext.Current.CancellationToken);
+        var atGlobex = await Http.GetStringAsync(Globex + "/connect/checksession", TestContext.Current.CancellationToken);
+
+        Assert.Contains("\"Abblix.SessionId.acme\"", atAcme, StringComparison.Ordinal);
+        Assert.Contains("\"Abblix.SessionId.globex\"", atGlobex, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A pushed authorization request registered with one tenant is not found by the other: its request_uri
     /// names a request the other tenant never received.
     /// </summary>
     [Fact]
     public async Task APushedRequestOfOneTenant_IsUnknownToTheOther()
     {
-        var pushed = await PostAsync(Acme, "/connect/par", new Dictionary<string, string>
+        var pushed = await PostAsync(Acme, PushPath, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = "openid",
-            [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
         });
         Assert.Equal(HttpStatusCode.Created, pushed.StatusCode);
@@ -190,6 +348,30 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Each tenant sends its users to the sign-in page it declares, under its own path.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_SendsItsUsersToItsOwnSignInPage()
+    {
+        var pushed = await PostAsync(Globex, PushPath, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+        });
+        var requestUri = (await ReadJsonAsync(pushed))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+
+        var atGlobex = await Http.GetAsync(
+            Globex + $"/connect/authorize?client_id={ClientId}&request_uri={Uri.EscapeDataString(requestUri)}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.SeeOther, atGlobex.StatusCode);
+        Assert.StartsWith(Host + Globex + "/sign-in", atGlobex.Headers.Location?.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A device code one tenant issued is unknown at the other tenant's token endpoint, and still pending at its own.
     /// </summary>
     [Fact]
@@ -197,7 +379,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     {
         var authorization = await PostAsync(Acme, "/connect/deviceauthorization", new Dictionary<string, string>
         {
-            [DeviceAuthorizationRequest.Parameters.Scope] = "openid",
+            [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
         });
         Assert.Equal(HttpStatusCode.OK, authorization.StatusCode);
         var deviceCode = (await ReadJsonAsync(authorization))[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>();
@@ -208,22 +390,23 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             [TokenRequest.Parameters.DeviceCode] = deviceCode,
         };
 
-        var atGlobex = await PostAsync(Globex, "/connect/token", new Dictionary<string, string>(poll));
+        var atGlobex = await PostAsync(Globex, TokenPath, new Dictionary<string, string>(poll));
         Assert.Equal(ErrorCodes.InvalidGrant, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
 
-        var atAcme = await PostAsync(Acme, "/connect/token", new Dictionary<string, string>(poll));
+        var atAcme = await PostAsync(Acme, TokenPath, new Dictionary<string, string>(poll));
         Assert.Equal(ErrorCodes.AuthorizationPending, (await ReadJsonAsync(atAcme))[ResponseParameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
     /// A device flow completes: the device is sent to its own tenant's verification page, the user code entered
-    /// there is approved, and the device then gets its tokens. The other tenant's page does not know the code.
+    /// there is approved, and the device then gets its tokens, issued for the resource that tenant names as its
+    /// default. The other tenant's page does not know the code.
     /// </summary>
     [Fact]
     public async Task ADeviceFlow_CompletesOnItsOwnTenantsVerificationPage()
     {
         var authorization = await ReadJsonAsync(await PostAsync(Acme, "/connect/deviceauthorization",
-            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = "openid" }));
+            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId }));
         var verificationUri = authorization[DeviceAuthorizationResponse.Parameters.VerificationUri]!.GetValue<string>();
         var userCode = authorization[DeviceAuthorizationResponse.Parameters.UserCode]!.GetValue<string>();
         var deviceCode = authorization[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>();
@@ -239,30 +422,15 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             verificationUri, new FormUrlEncodedContent(entered), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, atAcme.StatusCode);
 
-        var tokens = await PostAsync(Acme, "/connect/token", new Dictionary<string, string>
+        var tokens = await PostAsync(Acme, TokenPath, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.DeviceAuthorization,
             [TokenRequest.Parameters.DeviceCode] = deviceCode,
         });
         Assert.Equal(HttpStatusCode.OK, tokens.StatusCode);
-        Assert.NotNull((await ReadJsonAsync(tokens))[ResponseParameters.AccessToken]);
+        var accessToken = (await ReadJsonAsync(tokens))[ResponseParameters.AccessToken]!.GetValue<string>();
+        var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
+        Assert.Contains(AcmeResource, payload[IanaClaimTypes.Aud]!.ToJsonString(), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The license this process runs under: the multi-tenant test license, which names both tenants' issuers.
-    /// </summary>
-    private static class License
-    {
-        public static readonly Task Loaded = LoadAsync();
-
-        private static async Task LoadAsync()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            const string name = "Abblix.Oidc.Server.MultiTenancy.E2E.Tests.Resources.test-license-multitenant.jwt";
-            await using var stream = assembly.GetManifestResourceStream(name)
-                ?? throw new InvalidOperationException($"The embedded license {name} is missing.");
-            using var reader = new StreamReader(stream);
-            await LicenseLoader.LoadAsync((await reader.ReadToEndAsync()).Trim());
-        }
-    }
 }

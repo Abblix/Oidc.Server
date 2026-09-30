@@ -7,11 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
@@ -94,7 +97,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // anything except a change of license terms.
         var client = new ClientInfo("some-client");
 
-        Assert.Same(client, client.CheckClientLicense());
+        Assert.Same(client, client.CheckClientLicense(SingleIssuer.Settings));
     }
 
     [Fact]
@@ -202,7 +205,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 20; index++)
         {
             var client = new ClientInfo($"unlicensed-client-{index}");
-            Assert.Same(client, client.CheckClientLicense());
+            Assert.Same(client, client.CheckClientLicense(SingleIssuer.Settings));
         }
     }
 
@@ -224,13 +227,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 3; index++)
         {
             var tolerated = new ClientInfo($"client-{index}");
-            Assert.Same(tolerated, tolerated.CheckClientLicense());
+            Assert.Same(tolerated, tolerated.CheckClientLicense(SingleIssuer.Settings));
         }
 
         // Past it: a client never seen before is refused, every time it asks.
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            Assert.Null(new ClientInfo("one-client-too-many").CheckClientLicense());
+            Assert.Null(new ClientInfo("one-client-too-many").CheckClientLicense(SingleIssuer.Settings));
         }
     }
 
@@ -250,13 +253,74 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         for (var index = 0; index < 3; index++)
         {
-            _ = new ClientInfo($"established-{index}").CheckClientLicense();
+            _ = new ClientInfo($"established-{index}").CheckClientLicense(SingleIssuer.Settings);
         }
 
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense());
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(SingleIssuer.Settings));
 
         var established = new ClientInfo("established-0");
-        Assert.Same(established, established.CheckClientLicense());
+        Assert.Same(established, established.CheckClientLicense(SingleIssuer.Settings));
+    }
+
+    [Fact]
+    public void A_client_id_two_tenants_register_counts_once_for_each()
+    {
+        // Two tenants may each register a client under one id, and each is a client the deployment serves. Counted
+        // by the bare id, the second tenant's clients would ride on the first's and never reach the limit.
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = 2,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
+        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+
+        _ = new ClientInfo("web").CheckClientLicense(acme);
+        _ = new ClientInfo("web").CheckClientLicense(globex);
+        _ = new ClientInfo("mobile").CheckClientLicense(acme);
+
+        Assert.Null(new ClientInfo("mobile").CheckClientLicense(globex));
+    }
+
+    [Fact]
+    public void A_refusal_is_recorded_for_each_tenant_refusing_a_client_of_one_id()
+    {
+        // The record of a refusal is throttled per client, so a client is named with its tenant there too: counted
+        // by the bare id, the second tenant's refusal would be taken in silence for the first one's record.
+        TestLicense.ClearChecker();
+        TestLicense.ClearLogThrottle();
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = 1,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
+        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+        _ = new ClientInfo("first").CheckClientLicense(acme);
+        _ = new ClientInfo("second").CheckClientLicense(acme);
+
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Null(new ClientInfo("web").CheckClientLicense(acme));
+            Assert.Null(new ClientInfo("web").CheckClientLicense(globex));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var refusals = records.Entries
+            .Where(record => record.EventId.Id == LogEvents.Licensing.LicenseChecker.ClientLimitExceededByMargin)
+            .Select(record => record.Message)
+            .ToArray();
+        Assert.Equal(2, refusals.Length);
+        Assert.Contains(refusals, message => message.Contains("acme/web", StringComparison.Ordinal));
+        Assert.Contains(refusals, message => message.Contains("globex/web", StringComparison.Ordinal));
     }
 
     [Fact]

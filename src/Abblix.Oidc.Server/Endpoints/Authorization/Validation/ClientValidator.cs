@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Logging;
 
@@ -24,9 +25,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
 /// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider) : IAuthorizationContextValidator
+    IClientInfoProvider clientInfoProvider,
+    IIssuerSettings issuerSettings) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client specified in the authorization request.
@@ -47,7 +50,7 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);

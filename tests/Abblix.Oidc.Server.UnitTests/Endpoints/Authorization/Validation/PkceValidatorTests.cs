@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -43,7 +44,7 @@ public class PkceValidatorTests
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None,
         IAuthorizationValueReuseDetector? reuseDetector = null)
         => new(
-            Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile })),
             reuseDetector ?? Mock.Of<IAuthorizationValueReuseDetector>());
 
     /// <summary>

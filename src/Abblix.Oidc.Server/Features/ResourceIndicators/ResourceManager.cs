@@ -7,33 +7,42 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Issuer;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
 /// <summary>
-/// In-memory <see cref="IResourceManager"/> backed by <see cref="OidcOptions.Resources"/>. Indexes
+/// In-memory <see cref="IResourceManager"/> backed by <see cref="IIssuerSettings.Resources"/>, one dictionary for each issuer. Indexes
 /// the configured <see cref="ResourceDefinition"/> entries by their absolute URI for O(1) lookup
 /// during RFC 8707 resource indicator validation.
 /// </summary>
 /// <remarks>
-/// The dictionary is built once at construction time from the snapshot of options; subsequent
-/// changes to the options instance are not reflected.
+/// The dictionary of each issuer is built the first time that issuer looks a resource up, and again once
+/// its resource definitions change, as after a reload of its settings.
 /// </remarks>
-/// <param name="options">The OIDC options containing resource definitions to be registered.</param>
-public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
+/// <param name="settings">The settings of the issuer serving the request, holding its resource definitions.</param>
+/// <param name="resources">The dictionary of each issuer.</param>
+public class ResourceManager(
+    IIssuerSettings settings,
+    IIssuerLocal<Dictionary<Uri, ResourceDefinition>> resources) : IResourceManager
 {
-    private readonly Dictionary<Uri, ResourceDefinition> _resources = InitializeResources(options);
+    private Dictionary<Uri, ResourceDefinition> Resources
+    {
+        get
+        {
+            var definitions = settings.Resources;
+            return resources.GetOrCreate(definitions, () => InitializeResources(definitions));
+        }
+    }
 
-    private static Dictionary<Uri, ResourceDefinition> InitializeResources(IOptions<OidcOptions> options)
+    private static Dictionary<Uri, ResourceDefinition> InitializeResources(ResourceDefinition[]? definitions)
     {
         var resources = new Dictionary<Uri, ResourceDefinition>();
-        if (options.Value.Resources == null)
+        if (definitions == null)
             return resources;
 
-        foreach (var resource in options.Value.Resources)
+        foreach (var resource in definitions)
         {
             // A non-absolute resource URI can never match a request (requests are rejected unless
             // absolute per RFC 8707 Section 2), so it would sit as a silent dead entry. Fail fast
@@ -41,12 +50,12 @@ public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
             if (!resource.Resource.IsAbsoluteUri)
                 throw new ArgumentException(
                     $"The configured resource '{resource.Resource}' must be an absolute URI (RFC 8707 Section 2).",
-                    nameof(options));
+                    nameof(definitions));
 
             if (!resources.TryAdd(resource.Resource, resource))
                 throw new ArgumentException(
                     $"Duplicate resource definition for '{resource.Resource}'. Each configured resource URI must be unique.",
-                    nameof(options));
+                    nameof(definitions));
         }
 
         return resources;
@@ -60,5 +69,5 @@ public class ResourceManager(IOptions<OidcOptions> options) : IResourceManager
     /// the specified URI, if the resource is found; otherwise, null. This parameter is passed uninitialized.</param>
     /// <returns><c>true</c> if the resource definition is found; otherwise, <c>false</c>.</returns>
     public bool TryGet(Uri resource, [MaybeNullWhen(false)] out ResourceDefinition definition)
-        => _resources.TryGetValue(resource, out definition);
+        => Resources.TryGetValue(resource, out definition);
 }

@@ -55,7 +55,7 @@ public class LicenseCheckerTests
         ClientInfo? clientInfo = null;
 
         // Act
-        var result = clientInfo.CheckClientLicense();
+        var result = clientInfo.CheckClientLicense(SingleIssuer.Settings);
 
         // Assert
         Assert.Null(result);
@@ -78,8 +78,8 @@ public class LicenseCheckerTests
         var client2 = new ClientInfo($"{uniquePrefix}-test-client-2");
 
         // Act
-        var result1 = client1.CheckClientLicense();
-        var result2 = client2.CheckClientLicense();
+        var result1 = client1.CheckClientLicense(SingleIssuer.Settings);
+        var result2 = client2.CheckClientLicense(SingleIssuer.Settings);
 
         // Assert
         Assert.NotNull(result1);
@@ -102,8 +102,8 @@ public class LicenseCheckerTests
         var client2 = new ClientInfo(clientId);
 
         // Act
-        var result1 = client1.CheckClientLicense();
-        var result2 = client2.CheckClientLicense();
+        var result1 = client1.CheckClientLicense(SingleIssuer.Settings);
+        var result2 = client2.CheckClientLicense(SingleIssuer.Settings);
 
         // Assert
         Assert.NotNull(result1);
@@ -135,7 +135,7 @@ public class LicenseCheckerTests
         }
 
         // Act
-        var results = clients.Select(c => c.CheckClientLicense()).ToList();
+        var results = clients.Select(c => c.CheckClientLicense(SingleIssuer.Settings)).ToList();
 
         // Assert - All clients should be allowed
         Assert.All(results, result => Assert.NotNull(result));
@@ -154,7 +154,7 @@ public class LicenseCheckerTests
         var clientTask = Task.FromResult<ClientInfo?>(new ClientInfo(clientId));
 
         // Act
-        var result = await clientTask.WithLicenseCheck();
+        var result = await clientTask.WithLicenseCheck(SingleIssuer.Settings);
 
         // Assert
         Assert.NotNull(result);
@@ -171,7 +171,7 @@ public class LicenseCheckerTests
         var clientTask = Task.FromResult<ClientInfo?>(null);
 
         // Act
-        var result = await clientTask.WithLicenseCheck();
+        var result = await clientTask.WithLicenseCheck(SingleIssuer.Settings);
 
         // Assert
         Assert.Null(result);

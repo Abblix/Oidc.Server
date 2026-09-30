@@ -147,7 +147,7 @@ public class UnreadableAssertionTimestampTests
             new FakeTimeProvider(Now),
             replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
-            Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None })));
 
         return (authenticator, replayCache);
     }

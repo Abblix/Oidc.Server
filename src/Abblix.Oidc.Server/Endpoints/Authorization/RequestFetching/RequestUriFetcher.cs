@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
@@ -30,10 +31,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
 /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
 /// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public partial class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
     IClientInfoProvider clientInfoProvider,
-    ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
+    ISecureHttpFetcher secureHttpFetcher,
+    IIssuerSettings issuerSettings) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously fetches the authorization request object from the given request URI.
@@ -76,7 +79,7 @@ public partial class RequestUriFetcher(
                 ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);

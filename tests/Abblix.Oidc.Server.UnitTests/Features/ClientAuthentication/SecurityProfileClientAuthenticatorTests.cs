@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -41,7 +42,7 @@ public class SecurityProfileClientAuthenticatorTests
         var inner = new Mock<IClientAuthenticator>();
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
-            Options.Create(new OidcOptions { DefaultSecurityProfile = defaultProfile }),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = defaultProfile })),
             logger);
 
         return (authenticator, inner);

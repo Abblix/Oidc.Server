@@ -13,6 +13,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -26,7 +27,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider) : IClientAuthenticator
+    IClientInfoProvider clientInfoProvider,
+    IIssuerSettings issuerSettings) : IClientAuthenticator
 {
     /// <summary>
     /// OID for Subject Alternative Name extension (RFC 5280 section 4.2.1.6).
@@ -72,7 +74,7 @@ public partial class TlsMetadataClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         if (client == null)
             return null;
 

@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -43,7 +44,11 @@ public class PushedRequestFetcherTests
                 DefaultSecurityProfile = defaultSecurityProfile,
             });
 
-        return new PushedRequestFetcher(snapshot.Object, _storage.Object, _clientInfoProvider.Object);
+        return new PushedRequestFetcher(
+            snapshot.Object,
+            SingleIssuer.SettingsOf(snapshot.Object),
+            _storage.Object,
+            _clientInfoProvider.Object);
     }
 
     private static AuthorizationRequest CreateRequest() => new()

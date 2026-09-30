@@ -13,11 +13,16 @@ using System.Threading.Tasks;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -152,6 +157,217 @@ public class MultiTenancyRegistrationTests
             => inner.RemoveAsync(key, token);
     }
 
+    /// <summary>
+    /// A tenant's pairwise key that cannot seal is refused at startup, naming the tenant, rather than by a 500 the
+    /// first time one of its clients is given a pairwise identifier.
+    /// </summary>
+    [Fact]
+    public void ATenantsUnusablePairwiseKey_IsRefusedAtStartup()
+    {
+        var tooShort = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[16]) },
+        };
+        var services = new ServiceCollection().AddServerStorage();
+        services.AddMultiTenancy(options => options.Tenants.Add(tooShort));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("Tenant 'acme': The pairwise salt must decode to at least", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A pairwise key registered for the whole server would be ignored under multi-tenancy, so startup refuses it.
+    /// </summary>
+    [Fact]
+    public void AServerWidePairwiseKey_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddPairwiseSubjectIdentifiers(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"A {nameof(PairwiseSubjectSettings)} registered for the whole server", refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
+    {
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                DefaultResourceIndicator = new Uri("https://api.acme.example"),
+            },
+            nameof(OidcOptions.DefaultResourceIndicator)
+        },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+                Clients = [new ClientInfo("public") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None }],
+            },
+            "Client 'public'"
+        },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                Clients = [new ClientInfo("App"), new ClientInfo("app")],
+            },
+            "2 clients are configured under the id 'App' and 'app'"
+        },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                Resources = [new ResourceDefinition(new Uri("api", UriKind.Relative))],
+            },
+            "The resource 'api' must be named by an absolute URI"
+        },
+    };
+
+    /// <summary>
+    /// What a tenant declares passes the checks the server's own settings pass at startup, so a tenant's mistake is
+    /// refused there, naming the tenant, rather than surfacing on the first request that meets it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TenantsTheServersChecksRefuse))]
+    public void ATenantsSettings_PassTheServersOwnChecks(TenantDefinition tenant, string mistake)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.TryAddEnumerable([
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
+        ]);
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"Tenant '{tenant.Id}': ", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(mistake, refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A mistake in the server's own settings is reported by those settings, and does not hide what is wrong with the
+    /// tenant list.
+    /// </summary>
+    [Fact]
+    public void InvalidServerSettings_LeaveTheTenantListsOwnRefusalsVisible()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = "https://auth.example.com");
+        services.AddServerStorage().AddMultiTenancy(options =>
+        {
+            options.Tenants.Add(Acme);
+            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/other" });
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Equal(typeof(MultiTenancyOptions), refusal.OptionsType);
+        Assert.Contains("The tenant id 'acme' is declared more than once.", refusal.Failures);
+        Assert.DoesNotContain(refusal.Failures, failure => failure.Contains(nameof(OidcOptions.Issuer), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A pairwise client set for the whole server under multi-tenancy gets the refusal of server-wide clients, not a
+    /// failure from asking a tenant's settings outside any tenant.
+    /// </summary>
+    [Fact]
+    public void AServerWidePairwiseClient_UnderMultiTenancy_IsRefusedAsServerWide()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options =>
+            options.Clients = [new ClientInfo("pairwise") { SubjectType = SubjectTypes.Pairwise }]);
+        services.AddIssuer();
+        services.AddClientInformation().AddUserInfo();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)} applies to the whole server",
+            refusal.Message, StringComparison.Ordinal);
+    }
+
+    public static TheoryData<Type, object> HostsOwnRegistries => new()
+    {
+        { typeof(IClientInfoProvider), Moq.Mock.Of<IClientInfoProvider>() },
+        { typeof(IClientInfoManager), Moq.Mock.Of<IClientInfoManager>() },
+        { typeof(IScopeManager), Moq.Mock.Of<IScopeManager>() },
+        { typeof(IResourceManager), Moq.Mock.Of<IResourceManager>() },
+        { typeof(ISubjectTypeConverter), Moq.Mock.Of<ISubjectTypeConverter>() },
+    };
+
+    /// <summary>
+    /// A registry the host brings itself keeps one set of clients, scopes, resources or pairwise keys for every
+    /// tenant, since nothing tells it which tenant a request is for, so startup refuses it, naming the service.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(HostsOwnRegistries))]
+    public void AHostsOwnRegistry_IsRefusedAtStartup(Type service, object registry)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(service, registry);
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"{service.Name} is the host's own", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A registry the host scopes to a request cannot be resolved at startup, and that failure is reported as the
+    /// refusal, naming the service, rather than replacing every refusal of the tenant list with a container error.
+    /// </summary>
+    [Fact]
+    public void AHostsRegistryScopedToARequest_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped(_ => Moq.Mock.Of<IClientInfoProvider>());
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"{nameof(IClientInfoProvider)} is the host's own", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheServersOwnRegistries_PassTheStartupCheck(bool reloadableClients)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddClientInformation().AddUserInfo();
+        if (reloadableClients)
+            services.AddReloadableClientInformation();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Single(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
     [Fact]
     public void TheServersOwnComposition_PassesTheStartupCheck()
     {
@@ -231,6 +447,68 @@ public class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(nameof(OidcOptions.Issuer), refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A setting a tenant declares, set for the whole server, is refused at startup. Which settings those are is
+    /// held by the core's own tests of the refusal; this one holds that multi-tenancy puts the refusal in force.
+    /// </summary>
+    [Fact]
+    public void ServerWideClients_AreRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => options.Clients = [new ClientInfo("client")]);
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)} ", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnderATenant_TheClientsAreTheOnesItDeclares()
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = [new ClientInfo("client")] };
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(acme));
+        using var provider = services.BuildServiceProvider();
+        EnterTenant(provider, acme);
+
+        Assert.Same(acme.Clients, provider.GetRequiredService<IIssuerSettings>().Clients);
+    }
+
+    [Fact]
+    public void EachTenant_KeepsAValueOfItsOwn_AndNoTenantGetsNone()
+    {
+        using var provider = BuildProvider();
+        var local = provider.GetRequiredService<IIssuerLocal<object>>();
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+
+        EnterTenant(provider, Acme);
+        var acmeValue = local.GetOrCreate(null, () => new object());
+        Assert.Same(acmeValue, local.GetOrCreate(null, () => new object()));
+
+        EnterTenant(provider, globex);
+        Assert.NotSame(acmeValue, local.GetOrCreate(null, () => new object()));
+
+        EnterTenant(provider, null);
+        var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(null, () => new object()));
+        Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutATenant_TheSettingsAreRefused()
+    {
+        using var provider = BuildProvider();
+        EnterTenant(provider, null);
+
+        var settings = provider.GetRequiredService<IIssuerSettings>();
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => settings.Clients);
+        Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

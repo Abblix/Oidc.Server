@@ -184,13 +184,6 @@ public interface IEntityStorageKeyFactory
     string SessionClientMarkerKey(string sessionId, string generation, string clientId);
 
     /// <summary>
-    /// Generates a storage key for the registration access token binding of a client (RFC 7592).
-    /// </summary>
-    /// <param name="clientId">The identifier of the registered client.</param>
-    /// <returns>A formatted storage key for the client's current registration-access-token jti.</returns>
-    string RegistrationAccessTokenKey(string clientId);
-
-    /// <summary>
     /// Generates a storage key for reuse detection of an authorization request value (a PKCE
     /// <c>code_challenge</c> or an OpenID Connect <c>nonce</c>), scoped to a client and the value's kind.
     /// </summary>

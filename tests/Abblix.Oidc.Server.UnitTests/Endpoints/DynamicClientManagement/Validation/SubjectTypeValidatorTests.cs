@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -35,7 +36,33 @@ public class SubjectTypeValidatorTests
     {
         _secureHttpFetcher = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
         _logger = new Mock<ILogger<SubjectTypeValidator>>();
-        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object);
+        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, PairwiseKeyed);
+    }
+
+    /// <summary>
+    /// A converter holding a pairwise key, so a pairwise registration reaches the sector checks.
+    /// </summary>
+    private static readonly SubjectTypeConverter PairwiseKeyed =
+        new(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+
+    /// <summary>
+    /// An issuer with no pairwise key refuses a pairwise registration, rather than register a client every one of
+    /// whose token requests would fail.
+    /// </summary>
+    [Fact]
+    public async Task APairwiseRegistration_WithoutAKey_IsRefused()
+    {
+        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new SubjectTypeConverter());
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            RedirectUris = [new Uri("https://client.example.com/callback")],
+        });
+
+        var error = await validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
     }
 
     /// <summary>

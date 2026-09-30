@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -26,9 +27,11 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 /// <param name="logger">The logger for logging authentication events.</param>
 /// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public partial class NoneClientAuthenticator(
     ILogger<NoneClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider): IClientAuthenticator
+    IClientInfoProvider clientInfoProvider,
+    IIssuerSettings issuerSettings): IClientAuthenticator
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -57,7 +60,7 @@ public partial class NoneClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
         switch (client)
         {
             case null:

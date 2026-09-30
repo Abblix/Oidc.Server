@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -37,10 +38,12 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
 /// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
 /// pairwise subject back to the real subject.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
     IRefreshTokenService refreshTokenService,
-    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
+    IClientInfoProvider clientInfoProvider,
+    IIssuerSettings issuerSettings) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
@@ -67,7 +70,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         var originalClientId = jwt.Payload.ClientId;
         var originalClient = originalClientId is null
             ? null
-            : await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck();
+            : await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck(issuerSettings);
         if (originalClient is null)
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's client is not known.");

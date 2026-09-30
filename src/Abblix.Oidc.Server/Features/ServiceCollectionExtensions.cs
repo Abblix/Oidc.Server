@@ -158,6 +158,14 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientSecretsOptionsValidator>());
 
+        // Fail loud at startup when the client or resource registry could not hold what is configured, instead
+        // of failing every request that builds it, without naming what it could not hold.
+        services.TryAddEnumerable([
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, PairwiseClientsOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
+        ]);
+
         // Fail loud at startup when EnabledEndpoints advertises an opt-in endpoint whose feature services were
         // never registered by the matching AddX() call, instead of 500-ing on every request to it.
         services.TryAddEnumerable(
@@ -189,6 +197,28 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Serves clients from a store that follows a reload of the settings: the clients each issuer's settings
+    /// configure are read again once they change, while what dynamic registration added, changed or removed is
+    /// kept.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    /// <remarks>
+    /// It replaces the client store, whichever was registered, so it may be called before or after
+    /// <c>AddOidcServices</c>. The settings own every id they configure: the store changes nothing under one, and
+    /// a client registered under an id they come to configure is dropped.
+    /// </remarks>
+    public static IServiceCollection AddReloadableClientInformation(this IServiceCollection services)
+    {
+        services.TryAddSingleton<ReloadableClientInfoStorage>();
+        services.Replace(ServiceDescriptor.Singleton<IClientInfoProvider>(
+            provider => provider.GetRequiredService<ReloadableClientInfoStorage>()));
+        services.Replace(ServiceDescriptor.Singleton<IClientInfoManager>(
+            provider => provider.GetRequiredService<ReloadableClientInfoStorage>()));
+        return services;
+    }
+
+    /// <summary>
     /// Registers common services required by the application, like system clock, hashing services, etc.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
@@ -215,7 +245,7 @@ public static class ServiceCollectionExtensions
     /// Configures the issuer provider service to dynamically determine the issuer URI based on application settings.
     /// If an issuer is preconfigured in the options, a preconfigured issuer provider is used.
     /// Otherwise, a request-based issuer provider is utilized to determine the issuer URI dynamically,
-    /// allowing for flexible deployment scenarios.
+    /// allowing for flexible deployment scenarios. The settings belonging to the issuer come from the same options.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the issuer provider to.</param>
     /// <returns>The modified <see cref="IServiceCollection"/> with the issuer provider configured.</returns>
@@ -228,6 +258,10 @@ public static class ServiceCollectionExtensions
                 ? sp.CreateService<PreconfiguredIssuerProvider>()
                 : sp.CreateService<RequestBasedIssuerProvider>();
         });
+        services.TryAddSingleton<IIssuerSettings, OptionsIssuerSettings>();
+
+        // Transient, so each service holding values gets its own holder
+        services.TryAddTransient(typeof(IIssuerLocal<>), typeof(SingleIssuerLocal<>));
         return services;
     }
 
@@ -596,7 +630,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddUserInfo(this IServiceCollection services)
     {
         services.TryAddScoped<IUserClaimsProvider, UserClaimsProvider>();
-        services.TryAddSingleton<ISubjectTypeConverter, SubjectTypeConverter>();
+        services.TryAddSingleton<ISubjectTypeConverter, IssuerSubjectTypeConverter>();
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();
         services.TryAddSingleton<IResourceManager, ResourceManager>();

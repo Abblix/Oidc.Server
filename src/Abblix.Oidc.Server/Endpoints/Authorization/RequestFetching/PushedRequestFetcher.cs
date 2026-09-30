@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -24,12 +25,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="options">
 /// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
+/// <param name="issuerSettings">Provides the issuer's default security profile.</param>
 /// <param name="authorizationRequestStorage">
 /// The storage system used to retrieve pushed authorization request objects.</param>
 /// <param name="clientInfoProvider">
 /// Resolves the requesting client's registration to enforce the per-client PAR requirement.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
+    IIssuerSettings issuerSettings,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
 {
@@ -92,9 +95,9 @@ public class PushedRequestFetcher(
         // endpoint's chain - the PAR endpoint itself runs a different fetcher set and must not trip
         // over the requirement it is there to satisfy.
         if (request.ClientId is { } clientId &&
-            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck() is { } clientInfo &&
+            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings) is { } clientInfo &&
             (clientInfo.RequirePushedAuthorizationRequests ||
-             SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
+             SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
                  .RequirePushedAuthorizationRequests))
         {
             return ErrorFactory.InvalidRequestObject(

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -24,11 +25,12 @@ public class ClientSecretPostAuthenticator(
 	ILogger<ClientSecretPostAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService)
+	IHashService hashService,
+	IIssuerSettings issuerSettings)
 	: ClientSecretAuthenticator(
 		logger,
 		clientInfoProvider,
-		clock, hashService), IClientAuthenticator
+		clock, hashService, issuerSettings), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_post'.

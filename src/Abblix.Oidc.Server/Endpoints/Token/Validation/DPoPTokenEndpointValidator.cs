@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Nonces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -45,7 +46,8 @@ public partial class DPoPTokenEndpointValidator(
     ILogger<DPoPTokenEndpointValidator> logger,
     IProofValidator proofValidator,
     INonceService nonceService,
-    IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), ITokenContextValidator
+    IOptionsMonitor<OidcOptions> options,
+    IIssuerSettings issuerSettings) : DPoPNonceValidator(nonceService), ITokenContextValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
@@ -71,7 +73,7 @@ public partial class DPoPTokenEndpointValidator(
         // authentication request is spent. The profile tightens, and the granular RequireDPoP toggle cannot
         // weaken it.
         if (SecurityProfileRequirements
-                .For(context.ClientInfo, options.CurrentValue.DefaultSecurityProfile)
+                .For(context.ClientInfo, issuerSettings.DefaultSecurityProfile)
                 .RequireSenderConstrainedTokens &&
             !WillIssueCertificateBoundToken(context))
         {

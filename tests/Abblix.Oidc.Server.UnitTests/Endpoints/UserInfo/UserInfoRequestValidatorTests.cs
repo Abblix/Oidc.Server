@@ -59,7 +59,8 @@ public class UserInfoRequestValidatorTests
             _accessTokenService.Object,
             _clientInfoProvider.Object,
             _dpopValidator.Object,
-            _mtlsValidator.Object);
+            _mtlsValidator.Object,
+            SingleIssuer.Settings);
     }
 
     private static UserInfoRequest CreateUserInfoRequest(string? accessToken = null)

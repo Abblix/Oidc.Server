@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -42,8 +43,12 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// or real) on issuance, and opens it back when authenticating the token.</param>
 /// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
 /// </param>
+/// <param name="issuerSettings">The settings of the issuer serving the request, naming the resource a token is
+/// issued for when the request names none.</param>
 /// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
 /// token can be encrypted to the resource it is minted for.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, and the audience keys the encryption target.")]
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
@@ -51,6 +56,7 @@ internal class AccessTokenService(
 	IAuthServiceJwtFormatter serviceJwtFormatter,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
+	IIssuerSettings issuerSettings,
 	IAudienceKeyResolver audienceKeys) : IAccessTokenService
 {
 	/// <summary>
@@ -123,7 +129,7 @@ internal class AccessTokenService(
 
 		// The audience is settled once, before anything reads it, so the payload below and the encryption
 		// policy further down agree on who this token is for instead of each deriving its own answer.
-		var audienceContext = authContext.WithDefaultResource(options.Value.DefaultResourceIndicator);
+		var audienceContext = authContext.WithDefaultResource(issuerSettings.DefaultResourceIndicator);
 		audienceContext.ApplyTo(accessToken.Payload);
 
 		if (options.Value.FilterAuthorizationDetailsByLocation)

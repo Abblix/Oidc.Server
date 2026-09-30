@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
@@ -39,7 +40,8 @@ public class AuthorizationRequestProcessor(
 	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
-	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
+	IConsentConstraintEnforcer consentConstraintEnforcer,
+	IIssuerSettings issuerSettings) : IAuthorizationRequestProcessor
 {
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
@@ -54,7 +56,7 @@ public class AuthorizationRequestProcessor(
 	public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
 	{
 		// Ensures the client is permitted to make requests by the current license.
-		request.ClientInfo.CheckClientLicense();
+		request.ClientInfo.CheckClientLicense(issuerSettings);
 
 		var model = request.Model;
 

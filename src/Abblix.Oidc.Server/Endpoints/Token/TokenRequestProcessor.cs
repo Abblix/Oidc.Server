@@ -12,6 +12,7 @@ using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -30,12 +31,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="identityTokenService">Issues ID tokens.</param>
 /// <param name="tokenContextEvaluator">Narrows scopes/resources and computes mTLS confirmation binding.</param>
 /// <param name="grantIdGenerator">Starts a refresh token family for a grant that has none yet.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class TokenRequestProcessor(
 	IAccessTokenService accessTokenService,
 	IRefreshTokenService refreshTokenService,
 	IIdentityTokenService identityTokenService,
 	ITokenAuthorizationContextEvaluator tokenContextEvaluator,
-	IGrantIdGenerator grantIdGenerator) : ITokenRequestProcessor
+	IGrantIdGenerator grantIdGenerator,
+	IIssuerSettings issuerSettings) : ITokenRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid token request, determining the necessary tokens to generate based on
@@ -55,7 +58,7 @@ public class TokenRequestProcessor(
 	public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
 	{
 		var clientInfo = request.ClientInfo;
-		clientInfo.CheckClientLicense();
+		clientInfo.CheckClientLicense(issuerSettings);
 
 		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 

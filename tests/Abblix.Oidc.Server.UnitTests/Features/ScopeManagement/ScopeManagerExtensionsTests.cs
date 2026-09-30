@@ -34,7 +34,7 @@ public class ScopeManagerExtensionsTests
         };
 
         var options = Options.Create(new OidcOptions { Scopes = customScopes });
-        _scopeManager = new ScopeManager(options);
+        _scopeManager = SingleIssuer.ScopeManager(options);
     }
 
     /// <summary>

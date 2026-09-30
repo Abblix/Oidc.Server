@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -55,6 +56,21 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
             where same.Count() > 1
             select $"The tenants {string.Join(", ", same)} are served at the same address " +
                    $"{same.Key.Host}{same.Key.Path}.");
+
+        // Refused here rather than when the first pairwise identifier is minted, which would answer with a 500
+        failures.AddRange(
+            from tenant in options.Tenants
+            let refusal = tenant.PairwiseSubject is { Salt: var salt }
+                ? PairwiseSubjectSettings.SaltRefusal(salt)
+                : null
+            where refusal is not null
+            select $"Tenant '{tenant.Id}': {refusal}");
+
+        failures.AddRange(
+            from tenant in options.Tenants
+            let refusal = PairwiseClientsOptionsValidator.Refusal(tenant.Clients, tenant.PairwiseSubject)
+            where refusal is not null
+            select $"Tenant '{tenant.Id}': {refusal}");
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
