@@ -24,15 +24,33 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Issuer;
 public class IssuerLocalRaceTests
 {
     [Fact]
-    public Task WithoutTenants_TwoFirstCallers_ShareOneValue() => BothShareOneValueAsync(new SingleIssuerLocal<object>());
+    public async Task WithoutTenants_TwoFirstCallers_ShareOneValue()
+    {
+        var local = new SingleIssuerLocal<object>();
+
+        var (first, second) = await BuildAtOnceAsync(local);
+
+        Assert.Same(first, second);
+        Assert.Same(first, local.GetOrCreate(null, () => new object()));
+    }
 
     [Fact]
-    public Task UnderATenant_TwoFirstCallers_ShareOneValue()
-        => BothShareOneValueAsync(new TenantIssuerLocal<object>(new OneTenant()));
-
-    private static async Task BothShareOneValueAsync(IIssuerLocal<object> local)
+    public async Task UnderATenant_TwoFirstCallers_ShareOneValue()
     {
-        // Both callers are held inside the build until each has started one, so each has seen no value yet
+        var local = new TenantIssuerLocal<object>(new OneTenant());
+
+        var (first, second) = await BuildAtOnceAsync(local);
+
+        Assert.Same(first, second);
+        Assert.Same(first, local.GetOrCreate(null, () => new object()));
+    }
+
+    /// <summary>
+    /// What two callers asking for the value at once each get, both held inside the build until each has started
+    /// one, so each has seen no value yet.
+    /// </summary>
+    private static async Task<(object First, object Second)> BuildAtOnceAsync(IIssuerLocal<object> local)
+    {
         using var bothBuilding = new Barrier(2);
         object Build()
         {
@@ -42,9 +60,7 @@ public class IssuerLocalRaceTests
 
         var first = Task.Run(() => local.GetOrCreate(null, Build));
         var second = Task.Run(() => local.GetOrCreate(null, Build));
-
-        Assert.Same(await first, await second);
-        Assert.Same(await first, local.GetOrCreate(null, () => new object()));
+        return (await first, await second);
     }
 
     private sealed class OneTenant : ITenantAccessor
