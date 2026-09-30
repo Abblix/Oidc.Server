@@ -197,6 +197,28 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Serves clients from a store that follows a reload of the settings: the clients each issuer's settings
+    /// configure are read again once they change, while what dynamic registration added, changed or removed is
+    /// kept.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    /// <remarks>
+    /// It replaces the client store, whichever was registered, so it may be called before or after
+    /// <c>AddOidcServices</c>. A configured client wins over one registration merely added under its id, while a
+    /// change or removal registration made to a configured client keeps winning over the settings.
+    /// </remarks>
+    public static IServiceCollection AddReloadableClientInformation(this IServiceCollection services)
+    {
+        services.TryAddSingleton<ReloadableClientInfoStorage>();
+        services.Replace(ServiceDescriptor.Singleton<IClientInfoProvider>(
+            provider => provider.GetRequiredService<ReloadableClientInfoStorage>()));
+        services.Replace(ServiceDescriptor.Singleton<IClientInfoManager>(
+            provider => provider.GetRequiredService<ReloadableClientInfoStorage>()));
+        return services;
+    }
+
+    /// <summary>
     /// Registers common services required by the application, like system clock, hashing services, etc.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>

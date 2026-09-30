@@ -12,10 +12,13 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -65,10 +68,7 @@ public class IssuerReloadTests
         {
             Clients = [new ClientInfo("configured"), new ClientInfo("retired")],
         });
-        var clients = new ClientInfoStorage(
-            new OptionsIssuerSettings(options),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>(),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo?>>());
+        var clients = ClientsOf(options);
         await clients.AddClientAsync(new ClientInfo("registered"));
         await clients.RemoveClientAsync("retired");
 
@@ -87,15 +87,117 @@ public class IssuerReloadTests
     public async Task AClientAReloadDrops_IsNoLongerKnown()
     {
         var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
-        var clients = new ClientInfoStorage(
-            new OptionsIssuerSettings(options),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>(),
-            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo?>>());
+        var clients = ClientsOf(options);
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
 
         options.Reload(new OidcOptions());
 
         Assert.Null(await clients.TryFindClientAsync("configured"));
+    }
+
+    private static ReloadableClientInfoStorage ClientsOf(IOptionsMonitor<OidcOptions> options) => new(
+        new OptionsIssuerSettings(options),
+        new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>(),
+        new SingleIssuerLocal<ConcurrentDictionary<string, ReloadableClientInfoStorage.Registration>>());
+
+    /// <summary>
+    /// A client registered under an id the settings later configure gives way to the configured one: otherwise a
+    /// registrant choosing an id ahead of the administrator would be served in the configured client's place.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationUnderAnIdAReloadConfigures_GivesWayToTheConfiguredClient()
+    {
+        var options = new ReloadableOptions(new OidcOptions());
+        var clients = ClientsOf(options);
+        await clients.AddClientAsync(new ClientInfo("partner-app") { ClientName = "registered" });
+
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
+
+        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+    }
+
+    [Fact]
+    public async Task AnUpdateOfAConfiguredClient_OutlivesAReload()
+    {
+        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
+        var clients = ClientsOf(options);
+        await clients.UpdateClientAsync(new ClientInfo("configured") { ClientName = "updated" });
+
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
+
+        Assert.Equal("updated", (await clients.TryFindClientAsync("configured"))?.ClientName);
+    }
+
+    [Fact]
+    public async Task TwoRegistrationsUnderOneId_KeepTheFirst()
+    {
+        var clients = ClientsOf(new ReloadableOptions(new OidcOptions()));
+
+        await clients.AddClientAsync(new ClientInfo("app") { ClientName = "first" });
+        await clients.AddClientAsync(new ClientInfo("app") { ClientName = "second" });
+
+        Assert.Equal("first", (await clients.TryFindClientAsync("app"))?.ClientName);
+    }
+
+    /// <summary>
+    /// Removing a client registration made no removal of a configured client, so it leaves nothing behind to hide a
+    /// client of that id the settings configure later.
+    /// </summary>
+    [Fact]
+    public async Task ARemovedRegistration_HidesNoClientAReloadConfigures()
+    {
+        var options = new ReloadableOptions(new OidcOptions());
+        var clients = ClientsOf(options);
+        await clients.AddClientAsync(new ClientInfo("app"));
+        await clients.RemoveClientAsync("app");
+
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("app")] });
+
+        Assert.NotNull(await clients.TryFindClientAsync("app"));
+    }
+
+    /// <summary>
+    /// The default store reads the configured clients once, so a reload does not reach them.
+    /// </summary>
+    [Fact]
+    public async Task TheDefaultStore_KeepsTheClientsItStartedWith()
+    {
+        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
+        var clients = new ClientInfoStorage(
+            new OptionsIssuerSettings(options),
+            new SingleIssuerLocal<ConcurrentDictionary<string, ClientInfo>>());
+        Assert.NotNull(await clients.TryFindClientAsync("configured"));
+
+        options.Reload(new OidcOptions { Clients = [new ClientInfo("added")] });
+
+        Assert.NotNull(await clients.TryFindClientAsync("configured"));
+        Assert.Null(await clients.TryFindClientAsync("added"));
+    }
+
+    /// <summary>
+    /// The reloadable store serves both the lookups and the registrations, whether it is asked for before or after
+    /// the server's own registrations.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheReloadableStore_ServesClientsWhereverItIsAskedFor(bool beforeTheServer)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        if (beforeTheServer)
+            services.AddReloadableClientInformation();
+        services.AddClientInformation();
+        if (!beforeTheServer)
+            services.AddReloadableClientInformation();
+
+        // The startup checks of the options take services this test has no use for
+        services.RemoveAll<IValidateOptions<OidcOptions>>();
+        using var provider = services.BuildServiceProvider();
+
+        var clients = Assert.IsType<ReloadableClientInfoStorage>(provider.GetRequiredService<IClientInfoProvider>());
+        Assert.Same(clients, provider.GetRequiredService<IClientInfoManager>());
     }
 
     /// <summary>

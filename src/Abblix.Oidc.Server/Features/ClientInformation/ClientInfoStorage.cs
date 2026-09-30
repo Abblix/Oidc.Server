@@ -13,39 +13,24 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
 /// Manages the storage and retrieval of client information for OpenID Connect (OIDC) flows.
-/// Each issuer serves the clients its <see cref="IIssuerSettings"/> register, and a client added, changed or
-/// removed later is so only at the issuer it happened at.
+/// Each issuer starts with the clients its <see cref="IIssuerSettings"/> register, and a client added later is
+/// known only to the issuer it was added at.
 /// </summary>
 /// <remarks>
-/// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
-/// what registration changed since: a registered change is looked up first, and a removal is remembered as one.
+/// The clients are read from the settings once for each issuer, so a reload of the settings does not reach them;
+/// a host that wants it registers <see cref="ReloadableClientInfoStorage"/> through
+/// <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>.
 /// </remarks>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
-/// <param name="configured">The clients each issuer's settings configure.</param>
-/// <param name="registered">What registration added, changed or removed at each issuer; a removal is held as null.
-/// </param>
+/// <param name="clients">The clients of each issuer.</param>
 internal class ClientInfoStorage(
     IIssuerSettings settings,
-    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> configured,
-    IIssuerLocal<ConcurrentDictionary<string, ClientInfo?>> registered) : IClientInfoProvider, IClientInfoManager
+    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> clients) : IClientInfoProvider, IClientInfoManager
 {
-    private ConcurrentDictionary<string, ClientInfo> Configured
-    {
-        get
-        {
-            var clients = settings.Clients;
-            return configured.GetOrCreate(clients, () => new(
-                clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-                StringComparer.OrdinalIgnoreCase));
-        }
-    }
-
     // Built once for each issuer, whatever its settings become
-    private ConcurrentDictionary<string, ClientInfo?> Registered
-        => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
-
-    private ClientInfo? Find(string clientId)
-        => Registered.TryGetValue(clientId, out var client) ? client : Configured.GetValueOrDefault(clientId);
+    private ConcurrentDictionary<string, ClientInfo> Clients => clients.GetOrCreate(null, () => new(
+        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
+        StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -57,7 +42,7 @@ internal class ClientInfoStorage(
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        return Task.FromResult(Find(clientId));
+        return Task.FromResult(Clients.GetValueOrDefault(clientId));
     }
 
     /// <summary>
@@ -67,9 +52,7 @@ internal class ClientInfoStorage(
     /// <returns>A task that completes when the client is added.</returns>
     public Task AddClientAsync(ClientInfo clientInfo)
     {
-        if (Find(clientInfo.ClientId) is null)
-            Registered[clientInfo.ClientId] = clientInfo;
-
+        Clients.TryAdd(clientInfo.ClientId, clientInfo);
         return Task.CompletedTask;
     }
 
@@ -80,7 +63,7 @@ internal class ClientInfoStorage(
     /// <returns>A task that completes when the client is updated.</returns>
     public Task UpdateClientAsync(ClientInfo clientInfo)
     {
-        Registered[clientInfo.ClientId] = clientInfo;
+        Clients[clientInfo.ClientId] = clientInfo;
         return Task.CompletedTask;
     }
 
@@ -91,7 +74,7 @@ internal class ClientInfoStorage(
     /// <returns>A task that completes when the client is removed.</returns>
     public Task RemoveClientAsync(string clientId)
     {
-        Registered[clientId] = null;
+        Clients.TryRemove(clientId, out _);
         return Task.CompletedTask;
     }
 }

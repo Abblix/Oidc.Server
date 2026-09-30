@@ -330,13 +330,17 @@ public class MultiTenancyRegistrationTests
         Assert.Contains($"{nameof(IClientInfoProvider)} is the host's own", refusal.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void TheServersOwnRegistries_PassTheStartupCheck()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheServersOwnRegistries_PassTheStartupCheck(bool reloadableClients)
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
         services.AddIssuer();
         services.AddClientInformation().AddUserInfo();
+        if (reloadableClients)
+            services.AddReloadableClientInformation();
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 

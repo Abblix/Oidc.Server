@@ -28,13 +28,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) : IValidateOptions<MultiTenancyOptions>
 {
-    private static readonly (Type Service, Type PerTenant)[] Registries =
+    private static readonly (Type Service, Type[] PerTenant)[] Registries =
     [
-        (typeof(IClientInfoProvider), typeof(ClientInfoStorage)),
-        (typeof(IClientInfoManager), typeof(ClientInfoStorage)),
-        (typeof(IScopeManager), typeof(ScopeManager)),
-        (typeof(IResourceManager), typeof(ResourceManager)),
-        (typeof(ISubjectTypeConverter), typeof(IssuerSubjectTypeConverter)),
+        (typeof(IClientInfoProvider), [typeof(ClientInfoStorage), typeof(ReloadableClientInfoStorage)]),
+        (typeof(IClientInfoManager), [typeof(ClientInfoStorage), typeof(ReloadableClientInfoStorage)]),
+        (typeof(IScopeManager), [typeof(ScopeManager)]),
+        (typeof(IResourceManager), [typeof(ResourceManager)]),
+        (typeof(ISubjectTypeConverter), [typeof(IssuerSubjectTypeConverter)]),
     ];
 
     /// <inheritdoc />
@@ -43,7 +43,7 @@ public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) 
         var failures = (
             from registry in Registries
             let found = Find(registry.Service)
-            where found.Registered is not null && found.Registered.GetType() != registry.PerTenant ||
+            where found.Registered is not null && !registry.PerTenant.Contains(found.Registered.GetType()) ||
                   found.Failure is not null
             let whose = found.Registered is { } registered
                 ? $"({registered.GetType().FullName})"
