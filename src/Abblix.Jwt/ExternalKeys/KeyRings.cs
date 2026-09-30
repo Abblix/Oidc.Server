@@ -26,21 +26,21 @@ internal sealed class KeyRings(
     IOptions<KeyRingOptions> options) : IKeyRings
 {
     private readonly ConcurrentDictionary<string, KeyRing> _rings = new(StringComparer.Ordinal);
-    private readonly KeyRingStoreRound _round = new(store);
 
     /// <inheritdoc />
     public IKeyRing For(string partition) => Ring(partition);
 
     /// <summary>
-    /// Starts a refresh round: the rings refreshed in it share one read of the store, taken afresh.
+    /// Starts a refresh round: the ring of every partition kept, each with its view of one read of the store taken
+    /// for this round alone.
     /// </summary>
-    public void BeginRound() => _round.Begin();
-
-    /// <summary>
-    /// The ring of every partition kept.
-    /// </summary>
-    public IEnumerable<(string Partition, KeyRing Ring)> All
-        => options.Value.Partitions.Select(partition => (partition, Ring(partition)));
+    public IReadOnlyList<(string Partition, KeyRing Ring, IKeyRingStore Source)> BeginRound()
+    {
+        var round = new KeyRingStoreRound(store);
+        return options.Value.Partitions
+            .Select(partition => (partition, Ring(partition), (IKeyRingStore)new PartitionedKeyRingStore(round, partition)))
+            .ToArray();
+    }
 
     /// <summary>
     /// The ring of <paramref name="partition"/>, built on first use.
@@ -73,6 +73,6 @@ internal sealed class KeyRings(
 
         return _rings.GetOrAdd(partition, kept => serviceProvider.CreateService<KeyRing>(
             Dependency.Override(policy),
-            Dependency.Override<IKeyRingStore>(new PartitionedKeyRingStore(_round, kept))));
+            Dependency.Override<IKeyRingStore>(new PartitionedKeyRingStore(store, kept))));
     }
 }

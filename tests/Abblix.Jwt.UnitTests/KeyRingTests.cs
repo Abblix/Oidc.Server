@@ -48,6 +48,9 @@ public sealed class KeyRingTests : IDisposable
     }
     private static readonly DateTimeOffset Now = new(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>How long a wait on the refresh loop's thread sleeps between looks.</summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
+
     /// <summary>An in-memory ring store, standing in for the shared one a deployment uses.</summary>
     /// <remarks>
     /// It can also refuse to answer, which is how the refresh loop's behavior under an outage is exercised:
@@ -61,6 +64,12 @@ public sealed class KeyRingTests : IDisposable
 
         /// <summary>What every subsequent load throws, or <c>null</c> while the store is healthy.</summary>
         public Exception? FailWith { get; set; }
+
+        /// <summary>How many of the next loads fail, before the store answers again.</summary>
+        public int FailingLoads { get; set; }
+
+        /// <summary>Entries another pod adds between this pod's load and its next write.</summary>
+        public List<StoredKey> AddedByAnotherPod { get; } = [];
 
         /// <summary>Whether a load hangs until its token is canceled, instead of answering.</summary>
         public bool BlockUntilCancelled { get; set; }
@@ -80,11 +89,20 @@ public sealed class KeyRingTests : IDisposable
             if (FailWith is not null)
                 throw FailWith;
 
+            if (FailingLoads > 0)
+            {
+                FailingLoads--;
+                throw new InvalidOperationException("the ring store did not answer this once");
+            }
+
             return Entries.ToList();
         }
 
         public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
         {
+            Entries.AddRange(AddedByAnotherPod);
+            AddedByAnotherPod.Clear();
+
             if (Entries.Any(entry => entry.Id == key.Id))
                 return Task.FromResult(false);
 
@@ -195,8 +213,8 @@ public sealed class KeyRingTests : IDisposable
     {
         var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
 
-        foreach (var (_, ring) in rings.All)
-            await ring.RefreshAsync(TestContext.Current.CancellationToken);
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, TestContext.Current.CancellationToken);
 
         var acme = rings.For("acme").Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single();
         var globex = rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single();
@@ -859,16 +877,71 @@ public sealed class KeyRingTests : IDisposable
     {
         var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
         var ct = TestContext.Current.CancellationToken;
-        rings.BeginRound();
-        foreach (var (_, ring) in rings.All)
-            await ring.RefreshAsync(ct);
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, ct);
 
         var loadsBefore = store.Loads;
-        rings.BeginRound();
-        foreach (var (_, ring) in rings.All)
-            await ring.RefreshAsync(ct);
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, ct);
 
         Assert.Equal(loadsBefore + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// A refresh asked of a ring outside the refresh service reads the store itself, so it sees what other pods
+    /// minted since the last round rather than that round's read.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshAskedOutsideARound_ReadsTheStoreAfresh()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+        var ct = TestContext.Current.CancellationToken;
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, ct);
+
+        var loadsBefore = store.Loads;
+        await rings.For("acme").RefreshAsync(ct);
+        await rings.For("acme").RefreshAsync(ct);
+
+        Assert.Equal(loadsBefore + 2, store.Loads);
+    }
+
+    /// <summary>
+    /// A read that failed is not kept for the round: the partition after it reads the store for itself and is
+    /// refreshed.
+    /// </summary>
+    [Fact]
+    public async Task AFailedRead_IsNotKeptForTheRestOfTheRound()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+        var ct = TestContext.Current.CancellationToken;
+        store.FailingLoads = 1;
+        var round = rings.BeginRound();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => round[0].Ring.RefreshAsync(round[0].Source, ct));
+        await round[1].Ring.RefreshAsync(round[1].Source, ct);
+
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+    }
+
+    /// <summary>
+    /// A pod that loses the race to mint a period's key reads the store again in the same refresh, so it holds the
+    /// winner's key at once rather than nothing until the next round.
+    /// </summary>
+    [Fact]
+    public async Task APodLosingTheMintRace_HoldsTheWinnersKey_InTheSameRefresh()
+    {
+        var (winner, winnersStore) = CreateRing();
+        await winner.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var store = new FakeStore();
+        store.AddedByAnotherPod.AddRange(winnersStore.Entries);
+        var (loser, _) = CreateRing(store);
+        await loser.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            Assert.Single(winner.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId,
+            Assert.Single(loser.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId);
     }
 
     /// <summary>
@@ -898,7 +971,7 @@ public sealed class KeyRingTests : IDisposable
         // acme is refreshed first, so its failure is reported before globex's refresh has run
         const int MaxPolls = 100;
         for (var polls = 0; !GlobexMinted() && polls < MaxPolls; polls++)
-            await Task.Delay(50, TestContext.Current.CancellationToken);
+            await Task.Delay(PollInterval, TestContext.Current.CancellationToken);
 
         await service.StopAsync(TestContext.Current.CancellationToken);
 

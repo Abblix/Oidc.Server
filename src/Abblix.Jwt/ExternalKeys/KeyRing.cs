@@ -80,19 +80,27 @@ internal sealed class KeyRing(
     /// Mints whatever the current period is missing, then reloads and opens the ring into memory.
     /// </summary>
     /// <param name="cancellationToken">Cancels the refresh.</param>
-    public async Task RefreshAsync(CancellationToken cancellationToken)
+    public Task RefreshAsync(CancellationToken cancellationToken) => RefreshAsync(store, cancellationToken);
+
+    /// <summary>
+    /// Refreshes the ring from <paramref name="source"/>: a view of the store the refresh service read once for
+    /// every partition refreshed in its round.
+    /// </summary>
+    /// <param name="source">Where the entries are read from and written to.</param>
+    /// <param name="cancellationToken">Cancels the refresh.</param>
+    internal async Task RefreshAsync(IKeyRingStore source, CancellationToken cancellationToken)
     {
-        var entries = await store.LoadAsync(cancellationToken);
+        var entries = await source.LoadAsync(cancellationToken);
 
         // Adoption first, and in the same refresh as the first mint: the adopted key is dated a period back, so
         // the key minted below trails it rather than taking over the instant it appears.
-        var adopted = await AdoptExistingKeysAsync(entries, cancellationToken);
+        var adopted = await AdoptExistingKeysAsync(entries, source, cancellationToken);
 
-        if (await MintDueKeysAsync(entries, cancellationToken) || adopted)
+        if (await MintDueKeysAsync(entries, source, cancellationToken) || adopted)
         {
             // Something was written, by this pod or by another that won the race: re-read so the ring holds the
             // winner's key rather than the one generated here.
-            entries = await store.LoadAsync(cancellationToken);
+            entries = await source.LoadAsync(cancellationToken);
         }
 
         var versions = await KeyEncryptionKeyVersions(cancellationToken)
@@ -105,7 +113,7 @@ internal sealed class KeyRing(
             opened.Add(new OpenedKey(entry.Id, key, entry.CreatedAt));
         }
 
-        _keys = await RetireExpiredAsync(opened, cancellationToken);
+        _keys = await RetireExpiredAsync(opened, source, cancellationToken);
     }
 
     /// <summary>
@@ -124,6 +132,7 @@ internal sealed class KeyRing(
     /// </remarks>
     private async Task<IReadOnlyList<OpenedKey>> RetireExpiredAsync(
         IReadOnlyList<OpenedKey> opened,
+        IKeyRingStore source,
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -164,18 +173,22 @@ internal sealed class KeyRing(
                 continue;
             }
 
-            await store.RemoveAsync(key.Id, cancellationToken);
+            await source.RemoveAsync(key.Id, cancellationToken);
         }
 
         return live;
     }
 
     /// <summary>
-    /// Mints the keys the current period lacks, and reports whether the ring changed.
+    /// Mints the keys the current period lacks, and reports whether it claimed any, whether this pod's claim won
+    /// or another's did.
     /// </summary>
-    private async Task<bool> MintDueKeysAsync(IReadOnlyList<StoredKey> entries, CancellationToken cancellationToken)
+    private async Task<bool> MintDueKeysAsync(
+        IReadOnlyList<StoredKey> entries,
+        IKeyRingStore source,
+        CancellationToken cancellationToken)
     {
-        var minted = false;
+        var claimed = false;
 
         foreach (var (usage, algorithm) in Roles())
         {
@@ -192,14 +205,16 @@ internal sealed class KeyRing(
 
             // False means another pod claimed this period first. Its key is as good as ours, and the ring must
             // hold exactly one, so the loser simply drops what it generated. Nothing is retried.
-            minted |= await store.TryAddAsync(entry, cancellationToken);
+            _ = await source.TryAddAsync(entry, cancellationToken);
+            claimed = true;
         }
 
-        return minted;
+        return claimed;
     }
 
     /// <summary>
-    /// Takes the keys the server already signs with into an empty ring, and reports whether anything was written.
+    /// Takes the keys the server already signs with into an empty ring, and reports whether it claimed any, whether
+    /// this pod's claim won or another's did.
     /// </summary>
     /// <remarks>
     /// Only into an EMPTY ring, which is what lets the call stay in a host's registration forever: the moment the
@@ -213,6 +228,7 @@ internal sealed class KeyRing(
     /// </remarks>
     private async Task<bool> AdoptExistingKeysAsync(
         IReadOnlyList<StoredKey> entries,
+        IKeyRingStore source,
         CancellationToken cancellationToken)
     {
         if (entries.Count > 0 || policy.AdoptedKeys.Count == 0)
@@ -223,7 +239,7 @@ internal sealed class KeyRing(
         // producing, and it takes over once the window has passed.
         var createdAt = timeProvider.GetUtcNow() - policy.RotateEvery;
         var keyEncryptionKey = await NewestKeyEncryptionKeyAsync(cancellationToken);
-        var adopted = false;
+        var claimed = false;
 
         foreach (var key in policy.AdoptedKeys)
         {
@@ -242,10 +258,11 @@ internal sealed class KeyRing(
                 CreatedAt = createdAt,
             };
 
-            adopted |= await store.TryAddAsync(entry, cancellationToken);
+            _ = await source.TryAddAsync(entry, cancellationToken);
+            claimed = true;
         }
 
-        return adopted;
+        return claimed;
     }
 
     /// <summary>Generates a key for the role and seals it to the newest KEK version.</summary>
