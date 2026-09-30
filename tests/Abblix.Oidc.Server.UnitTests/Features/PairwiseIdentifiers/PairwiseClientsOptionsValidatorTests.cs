@@ -12,6 +12,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using Xunit;
 
 #pragma warning disable ABXMT001
@@ -28,12 +30,15 @@ public class PairwiseClientsOptionsValidatorTests
 
     private static ClientInfo PairwiseClient(string id) => new(id) { SubjectType = SubjectTypes.Pairwise };
 
+    private static PairwiseClientsOptionsValidator CheckWith(ISubjectTypeConverter converter)
+        => new(new ServiceCollection().AddSingleton(converter).BuildServiceProvider());
+
     [Fact]
     public void APairwiseClient_WithoutAKey_IsRefused()
     {
         var options = new OidcOptions { Clients = [new ClientInfo("public"), PairwiseClient("pairwise")] };
 
-        var result = new PairwiseClientsOptionsValidator().Validate(null, options);
+        var result = CheckWith(new SubjectTypeConverter()).Validate(null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("The clients 'pairwise' take pairwise subject identifiers", result.FailureMessage,
@@ -45,7 +50,21 @@ public class PairwiseClientsOptionsValidatorTests
     {
         var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
 
-        Assert.True(new PairwiseClientsOptionsValidator(Key).Validate(null, options).Succeeded);
+        Assert.True(CheckWith(new SubjectTypeConverter(Key)).Validate(null, options).Succeeded);
+    }
+
+    /// <summary>
+    /// A host's own converter may issue pairwise identifiers without the server's key, and its answer is the one
+    /// that counts.
+    /// </summary>
+    [Fact]
+    public void APairwiseClient_OfAConverterIssuingThemItsOwnWay_PassesTheCheck()
+    {
+        var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
+        var converter = new Mock<ISubjectTypeConverter>();
+        converter.Setup(c => c.SubjectTypesSupported).Returns([SubjectTypes.Public, SubjectTypes.Pairwise]);
+
+        Assert.True(CheckWith(converter.Object).Validate(null, options).Succeeded);
     }
 
     [Fact]
