@@ -50,9 +50,8 @@ public sealed class ServiceTokensAlgorithmsValidator(
         var failures = new List<string>();
         var serviceTokens = options.ServiceTokens;
 
-        // Under multi-tenancy the server's own settings carry no keys, and each tenant's, validated under its id,
-        // carry its own
-        var ofTenant = MultiTenancyDetection.IsTenantsOwn(name);
+        // Under multi-tenancy the server's own settings carry no keys and each tenant's carry its own
+        var ofTenant = MultiTenancyDetection.IsTenantsOwn(options);
         var keysJudgedHere = custodian is null &&
                              (ofTenant || services is null || !MultiTenancyDetection.IsActive(services));
 #pragma warning disable ABXMT001

@@ -21,9 +21,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// security profile cannot admit - would surface on the first request that meets it. So every check of
 /// <see cref="OidcOptions"/> judges, for each tenant, the settings that tenant's requests are served with: the
 /// server's own, with each setting the tenant declares under the same name taken from the tenant. A check added
-/// later is applied to tenants with nothing more to do. The settings are validated under the tenant's id, which
-/// tells a check judging what the server's own settings leave to the tenants - the keys - a tenant's settings from
-/// the server's own.
+/// later is applied to tenants with nothing more to do, a host's own among them.
 /// </remarks>
 /// <param name="options">The server's own settings.</param>
 /// <param name="validators">The checks of the server's settings.</param>
@@ -53,7 +51,7 @@ public sealed class TenantSettingsValidator(
 
             // It refuses exactly the settings a tenant's view carries
             where validator is not TenantOwnedOptionsValidator
-            let result = validator.Validate(tenant.Id, servedWith)
+            let result = validator.Validate(Options.DefaultName, servedWith)
             where result.Failed
             from failure in result.Failures ?? []
             select $"Tenant '{tenant.Id}': {failure}"
@@ -64,7 +62,7 @@ public sealed class TenantSettingsValidator(
 
     private static OidcOptions ServedWith(OidcOptions server, TenantDefinition tenant)
     {
-        var servedWith = server with { };
+        var servedWith = new TenantOidcOptions(server);
         foreach (var (tenantProperty, serverProperty) in TenantOwnedSettings.All)
             serverProperty.SetValue(servedWith, tenantProperty.GetValue(tenant));
 

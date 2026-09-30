@@ -41,11 +41,11 @@ internal sealed class SigningKeysPresenceValidator(IServiceProvider serviceProvi
         // container cannot see through the provider's factory lambda - it overflows the stack
         // instead of reporting a circular dependency. By the time Validate runs the factory is
         // fully built, and the same resolution completes without re-entering it.
-        // Under multi-tenancy the server's own settings carry no keys, and each tenant's, validated under its id,
-        // carry its own; the custodian's key names are a tenant's own and judged with the tenant list
+        // Under multi-tenancy the server's own settings carry no keys and each tenant's carry its own; the
+        // custodian's key names are a tenant's own and judged with the tenant list
         if (MultiTenancyDetection.IsActive(serviceProvider))
         {
-            return MultiTenancyDetection.IsTenantsOwn(name) &&
+            return MultiTenancyDetection.IsTenantsOwn(options) &&
                    KeysComeFromSettings(serviceProvider) &&
                    options.SigningKeys.Count == 0
                 ? ValidateOptionsResult.Fail(NoTenantSigningKey)

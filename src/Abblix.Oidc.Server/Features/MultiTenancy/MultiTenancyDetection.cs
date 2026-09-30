@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -28,9 +29,8 @@ internal static class MultiTenancyDetection
 #pragma warning restore ABXMT001
 
     /// <summary>
-    /// Whether the settings validated under <paramref name="name"/> are a tenant's: the check of the tenant list
-    /// validates each tenant's settings under the tenant's id, and the server's own are validated under the
-    /// default name.
+    /// Whether <paramref name="options"/> are the settings a tenant's requests are served with, as the check of the
+    /// tenant list hands them to the checks of the server's settings, rather than the server's own.
     /// </summary>
-    public static bool IsTenantsOwn(string? name) => !string.IsNullOrEmpty(name);
+    public static bool IsTenantsOwn(OidcOptions options) => options is TenantOidcOptions;
 }

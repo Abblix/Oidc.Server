@@ -285,6 +285,47 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A rule the host adds to the server's settings the usual way, bound to the default name, judges each tenant's
+    /// settings too, and its refusal names the tenant.
+    /// </summary>
+    [Fact]
+    public void AHostsOwnRule_JudgesEachTenantsSettings()
+    {
+        const string HostRule = "The host signs with one key at a time.";
+
+        // The same tenant starts without the rule, so the refusal below is the rule's
+        using var withoutTheRule = TwoSigningKeys(hostRule: false);
+        Assert.NotEmpty(withoutTheRule.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+
+        using var withTheRule = TwoSigningKeys(hostRule: true);
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => withTheRule.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains($"Tenant 'acme': {HostRule}", refusal.Message, StringComparison.Ordinal);
+
+        ServiceProvider TwoSigningKeys(bool hostRule)
+        {
+            var services = new ServiceCollection();
+            var options = services.AddOptions<OidcOptions>();
+            if (hostRule)
+                options.Validate(settings => settings.SigningKeys.Count <= 1, HostRule);
+
+            services.AddIssuer();
+            services.AddAuthServiceJwt();
+            services.AddServerStorage().AddMultiTenancy(tenants => tenants.Tenants.Add(new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = AcmeIssuer,
+                SigningKeys =
+                [
+                    JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+                    JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+                ],
+            }));
+            return services.BuildServiceProvider();
+        }
+    }
+
+    /// <summary>
     /// Each tenant decrypts with its own encryption keys only, so a token encrypted to one tenant is read there and
     /// by no other.
     /// </summary>
