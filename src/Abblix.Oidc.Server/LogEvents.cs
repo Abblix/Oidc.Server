@@ -349,6 +349,17 @@ internal static class LogEvents
 
             public const int SectorIdentifierMissingUris = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Endpoints/DynamicClientManagement/RegisterClientRequestProcessor.cs</c> - a registration the client
+        /// store did not keep (sub-range 4060-4079).
+        /// </summary>
+        public static class RegisterClientRequestProcessor
+        {
+            private const int Base = 4060;
+
+            public const int RegistrationNotKept = Base + 1;
+        }
     }
 
     /// <summary>

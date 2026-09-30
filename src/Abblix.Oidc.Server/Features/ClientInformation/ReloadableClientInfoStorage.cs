@@ -66,7 +66,8 @@ internal partial class ReloadableClientInfoStorage(
 
     /// <summary>
     /// Drops a registration just stored under an id the settings configure, including one they came to configure after
-    /// the write was decided.
+    /// the write was decided. The write is answered as not made, so nothing is logged here: no registrant loses a
+    /// client it was told it has.
     /// </summary>
     /// <returns>Whether the settings configure the id, and so the registration is not kept - dropped here, or already
     /// by the eviction reading them brought about.</returns>
@@ -75,7 +76,7 @@ internal partial class ReloadableClientInfoStorage(
         if (!IsConfigured(client.ClientInfo.ClientId))
             return false;
 
-        Evict(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
+        Registered.TryRemove(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
         return true;
     }
 
@@ -107,7 +108,13 @@ internal partial class ReloadableClientInfoStorage(
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
     /// <returns>Whether the client was added and kept.</returns>
     public Task<bool> TryAddClientAsync(RegisteredClient client)
-        => Task.FromResult(Registered.TryAdd(client.ClientInfo.ClientId, client) && !Recheck(client));
+    {
+        // Asked before the write as well as after it: a registration refused for an id the settings already
+        // configure is never stored, so the eviction a first read of them brings about has nothing of its own
+        // to drop and log as a registrant's loss
+        var clientId = client.ClientInfo.ClientId;
+        return Task.FromResult(!IsConfigured(clientId) && Registered.TryAdd(clientId, client) && !Recheck(client));
+    }
 
     /// <inheritdoc />
     public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)

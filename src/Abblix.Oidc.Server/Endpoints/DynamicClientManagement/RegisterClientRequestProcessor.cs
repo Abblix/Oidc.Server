@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -21,7 +22,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-public class RegisterClientRequestProcessor(
+/// <param name="logger">Records a registration the client store did not keep.</param>
+/// <param name="credentialFactory">Generates the client id and secret.</param>
+/// <param name="clientInfoManager">Stores the registration with its registration access token id.</param>
+/// <param name="clock">Provides the issue time.</param>
+/// <param name="tokenIdGenerator">Generates the registration access token id.</param>
+/// <param name="registrationAccessTokenService">Issues the registration access token.</param>
+public partial class RegisterClientRequestProcessor(
+    ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
@@ -54,21 +62,26 @@ public class RegisterClientRequestProcessor(
         // accepts that token for this registration alone (RFC 7592 section 5).
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
 
-        // The response echoes the registered metadata, so what the store now holds is the answer -
-        // RFC 7591 section 3.2.1 asks for the server-assigned defaults to be visible to the client. A
-        // registration the store did not keep - one racing another under the same id, or an id the
-        // settings came to configure meanwhile - is refused as a taken id is, and issues nothing.
-        if (!await clientInfoManager.TryAddClientAsync(new RegisteredClient(clientInfo, registrationAccessTokenId)))
-        {
-            return Validation.ErrorFactory.InvalidClientMetadata(
-                $"The client with id={credentials.ClientId} is already registered");
-        }
-
+        // Issued before the client is stored, since issuing it only computes it: a failure to issue leaves
+        // no stored client that no token could manage, and a token for a registration the store then
+        // refuses matches nothing.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             credentials.ClientId,
             issuedAt,
             clientInfo.ExpiresAfter,
             registrationAccessTokenId);
+
+        // The response echoes the registered metadata, so what the store now holds is the answer -
+        // RFC 7591 section 3.2.1 asks for the server-assigned defaults to be visible to the client. A
+        // registration the store did not keep - one racing another under the same id, or, in a store
+        // following reloads, one under an id the settings came to configure meanwhile - is refused as
+        // a taken id is.
+        if (!await clientInfoManager.TryAddClientAsync(new RegisteredClient(clientInfo, registrationAccessTokenId)))
+        {
+            LogRegistrationNotKept(credentials.ClientId);
+            return Validation.ErrorFactory.InvalidClientMetadata(
+                $"The client with id={credentials.ClientId} is already registered");
+        }
 
         var response = new ClientRegistrationSuccessResponse(
             credentials.ClientId,

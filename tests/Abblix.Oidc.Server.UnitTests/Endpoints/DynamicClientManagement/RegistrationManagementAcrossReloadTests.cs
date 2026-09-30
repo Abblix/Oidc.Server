@@ -55,8 +55,9 @@ public class RegistrationManagementAcrossReloadTests
         new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
         new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
 
-    private static Task RegisterAsync(IClientInfoManager clients, string tokenId)
-        => clients.TryAddClientAsync(new RegisteredClient(new ClientInfo(ClientId) { ClientName = "registered" }, tokenId));
+    private static async Task RegisterAsync(IClientInfoManager clients, string tokenId)
+        => Assert.True(await clients.TryAddClientAsync(
+            new RegisteredClient(new ClientInfo(ClientId) { ClientName = "registered" }, tokenId)));
 
     private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {

@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <list type="bullet">
 /// <item>The token identifier lives and dies with its registration, so a token outliving its client matches
 /// nothing.</item>
-/// <item>No registration is held, and none found, under an id the store serves as a client the settings configure,
+/// <item>No registration is kept, and none found, under an id the store serves as a client the settings configure,
 /// so no token manages such a client.</item>
 /// <item>An addition, change or removal names the registration it is about, and takes effect only while the store
 /// still allows it: an addition only where no client is known under the id, a change or removal only while the store
@@ -31,7 +31,8 @@ public interface IClientInfoManager
     /// Adds a registered client, unless a client is already known under its id.
     /// </summary>
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
-    /// <returns>Whether the client was added.</returns>
+    /// <returns>Whether the client was added and kept: a registration answered with <c>true</c> is one the
+    /// store serves.</returns>
     Task<bool> TryAddClientAsync(RegisteredClient client);
 
     /// <summary>

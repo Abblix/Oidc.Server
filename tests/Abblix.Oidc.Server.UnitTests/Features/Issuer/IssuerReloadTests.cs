@@ -69,7 +69,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
         var clients = ClientsOf(options);
-        await clients.TryAddClientAsync(Registration("registered"));
+        Assert.True(await clients.TryAddClientAsync(Registration("registered")));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
 
@@ -118,7 +118,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
-        await clients.TryAddClientAsync(Registration("partner-app", "registered"));
+        Assert.True(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
 
@@ -134,7 +134,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
-        await clients.TryAddClientAsync(Registration("partner-app", "registered"));
+        Assert.True(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
@@ -149,7 +149,7 @@ public class IssuerReloadTests
         var logger = new CapturingLogger<ReloadableClientInfoStorage>();
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options, logger);
-        await clients.TryAddClientAsync(Registration("partner-app"));
+        Assert.True(await clients.TryAddClientAsync(Registration("partner-app")));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app")] });
         await clients.TryFindClientAsync("partner-app");
@@ -160,21 +160,48 @@ public class IssuerReloadTests
     }
 
     /// <summary>
-    /// A client added under an id the settings configure - as when a registration decided under earlier settings
-    /// lands after a reload that configures its id was served - is not kept: nothing would evict it later, and it
-    /// would come back once the id leaves the settings.
+    /// A registration refused because the settings configure its id was never granted, so it is not logged as a
+    /// registrant losing its client.
     /// </summary>
     [Fact]
-    public async Task AClientAddedUnderAConfiguredId_DoesNotComeBackWhenTheIdLeaves()
+    public async Task AnAddTheSettingsRefuse_IsNotLoggedAsADrop()
     {
-        var options = new ReloadableOptions(new OidcOptions
-        {
-            Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
-        });
-        var clients = ClientsOf(options);
-        Assert.NotNull(await clients.TryFindClientAsync("partner-app"));
+        var logger = new CapturingLogger<ReloadableClientInfoStorage>();
+        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("partner-app")] });
+        var clients = ClientsOf(options, logger);
 
-        await clients.TryAddClientAsync(Registration("partner-app", "registered"));
+        Assert.False(await clients.TryAddClientAsync(Registration("partner-app")));
+
+        Assert.Empty(logger.Entries);
+    }
+
+    /// <summary>
+    /// A client added once a reload configuring its id was served - after the store looked at the settings and found
+    /// the id free - is not kept: nothing would evict it later, and it would come back once the id leaves the settings.
+    /// It was never granted, so nothing is logged as a registrant losing its client.
+    /// </summary>
+    [Fact]
+    public async Task AClientAddedAsAReloadConfiguresItsId_DoesNotComeBackWhenTheIdLeaves()
+    {
+        var options = new ReloadableOptions(new OidcOptions());
+        var logger = new CapturingLogger<ReloadableClientInfoStorage>();
+        ReloadableClientInfoStorage? clients = null;
+        var configured = new ServedAfterFirstUse(() =>
+        {
+            options.Reload(new OidcOptions
+            {
+                Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
+            });
+            clients!.TryFindClientAsync("partner-app").GetAwaiter().GetResult();
+        });
+        clients = new ReloadableClientInfoStorage(
+            logger,
+            new OptionsIssuerSettings(options),
+            configured,
+            new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
+
+        Assert.False(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
+        Assert.Empty(logger.Entries);
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
         options.Reload(new OidcOptions());
@@ -191,7 +218,7 @@ public class IssuerReloadTests
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
         var registration = Registration("partner-app", "registered");
-        await clients.TryAddClientAsync(registration);
+        Assert.True(await clients.TryAddClientAsync(registration));
         options.Reload(new OidcOptions
         {
             Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
@@ -234,7 +261,7 @@ public class IssuerReloadTests
         Assert.NotNull(await clients.TryFindClientAsync("app"));
         options.Reload(new OidcOptions());
 
-        await clients.TryAddClientAsync(Registration("app", "registered"));
+        Assert.True(await clients.TryAddClientAsync(Registration("app", "registered")));
 
         Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
     }
@@ -245,7 +272,7 @@ public class IssuerReloadTests
     public async Task ARemovedRegistration_IsNoLongerKnown(bool reloadable)
     {
         var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
-        await clients.TryAddClientAsync(Registration("app"));
+        Assert.True(await clients.TryAddClientAsync(Registration("app")));
 
         Assert.True(await clients.TryRemoveClientAsync(Registration("app")));
 
@@ -263,7 +290,7 @@ public class IssuerReloadTests
     {
         var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
         var first = Registration("app", "first");
-        await clients.TryAddClientAsync(first);
+        Assert.True(await clients.TryAddClientAsync(first));
         var second = Registration("app", "second", "jti-2");
 
         Assert.True(await clients.TryUpdateClientAsync(first, second));
@@ -285,7 +312,7 @@ public class IssuerReloadTests
     {
         var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
         var registration = Registration("app");
-        await clients.TryAddClientAsync(registration);
+        Assert.True(await clients.TryAddClientAsync(registration));
         Assert.True(await clients.TryRemoveClientAsync(registration));
 
         Assert.False(await clients.TryUpdateClientAsync(registration, Registration("app", "updated", "jti-2")));
@@ -314,7 +341,7 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new OidcOptions());
         var clients = ClientsOf(options);
-        await clients.TryAddClientAsync(Registration("app"));
+        Assert.True(await clients.TryAddClientAsync(Registration("app")));
         await clients.TryRemoveClientAsync(Registration("app"));
 
         options.Reload(new OidcOptions { Clients = [new ClientInfo("app")] });
@@ -377,6 +404,28 @@ public class IssuerReloadTests
         public OidcOptions Get(string? name) => CurrentValue;
 
         public IDisposable? OnChange(Action<OidcOptions, string?> listener) => null;
+    }
+
+    /// <summary>
+    /// Holds the configured clients as a single issuer does, and runs <paramref name="meanwhile"/> once, right after
+    /// handing out the first value: whatever it serves happens between that look and what the caller does next.
+    /// </summary>
+    private sealed class ServedAfterFirstUse(Action meanwhile) : IIssuerLocal<Dictionary<string, ClientInfo>>
+    {
+        private readonly SingleIssuerLocal<Dictionary<string, ClientInfo>> _inner = new();
+        private bool _used;
+
+        public Dictionary<string, ClientInfo> GetOrCreate(object? source, Func<Dictionary<string, ClientInfo>> create)
+        {
+            var value = _inner.GetOrCreate(source, create);
+            if (!_used)
+            {
+                _used = true;
+                meanwhile();
+            }
+
+            return value;
+        }
     }
 
     /// <summary>
