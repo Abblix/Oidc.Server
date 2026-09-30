@@ -77,4 +77,7 @@ internal sealed class OptionsIssuerSettings(
 
     /// <inheritdoc />
     public CustodianHeldKeys? CustodianKeys => custodianKeys;
+
+    /// <inheritdoc />
+    public Uri? MtlsBaseUri => options.CurrentValue.Discovery.MtlsBaseUri;
 }

@@ -125,4 +125,12 @@ public sealed class TenantDefinition
     /// names keys of its own there, as it declares its own <see cref="SigningKeys"/> otherwise.
     /// </summary>
     public CustodianHeldKeys? CustodianKeys { get; init; }
+
+    /// <summary>
+    /// The scheme, host and port this tenant's mutual-TLS endpoint aliases (RFC 8705 section 5) are served at, as
+    /// <see cref="DiscoveryOptions.MtlsBaseUri"/> is for a server without tenants. The aliases keep the tenant's
+    /// issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
+    /// the address therefore carries no path of its own.
+    /// </summary>
+    public Uri? MtlsBaseUri { get; init; }
 }

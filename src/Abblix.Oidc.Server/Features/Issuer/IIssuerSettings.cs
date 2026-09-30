@@ -106,4 +106,9 @@ public interface IIssuerSettings
     /// The custodian's keys the issuer produces with, when its keys are held by a custodian; null when none are named.
     /// </summary>
     CustodianHeldKeys? CustodianKeys { get; }
+
+    /// <summary>
+    /// The address the issuer's mutual-TLS endpoint aliases are served at, or null when it declares none.
+    /// </summary>
+    Uri? MtlsBaseUri { get; }
 }

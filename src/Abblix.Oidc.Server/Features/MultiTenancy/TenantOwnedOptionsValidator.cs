@@ -54,6 +54,25 @@ public sealed class TenantOwnedOptionsValidator(
                 $"{nameof(TenantDefinition.PairwiseSubject)}, so leave it out.");
         }
 
+        if (options.Discovery.MtlsBaseUri is not null)
+        {
+            failures.Add(
+                $"{nameof(OidcOptions)}.{nameof(OidcOptions.Discovery)}.{nameof(DiscoveryOptions.MtlsBaseUri)} applies " +
+                $"to the whole server; under multi-tenancy each tenant declares its own in {nameof(TenantDefinition)}." +
+                $"{nameof(TenantDefinition.MtlsBaseUri)}, so leave it unset.");
+        }
+
+        // An alias is an absolute address, the same for every tenant, and no request to it can tell which tenant
+        // it is for
+        if (options.Discovery.MtlsEndpointAliases is not null)
+        {
+            failures.Add(
+                $"{nameof(OidcOptions)}.{nameof(OidcOptions.Discovery)}.{nameof(DiscoveryOptions.MtlsEndpointAliases)} " +
+                "names one address per endpoint for every tenant, and a request to it resolves no tenant; under " +
+                $"multi-tenancy declare each tenant's {nameof(TenantDefinition)}.{nameof(TenantDefinition.MtlsBaseUri)} " +
+                "instead.");
+        }
+
         if (custodianKeys is not null)
         {
             failures.Add(

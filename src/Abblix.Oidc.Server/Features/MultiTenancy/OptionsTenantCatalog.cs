@@ -34,7 +34,7 @@ public sealed class OptionsTenantCatalog(IOptions<MultiTenancyOptions> options) 
     /// </summary>
     private readonly Lazy<ILookup<string, Served>> _byHost = new(() =>
         options.Value.Tenants
-            .Select(tenant => new Served(TenantAddress.Of(tenant.Issuer), tenant))
+            .SelectMany(tenant => TenantAddress.AllOf(tenant).Select(address => new Served(address, tenant)))
             .OrderByDescending(served => served.Address.Path.Length)
             .ToLookup(served => served.Address.Host, StringComparer.Ordinal));
 

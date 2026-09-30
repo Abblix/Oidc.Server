@@ -465,6 +465,34 @@ public class MultiTenancyRegistrationTests
         Assert.Equal("globex", Assert.Single(atGlobex).KeyId);
     }
 
+    /// <summary>
+    /// The server's own mutual-TLS address, or its fixed aliases, name one address for every tenant, which no
+    /// request can tell apart, so startup refuses them under multi-tenancy.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ServerWideMutualTlsAddresses_AreRefusedAtStartup(bool aliases)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options =>
+        {
+            if (aliases)
+                options.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = new Uri("https://mtls.example.com/token") };
+            else
+                options.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
+        });
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(
+            aliases ? nameof(DiscoveryOptions.MtlsEndpointAliases) : nameof(DiscoveryOptions.MtlsBaseUri),
+            refusal.Message,
+            StringComparison.Ordinal);
+    }
+
     public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
     {
         {

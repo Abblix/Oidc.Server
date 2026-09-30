@@ -24,6 +24,19 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed record TenantAddress(string Host, string Path)
 {
     /// <summary>
+    /// Every address <paramref name="tenant"/> is served at: its issuer's, and its mutual-TLS host under the
+    /// issuer's path when it declares one.
+    /// </summary>
+    public static IEnumerable<TenantAddress> AllOf(TenantDefinition tenant)
+    {
+        var issuer = Of(tenant.Issuer);
+        yield return issuer;
+
+        if (tenant.MtlsBaseUri is { IsAbsoluteUri: true } mtls)
+            yield return issuer with { Host = TenantHost.Normalize(mtls.Host) };
+    }
+
+    /// <summary>
     /// The address <paramref name="issuer"/> names.
     /// </summary>
     /// <remarks>

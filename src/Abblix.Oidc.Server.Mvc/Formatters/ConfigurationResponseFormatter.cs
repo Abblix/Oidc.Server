@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Controllers;
@@ -24,7 +25,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
 	IEndpointResolver endpointResolver,
-	ISignedMetadataProvider signedMetadataProvider) : IConfigurationResponseFormatter
+	ISignedMetadataProvider signedMetadataProvider,
+	IIssuerSettings issuerSettings) : IConfigurationResponseFormatter
 {
 	/// <summary>
 	/// Formats the configuration response by mapping metadata and adding endpoint URLs.
@@ -114,7 +116,7 @@ public class ConfigurationResponseFormatter(
 
 		// Add mTLS endpoint aliases if configured
 		var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-		var mtlsBaseUri = options.Value.Discovery.MtlsBaseUri;
+		var mtlsBaseUri = issuerSettings.MtlsBaseUri;
 
 		if (mtlsOptions != null || mtlsBaseUri != null)
 		{

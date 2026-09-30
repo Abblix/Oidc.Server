@@ -85,5 +85,8 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
     /// <inheritdoc />
     public CustodianHeldKeys? CustodianKeys => Tenant.CustodianKeys;
 
+    /// <inheritdoc />
+    public Uri? MtlsBaseUri => Tenant.MtlsBaseUri;
+
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

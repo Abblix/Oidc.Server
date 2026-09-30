@@ -54,6 +54,9 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         $"{typeof(TenantIssuerSettings).FullName}.get_{nameof(TenantIssuerSettings.CheckSessionCookieName)}",
         typeof(CheckSessionCookieOptions).FullName!,
 
+        // The discovery options holding the mutual-TLS address of a server without tenants
+        typeof(DiscoveryOptions).FullName!,
+
         // Startup judging the configured values
         typeof(ClientIdsOptionsValidator).FullName!,
         typeof(ClientSecretsOptionsValidator).FullName!,
@@ -122,6 +125,7 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
             .Where(property => tenantSettings.Contains(property.Name) && property.GetMethod is not null)
             .Select(property => property.GetMethod!)
             .Append(typeof(CheckSessionCookieOptions).GetProperty(nameof(CheckSessionCookieOptions.Name))!.GetMethod!)
+            .Append(typeof(DiscoveryOptions).GetProperty(nameof(DiscoveryOptions.MtlsBaseUri))!.GetMethod!)
             .ToHashSet();
     }
 

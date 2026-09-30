@@ -50,6 +50,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string Host = "https://auth.example.com";
     private const string Acme = "/tenants/acme";
     private const string Globex = "/tenants/globex";
+    private const string MtlsHost = "https://mtls.example.com";
     private const string ClientId = "shared-client-id";
     private const string AcmeOnlyClientId = "acme-only-client-id";
     private const string PairwiseClientId = "pairwise-client-id";
@@ -112,6 +113,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 DefaultResourceIndicator = new Uri(AcmeResource),
                 LoginUri = new Uri("/login", UriKind.Relative),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+                MtlsBaseUri = new Uri(MtlsHost),
             });
             options.Tenants.Add(new TenantDefinition
             {
@@ -282,6 +284,25 @@ public sealed class TenantIsolationTests : IAsyncLifetime
 
         Assert.True(SignedByOneOf(token, await PublishedKeysAsync(Acme)));
         Assert.False(SignedByOneOf(token, await PublishedKeysAsync(Globex)));
+    }
+
+    /// <summary>
+    /// A tenant's discovery document names its mutual-TLS aliases on its own mutual-TLS host under its issuer path,
+    /// and a request there is served as that tenant's.
+    /// </summary>
+    [Fact]
+    public async Task ATenantsMutualTlsAliases_AreOnItsHost_AndServeThatTenant()
+    {
+        var configuration = JsonNode.Parse(await Http.GetStringAsync(
+            Acme + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+
+        var alias = configuration[ConfigurationResponse.Parameters.MtlsEndpointAliases]!
+            [ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
+        Assert.Equal(new Uri(MtlsHost + Acme + TokenPath), new Uri(alias));
+
+        var atTheAliasHost = JsonNode.Parse(await Http.GetStringAsync(
+            MtlsHost + Acme + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+        Assert.Equal(Host + Acme, atTheAliasHost[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
     }
 
     /// <summary>

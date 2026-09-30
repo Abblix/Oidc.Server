@@ -53,7 +53,8 @@ public class DiscoveryControllerMtlsTests
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            Mock.Of<ISignedMetadataProvider>());
+            Mock.Of<ISignedMetadataProvider>(),
+            SingleIssuer.SettingsOf(_optionsMock.Object));
     }
 
     /// <summary>
