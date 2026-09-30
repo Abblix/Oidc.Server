@@ -828,6 +828,66 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
+    /// The partitions refreshed in one round share one read of the store, so a tick costs the same read however
+    /// many issuers the ring keeps partitions for.
+    /// </summary>
+    [Fact]
+    public async Task ARound_ReadsTheStoreOnce_ForEveryPartition()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+        var ct = TestContext.Current.CancellationToken;
+        rings.BeginRound();
+        foreach (var (_, ring) in rings.All)
+            await ring.RefreshAsync(ct);
+
+        var loadsBefore = store.Loads;
+        rings.BeginRound();
+        foreach (var (_, ring) in rings.All)
+            await ring.RefreshAsync(ct);
+
+        Assert.Equal(loadsBefore + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// A partition whose keys cannot be opened is reported by name, and the partitions after it in the round are
+    /// refreshed all the same.
+    /// </summary>
+    [Fact]
+    public async Task RefreshLoop_RefreshesTheOtherPartitions_WhenOneCannotBeOpened()
+    {
+        var propagation = TimeSpan.FromHours(1);
+        var time = new FakeTimeProvider(Now);
+        var (rings, _, store) = CreateRings(propagation, time, null, "acme", "globex");
+        var logger = new RecordingLogger<KeyRingRefreshService>();
+        var service = new KeyRingRefreshService(
+            logger, rings, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
+
+        // acme gets an entry nothing can open; globex loses its stored keys, so its next refresh mints again
+        store.Entries.Add(new StoredKey { Id = "acme.unopenable", Jwe = "not a sealed key", CreatedAt = Now });
+        store.Entries.RemoveAll(entry => entry.Id.StartsWith("globex.", StringComparison.Ordinal));
+
+        time.Advance(propagation / 2);
+        await WaitForErrors(logger, 1);
+
+        // acme is refreshed first, so its failure is reported before globex's refresh has run
+        const int MaxPolls = 100;
+        for (var polls = 0; !GlobexMinted() && polls < MaxPolls; polls++)
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains("'acme'", logger.Snapshot.Single(entry => entry.Level == LogLevel.Error).Message);
+        Assert.True(GlobexMinted(), "The partition refreshed after the failing one was not refreshed.");
+
+        bool GlobexMinted() => Array.Exists(
+            store.Entries.ToArray(),
+            entry => entry.Id.StartsWith("globex.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// The refresh loop keeps ticking after the store refuses to answer. A failure there costs freshness and
     /// nothing else - the keys are already open in memory and signing needs no custodian - so letting it escape
     /// would trade a store outage for the loss of every pod, since a faulted background service stops the host.

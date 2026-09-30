@@ -37,6 +37,7 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
+        rings.BeginRound();
         foreach (var (_, ring) in rings.All)
             await ring.RefreshAsync(cancellationToken);
 
@@ -53,7 +54,9 @@ internal sealed partial class KeyRingRefreshService(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            // Each partition on its own: one that cannot be refreshed leaves the others current
+            rings.BeginRound();
+
+            // Each partition on its own: one whose keys cannot be opened leaves the others current
             foreach (var (partition, ring) in rings.All)
             {
                 try
