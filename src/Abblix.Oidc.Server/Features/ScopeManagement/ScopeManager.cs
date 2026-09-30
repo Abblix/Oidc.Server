@@ -28,7 +28,14 @@ public class ScopeManager(
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ScopeDefinition>> scopes) : IScopeManager
 {
-    private Dictionary<string, ScopeDefinition> Scopes => scopes.GetOrCreate(() => InitializeScopes(settings.Scopes));
+    private Dictionary<string, ScopeDefinition> Scopes
+    {
+        get
+        {
+            var definitions = settings.Scopes;
+            return scopes.GetOrCreate(definitions, () => InitializeScopes(definitions));
+        }
+    }
 
     private static Dictionary<string, ScopeDefinition> InitializeScopes(ScopeDefinition[]? customScopes)
     {

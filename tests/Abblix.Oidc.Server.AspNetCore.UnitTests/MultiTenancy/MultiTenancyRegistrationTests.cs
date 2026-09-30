@@ -446,14 +446,14 @@ public class MultiTenancyRegistrationTests
         var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
 
         EnterTenant(provider, Acme);
-        var acmeValue = local.GetOrCreate(() => new object());
-        Assert.Same(acmeValue, local.GetOrCreate(() => new object()));
+        var acmeValue = local.GetOrCreate(null, () => new object());
+        Assert.Same(acmeValue, local.GetOrCreate(null, () => new object()));
 
         EnterTenant(provider, globex);
-        Assert.NotSame(acmeValue, local.GetOrCreate(() => new object()));
+        Assert.NotSame(acmeValue, local.GetOrCreate(null, () => new object()));
 
         EnterTenant(provider, null);
-        var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(() => new object()));
+        var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(null, () => new object()));
         Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
     }
 

@@ -22,7 +22,13 @@ internal sealed class IssuerSubjectTypeConverter(
     IIssuerLocal<SubjectTypeConverter> converters) : ISubjectTypeConverter
 {
     private SubjectTypeConverter Converter
-        => converters.GetOrCreate(() => new SubjectTypeConverter(settings.PairwiseSubject));
+    {
+        get
+        {
+            var pairwiseSubject = settings.PairwiseSubject;
+            return converters.GetOrCreate(pairwiseSubject, () => new SubjectTypeConverter(pairwiseSubject));
+        }
+    }
 
     /// <inheritdoc />
     public IEnumerable<string> SubjectTypesSupported => Converter.SubjectTypesSupported;

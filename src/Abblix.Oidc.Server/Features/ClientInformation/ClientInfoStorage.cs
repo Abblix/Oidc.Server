@@ -13,18 +13,39 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
 /// Manages the storage and retrieval of client information for OpenID Connect (OIDC) flows.
-/// Each issuer starts with the clients its <see cref="IIssuerSettings"/> register, and a client added later is
-/// known only to the issuer it was added at.
+/// Each issuer serves the clients its <see cref="IIssuerSettings"/> register, and a client added, changed or
+/// removed later is so only at the issuer it happened at.
 /// </summary>
+/// <remarks>
+/// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
+/// what registration changed since: a registered change is looked up first, and a removal is remembered as one.
+/// </remarks>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
-/// <param name="clients">The clients of each issuer.</param>
+/// <param name="configured">The clients each issuer's settings configure.</param>
+/// <param name="registered">What registration added, changed or removed at each issuer; a removal is held as null.
+/// </param>
 internal class ClientInfoStorage(
     IIssuerSettings settings,
-    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> clients) : IClientInfoProvider, IClientInfoManager
+    IIssuerLocal<ConcurrentDictionary<string, ClientInfo>> configured,
+    IIssuerLocal<ConcurrentDictionary<string, ClientInfo?>> registered) : IClientInfoProvider, IClientInfoManager
 {
-    private ConcurrentDictionary<string, ClientInfo> Clients => clients.GetOrCreate(() => new(
-        settings.Clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
-        StringComparer.OrdinalIgnoreCase));
+    private ConcurrentDictionary<string, ClientInfo> Configured
+    {
+        get
+        {
+            var clients = settings.Clients;
+            return configured.GetOrCreate(clients, () => new(
+                clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    // Built once for each issuer, whatever its settings become
+    private ConcurrentDictionary<string, ClientInfo?> Registered
+        => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
+
+    private ClientInfo? Find(string clientId)
+        => Registered.TryGetValue(clientId, out var client) ? client : Configured.GetValueOrDefault(clientId);
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -36,7 +57,7 @@ internal class ClientInfoStorage(
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        return Task.FromResult(Clients.GetValueOrDefault(clientId));
+        return Task.FromResult(Find(clientId));
     }
 
     /// <summary>
@@ -46,7 +67,9 @@ internal class ClientInfoStorage(
     /// <returns>A task that completes when the client is added.</returns>
     public Task AddClientAsync(ClientInfo clientInfo)
     {
-        Clients.TryAdd(clientInfo.ClientId, clientInfo);
+        if (Find(clientInfo.ClientId) is null)
+            Registered[clientInfo.ClientId] = clientInfo;
+
         return Task.CompletedTask;
     }
 
@@ -57,7 +80,7 @@ internal class ClientInfoStorage(
     /// <returns>A task that completes when the client is updated.</returns>
     public Task UpdateClientAsync(ClientInfo clientInfo)
     {
-        Clients[clientInfo.ClientId] = clientInfo;
+        Registered[clientInfo.ClientId] = clientInfo;
         return Task.CompletedTask;
     }
 
@@ -68,7 +91,7 @@ internal class ClientInfoStorage(
     /// <returns>A task that completes when the client is removed.</returns>
     public Task RemoveClientAsync(string clientId)
     {
-        Clients.TryRemove(clientId, out _);
+        Registered[clientId] = null;
         return Task.CompletedTask;
     }
 }

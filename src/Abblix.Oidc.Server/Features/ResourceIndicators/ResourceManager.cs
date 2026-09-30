@@ -18,8 +18,8 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 /// during RFC 8707 resource indicator validation.
 /// </summary>
 /// <remarks>
-/// The dictionary of each issuer is built the first time that issuer looks a resource up; later
-/// changes to its settings are not reflected.
+/// The dictionary of each issuer is built the first time that issuer looks a resource up, and again once
+/// its resource definitions change, as after a reload of its settings.
 /// </remarks>
 /// <param name="settings">The settings of the issuer serving the request, holding its resource definitions.</param>
 /// <param name="resources">The dictionary of each issuer.</param>
@@ -28,7 +28,13 @@ public class ResourceManager(
     IIssuerLocal<Dictionary<Uri, ResourceDefinition>> resources) : IResourceManager
 {
     private Dictionary<Uri, ResourceDefinition> Resources
-        => resources.GetOrCreate(() => InitializeResources(settings.Resources));
+    {
+        get
+        {
+            var definitions = settings.Resources;
+            return resources.GetOrCreate(definitions, () => InitializeResources(definitions));
+        }
+    }
 
     private static Dictionary<Uri, ResourceDefinition> InitializeResources(ResourceDefinition[]? definitions)
     {

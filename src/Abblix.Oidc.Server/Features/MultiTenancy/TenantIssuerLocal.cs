@@ -21,9 +21,32 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor) : IIssuerLocal<T> where T : class
 {
-    private readonly ConcurrentDictionary<string, T> _values = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Built> _values = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    public T GetOrCreate(Func<T> create)
-        => _values.GetOrAdd(TenantKey.CurrentTenantId(tenantAccessor), _ => create());
+    /// <remarks>
+    /// Of two callers building a tenant's value at once, the one that stores it first wins and the other takes that
+    /// value, so what either writes into it is kept.
+    /// </remarks>
+    public T GetOrCreate(object? source, Func<T> create)
+    {
+        var tenantId = TenantKey.CurrentTenantId(tenantAccessor);
+        while (true)
+        {
+            var found = _values.TryGetValue(tenantId, out var built);
+            if (found && ReferenceEquals(built!.Source, source))
+                return built.Value;
+
+            var fresh = new Built(source, create());
+            if (found ? _values.TryUpdate(tenantId, fresh, built!) : _values.TryAdd(tenantId, fresh))
+                return fresh.Value;
+        }
+    }
+
+    // A class rather than a record: replacing a tenant's value compares the one it replaces by reference
+    private sealed class Built(object? source, T value)
+    {
+        public object? Source { get; } = source;
+        public T Value { get; } = value;
+    }
 }

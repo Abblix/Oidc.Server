@@ -13,8 +13,30 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// </summary>
 internal sealed class SingleIssuerLocal<T> : IIssuerLocal<T> where T : class
 {
-    private T? _value;
+    private Built? _built;
 
     /// <inheritdoc />
-    public T GetOrCreate(Func<T> create) => LazyInitializer.EnsureInitialized(ref _value, create);
+    /// <remarks>
+    /// Of two callers building at once, the one that stores its value first wins and the other takes that value,
+    /// so what either writes into it is kept.
+    /// </remarks>
+    public T GetOrCreate(object? source, Func<T> create)
+    {
+        while (true)
+        {
+            var built = Volatile.Read(ref _built);
+            if (built is not null && ReferenceEquals(built.Source, source))
+                return built.Value;
+
+            var fresh = new Built(source, create());
+            if (ReferenceEquals(Interlocked.CompareExchange(ref _built, fresh, built), built))
+                return fresh.Value;
+        }
+    }
+
+    private sealed class Built(object? source, T value)
+    {
+        public object? Source { get; } = source;
+        public T Value { get; } = value;
+    }
 }

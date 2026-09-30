@@ -20,11 +20,13 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 public interface IIssuerLocal<T> where T : class
 {
     /// <summary>
-    /// The value for the issuer serving the request, built by <paramref name="create"/> the first time that issuer
-    /// asks for it.
+    /// The value for the issuer serving the request, built by <paramref name="create"/> from
+    /// <paramref name="source"/> the first time that issuer asks for it, and built again whenever the issuer's
+    /// source is another object - as its settings are after a reload.
     /// </summary>
     /// <remarks>
     /// <paramref name="create"/> runs while that issuer is serving, so the settings it reads are the issuer's.
+    /// The source is compared by reference: the settings an issuer serves are the same object until they change.
     /// </remarks>
-    T GetOrCreate(Func<T> create);
+    T GetOrCreate(object? source, Func<T> create);
 }
