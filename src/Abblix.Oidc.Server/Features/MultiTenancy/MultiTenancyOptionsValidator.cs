@@ -66,6 +66,12 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
             where refusal is not null
             select $"Tenant '{tenant.Id}': {refusal}");
 
+        failures.AddRange(
+            from tenant in options.Tenants
+            let refusal = PairwiseClientsOptionsValidator.Refusal(tenant.Clients, tenant.PairwiseSubject)
+            where refusal is not null
+            select $"Tenant '{tenant.Id}': {refusal}");
+
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 

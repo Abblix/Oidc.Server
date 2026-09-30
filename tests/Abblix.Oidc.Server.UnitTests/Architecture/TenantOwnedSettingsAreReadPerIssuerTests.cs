@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Xunit;
 
 #pragma warning disable ABXMT001
@@ -59,6 +60,7 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         typeof(ClockSkewCeilingValidator).FullName!,
         typeof(DefaultResourceIndicatorValidator).FullName!,
         typeof(OidcOptionsSecurityProfileValidator).FullName!,
+        typeof(PairwiseClientsOptionsValidator).FullName!,
         typeof(ResourceDefinitionsValidator).FullName!,
         typeof(TenantOwnedOptionsValidator).FullName!,
     ];

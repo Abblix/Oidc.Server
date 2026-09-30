@@ -22,8 +22,9 @@ namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 public interface ISubjectTypeConverter
 {
     /// <summary>
-    /// Lists the subject types that this converter supports. This typically includes "public" and "pairwise"
-    /// among others, depending on the OpenID Connect implementation specifics.
+    /// Lists the subject types that this converter can issue for the issuer serving the request: discovery
+    /// publishes them, and dynamic registration refuses a pairwise client when pairwise is not among them. Listing
+    /// pairwise without being able to issue it registers a client whose every token request then fails.
     /// </summary>
     IEnumerable<string> SubjectTypesSupported { get; }
 

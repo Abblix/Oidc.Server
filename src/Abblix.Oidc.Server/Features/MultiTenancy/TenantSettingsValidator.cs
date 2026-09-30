@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -58,8 +59,9 @@ public sealed class TenantSettingsValidator(
             let servedWith = ServedWith(server, tenant)
             from validator in validators
 
-            // It refuses exactly the settings a tenant's view carries
-            where validator is not TenantOwnedOptionsValidator
+            // One refuses exactly the settings a tenant's view carries; the other judges the key registered for the
+            // whole server, where a tenant has its own, which the tenant list's own check judges
+            where validator is not TenantOwnedOptionsValidator and not PairwiseClientsOptionsValidator
             let result = validator.Validate(Options.DefaultName, servedWith)
             where result.Failed
             from failure in result.Failures ?? []
