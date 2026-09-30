@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt.ExternalKeys;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -48,6 +49,11 @@ public static class MultiTenancyExtensions
         }
 
         services.AddOptions<MultiTenancyOptions>().Configure(configure).ValidateOnStart();
+
+        // A server minting its keys keeps a ring for each tenant, named by the tenant's id as its issuer settings
+        // are, so no two tenants share a key
+        services.AddOptions<KeyRingOptions>().Configure<IOptions<MultiTenancyOptions>>(
+            (ring, tenants) => ring.Partitions = [..tenants.Value.Tenants.Select(tenant => tenant.Id)]);
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),

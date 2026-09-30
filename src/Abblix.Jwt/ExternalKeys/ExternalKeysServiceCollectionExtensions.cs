@@ -263,12 +263,24 @@ public static class ExternalKeysServiceCollectionExtensions
         // builder rather than captured, so a call chained after this one - AdoptExistingKeys - still reaches the
         // ring: this factory runs when the container builds, by which time the whole chain has run.
         services.TryAddSingleton(
-            serviceProvider => serviceProvider.CreateService<KeyRing>(Dependency.Override(builder.Policy)));
+            serviceProvider => serviceProvider.CreateService<KeyRings>(Dependency.Override(builder.Policy)));
 
-        // The concrete type is what is constructed, and the contract is an alias to it. Registering the contract
-        // with its own factory instead would build a SECOND ring: the refresh service would keep one current
-        // while every consumer read the other, which fails as a server publishing keys it never rotates.
-        services.TryAddSingleton<IKeyRing>(serviceProvider => serviceProvider.GetRequiredService<KeyRing>());
+        // Every contract is an alias to the one set of rings. Registering one with its own factory instead would
+        // build a SECOND ring: the refresh service would keep one current while every consumer read the other,
+        // which fails as a server publishing keys it never rotates.
+        services.TryAddSingleton<IKeyRings>(serviceProvider => serviceProvider.GetRequiredService<KeyRings>());
+        services.TryAddSingleton<IKeyRing>(serviceProvider =>
+            serviceProvider.GetRequiredService<KeyRings>().Ring(KeyRingOptions.DefaultPartition));
+
+        // A partition names its entries in the store, so it must be a name every store accepts, and one the default
+        // partition can tell from its own entries
+        services.AddOptions<KeyRingOptions>().Validate(
+            ring => ring.Partitions.Count > 0 &&
+                    ring.Partitions.Distinct(StringComparer.Ordinal).Count() == ring.Partitions.Count &&
+                    ring.Partitions.All(partition => partition.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')),
+            $"{nameof(KeyRingOptions)}.{nameof(KeyRingOptions.Partitions)} must name at least one partition, each " +
+            "once, and each of letters, digits, '-' and '_' only: a partition's name goes in front of its entries' " +
+            "ids in the store.");
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
 

@@ -402,6 +402,69 @@ public class MultiTenancyRegistrationTests
             refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A container minting its keys, with rings that hold, for each partition, a key whose id is the partition.
+    /// </summary>
+    private static ServiceProvider MintingKeys(params TenantDefinition[] tenants)
+    {
+        var rings = new Moq.Mock<IKeyRings>();
+        rings.Setup(r => r.For(Moq.It.IsAny<string>())).Returns((string partition) =>
+        {
+            var ring = new Moq.Mock<IKeyRing>();
+            ring.Setup(r => r.Get(PublicKeyUsages.Signature, Moq.It.IsAny<bool>()))
+                .Returns([JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { KeyId = partition }]);
+            return ring.Object;
+        });
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(Moq.Mock.Of<IKeyCustodian>());
+        services.AddSingleton(Moq.Mock.Of<IKeyRingStore>());
+        services.AddSingleton(rings.Object);
+        services.AddJsonWebTokens();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
+        services.AddServerStorage().AddMultiTenancy(options =>
+        {
+            foreach (var tenant in tenants)
+                options.Tenants.Add(tenant);
+        });
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// A server minting its keys keeps a ring for each tenant, named by the tenant's id.
+    /// </summary>
+    [Fact]
+    public void TheKeyRing_KeepsAPartitionForEachTenant()
+    {
+        using var provider = MintingKeys(Acme, new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" });
+
+        Assert.Equal(["acme", "globex"], provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.Partitions);
+    }
+
+    /// <summary>
+    /// Each tenant publishes and signs with the keys of its own ring.
+    /// </summary>
+    [Fact]
+    public async Task EachTenant_PublishesTheKeysOfItsOwnRing()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        using var provider = MintingKeys(Acme, globex);
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+
+        EnterTenant(provider, Acme);
+        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        EnterTenant(provider, globex);
+        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("acme", Assert.Single(atAcme).KeyId);
+        Assert.Equal("globex", Assert.Single(atGlobex).KeyId);
+    }
+
     public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
     {
         {
