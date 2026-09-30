@@ -68,8 +68,8 @@ public class PairwiseClientsOptionsValidatorTests
     }
 
     /// <summary>
-    /// A converter that cannot be asked at startup - one reading the options being checked, or one scoped to a
-    /// request - is named in the refusal instead of failing the startup some other way.
+    /// A converter whose answer cannot be had at startup - one reading the options being checked - is named in the
+    /// refusal instead of failing the startup some other way.
     /// </summary>
     [Fact]
     public void AConverterThatCannotBeAsked_IsNamedInTheRefusal()
@@ -83,6 +83,24 @@ public class PairwiseClientsOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains(converter.Object.GetType().FullName!, result.FailureMessage, StringComparison.Ordinal);
         Assert.Contains("reads the options", result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A converter that cannot even be built at startup - one scoped to a request, for one - is refused with the
+    /// reason the container gives.
+    /// </summary>
+    [Fact]
+    public void AConverterThatCannotBeBuilt_IsRefusedWithTheReason()
+    {
+        var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
+        var services = new ServiceCollection().AddScoped(_ => Mock.Of<ISubjectTypeConverter>());
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        var result = new PairwiseClientsOptionsValidator(provider).Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains("could not be resolved at startup", result.FailureMessage, StringComparison.Ordinal);
+        Assert.Contains(nameof(ISubjectTypeConverter), result.FailureMessage, StringComparison.Ordinal);
     }
 
     [Fact]

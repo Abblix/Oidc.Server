@@ -38,18 +38,28 @@ public sealed class PairwiseClientsOptionsValidator(IServiceProvider serviceProv
         // multi-tenancy the tenant list judges each tenant's clients by the tenant's key, and the server's own
         // clients are refused as server-wide, so there is nothing here to ask the tenants' converter about.
         var pairwise = PairwiseClients(options.Clients);
-#pragma warning disable ABXMT001
-        if (pairwise.Length == 0 || serviceProvider.GetService<ITenantAccessor>() is not null)
+        if (pairwise.Length == 0 || UnderMultiTenancy)
             return ValidateOptionsResult.Success;
-#pragma warning restore ABXMT001
 
-        ISubjectTypeConverter? subjectTypeConverter = null;
+        ISubjectTypeConverter? subjectTypeConverter;
         try
         {
             subjectTypeConverter = serviceProvider.GetService<ISubjectTypeConverter>();
-            if (subjectTypeConverter is null ||
-                subjectTypeConverter.SubjectTypesSupported.Contains(SubjectTypes.Pairwise))
-                return ValidateOptionsResult.Success;
+        }
+        catch (InvalidOperationException exception)
+        {
+            return ValidateOptionsResult.Fail(
+                $"The clients {string.Join(", ", pairwise)} take pairwise subject identifiers, and the subject type " +
+                $"converter that would issue them could not be resolved at startup: {exception.Message}");
+        }
+
+        if (subjectTypeConverter is null)
+            return ValidateOptionsResult.Success;
+
+        bool issuesPairwise;
+        try
+        {
+            issuesPairwise = subjectTypeConverter.SubjectTypesSupported.Contains(SubjectTypes.Pairwise);
         }
         catch (InvalidOperationException exception)
         {
@@ -59,14 +69,26 @@ public sealed class PairwiseClientsOptionsValidator(IServiceProvider serviceProv
                 $"{exception.Message}");
         }
 
-        return ValidateOptionsResult.Fail(
-            $"The clients {string.Join(", ", pairwise)} take pairwise subject identifiers, which the subject type " +
-            $"converter{Named(subjectTypeConverter)} does not issue: configure a pairwise key for the server's own " +
-            "converter, or register one that issues them.");
+        return issuesPairwise
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(
+                $"The clients {string.Join(", ", pairwise)} take pairwise subject identifiers, which the subject " +
+                $"type converter{Named(subjectTypeConverter)} does not issue: configure a pairwise key for the " +
+                "server's own converter, or register one that issues them.");
     }
 
-    private static string Named(ISubjectTypeConverter? subjectTypeConverter)
-        => subjectTypeConverter is null ? string.Empty : $" ({subjectTypeConverter.GetType().FullName})";
+    /// <summary>
+    /// Whether the server serves tenants, told by the check of the tenant list that only multi-tenancy registers,
+    /// asked of the container without building anything.
+    /// </summary>
+    private bool UnderMultiTenancy
+        => serviceProvider.GetService<IServiceProviderIsService>() is { } services &&
+#pragma warning disable ABXMT001
+           services.IsService(typeof(IValidateOptions<MultiTenancyOptions>));
+#pragma warning restore ABXMT001
+
+    private static string Named(ISubjectTypeConverter subjectTypeConverter)
+        => $" ({subjectTypeConverter.GetType().FullName})";
 
     /// <summary>
     /// Why <paramref name="clients"/> cannot be served with <paramref name="pairwiseSubject"/> as the key sealing
