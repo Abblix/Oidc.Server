@@ -38,7 +38,10 @@ internal sealed class KeyRings(
     {
         var round = new KeyRingStoreRound(store);
         return options.Value.Partitions
-            .Select(partition => (partition, Ring(partition), (IKeyRingStore)new PartitionedKeyRingStore(round, partition)))
+            .Select(partition => (
+                partition,
+                Ring(partition),
+                (IKeyRingStore)new PartitionedKeyRingStore(round, partition)))
             .ToArray();
     }
 

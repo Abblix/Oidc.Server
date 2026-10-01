@@ -866,6 +866,7 @@ public sealed class KeyRingTests : IDisposable
 
         var refusal = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IKeyRing>());
         Assert.Contains($"{nameof(IKeyRings)}.{nameof(IKeyRings.For)}", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("'acme', 'globex'", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

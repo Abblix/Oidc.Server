@@ -313,6 +313,28 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A request reaching the tenant's mutual-TLS host in another form the tenant is resolved by - another port, the
+    /// fully qualified name - is answered as one on that host: the ordinary endpoints on the issuer's host.
+    /// </summary>
+    [Theory]
+    [InlineData("mtls.example.com:8443")]
+    [InlineData("mtls.example.com.")]
+    public async Task ADocumentFetchedOnAnotherFormOfTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost(
+        string mtlsHost)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, MtlsHost + Acme + "/.well-known/openid-configuration");
+        request.Headers.Host = mtlsHost;
+        using var response = await Http.SendAsync(request, TestContext.Current.CancellationToken);
+        var configuration = JsonNode.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+
+        Assert.Equal(Host + Acme, configuration[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
+        var tokenEndpoint = configuration[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
+        Assert.Equal(new Uri(Host + Acme + TokenPath), new Uri(tokenEndpoint));
+    }
+
+    /// <summary>
     /// The keys <paramref name="tenant"/> publishes at the JWKS address its discovery document names.
     /// </summary>
     private async Task<RsaJsonWebKey[]> PublishedKeysAsync(string tenant)

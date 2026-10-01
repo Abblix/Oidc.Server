@@ -93,11 +93,15 @@ public class DiscoveryControllerMtlsTests
     /// mutual-TLS host.
     /// </summary>
     [Theory]
-    [InlineData("https://mtls.example.com/token")]
-    [InlineData("https://mtls.example.com:8443/token")] // reached on another port, still the mutual-TLS host
-    public async Task ADocumentFetchedOnTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost(string resolved)
+    [InlineData("https://mtls.example.com", "https://mtls.example.com/token")]
+    [InlineData("https://mtls.example.com", "https://mtls.example.com:8443/token")] // another port, the same host
+    [InlineData("https://mtls.example.com", "https://mtls.example.com./token")] // the fully qualified form
+    [InlineData("https://мтлс.example.com", "https://xn--k1abqc.example.com/token")] // the ASCII form of the name
+    public async Task ADocumentFetchedOnTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost(
+        string mtlsBaseUri,
+        string resolved)
     {
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _oidcOptions.Discovery.MtlsBaseUri = new Uri(mtlsBaseUri);
         _endpointResolverMock
             .Setup(x => x.Resolve("Token", "Token"))
             .Returns(new Uri(resolved));
@@ -106,7 +110,7 @@ public class DiscoveryControllerMtlsTests
 
         Assert.NotNull(result.Value);
         Assert.Equal(new Uri("https://example.com/token"), result.Value.TokenEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/token"), result.Value.MtlsEndpointAliases?.TokenEndpoint);
+        Assert.Equal(new Uri(new Uri(mtlsBaseUri), "/token"), result.Value.MtlsEndpointAliases?.TokenEndpoint);
     }
 
     /// <summary>

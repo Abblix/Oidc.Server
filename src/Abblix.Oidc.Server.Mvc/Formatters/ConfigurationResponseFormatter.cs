@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -162,18 +163,21 @@ public class ConfigurationResponseFormatter(
 	/// that demands one.
 	/// </summary>
 	/// <remarks>
-	/// The host alone is compared, as a tenant is resolved by it: a request reaching the mutual-TLS host on another
-	/// port or scheme is still that host's. A server without tenants whose issuer names another host than the one
-	/// serving its endpoints has them named on the issuer's host too, when the document is fetched on the mutual-TLS
-	/// host.
+	/// The host is compared as a tenant is resolved by it, so whatever request reaches the tenant on its mutual-TLS host
+	/// is answered so. A server without tenants whose mutual-TLS host differs from its ordinary one only by port
+	/// therefore names the ordinary endpoints on the issuer's host on either.
 	/// </remarks>
 	private Uri? OnIssuersHost(Uri? endpoint, string issuer)
 		=> endpoint is not null &&
 		   issuerSettings.MtlsBaseUri is { } mtlsBaseUri &&
-		   Uri.Compare(endpoint, mtlsBaseUri, UriComponents.Host, UriFormat.Unescaped,
-			   StringComparison.OrdinalIgnoreCase) == 0
+		   SameHost(endpoint, mtlsBaseUri)
 			? Rebase(endpoint, new Uri(new Uri(issuer).GetLeftPart(UriPartial.Authority)))
 			: endpoint;
+
+#pragma warning disable ABXMT001
+	private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
+		=> TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
+#pragma warning restore ABXMT001
 
 	/// <summary>
 	/// Rebases an original URI to use a different base URI, preserving the original's path.
