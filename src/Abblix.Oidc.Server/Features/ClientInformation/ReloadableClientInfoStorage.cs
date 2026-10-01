@@ -35,7 +35,7 @@ internal partial class ReloadableClientInfoStorage(
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
     IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered)
-    : IClientInfoProvider, IClientInfoManager
+    : IClientInfoStore
 {
     private Dictionary<string, ClientInfo> Configured
     {

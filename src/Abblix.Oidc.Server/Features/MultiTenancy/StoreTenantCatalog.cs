@@ -18,7 +18,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again.
+/// from it is not built again. Every other definition is ordered after all served before it
+/// (<see cref="TenantDefinition.Revision"/>), so a request still holding an earlier one is answered with what the
+/// later one built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -48,6 +50,9 @@ public sealed partial class StoreTenantCatalog(
 
     private Reading? _reading;
 
+    // Counts the readings, so each definition first served in a later one is ordered after every earlier one
+    private long _readings;
+
     /// <summary>
     /// Reads the store again and serves what the checks let through.
     /// </summary>
@@ -69,7 +74,8 @@ public sealed partial class StoreTenantCatalog(
         var listed = await store.ListAsync(cancellationToken);
         var previous = Volatile.Read(ref _reading);
 
-        var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
+        var revision = ++_readings;
+        var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? Revised(fresh, revision)).ToArray();
         var refusals = (
             from check in checks
             from refusal in check.Check([..stored.Select(tenant => tenant.Tenant)])
@@ -117,6 +123,15 @@ public sealed partial class StoreTenantCatalog(
            held.Tenant.Generation == fresh.Tenant.Generation
             ? held
             : null;
+
+    /// <summary>
+    /// <paramref name="fresh"/>, its definition ordered after every one served before it.
+    /// </summary>
+    private static StoredTenant Revised(StoredTenant fresh, long revision)
+    {
+        fresh.Tenant.Revision = revision;
+        return fresh;
+    }
 
     /// <summary>
     /// The last reading, made on the first question when nothing has refreshed the catalog yet - as in a container

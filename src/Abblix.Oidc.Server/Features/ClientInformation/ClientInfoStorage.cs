@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 internal class ClientInfoStorage(
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
-    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : IClientInfoProvider, IClientInfoManager
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : IClientInfoStore
 {
     // Built once for each issuer, whatever its settings become
     private Dictionary<string, ClientInfo> Configured => configured.GetOrCreate(null, () =>

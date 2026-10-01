@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 using Abblix.DependencyInjection;
@@ -1117,6 +1118,54 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A store of tenants whose listing changes between readings, as one the host edits while the server runs.
+    /// </summary>
+    private sealed class ChangingTenantStore : ITenantStore
+    {
+        public IReadOnlyCollection<StoredTenant> Tenants { get; set; } = [];
+
+        public Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Tenants);
+    }
+
+    private static ServiceProvider ServingFrom(ChangingTenantStore store)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddClientInformation();
+        services.AddSingleton<ITenantStore>(store);
+        services.AddServerStorage().AddMultiTenancy(_ => { });
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// The definition the server serves once the store holds <paramref name="tenant"/> under
+    /// <paramref name="version"/> and has been read again.
+    /// </summary>
+    private static async Task<TenantDefinition> Served(
+        IServiceProvider provider,
+        ChangingTenantStore store,
+        TenantDefinition tenant,
+        string version)
+    {
+        store.Tenants = [new StoredTenant(tenant, version)];
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(CancellationToken.None);
+        var served = await catalog.FindByIdAsync(tenant.Id, CancellationToken.None);
+        Assert.NotNull(served);
+        return served;
+    }
+
+    private static TenantDefinition AcmeWith(params string[] clientIds) => new()
+    {
+        Id = "acme",
+        Issuer = AcmeIssuer,
+        Clients = [..clientIds.Select(id => new ClientInfo(id) { TokenEndpointAuthMethod = ClientAuthenticationMethods.None })],
+    };
+
+    /// <summary>
     /// A request begun before a tenant's definition changed holds the former one to its end; reaching the client
     /// store then, it does not bring the former definition back and drop a client registered under an id the new
     /// definition freed.
@@ -1124,24 +1173,16 @@ public class MultiTenancyRegistrationTests
     [Fact]
     public async Task ARequestHoldingAFormerDefinition_DoesNotDropARegistrationMadeSince()
     {
-        TenantDefinition Acme(params string[] clientIds)
-            => new() { Id = "acme", Issuer = AcmeIssuer, Clients = [..clientIds.Select(id => new ClientInfo(id))] };
-
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddOptions<OidcOptions>();
-        services.AddIssuer();
-        services.AddClientInformation();
-        services.AddServerStorage().AddMultiTenancy(_ => { });
-        using var provider = services.BuildServiceProvider();
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
         var clients = provider.GetRequiredService<IClientInfoProvider>();
         var manager = provider.GetRequiredService<IClientInfoManager>();
-        var former = Acme("freed");
-        var current = Acme();
 
+        var former = await Served(provider, store, AcmeWith("freed"), "1");
         EnterTenant(provider, former);
         Assert.NotNull(await clients.TryFindClientAsync("freed"));
 
+        var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
         Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
@@ -1150,6 +1191,73 @@ public class MultiTenancyRegistrationTests
 
         EnterTenant(provider, current);
         Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+    }
+
+    /// <summary>
+    /// A request holding a definition the store replaced twice since does not leave the tenant served the
+    /// definition between the two.
+    /// </summary>
+    [Fact]
+    public async Task ARequestHoldingADefinitionBetweenTwoChanges_DoesNotHoldTheTenantThere()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+
+        EnterTenant(provider, await Served(provider, store, AcmeWith("first"), "1"));
+        Assert.NotNull(await clients.TryFindClientAsync("first"));
+        var between = await Served(provider, store, AcmeWith("between"), "2");
+        var last = await Served(provider, store, AcmeWith("last"), "3");
+        EnterTenant(provider, last);
+        Assert.NotNull(await clients.TryFindClientAsync("last"));
+
+        EnterTenant(provider, between);
+        await clients.TryFindClientAsync("between");
+
+        EnterTenant(provider, last);
+        Assert.NotNull(await clients.TryFindClientAsync("last"));
+        Assert.Null(await clients.TryFindClientAsync("between"));
+    }
+
+    /// <summary>
+    /// A tenant whose clients are all removed stops serving them, although every definition declaring no clients
+    /// hands out one and the same empty list.
+    /// </summary>
+    [Fact]
+    public async Task ATenantLeftWithNoClients_StopsServingTheOnesItHad()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+
+        EnterTenant(provider, await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer }, "1"));
+        Assert.Null(await clients.TryFindClientAsync("removed"));
+        EnterTenant(provider, await Served(provider, store, AcmeWith("removed"), "2"));
+        Assert.NotNull(await clients.TryFindClientAsync("removed"));
+
+        EnterTenant(provider, await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer }, "3"));
+        Assert.Null(await clients.TryFindClientAsync("removed"));
+    }
+
+    /// <summary>
+    /// A store handing back, as a new version, a definition object it handed out before - a rollback to a kept
+    /// one - has that definition served again.
+    /// </summary>
+    [Fact]
+    public async Task ADefinitionHandedBackAgain_IsServedAgain()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var kept = AcmeWith("kept");
+
+        EnterTenant(provider, await Served(provider, store, kept, "1"));
+        Assert.NotNull(await clients.TryFindClientAsync("kept"));
+        EnterTenant(provider, await Served(provider, store, AcmeWith("replacing"), "2"));
+        Assert.NotNull(await clients.TryFindClientAsync("replacing"));
+
+        EnterTenant(provider, await Served(provider, store, kept, "3"));
+        Assert.NotNull(await clients.TryFindClientAsync("kept"));
     }
 
     /// <summary>
