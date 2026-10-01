@@ -35,8 +35,8 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenant
     /// A request begun before the tenant's definition changed holds the former one to its end. A value is replaced
     /// only from the definition the server's own catalog serves now (<see cref="StoreTenantCatalog.Serves"/>): a
     /// request holding any other is answered with the value held, rather than bring its definition back - and, for
-    /// the clients, drop a registration made since under an id the served one freed. Before that catalog has read
-    /// anything, and under any other catalog, a changed source decides alone.
+    /// the clients, drop a registration made since under an id the served one freed. Where that catalog serves the
+    /// tenant no definition, has read nothing yet, or is not the catalog in use, a changed source decides alone.
     /// </para>
     /// </remarks>
     public T GetOrCreate(object? source, Func<T> create)

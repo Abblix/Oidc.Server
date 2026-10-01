@@ -18,8 +18,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again. What was built is replaced only from the definition served now
-/// (<see cref="Serves"/>), so a request still holding one this catalog replaced is answered with what was built.
+/// from it is not built again. While a tenant is served, what was built for it is replaced only from the definition
+/// served now (<see cref="Serves"/>), so a request still holding one this catalog replaced is answered with what was
+/// built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -121,16 +122,21 @@ public sealed partial class StoreTenantCatalog(
 
     /// <summary>
     /// Whether <paramref name="tenant"/> - this very definition object - is the one served for its id now, or null
-    /// when nothing has been read yet.
+    /// when this catalog serves its id no definition: nothing read yet, or the tenant refused or dropped.
     /// </summary>
     /// <remarks>
-    /// Answered from the last reading, so a tenant the checks refused or the store dropped is served by no
-    /// definition, and a request still holding one gets false.
+    /// A tenant served by no definition has no later one to prefer, so a request holding its last definition is
+    /// left to the source alone rather than to the values of the definition before.
     /// </remarks>
     internal bool? Serves(TenantDefinition tenant)
-        => Volatile.Read(ref _reading) is { } reading
-            ? ReferenceEquals(reading.ById.GetValueOrDefault(tenant.Id)?.Tenant, tenant)
+        => Volatile.Read(ref _reading)?.ById.GetValueOrDefault(tenant.Id)?.Tenant is { } served
+            ? ReferenceEquals(served, tenant)
             : null;
+
+    /// <summary>
+    /// Whether this catalog has read the store, and so can say which definitions it serves.
+    /// </summary>
+    internal bool HasRead => Volatile.Read(ref _reading) is not null;
 
     /// <summary>
     /// The definition served now for the tenant and generation of <paramref name="held"/>, or null when this catalog

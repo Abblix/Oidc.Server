@@ -46,10 +46,11 @@ public sealed class TenantIssuerSettings(
 
     /// <summary>
     /// The clients the current tenant's definition in force configures: the one the server's own catalog serves now,
-    /// which a request begun before the definition changed does not hold, or the one the request holds where no such
-    /// catalog serves one.
+    /// which a request begun before the definition changed does not hold, and none when that catalog serves the
+    /// tenant no definition; the one the request holds where no such catalog has read the tenants.
     /// </summary>
-    internal IEnumerable<ClientInfo> ClientsInForce => ((catalog as StoreTenantCatalog)?.Serving(Tenant) ?? Tenant).Clients;
+    internal IEnumerable<ClientInfo> ClientsInForce
+        => catalog is StoreTenantCatalog { HasRead: true } own ? own.Serving(Tenant)?.Clients ?? [] : Tenant.Clients;
 
     /// <inheritdoc />
     public ScopeDefinition[]? Scopes => Tenant.Scopes;

@@ -27,9 +27,10 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// served in the configured client's place, and does not come back once the settings let the id go. Every
 /// registration dropped this way is logged, a write answered as not made included.
 /// <para>
-/// A write is judged by the settings in force rather than by the clients built, so one decided by a request begun
-/// before the settings changed, or while the clients of the new ones are being built or before anybody built them,
-/// is answered by what the settings now configure.
+/// Whether the settings configure an id is always asked of the settings in force rather than of the clients built:
+/// by a write, by a lookup of a registration, and by a build before it drops one. So a request begun before the
+/// settings changed, a build of former settings ending after the change, and a write landing while the clients of
+/// the new ones are being built or before anybody built them, all answer by what the settings now configure.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
@@ -55,11 +56,13 @@ internal partial class ReloadableClientInfoStorage(
 
     /// <summary>
     /// Drops every registration stored under an id <paramref name="clients"/> configure, as the store first reads
-    /// them.
+    /// them, where the settings in force still configure it: a build of former settings may end after a registration
+    /// the current ones allow.
     /// </summary>
     private Dictionary<string, ClientInfo> Evicting(Dictionary<string, ClientInfo> clients)
     {
-        foreach (var registration in Registered.Where(registration => clients.ContainsKey(registration.Key)))
+        foreach (var registration in Registered.Where(
+                     registration => clients.ContainsKey(registration.Key) && ConfiguredInForce(registration.Key)))
             Evict(registration);
 
         return clients;
@@ -72,11 +75,11 @@ internal partial class ReloadableClientInfoStorage(
     }
 
     /// <summary>
-    /// Drops a registration just stored under an id the settings configure, including one they came to configure after
-    /// the write was decided.
+    /// Drops a registration under an id the settings in force configure: one just written, including one they came to
+    /// configure after the write was decided, or one a lookup found.
     /// </summary>
     /// <returns>Whether the settings configure the id, and so the registration is not kept - dropped here, or already
-    /// by the eviction reading them brought about.</returns>
+    /// by a build of the clients.</returns>
     private bool Recheck(RegisteredClient client)
     {
         if (!ConfiguredInForce(client.ClientInfo.ClientId))
@@ -90,12 +93,10 @@ internal partial class ReloadableClientInfoStorage(
     private ConcurrentDictionary<string, RegisteredClient> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
-    private bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
-
     /// <summary>
     /// Whether the settings in force configure <paramref name="clientId"/>, read from them rather than from the
     /// clients built: a request begun before the settings changed holds the former ones, and the clients of the
-    /// current ones may not be built yet.
+    /// current ones may not be built yet, or be built from former settings.
     /// </summary>
     private bool ConfiguredInForce(string clientId)
     {
@@ -133,9 +134,9 @@ internal partial class ReloadableClientInfoStorage(
     public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
     {
         // The settings are read last, so the answer is theirs as they stand once the registration was read: a reload
-        // configuring the id before that drops the registration, or hides it here
+        // configuring the id before that drops the registration here, so it does not come back once they let it go
         var client = Registered.GetValueOrDefault(clientId);
-        return Task.FromResult(client is null || IsConfigured(clientId) ? null : client);
+        return Task.FromResult(client is null || Recheck(client) ? null : client);
     }
 
     /// <inheritdoc />
