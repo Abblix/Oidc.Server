@@ -30,8 +30,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// Whether the settings configure an id is asked of the settings in force rather than of the clients built: by a
 /// lookup, and by a build before it drops a registration. So a request begun before the settings changed, and a
 /// build of former settings ending after the change, answer by what the settings now configure. A write is refused
-/// when either the settings in force or the ones the request holds configure the id, as a refused write is answered
-/// truly while a write kept now and dropped later is not.
+/// when either the settings in force or the ones the request holds configure the id - the latter before anything is
+/// written - as a refused write is answered truly while a write kept now and dropped later is not.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
@@ -76,30 +76,31 @@ internal partial class ReloadableClientInfoStorage(
     }
 
     /// <summary>
-    /// Drops a registration a lookup found under an id the settings in force configure.
+    /// Drops a registration under an id the settings in force configure: one a lookup found, or one just written,
+    /// including under an id they came to configure after the write was decided.
     /// </summary>
     /// <returns>Whether the settings configure the id, and so the registration is not kept - dropped here, or already
     /// by a build of the clients.</returns>
     private bool Recheck(RegisteredClient client)
-        => DropWhen(ConfiguredInForce(client.ClientInfo.ClientId), client);
-
-    /// <summary>
-    /// Drops a registration just written under an id the settings in force or the ones the request holds configure,
-    /// including an id they came to configure after the write was decided.
-    /// </summary>
-    /// <returns>Whether the registration is not kept, and so the write is answered as not made.</returns>
-    private bool RecheckWrite(RegisteredClient client)
     {
-        var clientId = client.ClientInfo.ClientId;
-        return DropWhen(ConfiguredInForce(clientId) || Configures(settings.Clients, clientId), client);
+        if (!ConfiguredInForce(client.ClientInfo.ClientId))
+            return false;
+
+        Evict(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
+        return true;
     }
 
-    private bool DropWhen(bool configured, RegisteredClient client)
+    /// <summary>
+    /// Whether the settings the request holds configure the id of a registration about to be written, which is
+    /// then refused without being written: the settings in force may be on their way back to them.
+    /// </summary>
+    private bool RefusedByHeldSettings(RegisteredClient client)
     {
-        if (configured)
-            Evict(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
+        if (!Configures(settings.Clients, client.ClientInfo.ClientId))
+            return false;
 
-        return configured;
+        LogRegistrationEvicted(client.ClientInfo.ClientId, settings.Id);
+        return true;
     }
 
     // Built once for each issuer, whatever its settings become
@@ -146,7 +147,10 @@ internal partial class ReloadableClientInfoStorage(
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
     /// <returns>Whether the client was added and kept.</returns>
     public Task<bool> TryAddClientAsync(RegisteredClient client)
-        => Task.FromResult(Registered.TryAdd(client.ClientInfo.ClientId, client) && !RecheckWrite(client));
+        => Task.FromResult(
+            !RefusedByHeldSettings(client) &&
+            Registered.TryAdd(client.ClientInfo.ClientId, client) &&
+            !Recheck(client));
 
     /// <inheritdoc />
     public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
@@ -160,7 +164,10 @@ internal partial class ReloadableClientInfoStorage(
     /// <inheritdoc />
     public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
     {
-        return Task.FromResult(Registered.TryReplace(current, updated) && !RecheckWrite(updated));
+        return Task.FromResult(
+            !RefusedByHeldSettings(updated) &&
+            Registered.TryReplace(current, updated) &&
+            !Recheck(updated));
     }
 
     /// <inheritdoc />

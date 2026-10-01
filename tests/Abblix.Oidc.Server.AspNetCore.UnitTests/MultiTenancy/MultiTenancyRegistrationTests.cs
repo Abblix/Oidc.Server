@@ -1490,12 +1490,13 @@ public class MultiTenancyRegistrationTests
         EnterTenant(provider, replaced);
         var found = await clients.TryFindClientAsync("taken");
 
-        Assert.NotEqual("registrant", found?.ClientName);
+        Assert.NotNull(found);
+        Assert.NotEqual("registrant", found.ClientName);
     }
 
     /// <summary>
-    /// A request begun before the served definition took an id does not find, under it, a registration made before;
-    /// the lookup drops it, as the settings now configure the id.
+    /// A request begun before the served definition took an id does not find, under it, a registration made
+    /// before: the lookup drops it, as the settings now configure the id.
     /// </summary>
     [Fact]
     public async Task RequestBegunBeforeIdWasTaken_DoesNotFindRegistrationUnderIt()
@@ -1516,6 +1517,70 @@ public class MultiTenancyRegistrationTests
 
         Assert.Null(await clients.TryFindClientAsync("taken"));
         Assert.Null(await manager.TryFindRegisteredClientAsync("taken"));
+    }
+
+    /// <summary>
+    /// A change to a registration, written by a request holding a definition that configured its id while the served
+    /// one frees it, is answered as not made and leaves the registration as it was.
+    /// </summary>
+    [Fact]
+    public async Task UpdateUnderIdOnlyHeldDefinitionConfigures_KeepsRegistration()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
+        Assert.Null(await clients.TryFindClientAsync("other"));
+        var registration = new RegisteredClient(new ClientInfo("freed"), "token-id");
+        Assert.True(await manager.TryAddClientAsync(registration));
+        var held = await Served(provider, store, AcmeWith("freed"), "2");
+        var current = await Served(provider, store, AcmeWith(), "3");
+
+        EnterTenant(provider, held);
+        Assert.False(await manager.TryUpdateClientAsync(
+            registration,
+            new RegisteredClient(new ClientInfo("freed") { ClientName = "changed" }, "token-id")));
+
+        EnterTenant(provider, current);
+        Assert.Same(registration, await manager.TryFindRegisteredClientAsync("freed"));
+    }
+
+    /// <summary>
+    /// A registration written while the tenant is refused or dropped, by a request holding a definition from before
+    /// the last one served, is judged by that last one: an id it configures is answered as not made rather than
+    /// kept and dropped once the tenant is served again.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RegistrationFromEarlierDefinitionWhileTenantUnserved_IsJudgedByLastServed(bool refused)
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var earlier = await Served(provider, store, AcmeWith(), "1");
+        var last = await Served(provider, store, AcmeWith("taken"), "2");
+        EnterTenant(provider, last);
+        Assert.NotNull(await clients.TryFindClientAsync("taken"));
+
+        // Globex claims acme's issuer, so the checks refuse both
+        store.Tenants = refused
+            ?
+            [
+                new StoredTenant(last, "2"),
+                new StoredTenant(new TenantDefinition { Id = "globex", Issuer = AcmeIssuer }, "1"),
+            ]
+            : [];
+        await catalog.RefreshAsync(CancellationToken.None);
+        Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
+
+        EnterTenant(provider, earlier);
+        Assert.False(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id")));
     }
 
     /// <summary>
@@ -1612,9 +1677,9 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A tenant the store dropped after the clients of its last definition were built has no clients in force, so a
-    /// request still holding the definition before, building its clients back, does not drop a client registered
-    /// under an id that definition configures.
+    /// A tenant the store dropped after the clients of its last definition were built keeps that definition in
+    /// force, so a request still holding the definition before, building its clients back, does not drop a client
+    /// registered under an id only that earlier definition configures.
     /// </summary>
     [Fact]
     public async Task TenantDroppedAfterBuild_KeepsRegistrationMadeSince()

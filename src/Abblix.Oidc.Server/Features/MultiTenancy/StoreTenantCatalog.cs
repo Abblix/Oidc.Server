@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
@@ -18,9 +19,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again. While a tenant is served, what was built for it is replaced only from the definition
-/// served now (<see cref="Serves"/>), so a request still holding one this catalog replaced is answered with what was
-/// built.
+/// from it is not built again. What was built for a tenant is replaced only from its definition in force
+/// (<see cref="InForce"/>), so a request still holding one this catalog replaced is answered with what was built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -49,6 +49,10 @@ public sealed partial class StoreTenantCatalog(
     private readonly SemaphoreSlim _readingOne = new(1, 1);
 
     private Reading? _reading;
+
+    // The last definition served under each id, kept once the tenant is refused or dropped: a request still holding
+    // one of its definitions is judged by the last one in force rather than by none
+    private readonly ConcurrentDictionary<string, TenantDefinition> _lastServed = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Reads the store again and serves what the checks let through.
@@ -83,6 +87,8 @@ public sealed partial class StoreTenantCatalog(
 
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
         var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
+        foreach (var tenant in served.Select(entry => entry.Tenant))
+            _lastServed[tenant.Id] = tenant;
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
@@ -121,31 +127,15 @@ public sealed partial class StoreTenantCatalog(
             : null;
 
     /// <summary>
-    /// Whether <paramref name="tenant"/> - this very definition object - is the one served for its id now, or null
-    /// when this catalog serves its id no definition: nothing read yet, or the tenant refused or dropped.
+    /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the
+    /// last one served when the tenant is refused or dropped since; null when this catalog never served this
+    /// creation of the tenant.
     /// </summary>
-    /// <remarks>
-    /// A tenant served by no definition has no later one to prefer, so a request holding its last definition is
-    /// left to the source alone rather than to the values of the definition before.
-    /// </remarks>
-    internal bool? Serves(TenantDefinition tenant)
-        => Volatile.Read(ref _reading)?.ById.GetValueOrDefault(tenant.Id)?.Tenant is { } served
-            ? ReferenceEquals(served, tenant)
-            : null;
-
-    /// <summary>
-    /// Whether this catalog has read the store, and so can say which definitions it serves.
-    /// </summary>
-    internal bool HasRead => Volatile.Read(ref _reading) is not null;
-
-    /// <summary>
-    /// The definition served now for the tenant and generation of <paramref name="held"/>, or null when this catalog
-    /// serves none: nothing read yet, or the tenant refused, dropped or created again since.
-    /// </summary>
-    internal TenantDefinition? Serving(TenantDefinition held)
-        => Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant is { } served &&
-           served.Generation == held.Generation
-            ? served
+    internal TenantDefinition? InForce(TenantDefinition held)
+        => (Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant ??
+            _lastServed.GetValueOrDefault(held.Id)) is { } inForce &&
+           inForce.Generation == held.Generation
+            ? inForce
             : null;
 
     /// <summary>
