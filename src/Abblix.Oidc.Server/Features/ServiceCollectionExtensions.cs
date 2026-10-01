@@ -193,15 +193,18 @@ public static class ServiceCollectionExtensions
 
         // TryAdd: a host that pre-registers its own client store must win over the default (issue #226) - same
         // host-first contract as TryAdd* seams.
-        services.TryAddSingleton<IClientInfoProvider>(
-            serviceProvider => (IClientInfoProvider)DefaultClientStore(serviceProvider));
-        services.TryAddSingleton<IClientInfoManager>(
-            serviceProvider => (IClientInfoManager)DefaultClientStore(serviceProvider));
+        services.TryAddSingleton<IClientInfoProvider>(serviceProvider => FollowsTenants(serviceProvider)
+            ? serviceProvider.GetRequiredService<ReloadableClientInfoStorage>()
+            : serviceProvider.GetRequiredService<ClientInfoStorage>());
+        services.TryAddSingleton<IClientInfoManager>(serviceProvider => FollowsTenants(serviceProvider)
+            ? serviceProvider.GetRequiredService<ReloadableClientInfoStorage>()
+            : serviceProvider.GetRequiredService<ClientInfoStorage>());
         return services;
     }
 
     /// <summary>
-    /// The client store the server serves clients from unless the host registers its own.
+    /// Whether the client store the server serves clients from, unless the host registers its own, follows a change
+    /// of the configured clients.
     /// </summary>
     /// <remarks>
     /// Under multi-tenancy a tenant's definition changes while the server runs, read again from the store of
@@ -210,10 +213,8 @@ public static class ServiceCollectionExtensions
     /// <see cref="AddReloadableClientInformation"/>. Asked when the store is first resolved, by which time every
     /// registration is in, so the order of the calls registering clients and multi-tenancy does not matter.
     /// </remarks>
-    private static object DefaultClientStore(IServiceProvider serviceProvider)
-        => MultiTenancyDetection.IsActive(serviceProvider)
-            ? serviceProvider.GetRequiredService<ReloadableClientInfoStorage>()
-            : serviceProvider.GetRequiredService<ClientInfoStorage>();
+    private static bool FollowsTenants(IServiceProvider serviceProvider)
+        => MultiTenancyDetection.IsActive(serviceProvider);
 
     /// <summary>
     /// Serves clients from a store that follows a reload of the settings: the clients each issuer's settings

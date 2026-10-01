@@ -62,7 +62,7 @@ internal partial class ReloadableClientInfoStorage(
     private void Evict(KeyValuePair<string, RegisteredClient> registration)
     {
         if (Registered.TryRemove(registration))
-            LogRegistrationEvicted(registration.Key);
+            LogRegistrationEvicted(registration.Key, settings.Id);
     }
 
     /// <summary>

@@ -1117,6 +1117,42 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A request begun before a tenant's definition changed holds the former one to its end; reaching the client
+    /// store then, it does not bring the former definition back and drop a client registered under an id the new
+    /// definition freed.
+    /// </summary>
+    [Fact]
+    public async Task ARequestHoldingAFormerDefinition_DoesNotDropARegistrationMadeSince()
+    {
+        TenantDefinition Acme(params string[] clientIds)
+            => new() { Id = "acme", Issuer = AcmeIssuer, Clients = [..clientIds.Select(id => new ClientInfo(id))] };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddClientInformation();
+        services.AddServerStorage().AddMultiTenancy(_ => { });
+        using var provider = services.BuildServiceProvider();
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+        var former = Acme("freed");
+        var current = Acme();
+
+        EnterTenant(provider, former);
+        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+
+        EnterTenant(provider, current);
+        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+
+        EnterTenant(provider, former);
+        await clients.TryFindClientAsync("freed");
+
+        EnterTenant(provider, current);
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+    }
+
+    /// <summary>
     /// The default client store follows each tenant's definition under multi-tenancy, whichever of the two calls
     /// comes first, and reads a server's clients once without it, as before; the store finding clients is the one
     /// keeping them.
