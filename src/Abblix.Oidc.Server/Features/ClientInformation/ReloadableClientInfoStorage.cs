@@ -29,8 +29,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <para>
 /// Whether the settings configure an id is asked of the settings in force rather than of the clients built: by a
 /// lookup, and by a build before it drops a registration. So a request begun before the settings changed, and a
-/// build of former settings ending after the change, answer by what the settings now configure. A write is refused
-/// when the settings in force configure the id, whatever the settings the request holds say.
+/// build of former settings ending after the change, answer by what the settings now configure. A write under an id
+/// the settings in force configure is dropped and answered as not made, whatever the settings the request holds
+/// say.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>

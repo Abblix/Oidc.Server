@@ -131,7 +131,7 @@ public sealed partial class StoreTenantCatalog(
     /// <summary>
     /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the
     /// last one served when the tenant is refused or dropped since; null when this catalog never served this
-    /// creation of the tenant, or has served a later one since.
+    /// creation of the tenant, or has served another creation of it since.
     /// </summary>
     internal TenantDefinition? InForce(TenantDefinition held)
         => (Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant ??
