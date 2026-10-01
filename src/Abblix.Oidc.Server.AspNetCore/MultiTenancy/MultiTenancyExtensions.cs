@@ -55,12 +55,13 @@ public static class MultiTenancyExtensions
         services.AddOptions<KeyRingOptions>().Configure<IOptions<MultiTenancyOptions>>(
             (ring, tenants) => ring.Partitions = [..tenants.Value.Tenants.Select(TenantKey.PartitionOf)]);
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantListValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSettingsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantRegistriesValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantKeysValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantOwnedOptionsValidator>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantDefinitionsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantSettingsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantKeysCheck>(),
         ]);
 
         services.AddHttpContextAccessor();

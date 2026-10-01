@@ -18,11 +18,12 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 /// <summary>
 /// The tenant lists startup refuses, each for the request it could not resolve or would resolve wrongly.
 /// </summary>
-public class MultiTenancyOptionsValidatorTests
+public class TenantDefinitionsCheckTests
 {
     private static string? FailureOf(params TenantDefinition[] tenants)
     {
-        var result = new MultiTenancyOptionsValidator().Validate(null, new MultiTenancyOptions { Tenants = [..tenants] });
+        var result = new TenantListValidator([new TenantDefinitionsCheck()])
+            .Validate(null, new MultiTenancyOptions { Tenants = [..tenants] });
         return result.Failed ? result.FailureMessage : null;
     }
 
@@ -91,6 +92,26 @@ public class MultiTenancyOptionsValidatorTests
     public void TwoIssuersAtOneAddress_AreRefused(string first, string second)
         => Assert.Contains("served at the same address", FailureOf(Tenant("acme", first), Tenant("globex", second)),
             StringComparison.Ordinal);
+
+    /// <summary>
+    /// A refusal names the tenants it is about: a tenant's own mistake names that tenant alone, a conflict every
+    /// party to it, so a list read from a store can leave out exactly those.
+    /// </summary>
+    [Fact]
+    public void ARefusal_NamesTheTenantsItIsAbout()
+    {
+        var refusals = new TenantDefinitionsCheck().Check(
+        [
+            Tenant("acme", "https://auth.example.com/tenants/x"),
+            Tenant("globex", "https://auth.example.com/tenants/x"),
+            Tenant("initech", "ftp://initech.example.com"),
+            Tenant("umbrella", "https://umbrella.example.com"),
+        ]).ToArray();
+
+        Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme", "globex"]));
+        Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["initech"]));
+        Assert.DoesNotContain(refusals, refusal => refusal.TenantIds.Contains("umbrella"));
+    }
 
     /// <summary>
     /// A tenant's mutual-TLS address names only the host its aliases are served at: they keep the issuer's path, so
