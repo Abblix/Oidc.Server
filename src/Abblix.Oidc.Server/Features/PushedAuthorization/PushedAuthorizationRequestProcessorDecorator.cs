@@ -28,8 +28,9 @@ public class PushedAuthorizationRequestProcessorDecorator(
     IAuthorizationRequestStorage authorizationRequestStorage) : IAuthorizationRequestProcessor
 {
     /// <summary>
-    /// Delegates to the wrapped processor and, when the outcome is a successful authentication originating
-    /// from a pushed request, consumes the originating <c>request_uri</c> to enforce single use.
+    /// Delegates to the wrapped processor and consumes the <c>request_uri</c> values the request is done with: on a
+    /// successful authentication the one it came by and the one it was first fetched under, and on any answer the
+    /// one it came back with from the login or account-creation page.
     /// </summary>
     /// <param name="request">The validated authorization request to process.</param>
     /// <returns>The inner processor's <see cref="AuthorizationResponse"/>, unchanged.</returns>
@@ -37,17 +38,26 @@ public class PushedAuthorizationRequestProcessorDecorator(
     {
         var response = await inner.ProcessAsync(request);
 
-        // Consume the request_uri only on a terminal success: PushedRequestFetcher carries the URN forward
-        // onto the resolved request (surfaced as ValidAuthorizationRequest.RequestUri) and deliberately does
-        // not consume on fetch, so multi-step UI re-reads the same URN until a code or token is issued here.
-        // A request coming back from the login or account-creation page is done with the request_uri it came back
-        // with whatever it is answered: a next page gets a request_uri of its own, and this one would let the end
-        // user's browser come back past signing in until it expires.
+        // PushedRequestFetcher carries the URN forward onto the resolved request (surfaced as
+        // ValidAuthorizationRequest.RequestUri) and deliberately does not consume on fetch, so multi-step UI re-reads
+        // the same URN until a code or token is issued here. A request coming back from the login or
+        // account-creation page is done with the request_uri it came back with whatever it is answered: a next page
+        // gets a request_uri of its own, and this one would let the end user's browser come back past signing in
+        // until it expires.
         if ((response is SuccessfullyAuthenticated || request.Model.PromptedAt.HasValue) &&
             request.RequestUri is { } requestUri &&
             requestUri.OriginalString.StartsWith(RequestUrn.Prefix))
         {
             await authorizationRequestStorage.TryGetAsync(requestUri, shouldRemove: true);
+        }
+
+        // The URN the request was first fetched under - usually the one the client pushed - outlives the pages the
+        // request went through, and is done with once a code or token is issued
+        if (response is SuccessfullyAuthenticated &&
+            request.Model.OriginRequestUri is { } originRequestUri &&
+            originRequestUri != request.RequestUri)
+        {
+            await authorizationRequestStorage.TryGetAsync(originRequestUri, shouldRemove: true);
         }
 
         return response;

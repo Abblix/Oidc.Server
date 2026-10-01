@@ -591,6 +591,18 @@ public class MappersTests
         Assert.Equal(promptedAt, request.ToProto().FromProto().PromptedAt);
     }
 
+    /// <summary>
+    /// The URN the client pushed the request under survives storage, or it would outlive the code the flow led to.
+    /// </summary>
+    [Fact]
+    public void AuthorizationRequestMapper_RoundTrips_OriginRequestUri()
+    {
+        var pushed = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = new AuthorizationRequest { Scope = [TestConstants.DefaultScope], OriginRequestUri = pushed };
+
+        Assert.Equal(pushed, request.ToProto().FromProto().OriginRequestUri);
+    }
+
     [Fact]
     public void AuthorizationRequestMapper_ToProto_HandlesMaxAge()
     {

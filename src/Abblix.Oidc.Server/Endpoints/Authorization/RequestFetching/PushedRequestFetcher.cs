@@ -76,7 +76,13 @@ public class PushedRequestFetcher(
                 // Carry the URN forward on a dedicated, non-wire field - not RequestUri, whose https
                 // validation a urn: value would fail in the next fetcher - so the validator can surface it
                 // on ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
-                _ => requestObject with { PushedRequestUri = requestUrn },
+                // The first URN the request was fetched under is kept across the pages it is stored for, so it is
+                // consumed with the last one
+                _ => requestObject with
+                {
+                    PushedRequestUri = requestUrn,
+                    OriginRequestUri = requestObject.OriginRequestUri ?? requestUrn,
+                },
             };
         }
 

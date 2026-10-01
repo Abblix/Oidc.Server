@@ -89,4 +89,8 @@ message AuthorizationRequest {
   // When the server last sent the end user to log in or to create an account for this request,
   // so the request coming back with a session authenticated since then proceeds
   optional google.protobuf.Timestamp prompted_at = 24;
+
+  // The request URN this request was first fetched under, so it is consumed with the URN of
+  // the page the request comes back from once a code or token is issued
+  optional string origin_request_uri = 25;
 }

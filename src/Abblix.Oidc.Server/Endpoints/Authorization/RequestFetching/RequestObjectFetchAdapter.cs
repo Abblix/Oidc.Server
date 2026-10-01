@@ -49,6 +49,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
             .Bind(merged => ValidateMergedParameters(request, merged with
             {
                 PushedRequestUri = request.PushedRequestUri,
+                OriginRequestUri = request.OriginRequestUri,
                 PromptedAt = request.PromptedAt,
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));

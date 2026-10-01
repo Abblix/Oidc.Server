@@ -175,6 +175,31 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
     }
 
+    /// <summary>
+    /// The request_uri a request came back with from the login page is done with once the request moved on, here
+    /// to the login page again under a request_uri of its own: presenting the first one again is refused rather
+    /// than letting the browser come back past a later page.
+    /// </summary>
+    [Fact]
+    public async Task PromptLogin_RequestUriComeBackWith_IsRefusedOnceRequestMovedOn()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login)));
+        await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo);
+
+        var again = await client.GetAsync(
+            Authorize(
+                discovery,
+                TestConstants.ConfidentialClientId,
+                QueryValue(sentTo, AuthorizationRequest.Parameters.RequestUri)!),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+    }
+
     [Fact]
     public async Task PromptLogin_InPushedRequest_ReturningAfterSignIn_IssuesCode()
     {
@@ -241,6 +266,35 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 
         var replay = await client.GetAsync(
             Authorize(discovery, clientId, requestUri), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+    }
+
+    /// <summary>
+    /// A pushed request_uri stays usable while the end user is on the login page - a refresh or a second visit
+    /// presents it again - and is refused once the code the flow led to is issued, though the code was issued on a
+    /// request_uri of the login page's own (RFC 9126 section 7.3).
+    /// </summary>
+    [Fact]
+    public async Task PushedRequest_ThroughLoginPage_IsUsableUntilCodeAndRefusedAfter()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
+        var pushed = await PushAuthorizationRequestAsync(client, discovery, parameters);
+        var pushedUri = Authorize(
+            discovery,
+            TestConstants.ConfidentialClientId,
+            pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>());
+
+        var sentTo = await RedirectOf(client, pushedUri);
+        Assert.Equal(LoginPath, PathOf(await RedirectOf(client, pushedUri)));
+        endUser.SignInAgain();
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+
+        var replay = await client.GetAsync(pushedUri, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
     }

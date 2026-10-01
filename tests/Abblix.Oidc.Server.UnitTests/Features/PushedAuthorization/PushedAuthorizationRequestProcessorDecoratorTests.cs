@@ -38,7 +38,10 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         _decorator = new PushedAuthorizationRequestProcessorDecorator(_inner.Object, _storage.Object);
     }
 
-    private static ValidAuthorizationRequest CreateValidRequest(Uri? requestUri, DateTimeOffset? promptedAt = null)
+    private static ValidAuthorizationRequest CreateValidRequest(
+        Uri? requestUri,
+        DateTimeOffset? promptedAt = null,
+        Uri? pushedBy = null)
     {
         var model = new AuthorizationRequest
         {
@@ -48,6 +51,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             Scope = [Scopes.OpenId],
             PushedRequestUri = requestUri,
             PromptedAt = promptedAt,
+            OriginRequestUri = pushedBy,
         };
         var context = new AuthorizationValidationContext(model)
         {
@@ -74,6 +78,25 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
 
         Assert.IsType<SuccessfullyAuthenticated>(response);
         _storage.Verify(s => s.TryGetAsync(requestUri, true), Times.Once);
+    }
+
+    /// <summary>
+    /// A success reached through the login page consumes both the request_uri it came back with and the one the
+    /// client pushed the request under, which would otherwise outlive the code.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_SuccessThroughLoginPage_ConsumesPushedRequestUriToo()
+    {
+        var pageUri = new Uri("urn:ietf:params:oauth:request_uri:login-page");
+        var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = CreateValidRequest(pageUri, pushedBy: pushedUri);
+        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _storage.Setup(s => s.TryGetAsync(It.IsAny<Uri>(), true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        await _decorator.ProcessAsync(request);
+
+        _storage.Verify(s => s.TryGetAsync(pageUri, true), Times.Once);
+        _storage.Verify(s => s.TryGetAsync(pushedUri, true), Times.Once);
     }
 
     /// <summary>

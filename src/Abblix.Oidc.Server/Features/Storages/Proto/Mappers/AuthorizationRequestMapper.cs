@@ -70,6 +70,7 @@ internal static class AuthorizationRequestMapper
         if (source.Request != null) proto.Request = source.Request;
         if (source.RequestUri != null) proto.RequestUri = source.RequestUri.ToString();
         if (source.ProofKeyThumbprint != null) proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
+        if (source.OriginRequestUri != null) proto.OriginRequestUri = source.OriginRequestUri.OriginalString;
     }
 
     /// <summary>
@@ -105,6 +106,7 @@ internal static class AuthorizationRequestMapper
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
             PromptedAt = source.PromptedAt?.ToDateTimeOffset(),
+            OriginRequestUri = ProtoMapper.GetUri(source.OriginRequestUri, source.HasOriginRequestUri),
         };
     }
 }
