@@ -15,8 +15,9 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses at startup what a store of tenants of the host's own cannot serve: tenants the settings declare, which
-/// it does not hold, and keys the server mints, which it keeps only for the tenants the settings declare.
+/// Refuses at startup keys the server mints beside a store of tenants of the host's own: the server keeps a part of
+/// its key ring only for each tenant the settings declare, so a tenant the store holds beyond them would have no key
+/// to sign with.
 /// </summary>
 /// <param name="serviceProvider">The container the store and the key provider are resolved from.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
@@ -25,26 +26,12 @@ public sealed class TenantStoreValidator(IServiceProvider serviceProvider) : IVa
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
     {
-        if (serviceProvider.GetService<ITenantStore>() is OptionsTenantStore or null)
-            return ValidateOptionsResult.Success;
-
-        var failures = new List<string>();
-        if (options.Tenants.Count > 0)
-        {
-            failures.Add(
-                $"{nameof(MultiTenancyOptions)}.{nameof(MultiTenancyOptions.Tenants)} declares tenants, but the " +
-                $"tenants are read from a {nameof(ITenantStore)} of the host's own, so they would never be served. " +
-                "Hold them in that store instead.");
-        }
-
-        if (serviceProvider.GetService<IAuthServiceKeysProvider>() is MintedKeysProvider)
-        {
-            failures.Add(
+        return serviceProvider.GetService<ITenantStore>() is not OptionsTenantStore &&
+               serviceProvider.GetService<IAuthServiceKeysProvider>() is MintedKeysProvider
+            ? ValidateOptionsResult.Fail(
                 "The server mints the keys, and keeps a part of its key ring only for each tenant the settings " +
-                $"declare, so a tenant read from a {nameof(ITenantStore)} of the host's own would have none to sign " +
-                "with. Take each tenant's keys from its settings or from a custodian.");
-        }
-
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+                $"declare, so a tenant read from an {nameof(ITenantStore)} of the host's own would have none to sign " +
+                "with. Take each tenant's keys from its settings or from a custodian.")
+            : ValidateOptionsResult.Success;
     }
 }

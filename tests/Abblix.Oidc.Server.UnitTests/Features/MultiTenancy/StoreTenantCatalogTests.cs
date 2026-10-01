@@ -39,8 +39,13 @@ public class StoreTenantCatalogTests
 
         public TaskCompletionSource? HoldNextReading { get; set; }
 
+        private int _readings;
+
+        public int Readings => Volatile.Read(ref _readings);
+
         public async Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _readings);
             IReadOnlyCollection<StoredTenant> held = [..Tenants];
             if (HoldNextReading is { } hold)
             {
@@ -242,22 +247,48 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
-    /// An id the store holds twice names no one tenant, so neither is served, whatever checks the host keeps; the
-    /// other tenants are.
+    /// An id the store holds twice, or a tenant with no id, names no one tenant, so it is left out and logged,
+    /// whatever checks the host keeps; the other tenants are served.
     /// </summary>
     [Fact]
-    public async Task AnIdHeldTwice_IsNotServed_WhateverTheChecks()
+    public async Task AnIdHeldTwice_OrNone_IsLeftOutAndLogged_WhateverTheChecks()
     {
         var ct = TestContext.Current.CancellationToken;
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
         _store.Tenants.Add(Stored("acme", "https://acme2.example.com"));
+        _store.Tenants.Add(Stored(null!, "https://nobody.example.com"));
         _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
         var catalog = new StoreTenantCatalog(_logger, _store, []);
 
         await catalog.RefreshAsync(ct);
 
         Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByAddressAsync("nobody.example.com", "/", ct));
         Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Equal(2, _logger.Errors.Count);
+    }
+
+    /// <summary>
+    /// Questions arriving together before anything read the store wait for one reading rather than each make
+    /// their own.
+    /// </summary>
+    [Fact]
+    public async Task QuestionsArrivingBeforeAnyReading_ShareOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var release = new TaskCompletionSource();
+        _store.HoldNextReading = release;
+        var catalog = Catalog();
+
+        var first = AskAsync();
+        var second = AskAsync();
+        release.SetResult();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, _store.Readings);
+
+        async Task<TenantDefinition?> AskAsync() => await catalog.FindByIdAsync("acme", ct);
     }
 
     /// <summary>

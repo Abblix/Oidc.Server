@@ -741,26 +741,6 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// With tenants read from a store of the host's own, tenants the settings declare would never be served, so
-    /// startup refuses them rather than let them read as served.
-    /// </summary>
-    [Fact]
-    public void TenantsInTheSettings_BesideAStoreOfTheHostsOwn_AreRefusedAtStartup()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>();
-        services.AddIssuer();
-        services.AddAuthServiceJwt();
-        services.AddSingleton(Moq.Mock.Of<ITenantStore>());
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("would never be served", refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// Keys the server mints are kept for the tenants the settings declare, so a store of the host's own is
     /// refused with them at startup, rather than leave each tenant it holds without a key to sign with.
     /// </summary>

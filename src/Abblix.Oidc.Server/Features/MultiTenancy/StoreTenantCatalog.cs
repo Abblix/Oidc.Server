@@ -69,7 +69,19 @@ public sealed partial class StoreTenantCatalog(
         var previous = Volatile.Read(ref _reading);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
-        var refusals = (
+
+        // A tenant without an id, or an id held twice, names no one tenant, whatever checks the host keeps
+        var unnamed =
+            from tenant in stored
+            group tenant by tenant.Tenant.Id ?? string.Empty into same
+            where same.Key.Length == 0 || same.Count() > 1
+            select new TenantRefusal(
+                [same.Key],
+                same.Key.Length == 0
+                    ? "A tenant the store holds has no id."
+                    : $"The tenant id '{same.Key}' is held more than once.");
+
+        var refusals = unnamed.Concat(
             from check in checks
             from refusal in check.Check([..stored.Select(tenant => tenant.Tenant)])
             select refusal
@@ -78,14 +90,8 @@ public sealed partial class StoreTenantCatalog(
         foreach (var refusal in refusals.Where(refusal => previous?.Refused.Contains(refusal.Message) != true))
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
 
-        // An id held twice names no one tenant, whichever checks the host keeps
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
-        var served = stored
-            .Where(tenant => !refused.Contains(tenant.Tenant.Id))
-            .GroupBy(tenant => tenant.Tenant.Id, StringComparer.Ordinal)
-            .Where(same => same.Count() == 1)
-            .Select(same => same.Single())
-            .ToArray();
+        var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id ?? string.Empty)).ToArray();
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
