@@ -42,13 +42,28 @@ public sealed partial class StoreTenantCatalog(
         ILookup<string, Served> ByHost,
         IReadOnlySet<string> Refused);
 
+    // One reading at a time: a slower reading begun earlier would otherwise replace a newer one when it ends
+    private readonly SemaphoreSlim _readingOne = new(1, 1);
+
     private Reading? _reading;
-    private Task? _firstReading;
 
     /// <summary>
     /// Reads the store again and serves what the checks let through.
     /// </summary>
     public async Task RefreshAsync(CancellationToken cancellationToken)
+    {
+        await _readingOne.WaitAsync(cancellationToken);
+        try
+        {
+            await ReadAsync(cancellationToken);
+        }
+        finally
+        {
+            _readingOne.Release();
+        }
+    }
+
+    private async Task ReadAsync(CancellationToken cancellationToken)
     {
         var listed = await store.ListAsync(cancellationToken);
         var previous = Volatile.Read(ref _reading);
@@ -63,8 +78,14 @@ public sealed partial class StoreTenantCatalog(
         foreach (var refusal in refusals.Where(refusal => previous?.Refused.Contains(refusal.Message) != true))
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
 
+        // An id held twice names no one tenant, whichever checks the host keeps
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
-        var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
+        var served = stored
+            .Where(tenant => !refused.Contains(tenant.Tenant.Id))
+            .GroupBy(tenant => tenant.Tenant.Id, StringComparer.Ordinal)
+            .Where(same => same.Count() == 1)
+            .Select(same => same.Single())
+            .ToArray();
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
@@ -99,15 +120,24 @@ public sealed partial class StoreTenantCatalog(
             : null;
 
     /// <summary>
-    /// The last reading, made on the first question when nothing has refreshed the catalog yet.
+    /// The last reading, made on the first question when nothing has refreshed the catalog yet - as in a container
+    /// whose hosted services never ran. A reading that fails is not kept, so the next question reads again.
     /// </summary>
     private async ValueTask<Reading> ReadingAsync(CancellationToken cancellationToken)
     {
         if (Volatile.Read(ref _reading) is { } reading)
             return reading;
 
-        await LazyInitializer.EnsureInitialized(ref _firstReading, () => RefreshAsync(CancellationToken.None))
-            .WaitAsync(cancellationToken);
+        await _readingOne.WaitAsync(cancellationToken);
+        try
+        {
+            if (Volatile.Read(ref _reading) is null)
+                await ReadAsync(cancellationToken);
+        }
+        finally
+        {
+            _readingOne.Release();
+        }
 
         return Volatile.Read(ref _reading)!;
     }

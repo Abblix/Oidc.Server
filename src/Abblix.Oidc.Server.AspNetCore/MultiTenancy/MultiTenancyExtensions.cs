@@ -59,6 +59,7 @@ public static class MultiTenancyExtensions
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantListValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantRegistriesValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantStoreValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantOwnedOptionsValidator>(),
             ServiceDescriptor.Singleton<ITenantsCheck, TenantDefinitionsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, TenantSettingsCheck>(),
@@ -68,7 +69,8 @@ public static class MultiTenancyExtensions
         services.AddHttpContextAccessor();
         services.TryAddSingleton<ITenantStore, OptionsTenantStore>();
         services.TryAddSingleton<StoreTenantCatalog>();
-        services.TryAddSingleton<ITenantCatalog>(serviceProvider => serviceProvider.GetRequiredService<StoreTenantCatalog>());
+        services.TryAddSingleton<ITenantCatalog>(
+            serviceProvider => serviceProvider.GetRequiredService<StoreTenantCatalog>());
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantCatalogRefreshService>());
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();

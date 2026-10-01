@@ -94,13 +94,16 @@ public class TenantDefinitionsCheckTests
             StringComparison.Ordinal);
 
     /// <summary>
-    /// The store of tenants is read again every period, so a period that is not positive is refused at startup.
+    /// The store of tenants is read again every period by a timer, so a period it cannot keep is refused at
+    /// startup.
     /// </summary>
-    [Fact]
-    public void ARefreshPeriodThatIsNotPositive_IsRefused()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(60)] // longer than the timer reading the store accepts
+    public void ARefreshPeriodTheTimerCannotKeep_IsRefused(int days)
     {
         var result = new TenantListValidator([])
-            .Validate(null, new MultiTenancyOptions { RefreshEvery = TimeSpan.Zero });
+            .Validate(null, new MultiTenancyOptions { RefreshEvery = TimeSpan.FromDays(days) });
 
         Assert.Contains(nameof(MultiTenancyOptions.RefreshEvery), result.FailureMessage, StringComparison.Ordinal);
     }

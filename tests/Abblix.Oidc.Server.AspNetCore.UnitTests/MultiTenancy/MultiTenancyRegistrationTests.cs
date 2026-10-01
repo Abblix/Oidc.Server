@@ -634,7 +634,9 @@ public class MultiTenancyRegistrationTests
     /// <summary>
     /// A container minting its keys, with rings that hold, for each partition, a key whose id is the partition.
     /// </summary>
-    private static ServiceProvider MintingKeys(params TenantDefinition[] tenants)
+    private static ServiceProvider MintingKeys(params TenantDefinition[] tenants) => MintingKeys(_ => { }, tenants);
+
+    private static ServiceProvider MintingKeys(Action<IServiceCollection> host, params TenantDefinition[] tenants)
     {
         var rings = new Moq.Mock<IKeyRings>();
         rings.Setup(r => r.For(Moq.It.IsAny<string>())).Returns((string partition) =>
@@ -656,6 +658,7 @@ public class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
+        host(services);
         services.AddServerStorage().AddMultiTenancy(options =>
         {
             foreach (var tenant in tenants)
@@ -735,6 +738,40 @@ public class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
         Assert.Contains($"Tenant '{id}': the server mints the keys", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// With tenants read from a store of the host's own, tenants the settings declare would never be served, so
+    /// startup refuses them rather than let them read as served.
+    /// </summary>
+    [Fact]
+    public void TenantsInTheSettings_BesideAStoreOfTheHostsOwn_AreRefusedAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddSingleton(Moq.Mock.Of<ITenantStore>());
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("would never be served", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Keys the server mints are kept for the tenants the settings declare, so a store of the host's own is
+    /// refused with them at startup, rather than leave each tenant it holds without a key to sign with.
+    /// </summary>
+    [Fact]
+    public void MintedKeys_BesideAStoreOfTheHostsOwn_AreRefusedAtStartup()
+    {
+        using var provider = MintingKeys(services => services.AddSingleton(Moq.Mock.Of<ITenantStore>()));
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("would have none to sign with", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

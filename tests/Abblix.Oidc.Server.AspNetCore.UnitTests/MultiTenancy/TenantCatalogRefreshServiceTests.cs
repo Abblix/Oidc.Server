@@ -85,8 +85,13 @@ public class TenantCatalogRefreshServiceTests
         _catalog = new StoreTenantCatalog(NullLogger<StoreTenantCatalog>.Instance, _store, []);
     }
 
-    private TenantCatalogRefreshService Service()
-        => new(_logger, _catalog, Options.Create(new MultiTenancyOptions { RefreshEvery = Period }), _time);
+    private TenantCatalogRefreshService Service(ITenantCatalog? served = null)
+        => new(
+            _logger,
+            _catalog,
+            served ?? _catalog,
+            Options.Create(new MultiTenancyOptions { RefreshEvery = Period }),
+            _time);
 
     private static StoredTenant Stored(string id)
         => new(new TenantDefinition { Id = id, Issuer = $"https://{id}.example.com" }, "1");
@@ -141,6 +146,20 @@ public class TenantCatalogRefreshServiceTests
         Assert.Equal(2, _logger.Errors);
         Assert.NotNull(await _catalog.FindByIdAsync("acme", ct));
         await service.StopAsync(ct);
+    }
+
+    /// <summary>
+    /// A host serving tenants from a catalog of its own reads no store of tenants, so a store it never meant to
+    /// use cannot stop the server.
+    /// </summary>
+    [Fact]
+    public async Task UnderACatalogOfTheHostsOwn_TheStoreIsNotRead()
+    {
+        _store.FailWith = new InvalidOperationException("the store of tenants is unreachable");
+
+        await Service(served: Moq.Mock.Of<ITenantCatalog>()).StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, _store.Readings);
     }
 
     /// <summary>

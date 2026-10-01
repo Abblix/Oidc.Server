@@ -17,6 +17,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// It names the tenants each refusal is about, so whoever asks can decide what a refusal costs: the settings
 /// refuse to start, while a list read from a store leaves the refused tenants out.
+/// <para>
+/// A list read from a store is judged at every reading, so a check - and every check of the server's settings,
+/// a host's own among them, which judges each tenant's - runs once a period. One that throws instead of refusing
+/// fails the whole reading, and the server keeps serving the tenants it read last.
+/// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantsCheck

@@ -25,17 +25,40 @@ namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 /// </summary>
 public class StoreTenantCatalogTests
 {
-    /// <summary>A store whose tenants a test changes between readings, and can make unreadable.</summary>
+    /// <summary>
+    /// A store whose tenants a test changes between readings, can make unreadable, and can hold the next reading
+    /// back until the test lets it answer with what it held when asked.
+    /// </summary>
     private sealed class FakeStore : ITenantStore
     {
         public List<StoredTenant> Tenants { get; } = [];
 
         public Exception? FailWith { get; set; }
 
-        public Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
-            => FailWith is null
-                ? Task.FromResult<IReadOnlyCollection<StoredTenant>>([..Tenants])
-                : Task.FromException<IReadOnlyCollection<StoredTenant>>(FailWith);
+        public int FailingReadings { get; set; }
+
+        public TaskCompletionSource? HoldNextReading { get; set; }
+
+        public async Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<StoredTenant> held = [..Tenants];
+            if (HoldNextReading is { } hold)
+            {
+                HoldNextReading = null;
+                await hold.Task;
+            }
+
+            if (FailWith is not null)
+                throw FailWith;
+
+            if (FailingReadings > 0)
+            {
+                FailingReadings--;
+                throw new InvalidOperationException("the store of tenants did not answer this once");
+            }
+
+            return held;
+        }
     }
 
     /// <summary>Counts the records of refused tenants.</summary>
@@ -179,6 +202,62 @@ public class StoreTenantCatalogTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => catalog.RefreshAsync(ct));
 
         Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// A reading begun before a newer one does not replace it: they run one at a time, so a tenant created between
+    /// them stays served.
+    /// </summary>
+    [Fact]
+    public async Task AnOlderReading_DoesNotReplaceANewerOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        var release = new TaskCompletionSource();
+        _store.HoldNextReading = release;
+
+        var older = catalog.RefreshAsync(ct);
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var newer = catalog.RefreshAsync(ct);
+        release.SetResult();
+        await Task.WhenAll(older, newer);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// A first reading made on a question and failed is not kept: the next question reads the store again.
+    /// </summary>
+    [Fact]
+    public async Task AFailedFirstReading_IsNotKept()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.FailingReadings = 1;
+        var catalog = Catalog();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await catalog.FindByIdAsync("acme", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// An id the store holds twice names no one tenant, so neither is served, whatever checks the host keeps; the
+    /// other tenants are.
+    /// </summary>
+    [Fact]
+    public async Task AnIdHeldTwice_IsNotServed_WhateverTheChecks()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("acme", "https://acme2.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = new StoreTenantCatalog(_logger, _store, []);
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
     }
 
     /// <summary>

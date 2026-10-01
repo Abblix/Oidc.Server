@@ -28,12 +28,19 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 internal sealed partial class TenantCatalogRefreshService(
     ILogger<TenantCatalogRefreshService> logger,
     StoreTenantCatalog catalog,
+    ITenantCatalog served,
     IOptions<MultiTenancyOptions> options,
     TimeProvider timeProvider) : BackgroundService
 {
+    // A host serving tenants from a catalog of its own reads no store of tenants
+    private bool Serving => ReferenceEquals(served, catalog);
+
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
+        if (!Serving)
+            return;
+
         await catalog.RefreshAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }

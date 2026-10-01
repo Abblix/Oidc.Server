@@ -18,6 +18,10 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks) : IValidateOptions<MultiTenancyOptions>
 {
+    // The periods System.Threading.PeriodicTimer accepts
+    private static readonly TimeSpan ShortestPeriod = TimeSpan.FromMilliseconds(1);
+    private static readonly TimeSpan LongestPeriod = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
     {
@@ -27,11 +31,12 @@ public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks) : IVa
             select refusal.Message
         ).ToList();
 
-        if (options.RefreshEvery <= TimeSpan.Zero)
+        if (options.RefreshEvery < ShortestPeriod || options.RefreshEvery > LongestPeriod)
         {
             failures.Add(
-                $"{nameof(MultiTenancyOptions)}.{nameof(MultiTenancyOptions.RefreshEvery)} must be positive: it is " +
-                "how often the store of tenants is read again.");
+                $"{nameof(MultiTenancyOptions)}.{nameof(MultiTenancyOptions.RefreshEvery)} must lie between " +
+                $"{ShortestPeriod} and {LongestPeriod}: it is how often the store of tenants is read again, by a " +
+                "timer that accepts no other period.");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);

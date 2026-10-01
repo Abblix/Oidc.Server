@@ -93,7 +93,8 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
             select new TenantRefusal(
                 [..namers],
                 $"The custodian key '{namers.Key}' is named by the tenants " +
-                $"{string.Join(", ", namers.Select(id => $"'{id}'"))}; each tenant produces with keys of its own.");
+                $"{string.Join(", ", namers.Select(id => $"'{id}'"))}; " +
+                "each tenant produces with keys of its own.");
 
         return unnamed.Concat(shared);
     }
