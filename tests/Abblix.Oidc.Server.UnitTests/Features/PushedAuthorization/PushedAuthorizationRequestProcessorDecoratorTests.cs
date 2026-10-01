@@ -38,7 +38,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         _decorator = new PushedAuthorizationRequestProcessorDecorator(_inner.Object, _storage.Object);
     }
 
-    private static ValidAuthorizationRequest CreateValidRequest(Uri? requestUri)
+    private static ValidAuthorizationRequest CreateValidRequest(Uri? requestUri, DateTimeOffset? promptedAt = null)
     {
         var model = new AuthorizationRequest
         {
@@ -47,6 +47,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [Scopes.OpenId],
             PushedRequestUri = requestUri,
+            PromptedAt = promptedAt,
         };
         var context = new AuthorizationValidationContext(model)
         {
@@ -87,6 +88,24 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         await _decorator.ProcessAsync(request);
 
         _storage.Verify(s => s.TryGetAsync(It.IsAny<Uri>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A request coming back from the login or account-creation page and moving on to another page leaves the
+    /// request_uri of the page it came back from behind: the next page has a request_uri of its own, and the one it
+    /// came back with would otherwise let the end user's browser skip signing in again until it expires.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ReturnFromPromptedPageSentOnward_ConsumesRequestUri()
+    {
+        var requestUri = new Uri("urn:ietf:params:oauth:request_uri:login-page");
+        var request = CreateValidRequest(requestUri, promptedAt: DateTimeOffset.UnixEpoch);
+        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(new LoginRequired(request.Model));
+        _storage.Setup(s => s.TryGetAsync(requestUri, true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        await _decorator.ProcessAsync(request);
+
+        _storage.Verify(s => s.TryGetAsync(requestUri, true), Times.Once);
     }
 
     /// <summary>

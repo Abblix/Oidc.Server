@@ -17,7 +17,8 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// authorization request processor. Once processing yields a terminal success - an authorization code or
 /// token has been minted - the <c>request_uri</c> is removed from storage so it cannot be replayed within
 /// its remaining time-to-live. Interactive continuations (login, consent, account selection) leave it in
-/// place so the user agent can re-enter the authorization endpoint with the same <c>request_uri</c>.
+/// place so the user agent can re-enter the authorization endpoint with the same <c>request_uri</c>, except
+/// the one a request came back with from the login or account-creation page, which it is done with.
 /// </summary>
 /// <param name="inner">The authorization request processor being decorated.</param>
 /// <param name="authorizationRequestStorage">The storage backing pushed authorization requests, from which
@@ -39,7 +40,10 @@ public class PushedAuthorizationRequestProcessorDecorator(
         // Consume the request_uri only on a terminal success: PushedRequestFetcher carries the URN forward
         // onto the resolved request (surfaced as ValidAuthorizationRequest.RequestUri) and deliberately does
         // not consume on fetch, so multi-step UI re-reads the same URN until a code or token is issued here.
-        if (response is SuccessfullyAuthenticated &&
+        // A request coming back from the login or account-creation page is done with the request_uri it came back
+        // with whatever it is answered: a next page gets a request_uri of its own, and this one would let the end
+        // user's browser come back past signing in until it expires.
+        if ((response is SuccessfullyAuthenticated || request.Model.PromptedAt.HasValue) &&
             request.RequestUri is { } requestUri &&
             requestUri.OriginalString.StartsWith(RequestUrn.Prefix))
         {

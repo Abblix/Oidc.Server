@@ -539,6 +539,36 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// Of two sessions, the one opened since the end user was sent away is the one the request proceeds with,
+    /// rather than the end user being asked to choose between it and one opened before.
+    /// </summary>
+    [Fact]
+    public async Task PromptLogin_WithSessionsOpenedBeforeAndSince_ProceedsWithSessionSince()
+    {
+        var before = CreateAuthSession(sessionId: "before", authTime: _timeProvider.GetUtcNow());
+        _timeProvider.Advance(TimeSpan.FromMinutes(1));
+        var promptedAt = _timeProvider.GetUtcNow();
+        _timeProvider.Advance(TimeSpan.FromMinutes(1));
+        var since = CreateAuthSession(sessionId: "since", authTime: _timeProvider.GetUtcNow());
+        var request = CreateRequest(prompt: Prompts.Login, promptedAt: promptedAt);
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { before, since }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, since))
+            .ReturnsAsync(CreateConsents());
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.Equal(since.SessionId, Assert.IsType<SuccessfullyAuthenticated>(result).SessionId);
+    }
+
+    /// <summary>
     /// A session opened in the same second the end user was sent away counts as opened for the request: the
     /// moment a session was authenticated is kept to the second, so a finer comparison would send back an end
     /// user who logged in at once.
