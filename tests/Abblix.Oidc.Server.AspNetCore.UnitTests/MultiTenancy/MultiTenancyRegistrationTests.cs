@@ -1089,6 +1089,64 @@ public class MultiTenancyRegistrationTests
         Assert.Same(acme.Clients, provider.GetRequiredService<IIssuerSettings>().Clients);
     }
 
+    /// <summary>
+    /// A tenant whose definition changes while the server runs - read again from a store of tenants - is served
+    /// the clients the new definition declares: one it dropped no longer authenticates, one it added does.
+    /// </summary>
+    [Fact]
+    public async Task ATenantsChangedDefinition_ServesTheClientsItNowDeclares()
+    {
+        TenantDefinition Acme(string clientId)
+            => new() { Id = "acme", Issuer = AcmeIssuer, Clients = [new ClientInfo(clientId)] };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddClientInformation();
+        services.AddServerStorage().AddMultiTenancy(_ => { });
+        using var provider = services.BuildServiceProvider();
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+
+        EnterTenant(provider, Acme("before"));
+        Assert.NotNull(await clients.TryFindClientAsync("before"));
+
+        EnterTenant(provider, Acme("after"));
+        Assert.Null(await clients.TryFindClientAsync("before"));
+        Assert.NotNull(await clients.TryFindClientAsync("after"));
+    }
+
+    /// <summary>
+    /// The default client store follows each tenant's definition under multi-tenancy, whichever of the two calls
+    /// comes first, and reads a server's clients once without it, as before; the store finding clients is the one
+    /// keeping them.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void TheDefaultClientStore_FollowsTenants_OnlyUnderMultiTenancy(bool multiTenancy, bool clientsFirst)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        if (clientsFirst)
+            services.AddClientInformation();
+        if (multiTenancy)
+            services.AddServerStorage().AddMultiTenancy(_ => { });
+        if (!clientsFirst)
+            services.AddClientInformation();
+        using var provider = services.BuildServiceProvider();
+
+        var finding = provider.GetRequiredService<IClientInfoProvider>();
+        Assert.Same(finding, provider.GetRequiredService<IClientInfoManager>());
+        Assert.Equal(
+            multiTenancy ? "ReloadableClientInfoStorage" : "ClientInfoStorage",
+            finding.GetType().Name);
+    }
+
     [Fact]
     public void EachTenant_KeepsAValueOfItsOwn_AndNoTenantGetsNone()
     {
