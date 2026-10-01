@@ -51,6 +51,10 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string Acme = "/tenants/acme";
     private const string Globex = "/tenants/globex";
     private const string MtlsHost = "https://mtls.example.com";
+
+    // A mutual-TLS host declared in Unicode, and the ASCII form a client's Host header carries it in
+    private const string UnicodeMtlsHost = "https://мтлс.example.com";
+    private const string UnicodeMtlsHostInAscii = "xn--k1abqc.example.com";
     private const string ClientId = "shared-client-id";
     private const string AcmeOnlyClientId = "acme-only-client-id";
     private const string PairwiseClientId = "pairwise-client-id";
@@ -58,6 +62,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     private const string AcmeScope = "acme:read";
     private const string PushPath = "/connect/par";
     private const string TokenPath = "/connect/token";
+    private const string ConfigurationPath = "/.well-known/openid-configuration";
     private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
     private const string AcmeResource = "https://api.acme.example";
     [SuppressMessage("Minor Code Smell", "S1075",
@@ -122,6 +127,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 Clients = [Client(ClientId), PairwiseClient()],
                 LoginUri = new Uri("/sign-in", UriKind.Relative),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+                MtlsBaseUri = new Uri(UnicodeMtlsHost),
                 PairwiseSubject = new PairwiseSubjectSettings
                 {
                     Salt = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
@@ -294,14 +300,14 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     public async Task ATenantsMutualTlsAliases_AreOnItsHost_AndServeThatTenant()
     {
         var configuration = JsonNode.Parse(await Http.GetStringAsync(
-            Acme + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+            Acme + ConfigurationPath, TestContext.Current.CancellationToken))!;
 
         var alias = configuration[ConfigurationResponse.Parameters.MtlsEndpointAliases]!
             [ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
         Assert.Equal(new Uri(MtlsHost + Acme + TokenPath), new Uri(alias));
 
         var atTheAliasHost = JsonNode.Parse(await Http.GetStringAsync(
-            MtlsHost + Acme + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+            MtlsHost + Acme + ConfigurationPath, TestContext.Current.CancellationToken))!;
         Assert.Equal(Host + Acme, atTheAliasHost[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
 
         // Fetched on the mutual-TLS host, the document still sends a client without a certificate to the issuer's
@@ -323,7 +329,7 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         string mtlsHost)
     {
         using var request = new HttpRequestMessage(
-            HttpMethod.Get, MtlsHost + Acme + "/.well-known/openid-configuration");
+            HttpMethod.Get, MtlsHost + Acme + ConfigurationPath);
         request.Headers.Host = mtlsHost;
         using var response = await Http.SendAsync(request, TestContext.Current.CancellationToken);
         var configuration = JsonNode.Parse(
@@ -335,12 +341,30 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A tenant declaring its mutual-TLS host in Unicode is reached there in the ASCII form, and the document fetched
+    /// there names the ordinary endpoints on the issuer's host.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentFetchedOnAMutualTlsHostDeclaredInUnicode_NamesTheOrdinaryEndpointsOnTheIssuersHost()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, MtlsHost + Globex + ConfigurationPath);
+        request.Headers.Host = UnicodeMtlsHostInAscii;
+        using var response = await Http.SendAsync(request, TestContext.Current.CancellationToken);
+        var configuration = JsonNode.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+
+        Assert.Equal(Host + Globex, configuration[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
+        var tokenEndpoint = configuration[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
+        Assert.Equal(new Uri(Host + Globex + TokenPath), new Uri(tokenEndpoint));
+    }
+
+    /// <summary>
     /// The keys <paramref name="tenant"/> publishes at the JWKS address its discovery document names.
     /// </summary>
     private async Task<RsaJsonWebKey[]> PublishedKeysAsync(string tenant)
     {
         var configuration = JsonNode.Parse(await Http.GetStringAsync(
-            tenant + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+            tenant + ConfigurationPath, TestContext.Current.CancellationToken))!;
         var jwks = await Http.GetStringAsync(
             configuration[ConfigurationResponse.Parameters.JwksUri]!.GetValue<string>(),
             TestContext.Current.CancellationToken);
