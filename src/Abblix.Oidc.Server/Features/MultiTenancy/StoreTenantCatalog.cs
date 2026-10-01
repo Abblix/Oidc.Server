@@ -22,7 +22,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
-/// <param name="checks">The checks of the tenant list.</param>
+/// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
+/// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class StoreTenantCatalog(
     ILogger<StoreTenantCatalog> logger,
