@@ -10,6 +10,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http.Headers;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -48,7 +49,8 @@ public class RegistrationManagementAcrossReloadTests
         NullLogger<ReloadableClientInfoStorage>.Instance,
         _settings,
         new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
+        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>(),
+        new SingleIssuerLocal<Lock>());
 
     private ClientInfoStorage DefaultStore() => new(
         _settings,

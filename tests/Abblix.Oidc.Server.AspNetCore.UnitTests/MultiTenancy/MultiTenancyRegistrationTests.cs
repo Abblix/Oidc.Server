@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Threading;
@@ -1282,6 +1283,70 @@ public class MultiTenancyRegistrationTests
 
         EnterTenant(provider, await Served(provider, store, kept, "3"));
         Assert.NotNull(await clients.TryFindClientAsync("kept"));
+    }
+
+    /// <summary>
+    /// Clients a definition declares, whose reading, once armed, stops until the test lets it go on: it holds the
+    /// store mid-way through building them.
+    /// </summary>
+    private sealed class HeldClients(params ClientInfo[] clients) : IEnumerable<ClientInfo>
+    {
+        public bool Armed { get; set; }
+        public SemaphoreSlim Reached { get; } = new(0);
+        public SemaphoreSlim Released { get; } = new(0);
+
+        public IEnumerator<ClientInfo> GetEnumerator()
+        {
+            if (Armed)
+            {
+                Armed = false;
+                Reached.Release();
+                Released.Wait();
+            }
+
+            return ((IEnumerable<ClientInfo>)clients).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// A registration under an id the served definition configures, decided by a request holding the former one
+    /// while the clients of the served one are being built, is answered as not made rather than kept and then
+    /// dropped by that build.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationDuringTheBuildOfTheClients_IsAnsweredByThem()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var former = await Served(provider, store, AcmeWith(), "1");
+        EnterTenant(provider, former);
+        Assert.Null(await clients.TryFindClientAsync("taken"));
+
+        var held = new HeldClients(new ClientInfo("taken") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
+        var current = await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
+        held.Armed = true;
+        var building = Task.Run(async () =>
+        {
+            EnterTenant(provider, current);
+            return await clients.TryFindClientAsync("taken");
+        });
+        await held.Reached.WaitAsync(TestContext.Current.CancellationToken);
+
+        var registering = Task.Run(async () =>
+        {
+            EnterTenant(provider, former);
+            return await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id"));
+        });
+        await Task.WhenAny(registering, Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken));
+        held.Released.Release();
+
+        Assert.NotNull(await building);
+        Assert.False(await registering);
     }
 
     /// <summary>

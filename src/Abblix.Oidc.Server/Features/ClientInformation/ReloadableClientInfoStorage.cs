@@ -25,16 +25,23 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// right after the write and answered as not made. So a registrant choosing an id ahead of the administrator is never
 /// served in the configured client's place, and does not come back once the settings let the id go. Every
 /// registration dropped this way is logged, a write answered as not made included.
+/// <para>
+/// The clients of an issuer are built one build at a time, and a write rechecks the id against them only once no
+/// build is under way, so a write decided while the clients are being built is judged by what that build
+/// configures, rather than answered as made and then dropped by it.
+/// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
 /// <param name="configured">The clients each issuer's settings configure.</param>
 /// <param name="registered">The clients registration added or changed at each issuer.</param>
+/// <param name="turns">What each issuer's builds of its clients, and the reads waiting for them, take turns on.</param>
 internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
-    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered)
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered,
+    IIssuerLocal<Lock> turns)
     : IClientInfoStore
 {
     private Dictionary<string, ClientInfo> Configured
@@ -42,10 +49,15 @@ internal partial class ReloadableClientInfoStorage(
         get
         {
             var clients = settings.Clients;
-            return configured.GetOrCreate(clients, () => Evicting(
-                clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
+            lock (Turn)
+            {
+                return configured.GetOrCreate(clients, () => Evicting(
+                    clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
+            }
         }
     }
+
+    private Lock Turn => turns.GetOrCreate(null, () => new Lock());
 
     /// <summary>
     /// Drops every registration stored under an id <paramref name="clients"/> configure, as the store first reads
