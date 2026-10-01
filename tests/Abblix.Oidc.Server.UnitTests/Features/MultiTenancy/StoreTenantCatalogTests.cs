@@ -247,19 +247,20 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
-    /// An id the store holds twice, or a tenant with no id, names no one tenant, so it is left out and logged,
-    /// whatever checks the host keeps; the other tenants are served.
+    /// An id the store holds twice, or a tenant with no id, is left out and logged once, reading after reading,
+    /// while the other tenants are served.
     /// </summary>
     [Fact]
-    public async Task AnIdHeldTwice_OrNone_IsLeftOutAndLogged_WhateverTheChecks()
+    public async Task AnIdHeldTwice_OrNone_IsLeftOut_ReadingAfterReading()
     {
         var ct = TestContext.Current.CancellationToken;
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
         _store.Tenants.Add(Stored("acme", "https://acme2.example.com"));
         _store.Tenants.Add(Stored(null!, "https://nobody.example.com"));
         _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
-        var catalog = new StoreTenantCatalog(_logger, _store, []);
+        var catalog = Catalog();
 
+        await catalog.RefreshAsync(ct);
         await catalog.RefreshAsync(ct);
 
         Assert.Null(await catalog.FindByIdAsync("acme", ct));

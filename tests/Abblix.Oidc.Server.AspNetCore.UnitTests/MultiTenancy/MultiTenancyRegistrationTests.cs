@@ -741,6 +741,29 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A store of the host's own beside tenants the settings declare starts, as long as each tenant's keys come
+    /// from its settings: whether that store serves them too is the host's composition.
+    /// </summary>
+    [Fact]
+    public void AStoreOfTheHostsOwn_BesideTenantsInTheSettings_Starts()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddSingleton(Moq.Mock.Of<ITenantStore>());
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
+    /// <summary>
     /// Keys the server mints are kept for the tenants the settings declare, so a store of the host's own is
     /// refused with them at startup, rather than leave each tenant it holds without a key to sign with.
     /// </summary>

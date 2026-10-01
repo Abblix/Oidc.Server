@@ -69,19 +69,7 @@ public sealed partial class StoreTenantCatalog(
         var previous = Volatile.Read(ref _reading);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
-
-        // A tenant without an id, or an id held twice, names no one tenant, whatever checks the host keeps
-        var unnamed =
-            from tenant in stored
-            group tenant by tenant.Tenant.Id ?? string.Empty into same
-            where same.Key.Length == 0 || same.Count() > 1
-            select new TenantRefusal(
-                [same.Key],
-                same.Key.Length == 0
-                    ? "A tenant the store holds has no id."
-                    : $"The tenant id '{same.Key}' is held more than once.");
-
-        var refusals = unnamed.Concat(
+        var refusals = (
             from check in checks
             from refusal in check.Check([..stored.Select(tenant => tenant.Tenant)])
             select refusal
@@ -91,7 +79,7 @@ public sealed partial class StoreTenantCatalog(
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
 
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
-        var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id ?? string.Empty)).ToArray();
+        var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
@@ -118,8 +106,12 @@ public sealed partial class StoreTenantCatalog(
     /// <summary>
     /// The definition already served for <paramref name="fresh"/>'s tenant when the store holds it unchanged.
     /// </summary>
+    /// <remarks>
+    /// It runs before the checks, so it meets a tenant the store holds with no id, which the checks refuse.
+    /// </remarks>
     private static StoredTenant? Unchanged(Reading? previous, StoredTenant fresh)
-        => previous?.ById.GetValueOrDefault(fresh.Tenant.Id) is { } held &&
+        => fresh.Tenant.Id is { } id &&
+           previous?.ById.GetValueOrDefault(id) is { } held &&
            held.Version == fresh.Version &&
            held.Tenant.Generation == fresh.Tenant.Generation
             ? held
