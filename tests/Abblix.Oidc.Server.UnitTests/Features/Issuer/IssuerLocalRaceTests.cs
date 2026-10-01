@@ -68,7 +68,10 @@ public class IssuerLocalRaceTests
         public ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
             => ValueTask.FromResult<TenantDefinition?>(null);
 
-        public ValueTask<TenantDefinition?> FindByAddressAsync(string host, string path, CancellationToken cancellationToken)
+        public ValueTask<TenantDefinition?> FindByAddressAsync(
+            string host,
+            string path,
+            CancellationToken cancellationToken)
             => ValueTask.FromResult<TenantDefinition?>(null);
     }
 

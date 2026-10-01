@@ -7,8 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -127,7 +127,8 @@ public class IssuerReloadTests
             {
                 Armed = false;
                 Reached.Release();
-                Released.Wait(Patience);
+                if (!Released.Wait(Patience))
+                    throw new TimeoutException("The test never let the held build go on.");
             }
 
             return ((IEnumerable<ClientInfo>)clients).GetEnumerator();
@@ -150,7 +151,7 @@ public class IssuerReloadTests
         options.Reload(new OidcOptions { Clients = held });
         held.Armed = true;
         var building = Task.Run(() => clients.TryFindClientAsync("other"));
-        await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
+        Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
 
         options.Reload(new OidcOptions());
         Assert.True(await clients.TryAddClientAsync(Registration("freed")));

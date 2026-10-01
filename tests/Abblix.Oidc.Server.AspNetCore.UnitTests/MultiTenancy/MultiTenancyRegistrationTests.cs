@@ -1183,11 +1183,17 @@ public class MultiTenancyRegistrationTests
         return served;
     }
 
+    // Declares no clients at all, so it hands out the empty list every such definition shares
+    private static TenantDefinition AcmeWithoutClients() => new() { Id = "acme", Issuer = AcmeIssuer };
+
     private static TenantDefinition AcmeWith(params string[] clientIds) => new()
     {
         Id = "acme",
         Issuer = AcmeIssuer,
-        Clients = [..clientIds.Select(id => new ClientInfo(id) { TokenEndpointAuthMethod = ClientAuthenticationMethods.None })],
+        Clients =
+        [
+            ..clientIds.Select(id => new ClientInfo(id) { TokenEndpointAuthMethod = ClientAuthenticationMethods.None }),
+        ],
     };
 
     /// <summary>
@@ -1255,12 +1261,12 @@ public class MultiTenancyRegistrationTests
         using var provider = ServingFrom(store);
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
-        EnterTenant(provider, await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer }, "1"));
+        EnterTenant(provider, await Served(provider, store, AcmeWithoutClients(), "1"));
         Assert.Null(await clients.TryFindClientAsync("removed"));
         EnterTenant(provider, await Served(provider, store, AcmeWith("removed"), "2"));
         Assert.NotNull(await clients.TryFindClientAsync("removed"));
 
-        EnterTenant(provider, await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer }, "3"));
+        EnterTenant(provider, await Served(provider, store, AcmeWithoutClients(), "3"));
         Assert.Null(await clients.TryFindClientAsync("removed"));
     }
 
@@ -1304,7 +1310,8 @@ public class MultiTenancyRegistrationTests
             {
                 Armed = false;
                 Reached.Release();
-                Released.Wait(Patience);
+                if (!Released.Wait(Patience))
+                    throw new TimeoutException("The test never let the held build go on.");
             }
 
             return ((IEnumerable<ClientInfo>)clients).GetEnumerator();
@@ -1330,15 +1337,17 @@ public class MultiTenancyRegistrationTests
         EnterTenant(provider, former);
         Assert.Null(await clients.TryFindClientAsync("taken"));
 
-        var held = new HeldClients(new ClientInfo("taken") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
-        var current = await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
+        var held = new HeldClients(
+            new ClientInfo("taken") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
+        var current = await Served(
+            provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
         held.Armed = true;
         var building = Task.Run(async () =>
         {
             EnterTenant(provider, current);
             return await clients.TryFindClientAsync("taken");
         });
-        await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
+        Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
 
         var registering = Task.Run(async () =>
         {
@@ -1411,15 +1420,17 @@ public class MultiTenancyRegistrationTests
 
         EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
         Assert.Null(await clients.TryFindClientAsync("freed"));
-        var held = new HeldClients(new ClientInfo("freed") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
-        var former = await Served(provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
+        var held = new HeldClients(
+            new ClientInfo("freed") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
+        var former = await Served(
+            provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
         held.Armed = true;
         var building = Task.Run(async () =>
         {
             EnterTenant(provider, former);
             return await clients.TryFindClientAsync("other");
         });
-        await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
+        Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
 
         var current = await Served(provider, store, AcmeWith(), "3");
         var registered = await Task.Run(async () =>
@@ -1458,9 +1469,86 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A store handing the former definition back in a reading the checks refuse leaves the tenant unserved, with no
-    /// clients in force, so a request still holding the former definition does not drop a client registered since
-    /// under the id it configures.
+    /// A request holding a definition the served one replaced finds, under an id both configure, the configured
+    /// client rather than a registration made before either took the id.
+    /// </summary>
+    [Fact]
+    public async Task RequestHoldingReplacedDefinition_FindsConfiguredClientOverRegistration()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
+        Assert.Null(await clients.TryFindClientAsync("other"));
+        Assert.True(await manager.TryAddClientAsync(
+            new RegisteredClient(new ClientInfo("taken") { ClientName = "registrant" }, "token-id")));
+        var replaced = await Served(provider, store, AcmeWith("taken"), "2");
+        await Served(provider, store, AcmeWith("taken", "more"), "3");
+
+        EnterTenant(provider, replaced);
+        var found = await clients.TryFindClientAsync("taken");
+
+        Assert.NotEqual("registrant", found?.ClientName);
+    }
+
+    /// <summary>
+    /// A request begun before the served definition took an id does not find, under it, a registration made before;
+    /// the lookup drops it, as the settings now configure the id.
+    /// </summary>
+    [Fact]
+    public async Task RequestBegunBeforeIdWasTaken_DoesNotFindRegistrationUnderIt()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var former = await Served(provider, store, AcmeWith(), "1");
+        EnterTenant(provider, former);
+        Assert.Null(await clients.TryFindClientAsync("other"));
+        Assert.True(await manager.TryAddClientAsync(
+            new RegisteredClient(new ClientInfo("taken") { ClientName = "registrant" }, "token-id")));
+        await Served(provider, store, AcmeWith("taken"), "2");
+
+        EnterTenant(provider, former);
+
+        Assert.Null(await clients.TryFindClientAsync("taken"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync("taken"));
+    }
+
+    /// <summary>
+    /// A registration written by a request holding a definition that configures its id is answered as not made while
+    /// the tenant is refused, rather than made and then dropped once the tenant is served again.
+    /// </summary>
+    [Fact]
+    public async Task RegistrationWhileTenantRefused_UnderIdItsDefinitionConfigures_IsNotMade()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var held = await Served(provider, store, AcmeWith("taken"), "1");
+
+        // Globex claims acme's issuer, so the checks refuse both
+        store.Tenants =
+        [
+            new StoredTenant(held, "1"),
+            new StoredTenant(new TenantDefinition { Id = "globex", Issuer = AcmeIssuer }, "1"),
+        ];
+        await catalog.RefreshAsync(CancellationToken.None);
+        Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
+
+        EnterTenant(provider, held);
+        Assert.False(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id")));
+    }
+
+    /// <summary>
+    /// A store handing the former definition back in a reading the checks refuse leaves the tenant unserved, and a
+    /// request still holding the former definition, answered with what was built from it, does not drop a client
+    /// registered since under the id it configures.
     /// </summary>
     [Fact]
     public async Task RefusedRollback_KeepsRegistrationMadeSince()
@@ -1495,8 +1583,8 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A tenant the store no longer holds has no clients in force, so a request holding its former definition does
-    /// not drop a client registered under the id that definition configures.
+    /// A tenant the store no longer holds answers a request holding its former definition with what was built from
+    /// it, and drops no client registered since under the id that definition configures.
     /// </summary>
     [Fact]
     public async Task DroppedTenant_KeepsRegistrationMadeSince()
