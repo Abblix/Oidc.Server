@@ -27,6 +27,13 @@ public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks) : IVa
             select refusal.Message
         ).ToList();
 
+        if (options.RefreshEvery <= TimeSpan.Zero)
+        {
+            failures.Add(
+                $"{nameof(MultiTenancyOptions)}.{nameof(MultiTenancyOptions.RefreshEvery)} must be positive: it is " +
+                "how often the store of tenants is read again.");
+        }
+
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 }

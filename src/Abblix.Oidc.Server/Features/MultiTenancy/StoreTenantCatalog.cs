@@ -1,0 +1,114 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Logging;
+
+namespace Abblix.Oidc.Server.Features.MultiTenancy;
+
+/// <summary>
+/// The tenants a store of tenants holds, as last read: the checks of the tenant list judge each reading, and the
+/// tenants they refuse are left out and logged while the rest are served.
+/// </summary>
+/// <remarks>
+/// Asked on every request, static files included, so it answers from the last reading and never from the store.
+/// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
+/// from it is not built again.
+/// </remarks>
+/// <param name="logger">Records the tenants left out.</param>
+/// <param name="store">Where the tenants are read from.</param>
+/// <param name="checks">The checks of the tenant list.</param>
+[Experimental(MultiTenancyDiagnostics.Experimental)]
+public sealed partial class StoreTenantCatalog(
+    ILogger<StoreTenantCatalog> logger,
+    ITenantStore store,
+    IEnumerable<ITenantsCheck> checks) : ITenantCatalog
+{
+    /// <summary>A tenant and where it is served.</summary>
+    private sealed record Served(TenantAddress Address, TenantDefinition Tenant);
+
+    /// <summary>One reading of the store: the tenants served, by id and by host.</summary>
+    /// <param name="ById">The tenants served, by id.</param>
+    /// <param name="ByHost">The tenants of each host, the longest issuer path first, so the first one covering a
+    /// path is the match.</param>
+    /// <param name="Refused">What the checks refused in this reading, so the next one logs only what is new.</param>
+    private sealed record Reading(
+        IReadOnlyDictionary<string, StoredTenant> ById,
+        ILookup<string, Served> ByHost,
+        IReadOnlySet<string> Refused);
+
+    private Reading? _reading;
+    private Task? _firstReading;
+
+    /// <summary>
+    /// Reads the store again and serves what the checks let through.
+    /// </summary>
+    public async Task RefreshAsync(CancellationToken cancellationToken)
+    {
+        var listed = await store.ListAsync(cancellationToken);
+        var previous = Volatile.Read(ref _reading);
+
+        var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
+        var refusals = (
+            from check in checks
+            from refusal in check.Check([..stored.Select(tenant => tenant.Tenant)])
+            select refusal
+        ).ToArray();
+
+        foreach (var refusal in refusals.Where(refusal => previous?.Refused.Contains(refusal.Message) != true))
+            LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
+
+        var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
+        var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
+
+        Volatile.Write(ref _reading, new Reading(
+            served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
+            served
+                .SelectMany(tenant => TenantAddress.AllOf(tenant.Tenant)
+                    .Select(address => new Served(address, tenant.Tenant)))
+                .OrderByDescending(entry => entry.Address.Path.Length)
+                .ToLookup(entry => entry.Address.Host, StringComparer.Ordinal),
+            refusals.Select(refusal => refusal.Message).ToHashSet(StringComparer.Ordinal)));
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
+        => (await ReadingAsync(cancellationToken)).ById.GetValueOrDefault(tenantId)?.Tenant;
+
+    /// <inheritdoc />
+    public async ValueTask<TenantDefinition?> FindByAddressAsync(
+        string host,
+        string path,
+        CancellationToken cancellationToken)
+        => (await ReadingAsync(cancellationToken)).ByHost[TenantHost.Normalize(host)]
+            .FirstOrDefault(entry => entry.Address.Covers(path))?.Tenant;
+
+    /// <summary>
+    /// The definition already served for <paramref name="fresh"/>'s tenant when the store holds it unchanged.
+    /// </summary>
+    private static StoredTenant? Unchanged(Reading? previous, StoredTenant fresh)
+        => previous?.ById.GetValueOrDefault(fresh.Tenant.Id) is { } held &&
+           held.Version == fresh.Version &&
+           held.Tenant.Generation == fresh.Tenant.Generation
+            ? held
+            : null;
+
+    /// <summary>
+    /// The last reading, made on the first question when nothing has refreshed the catalog yet.
+    /// </summary>
+    private async ValueTask<Reading> ReadingAsync(CancellationToken cancellationToken)
+    {
+        if (Volatile.Read(ref _reading) is { } reading)
+            return reading;
+
+        await LazyInitializer.EnsureInitialized(ref _firstReading, () => RefreshAsync(CancellationToken.None))
+            .WaitAsync(cancellationToken);
+
+        return Volatile.Read(ref _reading)!;
+    }
+}

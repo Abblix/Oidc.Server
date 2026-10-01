@@ -20,4 +20,10 @@ public sealed class MultiTenancyOptions
     /// The tenants this deployment serves, each reached at its issuer.
     /// </summary>
     public List<TenantDefinition> Tenants { get; set; } = [];
+
+    /// <summary>
+    /// How often the server reads the store of tenants again, which bounds how long a tenant created, changed or
+    /// removed on another instance takes to reach this one.
+    /// </summary>
+    public TimeSpan RefreshEvery { get; set; } = TimeSpan.FromMinutes(1);
 }

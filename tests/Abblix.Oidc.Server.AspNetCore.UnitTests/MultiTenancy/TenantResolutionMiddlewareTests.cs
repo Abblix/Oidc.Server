@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -74,7 +75,10 @@ public class TenantResolutionMiddlewareTests
                     context.Request.Path.Value ?? string.Empty);
                 return thrownDownstream is null ? Task.CompletedTask : Task.FromException(thrownDownstream);
             },
-            new OptionsTenantCatalog(Options.Create(Declared)));
+            new StoreTenantCatalog(
+                NullLogger<StoreTenantCatalog>.Instance,
+                new OptionsTenantStore(Options.Create(Declared)),
+                []));
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Host = new HostString(host);

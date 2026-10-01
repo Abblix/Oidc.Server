@@ -94,6 +94,18 @@ public class TenantDefinitionsCheckTests
             StringComparison.Ordinal);
 
     /// <summary>
+    /// The store of tenants is read again every period, so a period that is not positive is refused at startup.
+    /// </summary>
+    [Fact]
+    public void ARefreshPeriodThatIsNotPositive_IsRefused()
+    {
+        var result = new TenantListValidator([])
+            .Validate(null, new MultiTenancyOptions { RefreshEvery = TimeSpan.Zero });
+
+        Assert.Contains(nameof(MultiTenancyOptions.RefreshEvery), result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A refusal names the tenants it is about: a tenant's own mistake names that tenant alone, a conflict every
     /// party to it, so a list read from a store can leave out exactly those.
     /// </summary>

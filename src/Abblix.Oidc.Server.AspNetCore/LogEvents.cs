@@ -26,5 +26,8 @@ internal static class LogEvents
 
         /// <summary>An OpenID endpoint reached while tenant resolution is not in the pipeline.</summary>
         public const int ResolutionNotInPipeline = Base;
+
+        /// <summary>A reading of the store of tenants that failed after startup.</summary>
+        public const int CatalogRefreshFailed = Base + 1;
     }
 }
