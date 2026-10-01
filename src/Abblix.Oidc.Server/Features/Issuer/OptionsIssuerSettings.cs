@@ -34,6 +34,9 @@ internal sealed class OptionsIssuerSettings(
     public string Id => string.Empty;
 
     /// <inheritdoc />
+    public string KeyPartition => KeyRingOptions.DefaultPartition;
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => options.CurrentValue.Clients;
 
     /// <inheritdoc />

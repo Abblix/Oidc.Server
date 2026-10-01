@@ -279,8 +279,8 @@ public static class ExternalKeysServiceCollectionExtensions
                     ring.Partitions.Distinct(StringComparer.Ordinal).Count() == ring.Partitions.Count &&
                     ring.Partitions.All(KeyRingOptions.IsPartitionName),
             $"{nameof(KeyRingOptions)}.{nameof(KeyRingOptions.Partitions)} must name at least one partition, each " +
-            "once, and each of letters, digits, '-' and '_' only: a partition's name goes in front of its entries' " +
-            "ids in the store.");
+            "once, and each of letters, digits, '-', '_' and '~' only: a partition's name goes in front of its " +
+            "entries' ids in the store.");
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
 

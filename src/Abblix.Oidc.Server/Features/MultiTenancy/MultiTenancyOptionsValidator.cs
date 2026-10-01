@@ -41,6 +41,13 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
             select $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' names a host with no ASCII form, " +
                    "which no request can carry.");
 
+        // It is part of the names the tenant's data and keys are kept under, which every store accepts in this form
+        failures.AddRange(
+            from tenant in options.Tenants
+            where !TenantKey.IsPartitionSegment(tenant.Generation)
+            select $"The generation '{tenant.Generation}' of tenant '{tenant.Id}' must hold only letters, digits, " +
+                   "'-' and '_'.");
+
         failures.AddRange(
             from tenant in options.Tenants
             group tenant by tenant.Id into same

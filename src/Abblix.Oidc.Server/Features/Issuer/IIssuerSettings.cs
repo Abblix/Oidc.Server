@@ -33,6 +33,11 @@ public interface IIssuerSettings
     string Id { get; }
 
     /// <summary>
+    /// The partition of the key ring that keeps the keys the server mints for the issuer.
+    /// </summary>
+    string KeyPartition { get; }
+
+    /// <summary>
     /// The clients registered with the issuer.
     /// </summary>
     IEnumerable<ClientInfo> Clients { get; }

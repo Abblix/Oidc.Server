@@ -35,6 +35,9 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
     public string Id => Tenant.Id;
 
     /// <inheritdoc />
+    public string KeyPartition => TenantKey.PartitionOf(Tenant);
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
 
     /// <inheritdoc />

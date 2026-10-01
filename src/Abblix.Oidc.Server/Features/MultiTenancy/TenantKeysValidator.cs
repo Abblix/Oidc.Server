@@ -100,13 +100,14 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IVal
     }
 
     /// <summary>
-    /// The server keeps each tenant's minted keys in the store under the tenant's id, so the id must be a name
-    /// the key ring accepts for its part of the store.
+    /// The server keeps each tenant's minted keys in the store under its id and generation, joined by a separator
+    /// the id may not hold, so the id must be a name the key ring accepts and must not spell another tenant's
+    /// partition.
     /// </summary>
     private static IEnumerable<string> PartitionsOf(MultiTenancyOptions tenants)
         =>
             from tenant in tenants.Tenants
-            where !KeyRingOptions.IsPartitionName(tenant.Id)
+            where !TenantKey.IsPartitionSegment(tenant.Id)
             select $"Tenant '{tenant.Id}': the server mints the keys and keeps each tenant's in the store under its " +
                    "id, so the id may hold only letters, digits, '-' and '_'.";
 }

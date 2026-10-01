@@ -39,7 +39,7 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     private readonly ConcurrentDictionary<object, byte> _handedOut = new(ReferenceEqualityComparer.Instance);
 
     private PartitionedRateLimiter<TResource> Current
-        => _limiters.GetOrAdd(TenantKey.CurrentTenantId(tenantAccessor), _ => new(Build)).Value;
+        => _limiters.GetOrAdd(TenantKey.CurrentSpace(tenantAccessor), _ => new(Build)).Value;
 
     /// <summary>
     /// A new limiter for a tenant, refused when it is one another tenant already holds.
