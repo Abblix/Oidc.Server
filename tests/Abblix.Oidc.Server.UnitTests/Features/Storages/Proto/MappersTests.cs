@@ -578,6 +578,19 @@ public class MappersTests
         Assert.Equal("en-GB", result.ClaimsLocales[0].Name);
     }
 
+    /// <summary>
+    /// The moment the server sent the end user to log in survives storage, or the request coming back from the
+    /// login page would be sent there again.
+    /// </summary>
+    [Fact]
+    public void AuthorizationRequestMapper_RoundTrips_PromptedAt()
+    {
+        var promptedAt = new DateTimeOffset(2026, 10, 1, 12, 30, 45, 500, TimeSpan.Zero);
+        var request = new AuthorizationRequest { Scope = [TestConstants.DefaultScope], PromptedAt = promptedAt };
+
+        Assert.Equal(promptedAt, request.ToProto().FromProto().PromptedAt);
+    }
+
     [Fact]
     public void AuthorizationRequestMapper_ToProto_HandlesMaxAge()
     {

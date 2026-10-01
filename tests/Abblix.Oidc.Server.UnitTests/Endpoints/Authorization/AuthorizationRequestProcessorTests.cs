@@ -117,7 +117,8 @@ public class AuthorizationRequestProcessorTests
         TimeSpan? defaultMaxAge = null,
         string[]? defaultAcrValues = null,
         string? idTokenHintSubject = null,
-        string? clientId = null)
+        string? clientId = null,
+        DateTimeOffset? promptedAt = null)
     {
         clientId ??= TestConstants.DefaultClientId;
 
@@ -131,6 +132,7 @@ public class AuthorizationRequestProcessorTests
             MaxAge = maxAge,
             AcrValues = acrValues,
             AuthorizationDetails = authorizationDetails,
+            PromptedAt = promptedAt,
         };
 
         var clientInfo = new ClientInfo(clientId)
@@ -485,6 +487,104 @@ public class AuthorizationRequestProcessorTests
 
         // Assert
         Assert.IsType<LoginRequired>(result);
+    }
+
+    /// <summary>
+    /// Sending the end user to log in or to create an account stamps the request with the moment it did, so the
+    /// request coming back from that page can tell a session opened for it from one that was already there.
+    /// </summary>
+    [Theory]
+    [InlineData(Prompts.Login)]
+    [InlineData(Prompts.Create)]
+    public async Task PromptLoginOrCreate_StampsRequestWhenSendingEndUser(string prompt)
+    {
+        var request = CreateRequest(prompt: prompt);
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { CreateAuthSession() }.ToAsyncEnumerable());
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.Equal(_timeProvider.GetUtcNow(), result.Model.PromptedAt);
+    }
+
+    /// <summary>
+    /// A request coming back from the login or account-creation page with a session opened after the server sent
+    /// the end user there proceeds with that session instead of sending the end user there again.
+    /// </summary>
+    [Theory]
+    [InlineData(Prompts.Login)]
+    [InlineData(Prompts.Create)]
+    public async Task PromptLoginOrCreate_WithSessionOpenedSincePrompted_Proceeds(string prompt)
+    {
+        var promptedAt = _timeProvider.GetUtcNow();
+        _timeProvider.Advance(TimeSpan.FromMinutes(1));
+        var session = CreateAuthSession(authTime: _timeProvider.GetUtcNow());
+        var request = CreateRequest(prompt: prompt, promptedAt: promptedAt);
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(CreateConsents());
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.IsType<SuccessfullyAuthenticated>(result);
+    }
+
+    /// <summary>
+    /// A session opened in the same second the end user was sent away counts as opened for the request: the
+    /// moment a session was authenticated is kept to the second, so a finer comparison would send back an end
+    /// user who logged in at once.
+    /// </summary>
+    [Fact]
+    public async Task PromptLogin_WithSessionOpenedInSameSecond_Proceeds()
+    {
+        var second = DateTimeOffset.FromUnixTimeSeconds(_timeProvider.GetUtcNow().ToUnixTimeSeconds());
+        var session = CreateAuthSession(authTime: second);
+        var request = CreateRequest(prompt: Prompts.Login, promptedAt: second.AddMilliseconds(500));
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(CreateConsents());
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("code");
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.IsType<SuccessfullyAuthenticated>(result);
+    }
+
+    /// <summary>
+    /// A request coming back with only a session opened before the server sent the end user away still asks for
+    /// login or account creation: that session is not the one the client asked for.
+    /// </summary>
+    [Theory]
+    [InlineData(Prompts.Login, typeof(LoginRequired))]
+    [InlineData(Prompts.Create, typeof(RegistrationRequired))]
+    public async Task PromptLoginOrCreate_WithOnlySessionOpenedBefore_AsksAgain(string prompt, Type expected)
+    {
+        var session = CreateAuthSession(authTime: _timeProvider.GetUtcNow());
+        _timeProvider.Advance(TimeSpan.FromMinutes(1));
+        var request = CreateRequest(prompt: prompt, promptedAt: _timeProvider.GetUtcNow());
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.IsType(expected, result);
     }
 
     /// <summary>

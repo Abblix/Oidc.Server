@@ -3,6 +3,7 @@ syntax = "proto3";
 option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 
 import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
 import "Features/Storages/Proto/RequestedClaims.proto";
 
 // Represents an authorization request for OpenID Connect or OAuth 2.0
@@ -84,4 +85,8 @@ message AuthorizationRequest {
   // persistence keeps byte-exact authorization_details until the front-channel
   // /authorize endpoint redeems the request_uri.
   optional string authorization_details_json = 23;
+
+  // When the server last sent the end user to log in or to create an account for this request,
+  // so the request coming back with a session authenticated since then proceeds
+  optional google.protobuf.Timestamp prompted_at = 24;
 }
