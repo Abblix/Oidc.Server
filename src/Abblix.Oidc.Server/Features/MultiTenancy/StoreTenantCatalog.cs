@@ -18,9 +18,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again. Every other definition is ordered after all served before it
-/// (<see cref="TenantDefinition.Revision"/>), so a request still holding an earlier one is answered with what the
-/// later one built.
+/// from it is not built again. What was built is built again only from the definition served now
+/// (<see cref="Serves"/>), so a request still holding one this catalog replaced is answered with what the served
+/// one built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -50,9 +50,6 @@ public sealed partial class StoreTenantCatalog(
 
     private Reading? _reading;
 
-    // Counts the readings, so each definition first served in a later one is ordered after every earlier one
-    private long _readings;
-
     /// <summary>
     /// Reads the store again and serves what the checks let through.
     /// </summary>
@@ -74,8 +71,7 @@ public sealed partial class StoreTenantCatalog(
         var listed = await store.ListAsync(cancellationToken);
         var previous = Volatile.Read(ref _reading);
 
-        var revision = ++_readings;
-        var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? Revised(fresh, revision)).ToArray();
+        var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
         var refusals = (
             from check in checks
             from refusal in check.Check([..stored.Select(tenant => tenant.Tenant)])
@@ -125,13 +121,17 @@ public sealed partial class StoreTenantCatalog(
             : null;
 
     /// <summary>
-    /// <paramref name="fresh"/>, its definition ordered after every one served before it.
+    /// Whether <paramref name="tenant"/> - this very definition object - is the one served for its id now, or null
+    /// when nothing has been read yet.
     /// </summary>
-    private static StoredTenant Revised(StoredTenant fresh, long revision)
-    {
-        fresh.Tenant.Revision = revision;
-        return fresh;
-    }
+    /// <remarks>
+    /// Answered from the last reading, so a tenant the checks refused or the store dropped is served by no
+    /// definition, and a request still holding one gets false.
+    /// </remarks>
+    internal bool? Serves(TenantDefinition tenant)
+        => Volatile.Read(ref _reading) is { } reading
+            ? ReferenceEquals(reading.ById.GetValueOrDefault(tenant.Id)?.Tenant, tenant)
+            : null;
 
     /// <summary>
     /// The last reading, made on the first question when nothing has refreshed the catalog yet - as in a container

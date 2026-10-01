@@ -18,8 +18,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Outside any tenant there is no value to hand out, and the call refuses rather than answer with another tenant's.
 /// </remarks>
+/// <param name="tenantAccessor">Resolves the current tenant.</param>
+/// <param name="catalog">The catalog the tenants are resolved from, asked whether it still serves the definition a
+/// request holds.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor) : IIssuerLocal<T> where T : class
+public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenantCatalog catalog) : IIssuerLocal<T>
+    where T : class
 {
     private readonly ConcurrentDictionary<string, Built> _values = new(StringComparer.Ordinal);
 
@@ -28,35 +32,40 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor) : IIssu
     /// Of two callers building a tenant's value at once, the one that stores it first wins and the other takes that
     /// value, so what either writes into it is kept.
     /// <para>
-    /// A request begun before the tenant's definition changed holds the former one to its end. The value is not
-    /// built back from a definition the server's catalog served before the one it was built from
-    /// (<see cref="TenantDefinition.Revision"/>): that request is answered with the later value, rather than bring
-    /// the former definition back - and, for the clients, drop a registration made since under an id the later
-    /// one freed. A definition no such catalog ordered is told apart from the last one only by its source.
+    /// A request begun before the tenant's definition changed holds the former one to its end. The value is built
+    /// again only from the definition the server's own catalog serves now (<see cref="StoreTenantCatalog.Serves"/>):
+    /// a request holding any other is answered with the value held, rather than bring its definition back - and,
+    /// for the clients, drop a registration made since under an id the served one freed. A catalog of the host's
+    /// own cannot say, and its definitions build again on a changed source.
     /// </para>
     /// </remarks>
     public T GetOrCreate(object? source, Func<T> create)
     {
         var tenant = TenantKey.CurrentTenant(tenantAccessor);
         var space = TenantKey.SpaceOf(tenant);
-        var revision = tenant.Revision;
         while (true)
         {
             var found = _values.TryGetValue(space, out var built);
-            if (found && (ReferenceEquals(built!.Source, source) || revision < built.Revision))
+            if (found && (ReferenceEquals(built!.Source, source) || !MayBuildFrom(tenant)))
                 return built.Value;
 
-            var fresh = new Built(source, revision, create());
+            var fresh = new Built(source, create());
             if (found ? _values.TryUpdate(space, fresh, built!) : _values.TryAdd(space, fresh))
                 return fresh.Value;
         }
     }
 
+    /// <summary>
+    /// Whether a value may be built again from <paramref name="tenant"/>: the server's own catalog says whether it
+    /// serves that definition now; any other catalog cannot, and its definition builds as before.
+    /// </summary>
+    private bool MayBuildFrom(TenantDefinition tenant)
+        => catalog is not StoreTenantCatalog own || own.Serves(tenant) != false;
+
     // A class rather than a record: replacing a tenant's value compares the one it replaces by reference
-    private sealed class Built(object? source, long revision, T value)
+    private sealed class Built(object? source, T value)
     {
         public object? Source { get; } = source;
-        public long Revision { get; } = revision;
         public T Value { get; } = value;
     }
 }

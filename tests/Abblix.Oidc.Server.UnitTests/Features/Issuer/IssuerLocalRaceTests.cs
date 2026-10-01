@@ -37,7 +37,7 @@ public class IssuerLocalRaceTests
     [Fact]
     public async Task UnderATenant_TwoFirstCallers_ShareOneValue()
     {
-        var local = new TenantIssuerLocal<object>(new OneTenant());
+        var local = new TenantIssuerLocal<object>(new OneTenant(), new NoCatalog());
 
         var (first, second) = await BuildAtOnceAsync(local);
 
@@ -61,6 +61,15 @@ public class IssuerLocalRaceTests
         var first = Task.Run(() => local.GetOrCreate(null, Build));
         var second = Task.Run(() => local.GetOrCreate(null, Build));
         return (await first, await second);
+    }
+
+    private sealed class NoCatalog : ITenantCatalog
+    {
+        public ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
+            => ValueTask.FromResult<TenantDefinition?>(null);
+
+        public ValueTask<TenantDefinition?> FindByAddressAsync(string host, string path, CancellationToken cancellationToken)
+            => ValueTask.FromResult<TenantDefinition?>(null);
     }
 
     private sealed class OneTenant : ITenantAccessor

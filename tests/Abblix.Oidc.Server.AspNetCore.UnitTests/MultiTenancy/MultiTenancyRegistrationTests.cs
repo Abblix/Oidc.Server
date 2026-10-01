@@ -1128,7 +1128,25 @@ public class MultiTenancyRegistrationTests
             => Task.FromResult(Tenants);
     }
 
-    private static ServiceProvider ServingFrom(ChangingTenantStore store)
+    /// <summary>
+    /// A catalog of the host's own: it passes on what the server's catalog serves until the host hands out a
+    /// definition of its own.
+    /// </summary>
+    private sealed class HostCatalog(StoreTenantCatalog inner) : ITenantCatalog
+    {
+        public TenantDefinition? Own { get; set; }
+
+        public async ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
+            => Own ?? await inner.FindByIdAsync(tenantId, cancellationToken);
+
+        public async ValueTask<TenantDefinition?> FindByAddressAsync(
+            string host,
+            string path,
+            CancellationToken cancellationToken)
+            => Own ?? await inner.FindByAddressAsync(host, path, cancellationToken);
+    }
+
+    private static ServiceProvider ServingFrom(ChangingTenantStore store, bool hostCatalog = false)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -1136,6 +1154,12 @@ public class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantStore>(store);
+        if (hostCatalog)
+        {
+            services.AddSingleton<HostCatalog>();
+            services.AddSingleton<ITenantCatalog>(serviceProvider => serviceProvider.GetRequiredService<HostCatalog>());
+        }
+
         services.AddServerStorage().AddMultiTenancy(_ => { });
         return services.BuildServiceProvider();
     }
@@ -1212,7 +1236,7 @@ public class MultiTenancyRegistrationTests
         Assert.NotNull(await clients.TryFindClientAsync("last"));
 
         EnterTenant(provider, between);
-        await clients.TryFindClientAsync("between");
+        Assert.Null(await clients.TryFindClientAsync("between"));
 
         EnterTenant(provider, last);
         Assert.NotNull(await clients.TryFindClientAsync("last"));
@@ -1258,6 +1282,117 @@ public class MultiTenancyRegistrationTests
 
         EnterTenant(provider, await Served(provider, store, kept, "3"));
         Assert.NotNull(await clients.TryFindClientAsync("kept"));
+    }
+
+    /// <summary>
+    /// A store handing the former definition back in a reading the checks refuse leaves it unserved, so a request
+    /// still holding it does not drop a client registered since under the id it configures.
+    /// </summary>
+    [Fact]
+    public async Task ARefusedRollback_DoesNotLetARequestHoldingTheFormerDefinitionDropARegistration()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var former = await Served(provider, store, AcmeWith("freed"), "1");
+        EnterTenant(provider, former);
+        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+        var current = await Served(provider, store, AcmeWith(), "2");
+        EnterTenant(provider, current);
+        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+
+        // Globex claims acme's issuer, so the checks refuse both
+        store.Tenants =
+        [
+            new StoredTenant(former, "3"),
+            new StoredTenant(new TenantDefinition { Id = "globex", Issuer = AcmeIssuer }, "1"),
+        ];
+        await catalog.RefreshAsync(CancellationToken.None);
+        Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
+
+        EnterTenant(provider, former);
+        await clients.TryFindClientAsync("freed");
+
+        EnterTenant(provider, current);
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+    }
+
+    /// <summary>
+    /// A tenant the store no longer holds still answers a request holding its definition, without building from it
+    /// again and dropping a client registered under the id it configures.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheStoreDropped_DoesNotLetARequestHoldingItDropARegistration()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var former = await Served(provider, store, AcmeWith("freed"), "1");
+        EnterTenant(provider, former);
+        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+        var current = await Served(provider, store, AcmeWith(), "2");
+        EnterTenant(provider, current);
+        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+
+        store.Tenants = [];
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(CancellationToken.None);
+
+        EnterTenant(provider, former);
+        await clients.TryFindClientAsync("freed");
+
+        EnterTenant(provider, current);
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+    }
+
+    /// <summary>
+    /// Under a catalog of the host's own, a tenant the host hands a definition of its own is served the clients it
+    /// declares, though the server's catalog, still reading the store, served another definition before.
+    /// </summary>
+    [Fact]
+    public async Task UnderAHostCatalog_ADefinitionOfItsOwn_IsServedItsClients()
+    {
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(AcmeWith("stored"), "1")] };
+        using var provider = ServingFrom(store, hostCatalog: true);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(CancellationToken.None);
+        var catalog = provider.GetRequiredService<HostCatalog>();
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+
+        EnterTenant(provider, await catalog.FindByIdAsync("acme", CancellationToken.None));
+        Assert.NotNull(await clients.TryFindClientAsync("stored"));
+
+        catalog.Own = AcmeWith("own");
+        EnterTenant(provider, await catalog.FindByIdAsync("acme", CancellationToken.None));
+        Assert.NotNull(await clients.TryFindClientAsync("own"));
+    }
+
+    /// <summary>
+    /// One definition object served by the catalogs of two servers in one process, each reading its store in its
+    /// own order, leaves each server free to move on to the next definition it serves.
+    /// </summary>
+    [Fact]
+    public async Task ADefinitionServedByTwoServers_LeavesEachFreeToMoveOn()
+    {
+        var shared = AcmeWith("shared");
+        var firstStore = new ChangingTenantStore();
+        var secondStore = new ChangingTenantStore();
+        using var first = ServingFrom(firstStore);
+        using var second = ServingFrom(secondStore);
+        var clients = second.GetRequiredService<IClientInfoProvider>();
+
+        var sharedInSecond = await Served(second, secondStore, shared, "1");
+        foreach (var version in new[] { "1", "2", "3" })
+            await Served(first, firstStore, AcmeWith(version), version);
+        await Served(first, firstStore, shared, "4");
+        EnterTenant(second, sharedInSecond);
+        Assert.NotNull(await clients.TryFindClientAsync("shared"));
+
+        EnterTenant(second, await Served(second, secondStore, AcmeWith("later"), "2"));
+        Assert.NotNull(await clients.TryFindClientAsync("later"));
     }
 
     /// <summary>

@@ -39,23 +39,6 @@ public sealed class TenantDefinition
     /// </remarks>
     public string Generation { get; init; } = string.Empty;
 
-    private long _revision;
-
-    /// <summary>
-    /// Orders the definitions the server's own catalog serves: each one it starts serving gets a greater value than
-    /// every definition before it, and zero marks one that catalog never served.
-    /// </summary>
-    /// <remarks>
-    /// What is built from a tenant's definition is built again only from a later one, so a request still holding
-    /// an earlier definition does not bring it back. Read while a later reading of the store may set it again, as
-    /// it does when the store hands this very object back as a new version.
-    /// </remarks>
-    internal long Revision
-    {
-        get => Interlocked.Read(ref _revision);
-        set => Interlocked.Exchange(ref _revision, value);
-    }
-
     /// <summary>
     /// The tenant's issuer identifier, as it appears in every token the tenant issues and in its discovery
     /// document - and the address the tenant is served at.
