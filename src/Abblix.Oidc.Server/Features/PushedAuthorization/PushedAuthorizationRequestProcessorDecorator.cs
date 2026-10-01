@@ -6,9 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 
@@ -23,9 +25,15 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// <param name="inner">The authorization request processor being decorated.</param>
 /// <param name="authorizationRequestStorage">The storage backing pushed authorization requests, from which
 /// the consumed <c>request_uri</c> is removed on a terminal success.</param>
+/// <param name="consumedRequestUris">Records the flows that ended, so the other pages of one are refused.</param>
+/// <param name="options">How long a page of a flow can be presented.</param>
+/// <param name="timeProvider">Dates the end of a flow.</param>
 public class PushedAuthorizationRequestProcessorDecorator(
     IAuthorizationRequestProcessor inner,
-    IAuthorizationRequestStorage authorizationRequestStorage) : IAuthorizationRequestProcessor
+    IAuthorizationRequestStorage authorizationRequestStorage,
+    IConsumedRequestUriRegistry consumedRequestUris,
+    IOptions<OidcOptions> options,
+    TimeProvider timeProvider) : IAuthorizationRequestProcessor
 {
     /// <summary>
     /// Delegates to the wrapped processor and consumes the <c>request_uri</c> values the request is done with: on a
@@ -52,12 +60,17 @@ public class PushedAuthorizationRequestProcessorDecorator(
         }
 
         // The URN the request was first fetched under - usually the one the client pushed - outlives the pages the
-        // request went through, and is done with once a code or token is issued
-        if (response is SuccessfullyAuthenticated &&
-            request.Model.OriginRequestUri is { } originRequestUri &&
-            originRequestUri != request.RequestUri)
+        // request went through, and is done with once a code or token is issued. So are the pages it led to that the
+        // code did not come by, as a refresh of one made: each carries this URN, and the record refuses them while a
+        // page can still be presented.
+        if (response is SuccessfullyAuthenticated && request.Model.OriginRequestUri is { } originRequestUri)
         {
-            await authorizationRequestStorage.TryGetAsync(originRequestUri, shouldRemove: true);
+            if (originRequestUri != request.RequestUri)
+                await authorizationRequestStorage.TryGetAsync(originRequestUri, shouldRemove: true);
+
+            await consumedRequestUris.MarkConsumedAsync(
+                originRequestUri,
+                timeProvider.GetUtcNow() + options.Value.LoginSessionExpiresIn);
         }
 
         return response;

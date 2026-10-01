@@ -610,6 +610,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
         services.TryAddSingleton<IAuthorizationValueReuseDetector, AuthorizationValueReuseDetector>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
+        services.TryAddSingleton<IConsumedRequestUriRegistry, ConsumedRequestUriRegistry>();
         services.TryAddSingleton<ISessionClientRegistry, SessionClientRegistry>();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RecordLifetimeOptionsValidator>());

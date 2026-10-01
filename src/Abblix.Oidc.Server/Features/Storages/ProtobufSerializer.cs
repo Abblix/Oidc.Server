@@ -45,6 +45,7 @@ public class ProtobufSerializer : IBinarySerializer
         [typeof(Proto.SessionClientsGeneration)] = Proto.SessionClientsGeneration.Parser,
         [typeof(Proto.LogoutConfirmation)] = Proto.LogoutConfirmation.Parser,
         [typeof(Proto.NonceSecret)] = Proto.NonceSecret.Parser,
+        [typeof(Proto.ConsumedRequestUri)] = Proto.ConsumedRequestUri.Parser,
     };
 
     /// <summary>
@@ -79,6 +80,7 @@ public class ProtobufSerializer : IBinarySerializer
             Proto.SessionClientsGeneration sessionClientsGeneration => sessionClientsGeneration,
             Proto.LogoutConfirmation logoutConfirmation => logoutConfirmation,
             Proto.NonceSecret nonceSecret => nonceSecret,
+            Proto.ConsumedRequestUri consumedRequestUri => consumedRequestUri,
 
             _ => throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +

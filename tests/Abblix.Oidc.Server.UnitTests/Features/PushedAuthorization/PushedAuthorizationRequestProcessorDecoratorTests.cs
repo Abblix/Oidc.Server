@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -16,6 +17,7 @@ using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -29,13 +31,19 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
 {
     private readonly Mock<IAuthorizationRequestProcessor> _inner;
     private readonly Mock<IAuthorizationRequestStorage> _storage;
+    private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
     private readonly PushedAuthorizationRequestProcessorDecorator _decorator;
 
     public PushedAuthorizationRequestProcessorDecoratorTests()
     {
         _inner = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
         _storage = new Mock<IAuthorizationRequestStorage>(MockBehavior.Strict);
-        _decorator = new PushedAuthorizationRequestProcessorDecorator(_inner.Object, _storage.Object);
+        _decorator = new PushedAuthorizationRequestProcessorDecorator(
+            _inner.Object,
+            _storage.Object,
+            _consumedRequestUris.Object,
+            Options.Create(new OidcOptions()),
+            TimeProvider.System);
     }
 
     private static ValidAuthorizationRequest CreateValidRequest(
@@ -97,6 +105,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
 
         _storage.Verify(s => s.TryGetAsync(pageUri, true), Times.Once);
         _storage.Verify(s => s.TryGetAsync(pushedUri, true), Times.Once);
+        _consumedRequestUris.Verify(r => r.MarkConsumedAsync(pushedUri, It.IsAny<DateTimeOffset>()), Times.Once);
     }
 
     /// <summary>

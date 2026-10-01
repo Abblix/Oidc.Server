@@ -299,6 +299,86 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
     }
 
+    /// <summary>
+    /// Every login-page request_uri of one pushed request is refused once a code is issued on any of them: a refresh
+    /// of the login page made a sibling, and the flow they belong to is over.
+    /// </summary>
+    [Fact]
+    public async Task PushedRequest_SiblingPageRequestUri_AfterCodeIsIssued_IsRefused()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var pushedUri = await PushedLoginRequestAsync(client, discovery);
+
+        var first = await RedirectOf(client, pushedUri);
+        var sibling = await RedirectOf(client, pushedUri);
+        endUser.SignInAgain();
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, first));
+
+        var replay = await client.GetAsync(
+            Authorize(
+                discovery,
+                TestConstants.ConfidentialClientId,
+                QueryValue(sibling, AuthorizationRequest.Parameters.RequestUri)!),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+    }
+
+    /// <summary>
+    /// A pushed request_uri still serves the flow after the end user came back from the login page without signing
+    /// in, as a refresh or the back button presents it again.
+    /// </summary>
+    [Fact]
+    public async Task PushedRequest_AfterReturnWithoutSigningIn_IsStillUsable()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var pushedUri = await PushedLoginRequestAsync(client, discovery);
+
+        var sentTo = await RedirectOf(client, pushedUri);
+        Assert.Equal(
+            LoginPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+
+        Assert.Equal(LoginPath, PathOf(await RedirectOf(client, pushedUri)));
+    }
+
+    /// <summary>
+    /// A pushed signed request object that went through the login page to a code cannot be presented again: the
+    /// request_uri it was pushed under is carried across the merge of the object and consumed with the code.
+    /// </summary>
+    [Fact]
+    public async Task PushedRequestObject_ThroughLoginPage_AfterCodeIsIssued_IsRefused()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, Prompts.Login);
+        var pushedUri = await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: true);
+
+        var sentTo = await RedirectOf(client, pushedUri);
+        endUser.SignInAgain();
+        AssertCode(await ReturnFromPage(client, discovery, clientId, sentTo));
+
+        var replay = await client.GetAsync(pushedUri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+    }
+
+    private static async Task<Uri> PushedLoginRequestAsync(HttpClient client, DiscoveryDocument discovery)
+    {
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
+        var pushed = await PushAuthorizationRequestAsync(client, discovery, parameters);
+        return Authorize(
+            discovery,
+            TestConstants.ConfidentialClientId,
+            pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task PromptLogin_ClaimingPromptedAtInQuery_IsSentToLogin()
     {

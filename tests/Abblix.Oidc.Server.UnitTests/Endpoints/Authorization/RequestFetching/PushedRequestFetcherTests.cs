@@ -31,6 +31,9 @@ public class PushedRequestFetcherTests
     private readonly Mock<IAuthorizationRequestStorage> _storage = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
 
+    // No flow has ended unless a test says so
+    private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
+
     private PushedRequestFetcher CreateFetcher(
         bool serverWideRequirement = false,
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
@@ -48,7 +51,8 @@ public class PushedRequestFetcherTests
             snapshot.Object,
             SingleIssuer.SettingsOf(snapshot.Object),
             _storage.Object,
-            _clientInfoProvider.Object);
+            _clientInfoProvider.Object,
+            _consumedRequestUris.Object);
     }
 
     private static AuthorizationRequest CreateRequest() => new()

@@ -53,6 +53,10 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     public string AuthorizationRequestKey(Uri requestUri)
         => $"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}";
 
+    /// <inheritdoc />
+    public string ConsumedRequestUriKey(Uri requestUri)
+        => $"Abblix.Oidc.Server:ConsumedPAR:{requestUri.OriginalString}";
+
     /// <summary>
     /// Generates a storage key for an authorized grant by authorization code.
     /// </summary>
