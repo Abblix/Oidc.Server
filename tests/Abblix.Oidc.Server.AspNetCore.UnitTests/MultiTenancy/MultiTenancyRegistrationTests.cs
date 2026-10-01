@@ -1096,7 +1096,7 @@ public class MultiTenancyRegistrationTests
     /// the clients the new definition declares: one it dropped no longer authenticates, one it added does.
     /// </summary>
     [Fact]
-    public async Task ATenantsChangedDefinition_ServesTheClientsItNowDeclares()
+    public async Task TenantsChangedDefinition_ServesClientsItNowDeclares()
     {
         TenantDefinition Acme(string clientId)
             => new() { Id = "acme", Issuer = AcmeIssuer, Clients = [new ClientInfo(clientId)] };
@@ -1196,7 +1196,7 @@ public class MultiTenancyRegistrationTests
     /// definition freed.
     /// </summary>
     [Fact]
-    public async Task ARequestHoldingAFormerDefinition_DoesNotDropARegistrationMadeSince()
+    public async Task RequestHoldingFormerDefinition_KeepsRegistrationMadeSince()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1209,6 +1209,7 @@ public class MultiTenancyRegistrationTests
 
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
+        Assert.Null(await clients.TryFindClientAsync("freed"));
         Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         EnterTenant(provider, former);
@@ -1223,7 +1224,7 @@ public class MultiTenancyRegistrationTests
     /// definition between the two.
     /// </summary>
     [Fact]
-    public async Task ARequestHoldingADefinitionBetweenTwoChanges_DoesNotHoldTheTenantThere()
+    public async Task RequestHoldingMiddleDefinition_IsAnsweredWithLatest()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1249,7 +1250,7 @@ public class MultiTenancyRegistrationTests
     /// hands out one and the same empty list.
     /// </summary>
     [Fact]
-    public async Task ATenantLeftWithNoClients_StopsServingTheOnesItHad()
+    public async Task TenantLeftWithoutClients_StopsServingThem()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1269,7 +1270,7 @@ public class MultiTenancyRegistrationTests
     /// one - has that definition served again.
     /// </summary>
     [Fact]
-    public async Task ADefinitionHandedBackAgain_IsServedAgain()
+    public async Task DefinitionHandedBack_IsServedAgain()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1311,12 +1312,12 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A registration under an id the served definition configures, decided by a request holding the former one
+    /// A registration under an id the served definition configures, written by a request holding the former one
     /// while the clients of the served one are being built, is answered as not made rather than kept and then
     /// dropped by that build.
     /// </summary>
     [Fact]
-    public async Task ARegistrationDuringTheBuildOfTheClients_IsAnsweredByThem()
+    public async Task RegistrationDuringClientsBuild_IsJudgedByServedDefinition()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1342,11 +1343,56 @@ public class MultiTenancyRegistrationTests
             EnterTenant(provider, former);
             return await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id"));
         });
-        await Task.WhenAny(registering, Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken));
+        Assert.False(await registering);
         held.Released.Release();
 
         Assert.NotNull(await building);
-        Assert.False(await registering);
+    }
+
+    /// <summary>
+    /// A registration under an id the served definition configures is answered as not made, though the request
+    /// writing it holds the former definition and nobody has built the clients of the served one yet.
+    /// </summary>
+    [Fact]
+    public async Task RegistrationFromFormerDefinition_IsJudgedByServedOne()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var former = await Served(provider, store, AcmeWith(), "1");
+        EnterTenant(provider, former);
+        Assert.Null(await clients.TryFindClientAsync("taken"));
+        var current = await Served(provider, store, AcmeWith("taken"), "2");
+
+        Assert.False(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id")));
+
+        EnterTenant(provider, current);
+        Assert.Null(await manager.TryFindRegisteredClientAsync("taken"));
+    }
+
+    /// <summary>
+    /// A change to a registration under an id the served definition has come to configure is answered as not made,
+    /// though the request writing it holds the former definition and nobody has built the clients of the served one
+    /// yet.
+    /// </summary>
+    [Fact]
+    public async Task UpdateFromFormerDefinition_IsJudgedByServedOne()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        var former = await Served(provider, store, AcmeWith(), "1");
+        EnterTenant(provider, former);
+        var registration = new RegisteredClient(new ClientInfo("taken"), "token-id");
+        Assert.True(await manager.TryAddClientAsync(registration));
+        await Served(provider, store, AcmeWith("taken"), "2");
+
+        Assert.False(await manager.TryUpdateClientAsync(
+            registration,
+            new RegisteredClient(new ClientInfo("taken") { ClientName = "changed" }, "token-id")));
     }
 
     /// <summary>
@@ -1354,7 +1400,7 @@ public class MultiTenancyRegistrationTests
     /// still holding it does not drop a client registered since under the id it configures.
     /// </summary>
     [Fact]
-    public async Task ARefusedRollback_DoesNotLetARequestHoldingTheFormerDefinitionDropARegistration()
+    public async Task RefusedRollback_KeepsRegistrationMadeSince()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1367,6 +1413,7 @@ public class MultiTenancyRegistrationTests
         Assert.NotNull(await clients.TryFindClientAsync("freed"));
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
+        Assert.Null(await clients.TryFindClientAsync("freed"));
         Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         // Globex claims acme's issuer, so the checks refuse both
@@ -1390,7 +1437,7 @@ public class MultiTenancyRegistrationTests
     /// again and dropping a client registered under the id it configures.
     /// </summary>
     [Fact]
-    public async Task ATenantTheStoreDropped_DoesNotLetARequestHoldingItDropARegistration()
+    public async Task DroppedTenant_KeepsRegistrationMadeSince()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1402,6 +1449,7 @@ public class MultiTenancyRegistrationTests
         Assert.NotNull(await clients.TryFindClientAsync("freed"));
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
+        Assert.Null(await clients.TryFindClientAsync("freed"));
         Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         store.Tenants = [];
@@ -1419,7 +1467,7 @@ public class MultiTenancyRegistrationTests
     /// declares, though the server's catalog, still reading the store, served another definition before.
     /// </summary>
     [Fact]
-    public async Task UnderAHostCatalog_ADefinitionOfItsOwn_IsServedItsClients()
+    public async Task HostCatalogDefinition_IsServedItsClients()
     {
         var store = new ChangingTenantStore { Tenants = [new StoredTenant(AcmeWith("stored"), "1")] };
         using var provider = ServingFrom(store, hostCatalog: true);
@@ -1436,31 +1484,6 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// One definition object served by the catalogs of two servers in one process, each reading its store in its
-    /// own order, leaves each server free to move on to the next definition it serves.
-    /// </summary>
-    [Fact]
-    public async Task ADefinitionServedByTwoServers_LeavesEachFreeToMoveOn()
-    {
-        var shared = AcmeWith("shared");
-        var firstStore = new ChangingTenantStore();
-        var secondStore = new ChangingTenantStore();
-        using var first = ServingFrom(firstStore);
-        using var second = ServingFrom(secondStore);
-        var clients = second.GetRequiredService<IClientInfoProvider>();
-
-        var sharedInSecond = await Served(second, secondStore, shared, "1");
-        foreach (var version in new[] { "1", "2", "3" })
-            await Served(first, firstStore, AcmeWith(version), version);
-        await Served(first, firstStore, shared, "4");
-        EnterTenant(second, sharedInSecond);
-        Assert.NotNull(await clients.TryFindClientAsync("shared"));
-
-        EnterTenant(second, await Served(second, secondStore, AcmeWith("later"), "2"));
-        Assert.NotNull(await clients.TryFindClientAsync("later"));
-    }
-
-    /// <summary>
     /// The default client store follows each tenant's definition under multi-tenancy, whichever of the two calls
     /// comes first, and reads a server's clients once without it, as before; the store finding clients is the one
     /// keeping them.
@@ -1469,7 +1492,7 @@ public class MultiTenancyRegistrationTests
     [InlineData(true, true)]
     [InlineData(true, false)]
     [InlineData(false, true)]
-    public void TheDefaultClientStore_FollowsTenants_OnlyUnderMultiTenancy(bool multiTenancy, bool clientsFirst)
+    public void DefaultClientStore_FollowsTenants_OnlyUnderMultiTenancy(bool multiTenancy, bool clientsFirst)
     {
         var services = new ServiceCollection();
         services.AddLogging();

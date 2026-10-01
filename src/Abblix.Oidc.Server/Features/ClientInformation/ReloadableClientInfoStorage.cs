@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -26,22 +27,20 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// served in the configured client's place, and does not come back once the settings let the id go. Every
 /// registration dropped this way is logged, a write answered as not made included.
 /// <para>
-/// The clients of an issuer are built one build at a time, and a write rechecks the id against them only once no
-/// build is under way, so a write decided while the clients are being built is judged by what that build
-/// configures, rather than answered as made and then dropped by it.
+/// A write is judged by the settings in force rather than by the clients built, so one decided by a request begun
+/// before the settings changed, or while the clients of the new ones are being built or before anybody built them,
+/// is answered by what the settings now configure.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
 /// <param name="configured">The clients each issuer's settings configure.</param>
 /// <param name="registered">The clients registration added or changed at each issuer.</param>
-/// <param name="turns">What each issuer's builds of its clients, and the reads waiting for them, take turns on.</param>
 internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
-    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered,
-    IIssuerLocal<Lock> turns)
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered)
     : IClientInfoStore
 {
     private Dictionary<string, ClientInfo> Configured
@@ -49,15 +48,10 @@ internal partial class ReloadableClientInfoStorage(
         get
         {
             var clients = settings.Clients;
-            lock (Turn)
-            {
-                return configured.GetOrCreate(clients, () => Evicting(
-                    clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
-            }
+            return configured.GetOrCreate(clients, () => Evicting(
+                clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
         }
     }
-
-    private Lock Turn => turns.GetOrCreate(null, () => new Lock());
 
     /// <summary>
     /// Drops every registration stored under an id <paramref name="clients"/> configure, as the store first reads
@@ -85,7 +79,7 @@ internal partial class ReloadableClientInfoStorage(
     /// by the eviction reading them brought about.</returns>
     private bool Recheck(RegisteredClient client)
     {
-        if (!IsConfigured(client.ClientInfo.ClientId))
+        if (!ConfiguredInForce(client.ClientInfo.ClientId))
             return false;
 
         Evict(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
@@ -97,6 +91,19 @@ internal partial class ReloadableClientInfoStorage(
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
     private bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
+
+    /// <summary>
+    /// Whether the settings in force configure <paramref name="clientId"/>, read from them rather than from the
+    /// clients built: a request begun before the settings changed holds the former ones, and the clients of the
+    /// current ones may not be built yet.
+    /// </summary>
+    private bool ConfiguredInForce(string clientId)
+    {
+#pragma warning disable ABXMT001
+        var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
+#pragma warning restore ABXMT001
+        return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

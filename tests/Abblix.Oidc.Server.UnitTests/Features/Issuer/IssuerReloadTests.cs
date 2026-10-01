@@ -9,7 +9,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -97,8 +96,7 @@ public class IssuerReloadTests
         logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
         new OptionsIssuerSettings(options),
         new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>(),
-        new SingleIssuerLocal<Lock>());
+        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
 
     private static ClientInfoStorage DefaultClientsOf(IOptionsMonitor<OidcOptions> options) => new(
         new OptionsIssuerSettings(options),

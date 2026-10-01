@@ -32,11 +32,11 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenant
     /// Of two callers building a tenant's value at once, the one that stores it first wins and the other takes that
     /// value, so what either writes into it is kept.
     /// <para>
-    /// A request begun before the tenant's definition changed holds the former one to its end. The value is built
-    /// again only from the definition the server's own catalog serves now (<see cref="StoreTenantCatalog.Serves"/>):
-    /// a request holding any other is answered with the value held, rather than bring its definition back - and,
-    /// for the clients, drop a registration made since under an id the served one freed. A catalog of the host's
-    /// own cannot say, and its definitions build again on a changed source.
+    /// A request begun before the tenant's definition changed holds the former one to its end. A value is replaced
+    /// only from the definition the server's own catalog serves now (<see cref="StoreTenantCatalog.Serves"/>): a
+    /// request holding any other is answered with the value held, rather than bring its definition back - and, for
+    /// the clients, drop a registration made since under an id the served one freed. Before that catalog has read
+    /// anything, and under any other catalog, a changed source decides alone.
     /// </para>
     /// </remarks>
     public T GetOrCreate(object? source, Func<T> create)

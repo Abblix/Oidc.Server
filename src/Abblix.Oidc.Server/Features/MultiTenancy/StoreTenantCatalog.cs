@@ -18,9 +18,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again. What was built is built again only from the definition served now
-/// (<see cref="Serves"/>), so a request still holding one this catalog replaced is answered with what the served
-/// one built.
+/// from it is not built again. What was built is replaced only from the definition served now
+/// (<see cref="Serves"/>), so a request still holding one this catalog replaced is answered with what was built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -131,6 +130,16 @@ public sealed partial class StoreTenantCatalog(
     internal bool? Serves(TenantDefinition tenant)
         => Volatile.Read(ref _reading) is { } reading
             ? ReferenceEquals(reading.ById.GetValueOrDefault(tenant.Id)?.Tenant, tenant)
+            : null;
+
+    /// <summary>
+    /// The definition served now for the tenant and generation of <paramref name="held"/>, or null when this catalog
+    /// serves none: nothing read yet, or the tenant refused, dropped or created again since.
+    /// </summary>
+    internal TenantDefinition? Serving(TenantDefinition held)
+        => Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant is { } served &&
+           served.Generation == held.Generation
+            ? served
             : null;
 
     /// <summary>
