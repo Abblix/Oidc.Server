@@ -12,27 +12,25 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses at startup a tenant declaring keys its server's placement never reads, and, with the keys held by a
+/// Refuses a tenant declaring keys its server's placement never reads, and, with the keys held by a
 /// custodian, a tenant naming no key there or one another tenant names; with the keys minted by the server, a tenant
 /// whose id cannot name its part of the store.
 /// </summary>
 /// <remarks>
 /// Whether a tenant whose keys come from its settings declares enough of them is judged with the rest of its
-/// settings, by the checks of the server's settings (<see cref="TenantSettingsValidator"/>).
+/// settings, by the checks of the server's settings (<see cref="TenantSettingsCheck"/>).
 /// </remarks>
 /// <param name="serviceProvider">The container the key provider is resolved from, once the settings are built.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IValidateOptions<MultiTenancyOptions>
+public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenantsCheck
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, MultiTenancyOptions tenants)
-    {
-        var failures = (serviceProvider.GetService<IAuthServiceKeysProvider>() switch
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants)
+        => serviceProvider.GetService<IAuthServiceKeysProvider>() switch
         {
             OidcOptionsKeysProvider => Unread(tenants, "the keys come from each tenant's settings",
                 nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys)),
@@ -46,22 +44,21 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IVal
 
             // A key provider of the host's own is refused under multi-tenancy by the check of the registries
             _ => [],
-        }).ToList();
-
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
-    }
+        };
 
     /// <summary>
     /// The key settings a tenant declares that the placement never reads: declared, they read as the keys the
     /// tenant produces with while it produces with others.
     /// </summary>
-    private static IEnumerable<string> Unread(MultiTenancyOptions tenants, string placement, params string[] read)
+    private static IEnumerable<TenantRefusal> Unread(IReadOnlyCollection<TenantDefinition> tenants, string placement, params string[] read)
         =>
-            from tenant in tenants.Tenants
+            from tenant in tenants
             from setting in Declared(tenant)
             where !read.Contains(setting, StringComparer.Ordinal)
-            select $"Tenant '{tenant.Id}': {nameof(TenantDefinition)}.{setting} is declared, but {placement}, " +
-                   "so it is never read.";
+            select TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': {nameof(TenantDefinition)}.{setting} is declared, but {placement}, " +
+                "so it is never read.");
 
     private static IEnumerable<string> Declared(TenantDefinition tenant)
     {
@@ -77,24 +74,27 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IVal
     /// Each tenant names keys in the custodian, and no key is named by two tenants: sharing one would let a party
     /// trusting one tenant's keys verify the other's tokens, which keys of their own exist to prevent.
     /// </summary>
-    private static IEnumerable<string> CustodianKeysOf(MultiTenancyOptions tenants)
+    private static IEnumerable<TenantRefusal> CustodianKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
     {
         var unnamed =
-            from tenant in tenants.Tenants
+            from tenant in tenants
             where tenant.CustodianKeys is null
-            select $"Tenant '{tenant.Id}': {ExternalKeysProvider.NoKeyNamed}";
+            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {ExternalKeysProvider.NoKeyNamed}");
 
         // A tenant may name one key for both roles, so each tenant counts once per key
         var shared =
-            from tenant in tenants.Tenants
+            from tenant in tenants
             where tenant.CustodianKeys is not null
             from keyName in new[] { tenant.CustodianKeys!.SigningKeyName, tenant.CustodianKeys.EncryptionKeyName }
                 .Distinct(StringComparer.Ordinal)
             where keyName is not null
             group tenant.Id by keyName into namers
             where namers.Count() > 1
-            select $"The custodian key '{namers.Key}' is named by the tenants {string.Join(", ", namers.Select(id => $"'{id}'"))}; " +
-                   "each tenant produces with keys of its own.";
+            select new TenantRefusal(
+                [..namers],
+                $"The custodian key '{namers.Key}' is named by the tenants " +
+                $"{string.Join(", ", namers.Select(id => $"'{id}'"))}; " +
+                "each tenant produces with keys of its own.");
 
         return unnamed.Concat(shared);
     }
@@ -104,10 +104,12 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IVal
     /// the id may not hold, so the id must be a name the key ring accepts and must not spell another tenant's
     /// partition.
     /// </summary>
-    private static IEnumerable<string> PartitionsOf(MultiTenancyOptions tenants)
+    private static IEnumerable<TenantRefusal> PartitionsOf(IReadOnlyCollection<TenantDefinition> tenants)
         =>
-            from tenant in tenants.Tenants
+            from tenant in tenants
             where !TenantKey.IsPartitionSegment(tenant.Id)
-            select $"Tenant '{tenant.Id}': the server mints the keys and keeps each tenant's in the store under its " +
-                   "id, so the id may hold only letters, digits, '-' and '_'.";
+            select TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': the server mints the keys and keeps each tenant's in the store under its " +
+                "id, so the id may hold only letters, digits, '-' and '_'.");
 }

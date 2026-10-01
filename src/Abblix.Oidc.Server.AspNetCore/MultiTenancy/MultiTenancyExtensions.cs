@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
@@ -55,16 +56,23 @@ public static class MultiTenancyExtensions
         services.AddOptions<KeyRingOptions>().Configure<IOptions<MultiTenancyOptions>>(
             (ring, tenants) => ring.Partitions = [..tenants.Value.Tenants.Select(TenantKey.PartitionOf)]);
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantListValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSettingsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantRegistriesValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantKeysValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantStoreValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantOwnedOptionsValidator>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantDefinitionsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantSettingsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantKeysCheck>(),
         ]);
 
         services.AddHttpContextAccessor();
-        services.TryAddSingleton<ITenantCatalog, OptionsTenantCatalog>();
+        services.TryAddSingleton<ITenantStore, OptionsTenantStore>();
+        services.TryAddSingleton<StoreTenantCatalog>();
+        services.TryAddSingleton<ITenantCatalog>(
+            serviceProvider => serviceProvider.GetRequiredService<StoreTenantCatalog>());
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantCatalogRefreshService>());
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIssuerProvider, TenantIssuerProvider>());
         services.Replace(ServiceDescriptor.Singleton<IIssuerSettings, TenantIssuerSettings>());

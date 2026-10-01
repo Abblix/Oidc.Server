@@ -634,7 +634,9 @@ public class MultiTenancyRegistrationTests
     /// <summary>
     /// A container minting its keys, with rings that hold, for each partition, a key whose id is the partition.
     /// </summary>
-    private static ServiceProvider MintingKeys(params TenantDefinition[] tenants)
+    private static ServiceProvider MintingKeys(params TenantDefinition[] tenants) => MintingKeys(_ => { }, tenants);
+
+    private static ServiceProvider MintingKeys(Action<IServiceCollection> host, params TenantDefinition[] tenants)
     {
         var rings = new Moq.Mock<IKeyRings>();
         rings.Setup(r => r.For(Moq.It.IsAny<string>())).Returns((string partition) =>
@@ -656,6 +658,7 @@ public class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
+        host(services);
         services.AddServerStorage().AddMultiTenancy(options =>
         {
             foreach (var tenant in tenants)
@@ -735,6 +738,43 @@ public class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
         Assert.Contains($"Tenant '{id}': the server mints the keys", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A store of the host's own beside tenants the settings declare starts, as long as each tenant's keys come
+    /// from its settings: whether that store serves them too is the host's composition.
+    /// </summary>
+    [Fact]
+    public void AStoreOfTheHostsOwn_BesideTenantsInTheSettings_Starts()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddIssuer();
+        services.AddAuthServiceJwt();
+        services.AddSingleton(Moq.Mock.Of<ITenantStore>());
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+    }
+
+    /// <summary>
+    /// Keys the server mints are kept for the tenants the settings declare, so a store of the host's own is
+    /// refused with them at startup, rather than leave each tenant it holds without a key to sign with.
+    /// </summary>
+    [Fact]
+    public void MintedKeys_BesideAStoreOfTheHostsOwn_AreRefusedAtStartup()
+    {
+        using var provider = MintingKeys(services => services.AddSingleton(Moq.Mock.Of<ITenantStore>()));
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("would have none to sign with", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

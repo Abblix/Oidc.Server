@@ -954,4 +954,21 @@ internal static class LogEvents
             public const int RegistrationEvicted = Base;
         }
     }
+
+    /// <summary>
+    /// Range 10700-10799: <c>Features/MultiTenancy</c> - what the server does with the tenants it reads.
+    /// </summary>
+    public static class MultiTenancy
+    {
+        /// <summary>
+        /// <c>Features/MultiTenancy/StoreTenantCatalog.cs</c> - tenants the checks of the tenant list leave out
+        /// (sub-range 10700-10719).
+        /// </summary>
+        public static class StoreTenantCatalog
+        {
+            private const int Base = 10700;
+
+            public const int TenantsLeftOut = Base;
+        }
+    }
 }

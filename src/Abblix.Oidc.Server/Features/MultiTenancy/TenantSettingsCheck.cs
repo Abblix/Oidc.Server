@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses at startup a tenant whose own settings the server's checks would refuse, naming the tenant.
+/// Refuses a tenant whose own settings the server's checks would refuse, naming the tenant.
 /// </summary>
 /// <remarks>
 /// Under multi-tenancy the settings a tenant declares are left unset on <see cref="OidcOptions"/>, so the checks
@@ -26,12 +26,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="options">The server's own settings.</param>
 /// <param name="validators">The checks of the server's settings.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantSettingsValidator(
+public sealed class TenantSettingsCheck(
     IOptions<OidcOptions> options,
-    IEnumerable<IValidateOptions<OidcOptions>> validators) : IValidateOptions<MultiTenancyOptions>
+    IEnumerable<IValidateOptions<OidcOptions>> validators) : ITenantsCheck
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, MultiTenancyOptions tenants)
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants)
     {
         OidcOptions server;
         try
@@ -41,11 +41,11 @@ public sealed class TenantSettingsValidator(
         catch (OptionsValidationException)
         {
             // The server's settings report their own refusal; thrown from here it would replace the tenant list's
-            return ValidateOptionsResult.Skip;
+            return [];
         }
 
-        var failures = (
-            from tenant in tenants.Tenants
+        return
+            from tenant in tenants
             let servedWith = ServedWith(server, tenant)
             from validator in validators
 
@@ -54,10 +54,7 @@ public sealed class TenantSettingsValidator(
             let result = validator.Validate(Options.DefaultName, servedWith)
             where result.Failed
             from failure in result.Failures ?? []
-            select $"Tenant '{tenant.Id}': {failure}"
-        ).ToList();
-
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {failure}");
     }
 
     private static OidcOptions ServedWith(OidcOptions server, TenantDefinition tenant)

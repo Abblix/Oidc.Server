@@ -11,19 +11,16 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// The tenants a deployment serves.
+/// Why a check of a tenant list refuses some of its tenants.
 /// </summary>
+/// <param name="TenantIds">The tenants refused: one for a mistake of its own, every party to a conflict between
+/// several.</param>
+/// <param name="Message">What is wrong, naming the tenants.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class MultiTenancyOptions
+public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string Message)
 {
     /// <summary>
-    /// The tenants this deployment serves, each reached at its issuer.
+    /// A refusal of <paramref name="tenant"/> alone.
     /// </summary>
-    public List<TenantDefinition> Tenants { get; set; } = [];
-
-    /// <summary>
-    /// How often the server reads the store of tenants again, which bounds how long a tenant created, changed or
-    /// removed on another instance takes to reach this one.
-    /// </summary>
-    public TimeSpan RefreshEvery { get; set; } = TimeSpan.FromMinutes(1);
+    public static TenantRefusal Of(TenantDefinition tenant, string message) => new([tenant.Id], message);
 }

@@ -129,7 +129,7 @@ public class PairwiseClientsOptionsValidatorTests
         var options = new OidcOptions { Clients = [PairwiseClient("pairwise")] };
         using var provider = new ServiceCollection()
             .AddSingleton<ISubjectTypeConverter>(new SubjectTypeConverter())
-            .AddSingleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>()
+            .AddSingleton<IValidateOptions<MultiTenancyOptions>, TenantListValidator>()
             .BuildServiceProvider();
 
         Assert.True(new PairwiseClientsOptionsValidator(provider).Validate(null, options).Succeeded);
@@ -171,7 +171,7 @@ public class PairwiseClientsOptionsValidatorTests
             ],
         };
 
-        var result = new MultiTenancyOptionsValidator().Validate(null, options);
+        var result = new TenantListValidator([new TenantDefinitionsCheck()]).Validate(null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("Tenant 'acme': The clients 'pairwise'", result.FailureMessage, StringComparison.Ordinal);
