@@ -19,8 +19,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again. What was built for a tenant is replaced only from its definition in force
-/// (<see cref="InForce"/>), so a request still holding one this catalog replaced is answered with what was built.
+/// from it is not built again. What was built for a tenant from its definition in force (<see cref="InForce"/>) is
+/// not replaced from another definition, so a request still holding one this catalog replaced is answered with what
+/// was built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -51,7 +52,8 @@ public sealed partial class StoreTenantCatalog(
     private Reading? _reading;
 
     // The last definition served under each id, kept once the tenant is refused or dropped: a request still holding
-    // one of its definitions is judged by the last one in force rather than by none
+    // one of its definitions is judged by the last one in force rather than by none. One entry for each id ever
+    // served, its keys included, kept for the life of the process
     private readonly ConcurrentDictionary<string, TenantDefinition> _lastServed = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -129,7 +131,7 @@ public sealed partial class StoreTenantCatalog(
     /// <summary>
     /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the
     /// last one served when the tenant is refused or dropped since; null when this catalog never served this
-    /// creation of the tenant.
+    /// creation of the tenant, or has served a later one since.
     /// </summary>
     internal TenantDefinition? InForce(TenantDefinition held)
         => (Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant ??

@@ -30,8 +30,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// Whether the settings configure an id is asked of the settings in force rather than of the clients built: by a
 /// lookup, and by a build before it drops a registration. So a request begun before the settings changed, and a
 /// build of former settings ending after the change, answer by what the settings now configure. A write is refused
-/// when either the settings in force or the ones the request holds configure the id - the latter before anything is
-/// written - as a refused write is answered truly while a write kept now and dropped later is not.
+/// when the settings in force configure the id, whatever the settings the request holds say.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
@@ -90,19 +89,6 @@ internal partial class ReloadableClientInfoStorage(
         return true;
     }
 
-    /// <summary>
-    /// Whether the settings the request holds configure the id of a registration about to be written, which is
-    /// then refused without being written: the settings in force may be on their way back to them.
-    /// </summary>
-    private bool RefusedByHeldSettings(RegisteredClient client)
-    {
-        if (!Configures(settings.Clients, client.ClientInfo.ClientId))
-            return false;
-
-        LogRegistrationEvicted(client.ClientInfo.ClientId, settings.Id);
-        return true;
-    }
-
     // Built once for each issuer, whatever its settings become
     private ConcurrentDictionary<string, RegisteredClient> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
@@ -117,11 +103,8 @@ internal partial class ReloadableClientInfoStorage(
 #pragma warning disable ABXMT001
         var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
 #pragma warning restore ABXMT001
-        return Configures(clients, clientId);
+        return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static bool Configures(IEnumerable<ClientInfo> clients, string clientId)
-        => clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -148,7 +131,6 @@ internal partial class ReloadableClientInfoStorage(
     /// <returns>Whether the client was added and kept.</returns>
     public Task<bool> TryAddClientAsync(RegisteredClient client)
         => Task.FromResult(
-            !RefusedByHeldSettings(client) &&
             Registered.TryAdd(client.ClientInfo.ClientId, client) &&
             !Recheck(client));
 
@@ -165,7 +147,6 @@ internal partial class ReloadableClientInfoStorage(
     public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
     {
         return Task.FromResult(
-            !RefusedByHeldSettings(updated) &&
             Registered.TryReplace(current, updated) &&
             !Recheck(updated));
     }

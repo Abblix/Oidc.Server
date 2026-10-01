@@ -47,7 +47,8 @@ public sealed class TenantIssuerSettings(
     /// <summary>
     /// The clients the current tenant's definition in force configures (<see cref="StoreTenantCatalog.InForce"/>),
     /// which a request begun before the definition changed does not hold; those of the definition the request holds
-    /// where the server's own catalog never served this creation of the tenant, or is not the catalog in use.
+    /// where the server's own catalog has no definition in force for this creation of the tenant, or is not the
+    /// catalog in use.
     /// </summary>
     internal IEnumerable<ClientInfo> ClientsInForce
         => (catalog is StoreTenantCatalog own ? own.InForce(Tenant) ?? Tenant : Tenant).Clients;

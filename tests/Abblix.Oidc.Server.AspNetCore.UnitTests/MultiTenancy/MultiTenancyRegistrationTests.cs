@@ -1521,10 +1521,10 @@ public class MultiTenancyRegistrationTests
 
     /// <summary>
     /// A change to a registration, written by a request holding a definition that configured its id while the served
-    /// one frees it, is answered as not made and leaves the registration as it was.
+    /// one frees it, is made and kept: the definition in force decides, and it leaves the id free.
     /// </summary>
     [Fact]
-    public async Task UpdateUnderIdOnlyHeldDefinitionConfigures_KeepsRegistration()
+    public async Task UpdateUnderIdOnlyHeldDefinitionConfigures_IsMadeAndKept()
     {
         var store = new ChangingTenantStore();
         using var provider = ServingFrom(store);
@@ -1538,13 +1538,12 @@ public class MultiTenancyRegistrationTests
         var held = await Served(provider, store, AcmeWith("freed"), "2");
         var current = await Served(provider, store, AcmeWith(), "3");
 
+        var changed = new RegisteredClient(new ClientInfo("freed") { ClientName = "changed" }, "token-id");
         EnterTenant(provider, held);
-        Assert.False(await manager.TryUpdateClientAsync(
-            registration,
-            new RegisteredClient(new ClientInfo("freed") { ClientName = "changed" }, "token-id")));
+        Assert.True(await manager.TryUpdateClientAsync(registration, changed));
 
         EnterTenant(provider, current);
-        Assert.Same(registration, await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.Same(changed, await manager.TryFindRegisteredClientAsync("freed"));
     }
 
     /// <summary>

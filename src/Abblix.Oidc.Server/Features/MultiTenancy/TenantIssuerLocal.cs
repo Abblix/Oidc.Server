@@ -35,8 +35,8 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenant
     /// A request begun before the tenant's definition changed holds the former one to its end. A value built from
     /// the definition in force (<see cref="StoreTenantCatalog.InForce"/>) is not replaced from any other: a request
     /// holding another is answered with it, rather than bring its definition back. A value built from any other
-    /// definition is replaced by whichever request comes next. Where that catalog never served the tenant, or is
-    /// not the catalog in use, a changed source decides alone.
+    /// definition is replaced by whichever request comes next. Where that catalog has no definition in force for
+    /// this creation of the tenant, or is not the catalog in use, a changed source decides alone.
     /// </para>
     /// </remarks>
     public T GetOrCreate(object? source, Func<T> create)
