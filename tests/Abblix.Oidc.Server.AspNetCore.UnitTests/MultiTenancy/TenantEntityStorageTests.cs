@@ -31,9 +31,17 @@ public class TenantEntityStorageTests
     {
         public TenantContext? Current { get; set; }
 
-        public void Enter(string? id) => Current = id is null
+        public void Enter(string? id, string generation = "") => Current = id is null
             ? null
-            : new TenantContext { Tenant = new TenantDefinition { Id = id, Issuer = $"https://auth.example.com/tenants/{id}" } };
+            : new TenantContext
+            {
+                Tenant = new TenantDefinition
+                {
+                    Id = id,
+                    Issuer = $"https://auth.example.com/tenants/{id}",
+                    Generation = generation,
+                },
+            };
     }
 
     /// <summary>An inner storage that remembers every key it was handed, as the distributed cache would.</summary>
@@ -112,6 +120,35 @@ public class TenantEntityStorageTests
         _tenant.Enter("a:b");
         Assert.Null(await Storage.GetAsync<string>("x", removeOnRetrieval: false));
         Assert.Single(_inner.Entries);
+    }
+
+    /// <summary>
+    /// A tenant created again under the id of one removed is another generation, and reads nothing the removed one
+    /// stored: a code or a refresh token issued before the removal is not redeemed by whoever holds the id next.
+    /// </summary>
+    [Fact]
+    public async Task ATenantCreatedAgainUnderAnId_ReadsNothingTheFormerOneStored()
+    {
+        _tenant.Enter("acme", generation: "1");
+        await Storage.SetAsync("code", "the former tenant's", Options);
+
+        _tenant.Enter("acme", generation: "2");
+        Assert.Null(await Storage.GetAsync<string>("code", removeOnRetrieval: false));
+    }
+
+    /// <summary>
+    /// A tenant the settings declare has no generation and keeps the key form it had before generations, so what
+    /// it stored before an upgrade is still its own; one with a generation cannot spell that key.
+    /// </summary>
+    [Fact]
+    public async Task ATenantWithoutAGeneration_KeepsTheKeyItHadBefore()
+    {
+        _tenant.Enter("acme");
+        await Storage.SetAsync("code", "acme's", Options);
+
+        Assert.Equal("tenant:4:acme:code", Assert.Single(_inner.Entries).Key);
+        _tenant.Enter("acme", generation: "code");
+        Assert.Null(await Storage.GetAsync<string>(string.Empty, removeOnRetrieval: false));
     }
 
     /// <summary>

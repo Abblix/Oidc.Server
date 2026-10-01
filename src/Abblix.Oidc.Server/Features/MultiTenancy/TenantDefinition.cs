@@ -28,6 +28,18 @@ public sealed class TenantDefinition
     public required string Id { get; init; }
 
     /// <summary>
+    /// Which creation of the tenant under <see cref="Id"/> this is, assigned by the store of tenants each time a
+    /// tenant is created and kept for as long as it lives: letters, digits, '-' and '_'. Empty for a tenant the
+    /// settings declare.
+    /// </summary>
+    /// <remarks>
+    /// What the server keeps for a tenant - its stored codes and tokens, its minted keys, what it builds from the
+    /// definition - is kept under its id and generation together, so a tenant created again under the id of one
+    /// removed starts with none of it.
+    /// </remarks>
+    public string Generation { get; init; } = string.Empty;
+
+    /// <summary>
     /// The tenant's issuer identifier, as it appears in every token the tenant issues and in its discovery
     /// document - and the address the tenant is served at.
     /// </summary>

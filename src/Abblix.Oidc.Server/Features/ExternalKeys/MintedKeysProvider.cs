@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// for a server without tenants, each tenant's own under multi-tenancy.</param>
 internal sealed class MintedKeysProvider(IKeyRings rings, IIssuerSettings settings) : IAuthServiceKeysProvider
 {
-    private IKeyRing Ring => rings.For(settings.Id);
+    private IKeyRing Ring => rings.For(settings.KeyPartition);
 
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)

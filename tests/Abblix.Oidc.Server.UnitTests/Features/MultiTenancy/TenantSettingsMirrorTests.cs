@@ -37,7 +37,7 @@ public class TenantSettingsMirrorTests
     /// </summary>
     private static readonly HashSet<string> TenantOnly =
         [
-            nameof(TenantDefinition.Id), nameof(TenantDefinition.PairwiseSubject),
+            nameof(TenantDefinition.Id), nameof(TenantDefinition.Generation), nameof(TenantDefinition.PairwiseSubject),
             nameof(TenantDefinition.CustodianKeys), nameof(TenantDefinition.MtlsBaseUri),
         ];
 

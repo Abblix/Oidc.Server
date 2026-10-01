@@ -681,7 +681,12 @@ public class MultiTenancyRegistrationTests
     [Fact]
     public async Task EachTenant_PublishesTheKeysOfItsOwnRing()
     {
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition
+        {
+            Id = "globex",
+            Issuer = "https://auth.example.com/tenants/globex",
+            Generation = "2",
+        };
         using var provider = MintingKeys(Acme, globex);
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
@@ -691,7 +696,7 @@ public class MultiTenancyRegistrationTests
         var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("acme", Assert.Single(atAcme).KeyId);
-        Assert.Equal("globex", Assert.Single(atGlobex).KeyId);
+        Assert.Equal("globex~2", Assert.Single(atGlobex).KeyId);
     }
 
     /// <summary>
@@ -720,14 +725,16 @@ public class MultiTenancyRegistrationTests
     /// The server keeps each tenant's minted keys under the tenant's id, so an id the key ring cannot name its part
     /// of the store by is refused at startup, naming the tenant.
     /// </summary>
-    [Fact]
-    public void ATenantIdTheKeyRingCannotNameAPartitionBy_IsRefusedAtStartup()
+    [Theory]
+    [InlineData("acme.eu")]
+    [InlineData("acme~eu")] // the separator of a generation, which would let this id name another tenant's partition
+    public void ATenantIdTheKeyRingCannotNameAPartitionBy_IsRefusedAtStartup(string id)
     {
-        using var provider = MintingKeys(new TenantDefinition { Id = "acme.eu", Issuer = AcmeIssuer });
+        using var provider = MintingKeys(new TenantDefinition { Id = id, Issuer = AcmeIssuer });
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("Tenant 'acme.eu': the server mints the keys", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"Tenant '{id}': the server mints the keys", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1059,6 +1066,59 @@ public class MultiTenancyRegistrationTests
         EnterTenant(provider, null);
         var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(null, () => new object()));
         Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant created again under the id of one removed builds its own values, rather than taking over what was
+    /// built for the removed one.
+    /// </summary>
+    [Fact]
+    public void ATenantCreatedAgainUnderAnId_BuildsValuesOfItsOwn()
+    {
+        using var provider = BuildProvider();
+        var local = provider.GetRequiredService<IIssuerLocal<object>>();
+        TenantDefinition Acme(string generation)
+            => new() { Id = "acme", Issuer = AcmeIssuer, Generation = generation };
+
+        EnterTenant(provider, Acme("1"));
+        var former = local.GetOrCreate(null, () => new object());
+
+        EnterTenant(provider, Acme("2"));
+        Assert.NotSame(former, local.GetOrCreate(null, () => new object()));
+    }
+
+    /// <summary>
+    /// The keys the server mints for a tenant are kept in a partition named by its id and generation, so a tenant
+    /// created again under the id of one removed mints keys of its own; a tenant the settings declare keeps the
+    /// partition named by its id alone.
+    /// </summary>
+    [Fact]
+    public void TheKeyRing_KeepsAPartitionForEachCreationOfATenant()
+    {
+        using var provider = MintingKeys(
+            Acme,
+            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex", Generation = "2" });
+
+        Assert.Equal(["acme", "globex~2"], provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.Partitions);
+    }
+
+    /// <summary>
+    /// A generation names the tenant's data and keys, so one holding what a store may refuse is refused at startup.
+    /// </summary>
+    [Fact]
+    public void AGenerationHoldingWhatAStoreMayRefuse_IsRefusedAtStartup()
+    {
+        using var provider = KeysFromSettings(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = AcmeIssuer,
+            Generation = "a.b",
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        });
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains("The generation 'a.b' of tenant 'acme'", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

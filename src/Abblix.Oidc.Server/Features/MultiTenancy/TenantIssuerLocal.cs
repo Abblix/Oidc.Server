@@ -30,15 +30,15 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor) : IIssu
     /// </remarks>
     public T GetOrCreate(object? source, Func<T> create)
     {
-        var tenantId = TenantKey.CurrentTenantId(tenantAccessor);
+        var space = TenantKey.CurrentSpace(tenantAccessor);
         while (true)
         {
-            var found = _values.TryGetValue(tenantId, out var built);
+            var found = _values.TryGetValue(space, out var built);
             if (found && ReferenceEquals(built!.Source, source))
                 return built.Value;
 
             var fresh = new Built(source, create());
-            if (found ? _values.TryUpdate(tenantId, fresh, built!) : _values.TryAdd(tenantId, fresh))
+            if (found ? _values.TryUpdate(space, fresh, built!) : _values.TryAdd(space, fresh))
                 return fresh.Value;
         }
     }

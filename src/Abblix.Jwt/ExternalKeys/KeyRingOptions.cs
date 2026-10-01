@@ -39,16 +39,16 @@ public sealed class KeyRingOptions
     /// </summary>
     /// <remarks>
     /// All partitions share the store: an entry of a partition other than the default is stored under its id with
-    /// the partition name and a dot in front, which is why a name holds only letters, digits, '-' and '_', and why
-    /// the default partition keeps only entries whose id has no dot.
+    /// the partition name and a dot in front, which is why a name holds only letters, digits, '-', '_' and '~', and
+    /// why the default partition keeps only entries whose id has no dot.
     /// </remarks>
     public IReadOnlyCollection<string> Partitions { get; set; } = [DefaultPartition];
 
     /// <summary>
     /// Whether <paramref name="partition"/> can name a partition: its name goes in front of its entries' ids in
-    /// the store, so it holds only letters, digits, '-' and '_', which every store accepts and none is a dot.
+    /// the store, so it holds only letters, digits, '-', '_' and '~', which every store accepts and none is a dot.
     /// </summary>
     /// <param name="partition">The name to judge.</param>
     public static bool IsPartitionName(string partition)
-        => partition.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
+        => partition.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '~');
 }

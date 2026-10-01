@@ -52,14 +52,19 @@ public sealed class TenantRateLimiterTests : IDisposable
         => _provider.GetRequiredKeyedService<PartitionedRateLimiter<(string ClientId, string? Source)>>(
             CallerRateLimiters.Introspection);
 
-    private void Enter(string? tenantId)
+    private void Enter(string? tenantId, string generation = "")
     {
         var context = new DefaultHttpContext();
         if (tenantId is not null)
         {
             context.Features.Set(new TenantContext
             {
-                Tenant = new TenantDefinition { Id = tenantId, Issuer = $"https://auth.example.com/tenants/{tenantId}" },
+                Tenant = new TenantDefinition
+                {
+                    Id = tenantId,
+                    Issuer = $"https://auth.example.com/tenants/{tenantId}",
+                    Generation = generation,
+                },
             });
         }
 
@@ -91,6 +96,21 @@ public sealed class TenantRateLimiterTests : IDisposable
         Assert.False(Introspection.AttemptAcquire((ClientId, null)).IsAcquired);
 
         Enter("globex");
+        Assert.True(Introspection.AttemptAcquire((ClientId, null)).IsAcquired);
+    }
+
+    /// <summary>
+    /// A tenant created again under the id of one removed starts with a budget of its own, not with what the
+    /// removed one had spent.
+    /// </summary>
+    [Fact]
+    public void ATenantCreatedAgainUnderAnId_StartsWithABudgetOfItsOwn()
+    {
+        Enter("acme", generation: "1");
+        Assert.True(Introspection.AttemptAcquire((ClientId, null)).IsAcquired);
+        Assert.False(Introspection.AttemptAcquire((ClientId, null)).IsAcquired);
+
+        Enter("acme", generation: "2");
         Assert.True(Introspection.AttemptAcquire((ClientId, null)).IsAcquired);
     }
 

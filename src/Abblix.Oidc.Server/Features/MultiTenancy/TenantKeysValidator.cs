@@ -106,7 +106,7 @@ public sealed class TenantKeysValidator(IServiceProvider serviceProvider) : IVal
     private static IEnumerable<string> PartitionsOf(MultiTenancyOptions tenants)
         =>
             from tenant in tenants.Tenants
-            where !KeyRingOptions.IsPartitionName(tenant.Id)
+            where !TenantKey.IsPartitionSegment(tenant.Id)
             select $"Tenant '{tenant.Id}': the server mints the keys and keeps each tenant's in the store under its " +
                    "id, so the id may hold only letters, digits, '-' and '_'.";
 }
