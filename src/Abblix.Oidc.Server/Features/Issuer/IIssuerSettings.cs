@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -89,4 +91,24 @@ public interface IIssuerSettings
     /// The name of the cookie carrying the user's session at the issuer, which its check-session page reads.
     /// </summary>
     string CheckSessionCookieName { get; }
+
+    /// <summary>
+    /// The keys the issuer signs with and publishes, when they come from its settings.
+    /// </summary>
+    IReadOnlyCollection<JsonWebKey> SigningKeys { get; }
+
+    /// <summary>
+    /// The keys clients encrypt to the issuer with, when they come from its settings.
+    /// </summary>
+    IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; }
+
+    /// <summary>
+    /// The custodian's keys the issuer produces with, when its keys are held by a custodian; null when none are named.
+    /// </summary>
+    CustodianHeldKeys? CustodianKeys { get; }
+
+    /// <summary>
+    /// The address the issuer's mutual-TLS endpoint aliases are served at, or null when it declares none.
+    /// </summary>
+    Uri? MtlsBaseUri { get; }
 }

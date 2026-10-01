@@ -296,6 +296,24 @@ public class KeyPlacementWiringTests
         Assert.Equal(SigningKeyName, provider.GetRequiredService<CustodianHeldKeys>().SigningKeyName);
     }
 
+    /// <summary>
+    /// A host whose keys are named per issuer chooses the placement without naming any: the choice is recorded and
+    /// no selection is left for a consumer to take as the one for every issuer.
+    /// </summary>
+    [Fact]
+    public async Task ThePlacementChosenWithoutNames_LeavesNoSelection()
+    {
+        var services = WithCustodian();
+        services.AddJsonWebTokens();
+        services.RequireKeyPlacement().UseKeysInCustodian();
+
+        using var provider = services.BuildServiceProvider();
+
+        await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(KeyPlacement.Custodian, provider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement);
+        Assert.Null(provider.GetService<CustodianHeldKeys>());
+    }
+
     [Fact]
     public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse()
     {

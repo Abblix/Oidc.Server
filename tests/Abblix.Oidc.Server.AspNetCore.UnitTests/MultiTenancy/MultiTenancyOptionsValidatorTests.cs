@@ -93,6 +93,55 @@ public class MultiTenancyOptionsValidatorTests
             StringComparison.Ordinal);
 
     /// <summary>
+    /// A tenant's mutual-TLS address names only the host its aliases are served at: they keep the issuer's path, so
+    /// a path of its own, plain http, a query or a fragment could not be honoured.
+    /// </summary>
+    [Theory]
+    [InlineData("https://mtls.example.com/base")]
+    [InlineData("http://mtls.example.com")]
+    [InlineData("https://mtls.example.com/?x=1")]
+    [InlineData("/mtls")]
+    public void AMutualTlsAddressThatIsNotAnHttpsHost_IsRefused(string mtls)
+        => Assert.Contains("must be an absolute https URL with no path", FailureOf(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = "https://auth.example.com/tenants/acme",
+            MtlsBaseUri = new Uri(mtls, UriKind.RelativeOrAbsolute),
+        }), StringComparison.Ordinal);
+
+    /// <summary>
+    /// A tenant's mutual-TLS host under its issuer path is one of its addresses, so two tenants cannot reach one
+    /// through it, whichever host the other's is.
+    /// </summary>
+    [Fact]
+    public void AMutualTlsAddressAnotherTenantIsServedAt_IsRefused()
+        => Assert.Contains("served at the same address mtls.example.com/tenants/acme", FailureOf(
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = "https://auth.example.com/tenants/acme",
+                MtlsBaseUri = new Uri("https://mtls.example.com"),
+            },
+            new TenantDefinition { Id = "globex", Issuer = "https://mtls.example.com/tenants/acme" }),
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void TenantsSharingAMutualTlsHost_UnderPathsOfTheirOwn_AreAccepted()
+        => Assert.Null(FailureOf(
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = "https://auth.example.com/tenants/acme",
+                MtlsBaseUri = new Uri("https://mtls.example.com"),
+            },
+            new TenantDefinition
+            {
+                Id = "globex",
+                Issuer = "https://auth.example.com/tenants/globex",
+                MtlsBaseUri = new Uri("https://mtls.example.com"),
+            }));
+
+    /// <summary>
     /// Addresses differing in case of the path are two: a request's path is compared exactly.
     /// </summary>
     [Fact]

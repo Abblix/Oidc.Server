@@ -100,8 +100,7 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
             return null;
 
         // A catalog of the host's own may match by a rule of its own, and the cut below needs this one.
-        var address = TenantAddress.Of(tenant.Issuer);
-        if (!IsOnRequestHost(address, request) || !address.Covers(fullPath))
+        if (AddressOnRequestHost(tenant, request) is not { } address || !address.Covers(fullPath))
             return null;
 
         // The full path starts with the path base, which past its trailing slash - a forwarded prefix can carry
@@ -143,8 +142,7 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
         if (await catalog.FindByAddressAsync(request.Host.Host, issuerPath, cancellationToken) is not { } tenant)
             return null;
 
-        var address = TenantAddress.Of(tenant.Issuer);
-        if (!IsOnRequestHost(address, request) ||
+        if (AddressOnRequestHost(tenant, request) is not { } address ||
             TenantAddress.CanonicalPath(address.Path) != TenantAddress.CanonicalPath(issuerPath))
         {
             return null;
@@ -154,9 +152,13 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCata
     }
 
     /// <summary>
-    /// Whether <paramref name="address"/> names the host <paramref name="request"/> reached, as it names the path:
-    /// a tenant served under another host's name would publish an issuer that is not where it was fetched from.
+    /// The address of <paramref name="tenant"/> on the host <paramref name="request"/> reached - its issuer's or its
+    /// mutual-TLS one - or null when it has none there: a tenant served under another host's name would publish an
+    /// issuer that is not where it was fetched from.
     /// </summary>
-    private static bool IsOnRequestHost(TenantAddress address, HttpRequest request)
-        => address.Host == TenantHost.Normalize(request.Host.Host);
+    private static TenantAddress? AddressOnRequestHost(TenantDefinition tenant, HttpRequest request)
+    {
+        var host = TenantHost.Normalize(request.Host.Host);
+        return TenantAddress.AllOf(tenant).FirstOrDefault(address => address.Host == host);
+    }
 }

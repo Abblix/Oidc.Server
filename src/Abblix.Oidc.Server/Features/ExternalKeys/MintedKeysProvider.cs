@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
 
@@ -20,13 +21,18 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// nothing to the custodian at issue time. Publication is where that matters most, so the private half is stripped
 /// unless a caller explicitly asks for it, exactly as the static-configuration provider does.
 /// </remarks>
-internal sealed class MintedKeysProvider(IKeyRing ring) : IAuthServiceKeysProvider
+/// <param name="rings">The ring of each issuer, each minting and rotating keys of its own.</param>
+/// <param name="settings">The settings of the issuer serving the request, whose id names its ring: the default one
+/// for a server without tenants, each tenant's own under multi-tenancy.</param>
+internal sealed class MintedKeysProvider(IKeyRings rings, IIssuerSettings settings) : IAuthServiceKeysProvider
 {
+    private IKeyRing Ring => rings.For(settings.Id);
+
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-        => ring.Get(PublicKeyUsages.Signature, includePrivateKeys).ToAsyncEnumerable();
+        => Ring.Get(PublicKeyUsages.Signature, includePrivateKeys).ToAsyncEnumerable();
 
     /// <inheritdoc />
     public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
-        => ring.Get(PublicKeyUsages.Encryption, includePrivateKeys).ToAsyncEnumerable();
+        => Ring.Get(PublicKeyUsages.Encryption, includePrivateKeys).ToAsyncEnumerable();
 }

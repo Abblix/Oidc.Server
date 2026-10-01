@@ -37,7 +37,12 @@ public class TenantResolutionMiddlewareTests
             new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" },
             new TenantDefinition { Id = "muenchen", Issuer = "https://münchen.example.com/" },
             new TenantDefinition { Id = "shared", Issuer = "https://auth.example.com" },
-            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
+            new TenantDefinition
+            {
+                Id = "globex",
+                Issuer = "https://auth.example.com/tenants/globex",
+                MtlsBaseUri = new Uri("https://mtls.example.com"),
+            },
             new TenantDefinition { Id = "globex-eu", Issuer = "https://auth.example.com/tenants/globex/eu/" },
             new TenantDefinition { Id = "initech", Issuer = "https://idp.example.com/idp/initech" },
             new TenantDefinition { Id = "societe", Issuer = "https://auth.example.com/tenants/société" },
@@ -290,6 +295,32 @@ public class TenantResolutionMiddlewareTests
         var (_, seen) = await RunAsync(host, path);
 
         Assert.Equal(tenantId, seen?.TenantId);
+    }
+
+    /// <summary>
+    /// A tenant's mutual-TLS endpoint aliases keep its issuer path on its mutual-TLS host, so a request there under
+    /// that path is the tenant's, with the path moved into the path base as on the issuer's host.
+    /// </summary>
+    [Fact]
+    public async Task ARequestOnATenantsMutualTlsHost_UnderItsIssuerPath_ResolvesToIt()
+    {
+        var (_, seen) = await RunAsync("mtls.example.com", "/tenants/globex/connect/token");
+
+        Assert.Equal(new Seen("globex", "/tenants/globex", "/connect/token"), seen);
+    }
+
+    /// <summary>
+    /// The mutual-TLS host is the declaring tenant's alone: a path another tenant of the issuer's host would take
+    /// there resolves to no tenant of its own.
+    /// </summary>
+    [Theory]
+    [InlineData("/connect/token")] // the path of the tenant served at the issuer host's root
+    [InlineData("/tenants/a%20b/connect/token")] // the path of another tenant of the issuer's host
+    public async Task ATenantsMutualTlsHost_ServesNoTenantThatDoesNotDeclareIt(string path)
+    {
+        var (_, seen) = await RunAsync("mtls.example.com", path);
+
+        Assert.Null(seen?.TenantId);
     }
 
     [Fact]

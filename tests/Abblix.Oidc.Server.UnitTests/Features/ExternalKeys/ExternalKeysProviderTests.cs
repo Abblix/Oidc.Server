@@ -175,7 +175,11 @@ public class ExternalKeysProviderTests
         };
         var options = Options.Create(new OidcOptions { KeyRolloverPropagation = propagation });
         return new ExternalKeysProvider(
-            NullLogger<ExternalKeysProvider>.Instance, custodian, keys, options, timeProvider);
+            NullLogger<ExternalKeysProvider>.Instance,
+            custodian,
+            SingleIssuer.SettingsOf(options, keys),
+            options,
+            timeProvider);
     }
 
 

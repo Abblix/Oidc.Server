@@ -47,12 +47,21 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
             where same.Count() > 1
             select $"The tenant id '{same.Key}' is declared more than once.");
 
-        // Compared as a request is resolved - host in one spelling, path without a trailing slash, scheme and
-        // port left out - since two issuers equal on those would claim the same requests.
+        // The mutual-TLS aliases carry the issuer path onto another host, so only the host is declared
         failures.AddRange(
             from tenant in options.Tenants
-            where IsIssuer(tenant.Issuer)
-            group tenant.Id by TenantAddress.Of(tenant.Issuer).Canonical() into same
+            where tenant.MtlsBaseUri is not null && !IsMtlsHost(tenant.MtlsBaseUri)
+            select $"The mutual-TLS address '{tenant.MtlsBaseUri}' of tenant '{tenant.Id}' must be an absolute https " +
+                   "URL with no path, query or fragment: its aliases keep the tenant's issuer path.");
+
+        // Compared as a request is resolved - host in one spelling, path without a trailing slash, scheme and
+        // port left out - since two addresses equal on those would claim the same requests; a tenant's mutual-TLS
+        // host under its issuer path is one of its addresses too.
+        failures.AddRange(
+            from tenant in options.Tenants
+            where IsIssuer(tenant.Issuer) && (tenant.MtlsBaseUri is null || IsMtlsHost(tenant.MtlsBaseUri))
+            from address in TenantAddress.AllOf(tenant).Select(address => address.Canonical()).Distinct()
+            group tenant.Id by address into same
             where same.Count() > 1
             select $"The tenants {string.Join(", ", same)} are served at the same address " +
                    $"{same.Key.Host}{same.Key.Path}.");
@@ -74,6 +83,17 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
+
+    /// <remarks>
+    /// Only the host is named: the aliases keep the issuer's path there, so a path of its own would move them to
+    /// an address no request resolves to the tenant. A client presents its certificate over TLS, so https alone.
+    /// </remarks>
+    private static bool IsMtlsHost(Uri value)
+        => value.IsAbsoluteUri &&
+           value.Scheme == Uri.UriSchemeHttps &&
+           value.AbsolutePath == "/" &&
+           string.IsNullOrEmpty(value.Query) &&
+           string.IsNullOrEmpty(value.Fragment);
 
     /// <remarks>
     /// OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 make the issuer an https URL; http is let

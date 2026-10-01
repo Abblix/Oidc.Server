@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -21,9 +23,12 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// </param>
 /// <param name="pairwiseSubject">The pairwise key, registered apart from the options, or null when there is none.
 /// </param>
+/// <param name="custodianKeys">The custodian's keys to produce with, named when the custodian placement was chosen,
+/// or null when none are named.</param>
 internal sealed class OptionsIssuerSettings(
     IOptionsMonitor<OidcOptions> options,
-    PairwiseSubjectSettings? pairwiseSubject = null) : IIssuerSettings
+    PairwiseSubjectSettings? pairwiseSubject = null,
+    CustodianHeldKeys? custodianKeys = null) : IIssuerSettings
 {
     /// <inheritdoc />
     public string Id => string.Empty;
@@ -63,4 +68,16 @@ internal sealed class OptionsIssuerSettings(
 
     /// <inheritdoc />
     public string CheckSessionCookieName => options.CurrentValue.CheckSessionCookie.Name;
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<JsonWebKey> SigningKeys => options.CurrentValue.SigningKeys;
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<JsonWebKey> EncryptionKeys => options.CurrentValue.EncryptionKeys;
+
+    /// <inheritdoc />
+    public CustodianHeldKeys? CustodianKeys => custodianKeys;
+
+    /// <inheritdoc />
+    public Uri? MtlsBaseUri => options.CurrentValue.Discovery.MtlsBaseUri;
 }

@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -73,6 +75,18 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
     /// </remarks>
     public string CheckSessionCookieName
         => $"{options.CurrentValue.CheckSessionCookie.Name}.{Uri.EscapeDataString(Tenant.Id)}";
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<JsonWebKey> SigningKeys => Tenant.SigningKeys;
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<JsonWebKey> EncryptionKeys => Tenant.EncryptionKeys;
+
+    /// <inheritdoc />
+    public CustodianHeldKeys? CustodianKeys => Tenant.CustodianKeys;
+
+    /// <inheritdoc />
+    public Uri? MtlsBaseUri => Tenant.MtlsBaseUri;
 
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 }

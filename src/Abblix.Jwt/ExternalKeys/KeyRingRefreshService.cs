@@ -30,14 +30,16 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </remarks>
 internal sealed partial class KeyRingRefreshService(
     ILogger<KeyRingRefreshService> logger,
-    KeyRing ring,
+    KeyRings rings,
     IOptions<KeyRingOptions> options,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await ring.RefreshAsync(cancellationToken);
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, cancellationToken);
+
         await base.StartAsync(cancellationToken);
     }
 
@@ -51,17 +53,21 @@ internal sealed partial class KeyRingRefreshService(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            try
+            // Each partition on its own: one whose keys cannot be opened leaves the others current
+            foreach (var (partition, ring, source) in rings.BeginRound())
             {
-                await ring.RefreshAsync(stoppingToken);
-            }
-            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
-            {
-                // Every tick is a fresh attempt, so a failure costs one period of staleness and nothing more.
-                // Letting it escape would end ExecuteAsync, and the host's default behavior for a faulted
-                // background service is to stop the process - so the pods would leave one after another over a
-                // single rotation window while still holding perfectly good keys.
-                LogRefreshFailed(exception, period);
+                try
+                {
+                    await ring.RefreshAsync(source, stoppingToken);
+                }
+                catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // Every tick is a fresh attempt, so a failure costs one period of staleness and nothing more.
+                    // Letting it escape would end ExecuteAsync, and the host's default behavior for a faulted
+                    // background service is to stop the process - so the pods would leave one after another over a
+                    // single rotation window while still holding perfectly good keys.
+                    LogRefreshFailed(exception, partition, period);
+                }
             }
         }
     }

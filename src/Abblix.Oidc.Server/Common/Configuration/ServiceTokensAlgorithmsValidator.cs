@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -27,10 +28,19 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// only, and is never called here: it answers where the keys come from without reading them, and without
 /// reading the options that are still being created. Injecting the key provider instead would re-enter
 /// <see cref="IOptions{TOptions}.Value"/> from inside its own creation.</param>
+/// <param name="services">Tells whether the server serves tenants, whose own settings carry no keys while each
+/// tenant's carry its own.</param>
 public sealed class ServiceTokensAlgorithmsValidator(
     IJsonWebTokenCreator jwtCreator,
-    IKeyCustodian? custodian = null) : IValidateOptions<OidcOptions>
+    IKeyCustodian? custodian = null,
+    IServiceProvider? services = null) : IValidateOptions<OidcOptions>
 {
+    private static string NoEncryptionKey(string tokenType, string keysSetting)
+        => $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
+           $"{keysSetting} is empty and no external key custodian is registered. " +
+           $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
+           $"this token as a signed JWS.";
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
@@ -39,6 +49,16 @@ public sealed class ServiceTokensAlgorithmsValidator(
 
         var failures = new List<string>();
         var serviceTokens = options.ServiceTokens;
+
+        // Under multi-tenancy the server's own settings carry no keys and each tenant's carry its own
+        var ofTenant = MultiTenancyDetection.IsTenantsOwn(options);
+        var keysJudgedHere = custodian is null &&
+                             (ofTenant || services is null || !MultiTenancyDetection.IsActive(services));
+#pragma warning disable ABXMT001
+        var keysSetting = ofTenant
+            ? $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)}"
+            : $"{nameof(OidcOptions)}.{nameof(OidcOptions.EncryptionKeys)}";
+#pragma warning restore ABXMT001
 
         Check(failures, nameof(serviceTokens.AccessToken), serviceTokens.AccessToken);
         Check(failures, nameof(serviceTokens.RefreshToken), serviceTokens.RefreshToken);
@@ -74,14 +94,8 @@ public sealed class ServiceTokensAlgorithmsValidator(
             // states nothing, and a host that never touched the setting must keep starting and issuing a signed
             // JWS exactly as before. The key set is only knowable here when it comes from the options; with a
             // custodian registered the keys live outside them, so the emptiness above says nothing.
-            if (token.Encrypt == true && custodian is null && options.EncryptionKeys.Count == 0)
-            {
-                results.Add(
-                    $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
-                    $"{nameof(OidcOptions.EncryptionKeys)} is empty and no external key custodian is registered. " +
-                    $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
-                    $"this token as a signed JWS.");
-            }
+            if (token.Encrypt == true && keysJudgedHere && options.EncryptionKeys.Count == 0)
+                results.Add(NoEncryptionKey(tokenType, keysSetting));
         }
     }
 }

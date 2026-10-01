@@ -8,6 +8,8 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -24,7 +26,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
 	IEndpointResolver endpointResolver,
-	ISignedMetadataProvider signedMetadataProvider) : IConfigurationResponseFormatter
+	ISignedMetadataProvider signedMetadataProvider,
+	IIssuerSettings issuerSettings) : IConfigurationResponseFormatter
 {
 	/// <summary>
 	/// Formats the configuration response by mapping metadata and adding endpoint URLs.
@@ -33,32 +36,32 @@ public class ConfigurationResponseFormatter(
 	/// <returns>An action result with the MVC-enriched configuration response including URLs.</returns>
 	public async Task<ActionResult<ModelResponse>> FormatResponseAsync(EndpointResponse response)
 	{
-		var tokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token);
-		var revocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation);
-		var introspectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection);
-		var userInfoEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.UserInfoAsync), OidcEndpoints.UserInfo);
+		var tokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token, response.Issuer);
+		var revocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation, response.Issuer);
+		var introspectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection, response.Issuer);
+		var userInfoEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.UserInfoAsync), OidcEndpoints.UserInfo, response.Issuer);
 
 		var mvcResponse = new ModelResponse
 		{
 			Issuer = response.Issuer,
 
-			JwksUri = Resolve<DiscoveryController>(nameof(DiscoveryController.KeysAsync), OidcEndpoints.Keys),
+			JwksUri = Resolve<DiscoveryController>(nameof(DiscoveryController.KeysAsync), OidcEndpoints.Keys, response.Issuer),
 
-			AuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.AuthorizeAsync), OidcEndpoints.Authorize),
+			AuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.AuthorizeAsync), OidcEndpoints.Authorize, response.Issuer),
 			UserInfoEndpoint = userInfoEndpoint,
-			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession),
-			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession),
-			PushedAuthorizationRequestEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.PushAuthorizeAsync), OidcEndpoints.PushedAuthorizationRequest),
+			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession, response.Issuer),
+			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession, response.Issuer),
+			PushedAuthorizationRequestEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.PushAuthorizeAsync), OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
 
 			TokenEndpoint = tokenEndpoint,
 			RevocationEndpoint = revocationEndpoint,
 			IntrospectionEndpoint = introspectionEndpoint,
 
-			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient),
+			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient, response.Issuer),
 
-			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication),
+			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication, response.Issuer),
 
-			DeviceAuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.DeviceAuthorizationAsync), OidcEndpoints.DeviceAuthorization),
+			DeviceAuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.DeviceAuthorizationAsync), OidcEndpoints.DeviceAuthorization, response.Issuer),
 
 			FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -114,7 +117,7 @@ public class ConfigurationResponseFormatter(
 
 		// Add mTLS endpoint aliases if configured
 		var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-		var mtlsBaseUri = options.Value.Discovery.MtlsBaseUri;
+		var mtlsBaseUri = issuerSettings.MtlsBaseUri;
 
 		if (mtlsOptions != null || mtlsBaseUri != null)
 		{
@@ -144,14 +147,37 @@ public class ConfigurationResponseFormatter(
 	/// <typeparam name="T">The controller type containing the action method.</typeparam>
 	/// <param name="actionName">The name of the action method to resolve.</param>
 	/// <param name="enablingFlag">The endpoint flag that must be enabled for the URL to be resolved.</param>
+	/// <param name="issuer">The issuer the document describes.</param>
 	/// <returns>The absolute URI to the endpoint if discovery and endpoint are enabled; otherwise, null.</returns>
-	private Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag) where T : ControllerBase
+	private Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag, string issuer) where T : ControllerBase
 	{
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
 		       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
-			? endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName))
+			? OnIssuersHost(endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName)), issuer)
 			: null;
 	}
+
+	/// <summary>
+	/// An endpoint resolved on the issuer's mutual-TLS host, where the document was fetched, moved to the issuer's
+	/// own host: a client without a certificate follows the ordinary endpoints, and only the aliases may name the host
+	/// that demands one.
+	/// </summary>
+	/// <remarks>
+	/// The host is compared as a tenant is resolved by it, so whatever request reaches the tenant on its mutual-TLS host
+	/// is answered so. A server without tenants whose mutual-TLS host differs from its ordinary one only by port
+	/// therefore names the ordinary endpoints on the issuer's host on either.
+	/// </remarks>
+	private Uri? OnIssuersHost(Uri? endpoint, string issuer)
+		=> endpoint is not null &&
+		   issuerSettings.MtlsBaseUri is { } mtlsBaseUri &&
+		   SameHost(endpoint, mtlsBaseUri)
+			? Rebase(endpoint, new Uri(new Uri(issuer).GetLeftPart(UriPartial.Authority)))
+			: endpoint;
+
+#pragma warning disable ABXMT001
+	private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
+		=> TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
+#pragma warning restore ABXMT001
 
 	/// <summary>
 	/// Rebases an original URI to use a different base URI, preserving the original's path.

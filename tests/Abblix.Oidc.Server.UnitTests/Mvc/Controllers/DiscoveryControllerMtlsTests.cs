@@ -53,7 +53,8 @@ public class DiscoveryControllerMtlsTests
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            Mock.Of<ISignedMetadataProvider>());
+            Mock.Of<ISignedMetadataProvider>(),
+            SingleIssuer.SettingsOf(_optionsMock.Object));
     }
 
     /// <summary>
@@ -84,6 +85,32 @@ public class DiscoveryControllerMtlsTests
         // Assert
         Assert.NotNull(result.Value);
         Assert.Null(result.Value.MtlsEndpointAliases);
+    }
+
+    /// <summary>
+    /// A document fetched on the mutual-TLS host names the ordinary endpoints on the issuer's host, so a client
+    /// without a certificate that follows it is not sent to the host demanding one; the aliases stay on the
+    /// mutual-TLS host.
+    /// </summary>
+    [Theory]
+    [InlineData("https://mtls.example.com", "https://mtls.example.com/token")]
+    [InlineData("https://mtls.example.com", "https://mtls.example.com:8443/token")] // another port, the same host
+    [InlineData("https://mtls.example.com", "https://mtls.example.com./token")] // the fully qualified form
+    [InlineData("https://мтлс.example.com", "https://xn--k1abqc.example.com/token")] // the ASCII form of the name
+    public async Task ADocumentFetchedOnTheMutualTlsHost_NamesTheOrdinaryEndpointsOnTheIssuersHost(
+        string mtlsBaseUri,
+        string resolved)
+    {
+        _oidcOptions.Discovery.MtlsBaseUri = new Uri(mtlsBaseUri);
+        _endpointResolverMock
+            .Setup(x => x.Resolve("Token", "Token"))
+            .Returns(new Uri(resolved));
+
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
+
+        Assert.NotNull(result.Value);
+        Assert.Equal(new Uri("https://example.com/token"), result.Value.TokenEndpoint);
+        Assert.Equal(new Uri(new Uri(mtlsBaseUri), "/token"), result.Value.MtlsEndpointAliases?.TokenEndpoint);
     }
 
     /// <summary>

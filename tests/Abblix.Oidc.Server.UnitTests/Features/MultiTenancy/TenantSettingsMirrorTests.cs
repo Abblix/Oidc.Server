@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -35,7 +36,10 @@ public class TenantSettingsMirrorTests
     /// server without tenants registers beside its options rather than in them.
     /// </summary>
     private static readonly HashSet<string> TenantOnly =
-        [nameof(TenantDefinition.Id), nameof(TenantDefinition.PairwiseSubject)];
+        [
+            nameof(TenantDefinition.Id), nameof(TenantDefinition.PairwiseSubject),
+            nameof(TenantDefinition.CustodianKeys), nameof(TenantDefinition.MtlsBaseUri),
+        ];
 
     public static TheoryData<string> Mirrored => new(
         typeof(TenantDefinition).GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -92,6 +96,8 @@ public class TenantSettingsMirrorTests
             return Array.CreateInstance(type.GetElementType()!, 1);
         if (type.IsAssignableFrom(typeof(ClientInfo[])))
             return new[] { new ClientInfo("client") };
+        if (type.IsAssignableFrom(typeof(JsonWebKey[])))
+            return new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
 
         throw new NotSupportedException($"No sample of {type} to set; add one here.");
     }

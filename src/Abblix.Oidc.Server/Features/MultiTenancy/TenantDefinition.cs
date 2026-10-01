@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -104,4 +106,31 @@ public sealed class TenantDefinition
     /// Each tenant keeps its own, so the pseudonyms two tenants give one user cannot be matched to each other.
     /// </summary>
     public PairwiseSubjectSettings? PairwiseSubject { get; init; }
+
+    /// <summary>
+    /// The keys this tenant signs its tokens with and publishes in its JWKS, as <see cref="OidcOptions.SigningKeys"/>
+    /// are for a server without tenants. Each tenant keeps its own, so a party trusting one tenant's keys cannot
+    /// verify another tenant's tokens.
+    /// </summary>
+    public IReadOnlyCollection<JsonWebKey> SigningKeys { get; init; } = [];
+
+    /// <summary>
+    /// The keys clients encrypt to this tenant with, as <see cref="OidcOptions.EncryptionKeys"/> are for a server
+    /// without tenants. Each tenant keeps its own, so what a client encrypts to one tenant no other can read.
+    /// </summary>
+    public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; init; } = [];
+
+    /// <summary>
+    /// The custodian's keys this tenant produces with, when the server keeps its keys in a custodian: each tenant
+    /// names keys of its own there, as it declares its own <see cref="SigningKeys"/> otherwise.
+    /// </summary>
+    public CustodianHeldKeys? CustodianKeys { get; init; }
+
+    /// <summary>
+    /// The scheme, host and port this tenant's mutual-TLS endpoint aliases (RFC 8705 section 5) are served at, as
+    /// <see cref="DiscoveryOptions.MtlsBaseUri"/> is for a server without tenants. The aliases keep the tenant's
+    /// issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
+    /// the address therefore carries no path of its own.
+    /// </summary>
+    public Uri? MtlsBaseUri { get; init; }
 }

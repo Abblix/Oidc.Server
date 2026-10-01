@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,6 +45,7 @@ public class ExternalKeysWiringTests
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
+        services.AddIssuer();
         services.AddAuthServiceJwt();
         return services;
     }
@@ -57,6 +59,23 @@ public class ExternalKeysWiringTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
+    }
+
+    /// <summary>
+    /// A server without tenants whose keys are held by a custodian and that names none there has nothing to sign
+    /// with, so startup refuses it rather than the first token.
+    /// </summary>
+    [Fact]
+    public void ACustodianPlacementNamingNoKey_IsRefusedAtStartup()
+    {
+        var services = AnOidcHost();
+        services.RequireKeyPlacement().UseKeysInCustodian();
+
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(ExternalKeysProvider.NoKeyNamed, refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -84,6 +103,7 @@ public class ExternalKeysWiringTests
         // The placement runs BEFORE the server's own registration. Reading the choice at resolve is what permits
         // that: nothing here has to be ordered against the placement call.
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
+        services.AddIssuer();
         services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();
@@ -102,6 +122,7 @@ public class ExternalKeysWiringTests
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
+        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
 
@@ -145,6 +166,7 @@ public class ExternalKeysWiringTests
         services.AddOptions<OidcOptions>().Configure(options => options.SigningKeys = [signingKey]);
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
+        services.AddIssuer();
         services.AddAuthServiceJwt();
 
         await using var provider = services.BuildServiceProvider();

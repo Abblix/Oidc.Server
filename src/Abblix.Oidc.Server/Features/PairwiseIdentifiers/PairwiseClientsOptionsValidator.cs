@@ -38,7 +38,7 @@ public sealed class PairwiseClientsOptionsValidator(IServiceProvider serviceProv
         // multi-tenancy the tenant list judges each tenant's clients by the tenant's key, and the server's own
         // clients are refused as server-wide, so there is nothing here to ask the tenants' converter about.
         var pairwise = PairwiseClients(options.Clients);
-        if (pairwise.Length == 0 || UnderMultiTenancy)
+        if (pairwise.Length == 0 || MultiTenancyDetection.IsActive(serviceProvider))
             return ValidateOptionsResult.Success;
 
         ISubjectTypeConverter? subjectTypeConverter;
@@ -76,16 +76,6 @@ public sealed class PairwiseClientsOptionsValidator(IServiceProvider serviceProv
                 $"type converter{Named(subjectTypeConverter)} does not issue: configure a pairwise key for the " +
                 "server's own converter, or register one that issues them.");
     }
-
-    /// <summary>
-    /// Whether the server serves tenants, told by the check of the tenant list that only multi-tenancy registers,
-    /// asked of the container without building anything.
-    /// </summary>
-    private bool UnderMultiTenancy
-        => serviceProvider.GetService<IServiceProviderIsService>() is { } services &&
-#pragma warning disable ABXMT001
-           services.IsService(typeof(IValidateOptions<MultiTenancyOptions>));
-#pragma warning restore ABXMT001
 
     private static string Named(ISubjectTypeConverter subjectTypeConverter)
         => $" ({subjectTypeConverter.GetType().FullName})";

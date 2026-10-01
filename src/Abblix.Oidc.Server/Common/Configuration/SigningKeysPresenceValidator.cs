@@ -9,6 +9,8 @@
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -39,20 +41,49 @@ internal sealed class SigningKeysPresenceValidator(IServiceProvider serviceProvi
         // container cannot see through the provider's factory lambda - it overflows the stack
         // instead of reporting a circular dependency. By the time Validate runs the factory is
         // fully built, and the same resolution completes without re-entering it.
-        var keysProvider = serviceProvider.GetRequiredService<IAuthServiceKeysProvider>();
-        var custodian = serviceProvider.GetService<IKeyCustodian>();
+        // Under multi-tenancy the server's own settings carry no keys and each tenant's carry its own; the
+        // custodian's key names are a tenant's own and judged with the tenant list
+        if (MultiTenancyDetection.IsActive(serviceProvider))
+        {
+            return MultiTenancyDetection.IsTenantsOwn(options) &&
+                   KeysComeFromSettings(serviceProvider) &&
+                   options.SigningKeys.Count == 0
+                ? ValidateOptionsResult.Fail(NoTenantSigningKey)
+                : ValidateOptionsResult.Success;
+        }
 
-        if (keysProvider is not OidcOptionsKeysProvider || custodian is not null)
-            return ValidateOptionsResult.Success;
+        if (KeysComeFromSettings(serviceProvider))
+        {
+            return options.SigningKeys.Count > 0
+                ? ValidateOptionsResult.Success
+                : ValidateOptionsResult.Fail(NoSigningKey);
+        }
 
-        if (options.SigningKeys.Count > 0)
-            return ValidateOptionsResult.Success;
-
-        return ValidateOptionsResult.Fail(
-            $"No signing key is configured, so the server cannot issue a single token and publishes an empty JWKS. " +
-            $"The library does not generate keys: supply at least one JWK with a private part in " +
-            $"{nameof(OidcOptions)}.{nameof(OidcOptions.SigningKeys)}, or register your own " +
-            $"{nameof(IAuthServiceKeysProvider)} that reads keys from where your deployment keeps them " +
-            "(the Vault and Azure key packages ship such providers).");
+        return serviceProvider.GetService<IAuthServiceKeysProvider>() is ExternalKeysProvider &&
+               serviceProvider.GetService<CustodianHeldKeys>() is null
+            ? ValidateOptionsResult.Fail(ExternalKeysProvider.NoKeyNamed)
+            : ValidateOptionsResult.Success;
     }
+
+    /// <summary>
+    /// Whether the keys come from the settings: the resolved provider is the library's static one and no custodian
+    /// is wired.
+    /// </summary>
+    internal static bool KeysComeFromSettings(IServiceProvider serviceProvider)
+        => serviceProvider.GetService<IAuthServiceKeysProvider>() is OidcOptionsKeysProvider &&
+           serviceProvider.GetService<IKeyCustodian>() is null;
+
+#pragma warning disable ABXMT001
+    private static string NoTenantSigningKey
+        => "No signing key is declared, so the tenant cannot issue a single token and publishes an empty JWKS. " +
+           $"Supply at least one JWK with a private part in {nameof(TenantDefinition)}." +
+           $"{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a custodian or minted by the server.";
+#pragma warning restore ABXMT001
+
+    private static string NoSigningKey
+        => $"No signing key is configured, so the server cannot issue a single token and publishes an empty JWKS. " +
+           $"The library does not generate keys: supply at least one JWK with a private part in " +
+           $"{nameof(OidcOptions)}.{nameof(OidcOptions.SigningKeys)}, or register your own " +
+           $"{nameof(IAuthServiceKeysProvider)} that reads keys from where your deployment keeps them " +
+           "(the Vault and Azure key packages ship such providers).";
 }
