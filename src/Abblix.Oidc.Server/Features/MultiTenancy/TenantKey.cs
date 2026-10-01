@@ -18,6 +18,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public static class TenantKey
 {
+    private const char GenerationSeparator = '~';
+
     /// <summary>
     /// <paramref name="key"/> in the space of the tenant <paramref name="accessor"/> resolved.
     /// </summary>
@@ -68,8 +70,6 @@ public static class TenantKey
     /// </summary>
     internal static bool IsPartitionSegment(string value)
         => KeyRingOptions.IsPartitionName(value) && !value.Contains(GenerationSeparator);
-
-    private const char GenerationSeparator = '~';
 
     /// <summary>
     /// The tenant <paramref name="accessor"/> resolved.

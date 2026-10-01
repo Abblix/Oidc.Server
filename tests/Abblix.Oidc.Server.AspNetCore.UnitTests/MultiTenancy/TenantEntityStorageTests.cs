@@ -138,7 +138,7 @@ public class TenantEntityStorageTests
 
     /// <summary>
     /// A tenant the settings declare has no generation and keeps the key form it had before generations, so what
-    /// it stored before an upgrade is still its own; one with a generation cannot spell that key.
+    /// it stored before an upgrade is still its own.
     /// </summary>
     [Fact]
     public async Task ATenantWithoutAGeneration_KeepsTheKeyItHadBefore()
@@ -147,8 +147,20 @@ public class TenantEntityStorageTests
         await Storage.SetAsync("code", "acme's", Options);
 
         Assert.Equal("tenant:4:acme:code", Assert.Single(_inner.Entries).Key);
+    }
+
+    /// <summary>
+    /// A generation must not run into the key of a tenant without one: tenant <c>acme</c> with key <c>4:code:x</c>
+    /// and tenant <c>acme</c> of generation <c>code</c> with key <c>x</c> are two entries.
+    /// </summary>
+    [Fact]
+    public async Task AGeneration_DoesNotRunIntoTheKeyOfATenantWithoutOne()
+    {
+        _tenant.Enter("acme");
+        await Storage.SetAsync("4:code:x", "acme's", Options);
+
         _tenant.Enter("acme", generation: "code");
-        Assert.Null(await Storage.GetAsync<string>(string.Empty, removeOnRetrieval: false));
+        Assert.Null(await Storage.GetAsync<string>("x", removeOnRetrieval: false));
     }
 
     /// <summary>

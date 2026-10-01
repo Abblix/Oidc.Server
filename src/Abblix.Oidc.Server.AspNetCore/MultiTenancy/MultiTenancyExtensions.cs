@@ -50,8 +50,8 @@ public static class MultiTenancyExtensions
 
         services.AddOptions<MultiTenancyOptions>().Configure(configure).ValidateOnStart();
 
-        // A server minting its keys keeps a ring for each tenant, named by the tenant's id as its issuer settings
-        // are, so no two tenants share a key
+        // A server minting its keys keeps a ring for each creation of a tenant, named as its issuer settings name
+        // it, so no two tenants share a key
         services.AddOptions<KeyRingOptions>().Configure<IOptions<MultiTenancyOptions>>(
             (ring, tenants) => ring.Partitions = [..tenants.Value.Tenants.Select(TenantKey.PartitionOf)]);
         services.TryAddEnumerable([

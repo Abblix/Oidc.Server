@@ -44,7 +44,7 @@ public sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancy
         // It is part of the names the tenant's data and keys are kept under, which every store accepts in this form
         failures.AddRange(
             from tenant in options.Tenants
-            where !tenant.Generation.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            where !TenantKey.IsPartitionSegment(tenant.Generation)
             select $"The generation '{tenant.Generation}' of tenant '{tenant.Id}' must hold only letters, digits, " +
                    "'-' and '_'.");
 

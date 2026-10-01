@@ -722,8 +722,8 @@ public class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// The server keeps each tenant's minted keys under the tenant's id, so an id the key ring cannot name its part
-    /// of the store by is refused at startup, naming the tenant.
+    /// The server keeps each tenant's minted keys under its id and generation, so an id the key ring cannot name its
+    /// part of the store by, or one holding the separator of a generation, is refused at startup, naming the tenant.
     /// </summary>
     [Theory]
     [InlineData("acme.eu")]
