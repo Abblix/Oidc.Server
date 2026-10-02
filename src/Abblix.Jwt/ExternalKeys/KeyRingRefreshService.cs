@@ -37,7 +37,10 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        foreach (var (_, ring, source) in rings.BeginRound())
+        await rings.CheckAsync(cancellationToken);
+
+        // A partition opened before this start was refreshed then, so it is not refreshed again now
+        foreach (var (_, ring, source) in rings.BeginRound(exceptOpened: true))
             await ring.RefreshAsync(source, cancellationToken);
 
         await base.StartAsync(cancellationToken);
@@ -46,9 +49,7 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Half the propagation window: a freshly minted key is announced for that window before it signs, so
-        // refreshing twice per window means no pod meets a token signed by a key it has not loaded.
-        var period = options.Value.KeyRolloverPropagation / 2;
+        var period = options.Value.RefreshPeriod;
         using var timer = new PeriodicTimer(period, timeProvider);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))

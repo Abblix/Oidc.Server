@@ -200,7 +200,7 @@ public sealed class KeyRingTests : IDisposable
                 AdoptedKeys = adoptedKeys ?? [],
             },
             store,
-            options);
+            new OptionsKeyRingPartitions(options));
         return (rings, rings.Ring(options.Value.Partitions.First()), store);
     }
 
@@ -272,21 +272,262 @@ public sealed class KeyRingTests : IDisposable
         Assert.Contains(store.Entries, stored => stored.Id == "sig-RS256-1");
     }
 
+    private static Task<IReadOnlyDictionary<string, Exception>> Open(KeyRings rings, params string[] partitions)
+        => rings.OpenAsync(partitions, TestContext.Current.CancellationToken);
+
+    // The clock of the rings RingsKeeping builds, which a test moves on
+    private readonly FakeTimeProvider _ringsTime = new(Now);
+
     /// <summary>
-    /// Adopted keys would be seeded into every ring of several partitions, so each would serve the others' keys.
+    /// Rings keeping the partitions <paramref name="kept"/> names, as a host registering its own does, over a fresh
+    /// store, with keys from <paramref name="custodian"/>.
+    /// </summary>
+    private (KeyRings Rings, FakeStore Store) RingsKeeping(
+        IKeyRingPartitions kept,
+        IKeyCustodian custodian,
+        params JsonWebKey[] adoptedKeys)
+    {
+        var store = new FakeStore();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(custodian);
+        services.ComposeExternalKeyBackends();
+        services.AddSingleton<KeyEnvelope>();
+        services.AddSingleton<TimeProvider>(_ringsTime);
+        services.AddSingleton(Options.Create(new KeyRingOptions()));
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var policy = new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName, AdoptedKeys = adoptedKeys };
+        return (new KeyRings(provider, policy, store, kept), store);
+    }
+
+    private static IKeyRingPartitions Keeping(params string[] partitions)
+    {
+        var kept = new Mock<IKeyRingPartitions>();
+        kept.Setup(p => p.Kept).Returns(partitions);
+        return kept.Object;
+    }
+
+    /// <summary>
+    /// Adopted keys would be seeded into every ring, and a named partition may have others beside it, so each would
+    /// serve the others' keys: adoption stands only in the unnamed partition of a ring serving one issuer.
     /// </summary>
     [Fact]
-    public void AdoptingKeys_IntoSeveralPartitions_IsRefused()
+    public async Task AdoptingKeys_IntoANamedPartition_IsRefused()
     {
         var adopted = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
 
-        // Into one partition, adoption stands
-        var (one, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adopted, "acme");
-        Assert.NotNull(one.For("acme"));
+        var (unnamed, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adopted);
+        Assert.NotNull(unnamed.For(KeyRingOptions.DefaultPartition));
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adopted, "acme", "globex"));
-        Assert.Contains("several partitions", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(
+            () => CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adopted, "acme"));
+        var failure = Assert.Single(await Open(unnamed, "globex"));
+        Assert.IsType<InvalidOperationException>(failure.Value);
+    }
+
+    /// <summary>
+    /// Keys adopted into a ring whose partitions come and go could serve no partition it opens later, so the ring
+    /// refuses to start with them rather than leave each such partition unopened for good.
+    /// </summary>
+    [Fact]
+    public async Task AdoptedKeys_WhenThePartitionsComeAndGo_RefuseTheStart()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (minting, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey));
+        await minting.CheckAsync(TestContext.Current.CancellationToken);
+
+        var (adopting, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), adopted);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => adopting.CheckAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A ring keeping no partition yet meets its key-encryption key only when the first one is opened, so it asks
+    /// the custodian for it at the start and refuses to start without it.
+    /// </summary>
+    [Fact]
+    public async Task AKeyEncryptionKeyTheCustodianDoesNotHold_RefusesTheStart()
+    {
+        var custodian = new Mock<IKeyCustodian>();
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
+            .Returns(AsyncEnumerable.Empty<KeyVersion>());
+        var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => rings.CheckAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A partition opened while the ring runs mints its first key at once and is served, though the ring was not
+    /// started keeping it.
+    /// </summary>
+    [Fact]
+    public async Task OpeningAPartition_MintsItsFirstKey_AndServesIt()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        Assert.Empty(await Open(rings, "globex"));
+
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, false));
+        Assert.Contains(store.Entries, stored => stored.Id.StartsWith("globex.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The partitions opened together share one read of the store, the keys they mint included, so a server
+    /// starting with many tenants reads the store once rather than twice for each.
+    /// </summary>
+    [Fact]
+    public async Task PartitionsOpenedTogether_ReadTheStoreOnce()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+        var before = store.Loads;
+
+        Assert.Empty(await Open(rings, "globex", "initech", "umbrella"));
+
+        Assert.Equal(before + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// A partition whose first refresh failed is not kept half-built: it is not served, the others opened with it
+    /// are, and the next opening tries it again.
+    /// </summary>
+    [Fact]
+    public async Task AFailedOpening_IsNotServed_AndIsTriedAgain()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        store.FailingLoads = 1;
+        Assert.Equal("globex", Assert.Single(await Open(rings, "globex", "initech")).Key);
+        Assert.Throws<InvalidOperationException>(() => rings.For("globex"));
+        Assert.NotEmpty(rings.For("initech").Get(PublicKeyUsages.Signature, false));
+
+        Assert.Empty(await Open(rings, "globex"));
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, false));
+    }
+
+    /// <summary>
+    /// A ring kept now, or opened within half a refresh period, is current and is not refreshed again when opened,
+    /// while one built but neither kept nor opened since, as a tenant dropped and served again, has missed its
+    /// refreshes and is refreshed before it is served.
+    /// </summary>
+    [Fact]
+    public async Task OpeningARingNoLongerCurrent_RefreshesIt_AndACurrentOneIsLeftAsItIs()
+    {
+        var (rings, store) = RingsKeeping(Keeping("acme"), StubCustodian(_keyEncryptionKey));
+        Assert.Empty(await Open(rings, "acme", "globex"));
+
+        var halfPeriod = new KeyRingOptions().RefreshPeriod / 2;
+        var before = store.Loads;
+        _ringsTime.Advance(halfPeriod - TimeSpan.FromSeconds(1));
+        Assert.Empty(await Open(rings, "acme", "globex"));
+        Assert.Equal(before, store.Loads);
+
+        _ringsTime.Advance(TimeSpan.FromSeconds(1));
+        Assert.Empty(await Open(rings, "acme", "globex"));
+        Assert.Equal(before + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// An opening stopped part way keeps what it opened and reports only what it did not reach, so openings that
+    /// never fit in the time they are given still bring partitions up, some each time.
+    /// </summary>
+    [Fact]
+    public async Task AnOpeningStoppedPartWay_KeepsWhatItOpened()
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var listings = 0;
+        var custodian = new Mock<IKeyCustodian>();
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                // A partition minting its first key lists the versions twice, to seal the key and to open it, so
+                // the third listing is the second partition's, where the time runs out
+                if (++listings == 3)
+                {
+                    stop.Cancel();
+                    stop.Token.ThrowIfCancellationRequested();
+                }
+
+                return new[] { new KeyVersion(_keyEncryptionKey.Sanitize(false), Now.AddDays(-100)) }
+                    .ToAsyncEnumerable();
+            });
+        custodian
+            .Setup(c => c.UnwrapKeyAsync(
+                _keyEncryptionKey.KeyId!, It.IsAny<string>(), It.IsAny<JsonWebTokenHeader>(), It.IsAny<byte[]>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
+                Task.FromResult<byte[]?>(UnwrapLocally((RsaJsonWebKey)_keyEncryptionKey, algorithm, encryptedKey)));
+        var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
+
+        var failures = await rings.OpenAsync(["acme", "globex", "initech"], stop.Token);
+
+        Assert.Equal(["globex", "initech"], failures.Keys.Order());
+        Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
+
+        // Once stopped, the opening asks the custodian nothing more for the partitions it did not reach
+        Assert.Equal(3, listings);
+    }
+
+    /// <summary>
+    /// The round the ring starts with leaves out the partitions refreshed when opened, so a server opening its
+    /// tenants before the ring starts does not open every key twice.
+    /// </summary>
+    [Fact]
+    public async Task TheFirstRound_LeavesOutThePartitionsAlreadyOpened()
+    {
+        var (rings, _) = RingsKeeping(Keeping("acme", "globex"), StubCustodian(_keyEncryptionKey));
+        Assert.Empty(await Open(rings, "acme"));
+
+        Assert.Equal(["globex"], rings.BeginRound(exceptOpened: true).Select(entry => entry.Partition));
+        Assert.Equal(["acme", "globex"], rings.BeginRound().Select(entry => entry.Partition));
+    }
+
+    /// <summary>
+    /// The partitions a host registers are the ones refreshed, whichever side of the ring's registration it
+    /// registered them, rather than those the settings declare.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PartitionsTheHostRegisters_AreTheOnesRefreshed(bool registeredFirst)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(new FakeStore());
+        services.ComposeExternalKeyBackends();
+        if (registeredFirst)
+            services.AddSingleton(Keeping("globex"));
+
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName });
+        if (!registeredFirst)
+            services.AddSingleton(Keeping("globex"));
+
+        using var provider = services.BuildServiceProvider();
+
+        var round = provider.GetRequiredService<KeyRings>().BeginRound();
+        Assert.Equal(["globex"], round.Select(entry => entry.Partition));
+    }
+
+    /// <summary>
+    /// A partition names its entries in every store the ring may use, so opening one under a name only some stores
+    /// accept is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("tenants/acme")]
+    [InlineData("acme.eu")]
+    public async Task OpeningAPartitionNamedWithCharactersAStoreMayRefuse_IsRefused(string partition)
+    {
+        var (rings, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        Assert.IsType<ArgumentException>(Assert.Single(await Open(rings, partition)).Value);
     }
 
     [Fact]
@@ -866,7 +1107,6 @@ public sealed class KeyRingTests : IDisposable
 
         var refusal = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IKeyRing>());
         Assert.Contains($"{nameof(IKeyRings)}.{nameof(IKeyRings.For)}", refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("'acme', 'globex'", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

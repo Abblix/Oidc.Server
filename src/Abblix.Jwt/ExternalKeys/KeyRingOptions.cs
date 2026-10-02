@@ -28,14 +28,22 @@ public sealed class KeyRingOptions
     public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
+    /// How often the ring is refreshed: half the propagation window. A freshly minted key is announced for that
+    /// window before it signs, so refreshing twice per window means no pod meets a token signed by a key it has not
+    /// loaded.
+    /// </summary>
+    internal TimeSpan RefreshPeriod => KeyRolloverPropagation / 2;
+
+    /// <summary>
     /// The partition a ring serving one issuer keeps, whose entries are stored under their own ids.
     /// </summary>
     public const string DefaultPartition = "";
 
     /// <summary>
     /// The partitions the key ring keeps, each a ring of its own that mints, rotates and serves keys apart from the
-    /// others, so no two partitions share a key. A server with one issuer keeps the default one; one serving
-    /// several tenants keeps one for each.
+    /// others, so no two partitions share a key. A server with one issuer keeps the default one. A server whose
+    /// issuers come and go while it runs registers an <see cref="IKeyRingPartitions"/> instead, and the ring keeps
+    /// the partitions it names rather than these, which are still checked at startup.
     /// </summary>
     /// <remarks>
     /// All partitions share the store: an entry of a partition other than the default is stored under its id with

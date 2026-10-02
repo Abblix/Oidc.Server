@@ -961,14 +961,15 @@ internal static class LogEvents
     public static class MultiTenancy
     {
         /// <summary>
-        /// <c>Features/MultiTenancy/StoreTenantCatalog.cs</c> - tenants the checks of the tenant list leave out
-        /// (sub-range 10700-10719).
+        /// <c>Features/MultiTenancy/StoreTenantCatalog.cs</c> - tenants a reading leaves out, refused by the checks
+        /// of the tenant list or not readied to be served (sub-range 10700-10719).
         /// </summary>
         public static class StoreTenantCatalog
         {
             private const int Base = 10700;
 
             public const int TenantsLeftOut = Base;
+            public const int TenantNotOpened = Base + 1;
         }
     }
 }

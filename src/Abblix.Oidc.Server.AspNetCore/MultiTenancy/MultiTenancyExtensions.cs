@@ -7,12 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 
@@ -47,11 +45,6 @@ public static class MultiTenancyExtensions
         }
 
         services.AddOptions<MultiTenancyOptions>().Configure(configure).ValidateOnStart();
-
-        // A server minting its keys keeps a ring for each creation of a tenant, named as its issuer settings name
-        // it, so no two tenants share a key
-        services.AddOptions<KeyRingOptions>().Configure<IOptions<MultiTenancyOptions>>(
-            (ring, tenants) => ring.Partitions = [..tenants.Value.Tenants.Select(TenantKey.PartitionOf)]);
         services.AddTenantValidation();
         services.AddTenantResolution();
 

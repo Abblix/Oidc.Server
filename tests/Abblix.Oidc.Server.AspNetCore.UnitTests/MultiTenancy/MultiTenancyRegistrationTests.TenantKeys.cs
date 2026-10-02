@@ -512,6 +512,8 @@ public partial class MultiTenancyRegistrationTests
                 .Returns([JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { KeyId = partition }]);
             return ring.Object;
         });
+        rings.Setup(r => r.OpenAsync(Moq.It.IsAny<IReadOnlyCollection<string>>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<IReadOnlyDictionary<string, Exception>>(new Dictionary<string, Exception>()));
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -531,17 +533,6 @@ public partial class MultiTenancyRegistrationTests
                 options.Tenants.Add(tenant);
         });
         return services.BuildServiceProvider();
-    }
-
-    /// <summary>
-    /// A server minting its keys keeps a ring for each tenant, named by the tenant's id.
-    /// </summary>
-    [Fact]
-    public void TheKeyRing_KeepsAPartitionForEachTenant()
-    {
-        using var provider = MintingKeys(Acme, new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" });
-
-        Assert.Equal(["acme", "globex"], provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.Partitions);
     }
 
     /// <summary>
@@ -566,6 +557,27 @@ public partial class MultiTenancyRegistrationTests
 
         Assert.Equal("acme", Assert.Single(atAcme).KeyId);
         Assert.Equal("globex~2", Assert.Single(atGlobex).KeyId);
+    }
+
+    /// <summary>
+    /// Tenants whose ids and generations spell one partition would sign with each other's keys, so none of them is
+    /// opened, each refused on its own, while the other tenants open as usual.
+    /// </summary>
+    [Fact]
+    public async Task TenantsSharingAPartition_AreEachRefused_AndTheOthersOpened()
+    {
+        using var provider = MintingKeys();
+        var opening = provider.GetServices<ITenantOpening>().OfType<TenantKeyRingOpening>().Single();
+
+        var failures = await opening.OpenAsync(
+            [
+                new TenantDefinition { Id = "acme~g1", Issuer = AcmeIssuer },
+                new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Generation = "g1" },
+                new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
+            ],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(["acme", "acme~g1"], failures.Keys.Order());
     }
 
     /// <summary>
@@ -627,19 +639,5 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
-    }
-
-    /// <summary>
-    /// Keys the server mints are kept for the tenants the settings declare, so a store of the host's own is
-    /// refused with them at startup, rather than leave each tenant it holds without a key to sign with.
-    /// </summary>
-    [Fact]
-    public void MintedKeys_BesideAStoreOfTheHostsOwn_AreRefusedAtStartup()
-    {
-        using var provider = MintingKeys(services => services.AddSingleton(Moq.Mock.Of<ITenantStore>()));
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("would have none to sign with", refusal.Message, StringComparison.Ordinal);
     }
 }

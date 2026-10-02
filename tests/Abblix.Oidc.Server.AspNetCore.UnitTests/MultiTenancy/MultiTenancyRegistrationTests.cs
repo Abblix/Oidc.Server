@@ -519,13 +519,15 @@ public partial class MultiTenancyRegistrationTests
     /// partition named by its id alone.
     /// </summary>
     [Fact]
-    public void TheKeyRing_KeepsAPartitionForEachCreationOfATenant()
+    public async Task TheKeyRing_KeepsAPartitionForEachCreationOfATenant()
     {
         using var provider = MintingKeys(
             Acme,
             new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex", Generation = "2" });
 
-        Assert.Equal(["acme", "globex~2"], provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.Partitions);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(["acme", "globex~2"], provider.GetRequiredService<IKeyRingPartitions>().Kept.Order());
     }
 
     /// <summary>

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,11 @@ internal static class TenantResolutionRegistration
         services.TryAddSingleton<StoreTenantCatalog>();
         services.TryAddSingleton<ITenantCatalog>(
             serviceProvider => serviceProvider.GetRequiredService<StoreTenantCatalog>());
+
+        // A server minting its keys keeps a part of its key ring for each creation of each tenant served, named as
+        // its issuer settings name it, so no two tenants share a key and a tenant gained at runtime has one
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantOpening, TenantKeyRingOpening>());
+        services.TryAddSingleton<IKeyRingPartitions, TenantKeyRingPartitions>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantCatalogRefreshService>());
         services.TryAddSingleton<ITenantAccessor, HttpContextTenantAccessor>();

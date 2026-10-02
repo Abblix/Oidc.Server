@@ -8,9 +8,10 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// The store every partition shares, read once for one refresh round: each partition's refresh in the round takes
-/// the same read, and a write makes the next load read the store again. A round lives only as long as the refresh
-/// service's pass over the partitions, so nothing it read outlives the pass.
+/// The store every partition shares, read once for one round: each partition refreshed or opened in the round
+/// takes the same read, a write the round won is added to it, and a write another pod won makes the next load read
+/// the store again. A round lives only as long as one pass of the refresh service or one opening of partitions, so
+/// nothing it read outlives that pass.
 /// </summary>
 /// <remarks>
 /// Every backend reads each entry's body to load, so a read per partition would cost the number of partitions
@@ -30,17 +31,26 @@ internal sealed class KeyRingStoreRound(IKeyRingStore store) : IKeyRingStore
         => _entries ??= await store.LoadAsync(cancellationToken);
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A write this round won keeps the round's read, the entry added to it, so the partitions it opens or
+    /// refreshes one after another share one read of the store. A write another pod won, or one that failed, leaves
+    /// the store holding what this round has not seen, so the next load reads it again.
+    /// </remarks>
     public async Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
     {
+        bool added;
         try
         {
-            return await store.TryAddAsync(key, cancellationToken);
+            added = await store.TryAddAsync(key, cancellationToken);
         }
-        finally
+        catch
         {
-            // Whether this write or another pod's won, the store changed since the round's read
             _entries = null;
+            throw;
         }
+
+        _entries = added && _entries is { } read ? [..read, key] : null;
+        return added;
     }
 
     /// <inheritdoc />
