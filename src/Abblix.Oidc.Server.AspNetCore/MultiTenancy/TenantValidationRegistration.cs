@@ -26,7 +26,6 @@ internal static class TenantValidationRegistration
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantListValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSeamsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantRegistriesValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantStoreValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantOwnedOptionsValidator>(),
             ServiceDescriptor.Singleton<ITenantsCheck, TenantDefinitionsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, TenantSettingsCheck>(),

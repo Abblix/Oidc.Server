@@ -84,12 +84,24 @@ public class StoreTenantCatalogTests
         }
     }
 
+    /// <summary>Readies each tenant it is asked to, failing those named in <see cref="Failing"/>.</summary>
+    private sealed class FakeOpening : ITenantOpening
+    {
+        public HashSet<string> Failing { get; } = [];
+
+        public Task OpenAsync(TenantDefinition tenant, CancellationToken cancellationToken)
+            => Failing.Contains(tenant.Id)
+                ? Task.FromException(new InvalidOperationException("the tenant's first key could not be minted"))
+                : Task.CompletedTask;
+    }
+
     private const string Version = "1";
 
     private readonly FakeStore _store = new();
     private readonly RecordingLogger _logger = new();
+    private readonly FakeOpening _opening = new();
 
-    private StoreTenantCatalog Catalog() => new(_logger, _store, [new TenantDefinitionsCheck()]);
+    private StoreTenantCatalog Catalog() => new(_logger, _store, [new TenantDefinitionsCheck()], [_opening]);
 
     private static StoredTenant Stored(string id, string issuer, string version = Version)
         => new(new TenantDefinition { Id = id, Issuer = issuer, Generation = "g1" }, version);
@@ -167,6 +179,50 @@ public class StoreTenantCatalogTests
         Assert.Null(await catalog.FindByIdAsync("acme", ct));
         Assert.Null(await catalog.FindByAddressAsync("acme.example.com", "/", ct));
         Assert.NotNull(await catalog.FindByAddressAsync("globex.example.com", "/", ct));
+    }
+
+    /// <summary>
+    /// A tenant the store gains that cannot be readied is left out of that reading and logged while the others are
+    /// served, and is served by the first reading that readies it.
+    /// </summary>
+    [Fact]
+    public async Task ATenantThatCannotBeOpened_IsLeftOutAndLogged_UntilAReadingOpensIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _opening.Failing.Add("globex");
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        Assert.Single(_logger.Errors);
+
+        _opening.Failing.Clear();
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// The first reading is what the server starts with, so a tenant it cannot ready fails that reading, as the
+    /// store failing to answer does, and the reading is not kept.
+    /// </summary>
+    [Fact]
+    public async Task ATenantThatCannotBeOpened_FailsTheFirstReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _opening.Failing.Add("acme");
+        var catalog = Catalog();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => catalog.RefreshAsync(ct));
+
+        _opening.Failing.Clear();
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
     }
 
     /// <summary>

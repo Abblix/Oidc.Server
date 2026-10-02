@@ -13,8 +13,9 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// The tenants a store of tenants holds, as last read: the checks of the tenant list judge each reading, and the
-/// tenants they refuse are left out and logged while the rest are served.
+/// The tenants a store of tenants holds, as last read: the checks of the tenant list judge each reading, each
+/// tenant they pass is readied to be served, and the tenants refused or not readied are left out and logged while
+/// the rest are served.
 /// </summary>
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
@@ -27,11 +28,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="store">Where the tenants are read from.</param>
 /// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
 /// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
+/// <param name="openings">What readies each tenant the checks pass before it is served.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class StoreTenantCatalog(
     ILogger<StoreTenantCatalog> logger,
     ITenantStore store,
-    IEnumerable<ITenantsCheck> checks) : ITenantCatalog
+    IEnumerable<ITenantsCheck> checks,
+    IEnumerable<ITenantOpening> openings) : ITenantCatalog
 {
     /// <summary>A tenant and where it is served.</summary>
     private sealed record Served(TenantAddress Address, TenantDefinition Tenant);
@@ -88,7 +91,10 @@ public sealed partial class StoreTenantCatalog(
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
 
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
-        var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
+        var served = await OpenedAsync(
+            [..stored.Where(tenant => !refused.Contains(tenant.Tenant.Id))],
+            previous is null,
+            cancellationToken);
         foreach (var tenant in served.Select(entry => entry.Tenant))
             _lastServed[tenant.Id] = tenant;
 
@@ -101,6 +107,40 @@ public sealed partial class StoreTenantCatalog(
                 .ToLookup(entry => entry.Address.Host, StringComparer.Ordinal),
             refusals.Select(refusal => refusal.Message).ToHashSet(StringComparer.Ordinal)));
     }
+
+    /// <summary>
+    /// The tenants of <paramref name="passed"/> the openings readied; one that failed is logged and left out of this
+    /// reading, except in the first, whose failure refuses the start as the store failing to answer does.
+    /// </summary>
+    private async Task<StoredTenant[]> OpenedAsync(
+        StoredTenant[] passed,
+        bool firstReading,
+        CancellationToken cancellationToken)
+    {
+        var opened = new List<StoredTenant>(passed.Length);
+        foreach (var tenant in passed)
+        {
+            try
+            {
+                foreach (var opening in openings)
+                    await opening.OpenAsync(tenant.Tenant, cancellationToken);
+
+                opened.Add(tenant);
+            }
+            catch (Exception exception) when (!firstReading && !cancellationToken.IsCancellationRequested)
+            {
+                LogTenantNotOpened(exception, tenant.Tenant.Id);
+            }
+        }
+
+        return [..opened];
+    }
+
+    /// <summary>
+    /// The tenants served now, as of the last reading; none before the first.
+    /// </summary>
+    internal IEnumerable<TenantDefinition> ServedTenants
+        => Volatile.Read(ref _reading)?.ById.Values.Select(tenant => tenant.Tenant) ?? [];
 
     /// <inheritdoc />
     public async ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)

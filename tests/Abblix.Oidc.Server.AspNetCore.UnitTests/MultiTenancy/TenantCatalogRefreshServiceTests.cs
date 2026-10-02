@@ -82,7 +82,7 @@ public class TenantCatalogRefreshServiceTests
 
     public TenantCatalogRefreshServiceTests()
     {
-        _catalog = new StoreTenantCatalog(NullLogger<StoreTenantCatalog>.Instance, _store, []);
+        _catalog = new StoreTenantCatalog(NullLogger<StoreTenantCatalog>.Instance, _store, [], []);
     }
 
     private TenantCatalogRefreshService Service()

@@ -261,9 +261,14 @@ public static class ExternalKeysServiceCollectionExtensions
         // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
         // container knows nothing about: everything else the ring needs is resolved normally. It is read off the
         // builder rather than captured, so a call chained after this one - AdoptExistingKeys - still reaches the
-        // ring: this factory runs when the container builds, by which time the whole chain has run.
+        // ring: this factory runs when the container builds, by which time the whole chain has run. The partitions
+        // are the host's when it registered any, whichever side of this call it did, and the settings' otherwise.
         services.TryAddSingleton(
-            serviceProvider => serviceProvider.CreateService<KeyRings>(Dependency.Override(builder.Policy)));
+            serviceProvider => serviceProvider.CreateService<KeyRings>(
+                Dependency.Override(builder.Policy),
+                Dependency.Override(
+                    serviceProvider.GetService<IKeyRingPartitions>() ??
+                    serviceProvider.CreateService<OptionsKeyRingPartitions>())));
 
         // Every contract is an alias to the one set of rings. Registering one with its own factory instead would
         // build a SECOND ring: the refresh service would keep one current while every consumer read the other,

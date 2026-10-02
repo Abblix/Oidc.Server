@@ -78,6 +78,7 @@ public class TenantResolutionMiddlewareTests
             new StoreTenantCatalog(
                 NullLogger<StoreTenantCatalog>.Instance,
                 new OptionsTenantStore(Options.Create(Declared)),
+                [],
                 []));
 
         var httpContext = new DefaultHttpContext();

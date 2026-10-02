@@ -18,4 +18,11 @@ public sealed partial class StoreTenantCatalog
         Message = "The tenants {TenantIds} are left out of the tenants served, and requests to them are answered as " +
                   "to no tenant: {Refusal}")]
     private partial void LogTenantsLeftOut(string tenantIds, string refusal);
+
+    [LoggerMessage(
+        EventId = LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotOpened,
+        Level = LogLevel.Error,
+        Message = "The tenant {TenantId} is left out of the tenants served until the next reading, and requests to " +
+                  "it are answered as to no tenant: it could not be readied to be served")]
+    private partial void LogTenantNotOpened(Exception exception, string tenantId);
 }

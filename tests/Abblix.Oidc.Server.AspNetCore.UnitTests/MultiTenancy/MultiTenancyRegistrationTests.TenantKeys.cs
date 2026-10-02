@@ -534,17 +534,6 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A server minting its keys keeps a ring for each tenant, named by the tenant's id.
-    /// </summary>
-    [Fact]
-    public void TheKeyRing_KeepsAPartitionForEachTenant()
-    {
-        using var provider = MintingKeys(Acme, new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" });
-
-        Assert.Equal(["acme", "globex"], provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.Partitions);
-    }
-
-    /// <summary>
     /// Each tenant publishes and signs with the keys of its own ring.
     /// </summary>
     [Fact]
@@ -627,19 +616,5 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
-    }
-
-    /// <summary>
-    /// Keys the server mints are kept for the tenants the settings declare, so a store of the host's own is
-    /// refused with them at startup, rather than leave each tenant it holds without a key to sign with.
-    /// </summary>
-    [Fact]
-    public void MintedKeys_BesideAStoreOfTheHostsOwn_AreRefusedAtStartup()
-    {
-        using var provider = MintingKeys(services => services.AddSingleton(Moq.Mock.Of<ITenantStore>()));
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("would have none to sign with", refusal.Message, StringComparison.Ordinal);
     }
 }
