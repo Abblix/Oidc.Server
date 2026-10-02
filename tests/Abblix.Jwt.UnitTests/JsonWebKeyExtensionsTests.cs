@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Xunit;
@@ -102,5 +103,40 @@ public class JsonWebKeyExtensionsTests
         var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256);
 
         Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// Every algorithm this library recognizes, except "none", is met by some key: the requirement table behind
+    /// <see cref="JsonWebKeyExtensions.SupportsAlgorithm"/> is held complete here rather than by a default arm,
+    /// so an algorithm added to either catalog fails this test until its key requirement is written down.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RecognizedAlgorithms))]
+    public void EveryRecognizedAlgorithm_IsMetBySomeKey(string algorithm)
+    {
+        JsonWebKey[] keys =
+        [
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P521, SigningAlgorithms.ES512),
+            JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256),
+        ];
+
+        Assert.Contains(keys, key => key.SupportsAlgorithm(algorithm));
+    }
+
+    public static TheoryData<string> RecognizedAlgorithms
+    {
+        get
+        {
+            var keyManagement = typeof(EncryptionAlgorithms.KeyManagement)
+                .GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(constant => constant.IsLiteral)
+                .Select(constant => (string)constant.GetRawConstantValue()!);
+
+            return new TheoryData<string>(
+                SigningAlgorithms.Known.Where(algorithm => algorithm != SigningAlgorithms.None).Concat(keyManagement));
+        }
     }
 }

@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Collections.Frozen;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -16,6 +17,97 @@ namespace Abblix.Jwt;
 /// </summary>
 public static class JsonWebKeyExtensions
 {
+	/// <summary>
+	/// The curves this library supports, keyed by OID: the JWK <c>crv</c> name and the one ECDSA algorithm
+	/// RFC 7518 section 3.4 binds to that curve.
+	/// </summary>
+	private static readonly FrozenDictionary<string, (string Curve, string Algorithm)> CurvesByOid =
+		new Dictionary<string, (string Curve, string Algorithm)>
+		{
+			[EllipticCurveOids.P256] = (EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+			[EllipticCurveOids.P384] = (EllipticCurveTypes.P384, SigningAlgorithms.ES384),
+			[EllipticCurveOids.P521] = (EllipticCurveTypes.P521, SigningAlgorithms.ES512),
+		}.ToFrozenDictionary(StringComparer.Ordinal);
+
+	/// <summary>
+	/// The RFC 7518 section stating the RSA key-size floor, for every algorithm that has one. Both the floor and
+	/// the citation are read from this one table, so an algorithm cannot gain a floor without its section.
+	/// </summary>
+	private static readonly FrozenDictionary<string, string> RsaKeySizeSections = new Dictionary<string, string>
+	{
+		[SigningAlgorithms.RS256] = "Section 3.3",
+		[SigningAlgorithms.RS384] = "Section 3.3",
+		[SigningAlgorithms.RS512] = "Section 3.3",
+		[SigningAlgorithms.PS256] = "Section 3.5",
+		[SigningAlgorithms.PS384] = "Section 3.5",
+		[SigningAlgorithms.PS512] = "Section 3.5",
+		[EncryptionAlgorithms.KeyManagement.Rsa1_5] = "Section 4.2",
+		[EncryptionAlgorithms.KeyManagement.RsaOaep] = "Section 4.3",
+		[EncryptionAlgorithms.KeyManagement.RsaOaep256] = "Section 4.3",
+	}.ToFrozenDictionary(StringComparer.Ordinal);
+
+	/// <summary>
+	/// What each algorithm demands of a key's material (Specification pattern, one rule per algorithm). An
+	/// algorithm absent from the table - "none", or a name this library cannot perform - is met by no key.
+	/// </summary>
+	private static readonly FrozenDictionary<string, Func<JsonWebKey, bool>> KeyRequirements =
+		new (string[] Algorithms, Func<JsonWebKey, bool> IsMetBy)[]
+		{
+			(
+				[
+					SigningAlgorithms.RS256, SigningAlgorithms.RS384, SigningAlgorithms.RS512,
+					SigningAlgorithms.PS256, SigningAlgorithms.PS384, SigningAlgorithms.PS512,
+				],
+				key => key.KeyType == JsonWebKeyTypes.Rsa
+			),
+			([SigningAlgorithms.ES256], key => key.IsCurve(EllipticCurveTypes.P256)),
+			([SigningAlgorithms.ES384], key => key.IsCurve(EllipticCurveTypes.P384)),
+			([SigningAlgorithms.ES512], key => key.IsCurve(EllipticCurveTypes.P521)),
+			(
+				[SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512],
+				key => key.KeyType == JsonWebKeyTypes.Octet
+			),
+
+			// JWE key management, RFC 7518 section 4.1. The same question, asked of the recipient's key.
+			(
+				[
+					EncryptionAlgorithms.KeyManagement.Rsa1_5,
+					EncryptionAlgorithms.KeyManagement.RsaOaep,
+					EncryptionAlgorithms.KeyManagement.RsaOaep256,
+				],
+				key => key.KeyType == JsonWebKeyTypes.Rsa
+			),
+
+			// Key agreement needs a curve, and any of the three will do: unlike ECDSA, the algorithm name does
+			// not pin one, so the curve is carried in the ephemeral key instead.
+			(
+				[
+					EncryptionAlgorithms.KeyManagement.EcdhEs,
+					EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
+					EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW,
+					EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW,
+				],
+				key => key.KeyType == JsonWebKeyTypes.EllipticCurve
+			),
+			(
+				[
+					EncryptionAlgorithms.KeyManagement.Aes128KW,
+					EncryptionAlgorithms.KeyManagement.Aes192KW,
+					EncryptionAlgorithms.KeyManagement.Aes256KW,
+					EncryptionAlgorithms.KeyManagement.Aes128Gcmkw,
+					EncryptionAlgorithms.KeyManagement.Aes192Gcmkw,
+					EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+					EncryptionAlgorithms.KeyManagement.Dir,
+					EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
+					EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW,
+					EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW,
+				],
+				key => key.KeyType == JsonWebKeyTypes.Octet
+			),
+		}
+		.SelectMany(rule => rule.Algorithms, (rule, algorithm) => KeyValuePair.Create(algorithm, rule.IsMetBy))
+		.ToFrozenDictionary(StringComparer.Ordinal);
+
 	/// <summary>
 	/// Converts an X509Certificate2 to a JsonWebKey. The private keys can be optionally included in the conversion.
 	/// </summary>
@@ -143,22 +235,11 @@ public static class JsonWebKeyExtensions
 	public static EllipticCurveJsonWebKey Apply(this EllipticCurveJsonWebKey jwk, ECParameters parameters)
 	{
 		var curveOid = parameters.Curve.Oid;
+		if (curveOid.Value is not { } oid || !CurvesByOid.TryGetValue(oid, out var namedCurve))
+			throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported");
 
-		jwk.Curve = curveOid.Value switch
-		{
-			EllipticCurveOids.P256 => EllipticCurveTypes.P256,
-			EllipticCurveOids.P384 => EllipticCurveTypes.P384,
-			EllipticCurveOids.P521 => EllipticCurveTypes.P521,
-			_ => throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported"),
-		};
-
-		jwk.Algorithm ??= curveOid.Value switch
-		{
-			EllipticCurveOids.P256 => SigningAlgorithms.ES256,
-			EllipticCurveOids.P384 => SigningAlgorithms.ES384,
-			EllipticCurveOids.P521 => SigningAlgorithms.ES512,
-			_ => throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported"),
-		};
+		jwk.Curve = namedCurve.Curve;
+		jwk.Algorithm ??= namedCurve.Algorithm;
 
 		jwk.X = parameters.Q.X;
 		jwk.Y = parameters.Q.Y;
@@ -198,20 +279,9 @@ public static class JsonWebKeyExtensions
 	/// own algorithms, and Section 3.4 - ECDSA - states none at all. A caller reporting on a key has to
 	/// ask about whatever algorithm the header named, and take "no floor here" for an answer, or it ends
 	/// up citing a requirement that document does not make.
-	/// <para>
-	/// The same nine algorithms as <see cref="RsaSectionFor"/>, and a row pins the two lists together:
-	/// this one answering null where that one names a section would leave the seam refusing a key while
-	/// the report says nothing about it.
-	/// </para>
 	/// </remarks>
-	internal static int? MinimumRsaKeyBitsFor(string algorithm) => algorithm switch
-	{
-		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 or
-			SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 or
-			EncryptionAlgorithms.KeyManagement.Rsa1_5 or EncryptionAlgorithms.KeyManagement.RsaOaep or
-			EncryptionAlgorithms.KeyManagement.RsaOaep256 => MinimumRsaKeyBits,
-		_ => null,
-	};
+	internal static int? MinimumRsaKeyBitsFor(string algorithm)
+		=> RsaKeySizeSections.ContainsKey(algorithm) ? MinimumRsaKeyBits : null;
 
 	/// <summary>
 	/// The smallest HMAC key RFC 7518 Section 3.2 permits for <paramref name="algorithm"/>, in bits, or
@@ -258,15 +328,8 @@ public static class JsonWebKeyExtensions
 	public static string RsaSectionForOrNothing(string algorithm)
 		=> SectionOrNull(algorithm) is { } section ? $"per RFC 7518 {section}" : "for RSA signatures";
 
-	private static string? SectionOrNull(string algorithm) => algorithm switch
-	{
-		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 => "Section 3.3",
-		SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 => "Section 3.5",
-		EncryptionAlgorithms.KeyManagement.Rsa1_5 => "Section 4.2",
-		EncryptionAlgorithms.KeyManagement.RsaOaep or EncryptionAlgorithms.KeyManagement.RsaOaep256
-			=> "Section 4.3",
-		_ => null,
-	};
+	private static string? SectionOrNull(string algorithm)
+		=> RsaKeySizeSections.GetValueOrDefault(algorithm);
 
 	/// <summary>
 	/// The real bit length of the key's modulus, ignoring any leading zero octets.
@@ -405,51 +468,8 @@ public static class JsonWebKeyExtensions
 	/// <param name="key">The key to test.</param>
 	/// <param name="algorithm">The JWS algorithm the caller needs.</param>
 	/// <returns>True when the key's type, and for ECDSA its curve, match what the algorithm requires.</returns>
-	public static bool SupportsAlgorithm(this JsonWebKey key, string algorithm) => algorithm switch
-	{
-		SigningAlgorithms.RS256 or
-		SigningAlgorithms.RS384 or
-		SigningAlgorithms.RS512 or
-
-		SigningAlgorithms.PS256 or
-		SigningAlgorithms.PS384 or
-		SigningAlgorithms.PS512 => key.KeyType == JsonWebKeyTypes.Rsa,
-
-		SigningAlgorithms.ES256 => key.IsCurve(EllipticCurveTypes.P256),
-		SigningAlgorithms.ES384 => key.IsCurve(EllipticCurveTypes.P384),
-		SigningAlgorithms.ES512 => key.IsCurve(EllipticCurveTypes.P521),
-
-		SigningAlgorithms.HS256 or
-		SigningAlgorithms.HS384 or
-		SigningAlgorithms.HS512 => key.KeyType == JsonWebKeyTypes.Octet,
-
-		// JWE key management, RFC 7518 section 4.1. The same question, asked of the recipient's key.
-		EncryptionAlgorithms.KeyManagement.Rsa1_5 or
-		EncryptionAlgorithms.KeyManagement.RsaOaep or
-		EncryptionAlgorithms.KeyManagement.RsaOaep256 => key.KeyType == JsonWebKeyTypes.Rsa,
-
-		// Key agreement needs a curve, and any of the three will do: unlike ECDSA, the algorithm name does
-		// not pin one, so the curve is carried in the ephemeral key instead.
-		EncryptionAlgorithms.KeyManagement.EcdhEs or
-		EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW or
-		EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW or
-		EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => key.KeyType == JsonWebKeyTypes.EllipticCurve,
-
-		EncryptionAlgorithms.KeyManagement.Aes128KW or
-		EncryptionAlgorithms.KeyManagement.Aes192KW or
-		EncryptionAlgorithms.KeyManagement.Aes256KW or
-		EncryptionAlgorithms.KeyManagement.Aes128Gcmkw or
-		EncryptionAlgorithms.KeyManagement.Aes192Gcmkw or
-		EncryptionAlgorithms.KeyManagement.Aes256Gcmkw or
-		EncryptionAlgorithms.KeyManagement.Dir or
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW or
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW or
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => key.KeyType == JsonWebKeyTypes.Octet,
-
-		// "none" carries no key, and an unregistered name is one this library cannot perform: in both cases
-		// no key qualifies, which is the answer rather than a reason to guess.
-		_ => false,
-	};
+	public static bool SupportsAlgorithm(this JsonWebKey key, string algorithm)
+		=> KeyRequirements.TryGetValue(algorithm, out var isMetBy) && isMetBy(key);
 
 	/// <summary>Whether the key is an elliptic-curve key on exactly the named curve.</summary>
 	private static bool IsCurve(this JsonWebKey key, string curve)

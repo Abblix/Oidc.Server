@@ -6,10 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
 using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -56,8 +54,8 @@ internal sealed partial class TransitCustodian(
         byte[] data,
         CancellationToken cancellationToken)
     {
-        var (name, version) = ParseKeyId(keyId);
-        var request = BuildSignRequest(Convert.ToBase64String(data), algorithm, version);
+        var (name, version) = TransitKeyId.Parse(keyId);
+        var request = TransitSignRequests.For(algorithm, Convert.ToBase64String(data), version);
         var path = $"{Mount}/sign/{name}";
 
         using var response = await SendGuardedAsync(HttpMethod.Post, path, request, cancellationToken);
@@ -68,64 +66,6 @@ internal sealed partial class TransitCustodian(
         // Transit returns "vault:v<version>:<base64(signature)>"; the wire signature is the last segment.
         return Convert.FromBase64String(signature[(signature.LastIndexOf(':') + 1)..]);
     }
-
-    private static class SignatureAlgorithms
-    {
-        public const string Pkcs1V15 = "pkcs1v15";
-        public const string Pss = "pss";
-    }
-
-    private static class HashAlgorithms
-    {
-        public const string Sha2With256 = "sha2-256";
-        public const string Sha2With384 = "sha2-384";
-        public const string Sha2With512 = "sha2-512";
-    }
-
-    private static class MarshalingAlgorithms
-    {
-        public const string Jws = "jws";
-    }
-
-    // Maps a JWS algorithm to the Transit sign request pinned to the given key version; an unmapped algorithm is
-    // rejected. key_version pins the exact version the kid names, so the produce role signs with the active
-    // version even when a newer version is already published but still propagating.
-    private static SignRequest BuildSignRequest(string input, string algorithm, int version)
-    {
-        // An algorithm decides two things independently: which digest, and how the signature is formed. RSA picks
-        // a padding, EC picks an encoding, so the request differs by exactly one field between the families.
-        var request = new SignRequest
-        {
-            Input = input,
-            HashAlgorithm = HashAlgorithmFor(algorithm),
-            KeyVersion = version,
-        };
-
-        // Transit sign-request field values. RSA sets signature_algorithm (PKCS#1 v1.5 / PSS); EC sets
-        // marshaling_algorithm=jws so Transit returns the R||S form JWS needs instead of ASN.1 DER.
-        return algorithm switch
-        {
-            SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512
-                => request with { SignatureAlgorithm = SignatureAlgorithms.Pkcs1V15 },
-
-            SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512
-                => request with { SignatureAlgorithm = SignatureAlgorithms.Pss },
-
-            SigningAlgorithms.ES256 or SigningAlgorithms.ES384 or SigningAlgorithms.ES512
-                => request with { MarshalingAlgorithm = MarshalingAlgorithms.Jws },
-
-            _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
-        };
-    }
-
-    private static string HashAlgorithmFor(string algorithm) => algorithm switch
-    {
-        SigningAlgorithms.RS256 or SigningAlgorithms.PS256 or SigningAlgorithms.ES256 => HashAlgorithms.Sha2With256,
-        SigningAlgorithms.RS384 or SigningAlgorithms.PS384 or SigningAlgorithms.ES384 => HashAlgorithms.Sha2With384,
-        SigningAlgorithms.RS512 or SigningAlgorithms.PS512 or SigningAlgorithms.ES512 => HashAlgorithms.Sha2With512,
-
-        _ => throw new NotSupportedException($"The Vault Transit store does not sign '{algorithm}'."),
-    };
 
     /// <summary>
     /// Unwraps (decrypts) an RSA-OAEP-256 Content Encryption Key with a Transit RSA key (the only key-management
@@ -147,7 +87,7 @@ internal sealed partial class TransitCustodian(
             throw new NotSupportedException(
                 $"The Vault Transit store unwraps {EncryptionAlgorithms.KeyManagement.RsaOaep256} only; got '{algorithm}'.");
 
-        var (name, version) = ParseKeyId(keyId);
+        var (name, version) = TransitKeyId.Parse(keyId);
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
         var path = $"{Mount}/decrypt/{name}";
 
@@ -173,21 +113,9 @@ internal sealed partial class TransitCustodian(
             "Vault Transit exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
 
     /// <summary>
-    /// Transit reports the key family in the "type" field ("ecdsa-p256", "rsa-2048"): match on the family prefix,
-    /// not the exact curve or modulus size.
-    /// </summary>
-    private static class KeyFamilyTypes
-    {
-        public const string Ecdsa = "ecdsa";
-        public const string Rsa = "rsa";
-    }
-
-    /// <summary>
-    /// Enumerates every version of the Transit key as a public-only JWK (RSA or EC, per the Transit key type),
-    /// each carrying the version-specific <c>kid</c> (<c>&lt;name&gt;:&lt;version&gt;</c>) and the version's
-    /// creation time. Transit returns each version's public half as a PEM (SubjectPublicKeyInfo). Called at
-    /// publication time, so JWKS publishing and signature verification run locally against the result and never
-    /// touch this client on the hot path.
+    /// Enumerates every version of the Transit key as a public-only JWK (RSA or EC, per the Transit key type).
+    /// Called at publication time, so JWKS publishing and signature verification run locally against the result
+    /// and never touch this client on the hot path.
     /// </summary>
     public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
         string keyName,
@@ -197,54 +125,8 @@ internal sealed partial class TransitCustodian(
         using var response = await SendGuardedAsync(HttpMethod.Get, path, body: null, cancellationToken);
         EnsureAnswered(response, path);
 
-        var data = response.Body(path).RootElement.GetProperty("data");
-        var keyType = data.GetProperty("type").GetString()!;
-
-        // Transit returns every version under "keys" as { "<version>": { public_key, creation_time } }. Publish
-        // them all so a rotation overlaps; the kid names the version so a later sign/unwrap addresses it exactly.
-        foreach (var version in data.GetProperty("keys").EnumerateObject())
-        {
-            var pem = version.Value.GetProperty("public_key").GetString()!;
-            var createdAt = DateTimeOffset.Parse(
-                version.Value.GetProperty("creation_time").GetString()!,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind);
-            var publicKey = ImportPublicKey(keyType, pem) with { KeyId = $"{keyName}:{version.Name}" };
-            yield return new KeyVersion(publicKey, createdAt);
-        }
-    }
-
-    // The published kid is "<transit key name>:<version>"; split it to address the Transit key and pin the
-    // version for a private operation. Transit key names contain no colon, so the last colon is the separator.
-    private static (string Name, int Version) ParseKeyId(string keyId)
-    {
-        var separator = keyId.LastIndexOf(':');
-        if (separator > 0 && int.TryParse(
-                keyId.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var version))
-            return (keyId[..separator], version);
-
-        throw new InvalidOperationException(
-            $"Malformed external key id '{keyId}'; expected '<name>:<version>' from GetKeyVersionsAsync.");
-    }
-
-    // Imports a Transit public key PEM (SubjectPublicKeyInfo) into a public-only JWK of the matching type.
-    private static JsonWebKey ImportPublicKey(string keyType, string pem)
-    {
-        if (keyType.StartsWith(KeyFamilyTypes.Ecdsa, StringComparison.Ordinal))
-        {
-            using var ecdsa = ECDsa.Create();
-            ecdsa.ImportFromPem(pem);
-            return new EllipticCurveJsonWebKey().Apply(ecdsa.ExportParameters(false));
-        }
-
-        if (keyType.StartsWith(KeyFamilyTypes.Rsa, StringComparison.Ordinal))
-        {
-            using var rsa = RSA.Create();
-            rsa.ImportFromPem(pem);
-            return new RsaJsonWebKey().Apply(rsa.ExportParameters(false));
-        }
-
-        throw new NotSupportedException($"The Vault Transit store does not publish key type '{keyType}'.");
+        foreach (var version in TransitKeyVersions.Read(response.Body(path).RootElement.GetProperty("data"), keyName))
+            yield return version;
     }
 
     /// <summary>

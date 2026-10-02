@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Buffers.Text;
+using System.Collections.Frozen;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -27,6 +28,28 @@ namespace Abblix.Jwt;
 /// </remarks>
 public static class HashCalculator
 {
+    /// <summary>
+    /// The digest each JWS algorithm pairs with, keyed by <c>alg</c>.
+    /// </summary>
+    private static readonly FrozenDictionary<string, Func<byte[], byte[]>> DigestsByAlgorithm =
+        new Dictionary<string, Func<byte[], byte[]>>
+        {
+            [SigningAlgorithms.RS256] = SHA256.HashData,
+            [SigningAlgorithms.PS256] = SHA256.HashData,
+            [SigningAlgorithms.ES256] = SHA256.HashData,
+            [SigningAlgorithms.HS256] = SHA256.HashData,
+
+            [SigningAlgorithms.RS384] = SHA384.HashData,
+            [SigningAlgorithms.PS384] = SHA384.HashData,
+            [SigningAlgorithms.ES384] = SHA384.HashData,
+            [SigningAlgorithms.HS384] = SHA384.HashData,
+
+            [SigningAlgorithms.RS512] = SHA512.HashData,
+            [SigningAlgorithms.PS512] = SHA512.HashData,
+            [SigningAlgorithms.ES512] = SHA512.HashData,
+            [SigningAlgorithms.HS512] = SHA512.HashData,
+        }.ToFrozenDictionary(StringComparer.Ordinal);
+
     /// <summary>
     /// Returns the base64url-encoded left-most half of <paramref name="value"/>'s digest, or
     /// <see langword="null"/> when <paramref name="signingAlgorithm"/> has no hash paired with it.
@@ -54,28 +77,11 @@ public static class HashCalculator
 
     private static byte[]? ComputeDigest(string signingAlgorithm, string value)
     {
+        if (!DigestsByAlgorithm.TryGetValue(signingAlgorithm, out var hashData))
+            return null;
+
         // ASCII, not UTF-8: section 3.2.2.9 says "the ASCII representation" of the value, and every
         // value this binds - an access token, a code, a state - is drawn from an ASCII alphabet.
-        var octets = Encoding.ASCII.GetBytes(value);
-
-        return signingAlgorithm switch
-        {
-            SigningAlgorithms.RS256 or
-            SigningAlgorithms.PS256 or
-            SigningAlgorithms.ES256 or
-            SigningAlgorithms.HS256 => SHA256.HashData(octets),
-
-            SigningAlgorithms.RS384 or
-            SigningAlgorithms.PS384 or
-            SigningAlgorithms.ES384 or
-            SigningAlgorithms.HS384 => SHA384.HashData(octets),
-
-            SigningAlgorithms.RS512 or
-            SigningAlgorithms.PS512 or
-            SigningAlgorithms.ES512 or
-            SigningAlgorithms.HS512 => SHA512.HashData(octets),
-
-            _ => null,
-        };
+        return hashData(Encoding.ASCII.GetBytes(value));
     }
 }
