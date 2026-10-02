@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -91,7 +92,11 @@ public partial class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement()
-            .UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName, AdoptedKeys = adoptedKeys });
+            .UseKeysInProcess(new MintedKeys
+            {
+                KeyEncryptionKeyName = KeyEncryptionKeyName,
+                AdoptedKeys = adoptedKeys,
+            });
         services.AddServerStorage().AddMultiTenancy(_ => { });
         return services.BuildServiceProvider();
     }
@@ -160,15 +165,19 @@ public partial class MultiTenancyRegistrationTests
 
     /// <summary>
     /// Keys adopted into the ring would be seeded into each tenant's part of it, so a server serving tenants refuses
-    /// them on the reading it starts with.
+    /// to start with them, its store empty or not.
     /// </summary>
     [Fact]
-    public async Task AdoptedKeys_UnderMultiTenancy_RefuseTheFirstReading()
+    public async Task AdoptedKeys_UnderMultiTenancy_RefuseTheStart()
     {
-        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1")] };
-        using var provider = MintingRealKeys(store, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature));
+        using var provider = MintingRealKeys(
+            new ChangingTenantStore(),
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            foreach (var service in provider.GetServices<IHostedService>())
+                await service.StartAsync(TestContext.Current.CancellationToken);
+        });
     }
 }

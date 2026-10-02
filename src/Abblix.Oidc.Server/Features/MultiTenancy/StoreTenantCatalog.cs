@@ -9,6 +9,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -28,13 +29,15 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="store">Where the tenants are read from.</param>
 /// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
 /// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
-/// <param name="openings">What readies each tenant the checks pass before it is served.</param>
+/// <param name="openings">What readies each tenant the checks pass before it is first served.</param>
+/// <param name="options">How long the openings of one reading may take.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class StoreTenantCatalog(
     ILogger<StoreTenantCatalog> logger,
     ITenantStore store,
     IEnumerable<ITenantsCheck> checks,
-    IEnumerable<ITenantOpening> openings) : ITenantCatalog
+    IEnumerable<ITenantOpening> openings,
+    IOptions<MultiTenancyOptions> options) : ITenantCatalog
 {
     /// <summary>A tenant and where it is served.</summary>
     private sealed record Served(TenantAddress Address, TenantDefinition Tenant);
@@ -44,13 +47,18 @@ public sealed partial class StoreTenantCatalog(
     /// <param name="ByHost">The tenants of each host, the longest issuer path first, so the first one covering a
     /// path is the match.</param>
     /// <param name="Refused">What the checks refused in this reading, so the next one logs only what is new.</param>
+    /// <param name="NotOpened">The tenants this reading could not ready, by id, so the next one logs only what is
+    /// new.</param>
     private sealed record Reading(
         IReadOnlyDictionary<string, StoredTenant> ById,
         ILookup<string, Served> ByHost,
-        IReadOnlySet<string> Refused);
+        IReadOnlySet<string> Refused,
+        IReadOnlySet<string> NotOpened);
 
     // One reading at a time: a slower reading begun earlier would otherwise replace a newer one when it ends
     private readonly SemaphoreSlim _readingOne = new(1, 1);
+
+    private readonly CompositeTenantOpening _opening = new(openings, options);
 
     private Reading? _reading;
 
@@ -75,6 +83,11 @@ public sealed partial class StoreTenantCatalog(
         }
     }
 
+    /// <summary>
+    /// Reads the store and serves what it holds in two steps: the tenants served before take their changes and
+    /// lose what the store dropped at once, and the tenants new to this catalog are served once readied, so a
+    /// custodian slow to ready them holds back only them.
+    /// </summary>
     private async Task ReadAsync(CancellationToken cancellationToken)
     {
         var listed = await store.ListAsync(cancellationToken);
@@ -91,10 +104,29 @@ public sealed partial class StoreTenantCatalog(
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
 
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
-        var served = await OpenedAsync(
-            [..stored.Where(tenant => !refused.Contains(tenant.Tenant.Id))],
-            previous is null,
-            cancellationToken);
+        var passed = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
+        var ready = passed.Where(tenant => WasServed(previous, tenant)).ToArray();
+        var fresh = passed.Except(ready).ToArray();
+        var messages = refusals.Select(refusal => refusal.Message).ToHashSet(StringComparer.Ordinal);
+
+        // Before any reading nothing is served, so nothing is published until every tenant had its chance
+        if (previous is not null && fresh.Length > 0)
+            Publish(ready, messages, previous.NotOpened);
+
+        var (opened, notOpened) = await OpenAsync(fresh, previous, cancellationToken);
+        Publish([..ready, ..opened], messages, notOpened);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="tenant"/> was served by <paramref name="previous"/> in the same creation, and so was
+    /// readied then.
+    /// </summary>
+    private static bool WasServed(Reading? previous, StoredTenant tenant)
+        => previous?.ById.GetValueOrDefault(tenant.Tenant.Id) is { } held &&
+           held.Tenant.Generation == tenant.Tenant.Generation;
+
+    private void Publish(StoredTenant[] served, IReadOnlySet<string> refused, IReadOnlySet<string> notOpened)
+    {
         foreach (var tenant in served.Select(entry => entry.Tenant))
             _lastServed[tenant.Id] = tenant;
 
@@ -105,35 +137,41 @@ public sealed partial class StoreTenantCatalog(
                     .Select(address => new Served(address, tenant.Tenant)))
                 .OrderByDescending(entry => entry.Address.Path.Length)
                 .ToLookup(entry => entry.Address.Host, StringComparer.Ordinal),
-            refusals.Select(refusal => refusal.Message).ToHashSet(StringComparer.Ordinal)));
+            refused,
+            notOpened));
     }
 
     /// <summary>
-    /// The tenants of <paramref name="passed"/> the openings readied; one that failed is logged and left out of this
-    /// reading, except in the first, whose failure refuses the start as the store failing to answer does.
+    /// Readies <paramref name="fresh"/>. A tenant not readied is logged, once while it stays so, and left out until a
+    /// reading readies it - except a tenant the settings declare on the reading the server starts with, which
+    /// refuses the start as the settings themselves would.
     /// </summary>
-    private async Task<StoredTenant[]> OpenedAsync(
-        StoredTenant[] passed,
-        bool firstReading,
+    /// <returns>The tenants readied, and the ids of those that were not.</returns>
+    private async Task<(StoredTenant[] Opened, IReadOnlySet<string> NotOpened)> OpenAsync(
+        StoredTenant[] fresh,
+        Reading? previous,
         CancellationToken cancellationToken)
     {
-        var opened = new List<StoredTenant>(passed.Length);
-        foreach (var tenant in passed)
-        {
-            try
-            {
-                foreach (var opening in openings)
-                    await opening.OpenAsync(tenant.Tenant, cancellationToken);
+        if (fresh.Length == 0)
+            return ([], new HashSet<string>(StringComparer.Ordinal));
 
-                opened.Add(tenant);
-            }
-            catch (Exception exception) when (!firstReading && !cancellationToken.IsCancellationRequested)
-            {
-                LogTenantNotOpened(exception, tenant.Tenant.Id);
-            }
+        var failures = await _opening.OpenAsync([..fresh.Select(tenant => tenant.Tenant)], cancellationToken);
+        if (previous is null && store is OptionsTenantStore && failures.Count > 0)
+        {
+            var (tenantId, exception) = failures.First();
+            throw new InvalidOperationException(
+                $"The tenant '{tenantId}' the settings declare could not be readied to be served.", exception);
         }
 
-        return [..opened];
+        foreach (var (tenantId, exception) in failures)
+        {
+            if (previous?.NotOpened.Contains(tenantId) != true)
+                LogTenantNotOpened(exception, tenantId);
+        }
+
+        return (
+            [..fresh.Where(tenant => !failures.ContainsKey(tenant.Tenant.Id))],
+            failures.Keys.ToHashSet(StringComparer.Ordinal));
     }
 
     /// <summary>

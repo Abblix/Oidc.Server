@@ -7,6 +7,7 @@
 
 using System.Collections.Concurrent;
 using Abblix.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -17,20 +18,48 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <param name="serviceProvider">Constructs each ring.</param>
 /// <param name="policy">What every ring mints, and the key-encryption key sealing it.</param>
 /// <param name="store">The store every partition shares.</param>
-/// <param name="partitions">The partitions to keep.</param>
+/// <param name="partitionsKept">The partitions to keep.</param>
 internal sealed class KeyRings(
     IServiceProvider serviceProvider,
     MintedKeys policy,
     IKeyRingStore store,
-    IKeyRingPartitions partitions) : IKeyRings
+    IKeyRingPartitions partitionsKept) : IKeyRings
 {
     private readonly ConcurrentDictionary<string, KeyRing> _rings = new(StringComparer.Ordinal);
+
+    // The partitions refreshed when opened, which the refresh loop's first round need not refresh again
+    private readonly ConcurrentDictionary<string, bool> _opened = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public IKeyRing For(string partition) => Ring(partition);
 
     /// <inheritdoc />
-    public async Task OpenAsync(string partition, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+        IReadOnlyCollection<string> partitions,
+        CancellationToken cancellationToken)
+    {
+        var kept = partitionsKept.Kept;
+        var round = new KeyRingStoreRound(store);
+        var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
+
+        // A ring built and kept is current; one built but not kept now has not been refreshed since it left
+        foreach (var partition in partitions.Where(partition =>
+                     !_rings.ContainsKey(partition) || !kept.Contains(partition, StringComparer.Ordinal)))
+        {
+            try
+            {
+                await OpenAsync(partition, round, cancellationToken);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                failures[partition] = exception;
+            }
+        }
+
+        return failures;
+    }
+
+    private async Task OpenAsync(string partition, KeyRingStoreRound round, CancellationToken cancellationToken)
     {
         if (!KeyRingOptions.IsPartitionName(partition))
         {
@@ -40,24 +69,52 @@ internal sealed class KeyRings(
                 nameof(partition));
         }
 
-        if (_rings.ContainsKey(partition))
-            return;
-
         // Kept only once refreshed, so a ring whose first key could not be minted is built again on the next try
         // rather than served empty
-        var ring = Build(partition);
-        await ring.RefreshAsync(cancellationToken);
+        var ring = _rings.TryGetValue(partition, out var built) ? built : Build(partition);
+        await ring.RefreshAsync(new PartitionedKeyRingStore(round, partition), cancellationToken);
         _rings.TryAdd(partition, ring);
+        _opened.TryAdd(partition, true);
+    }
+
+    /// <summary>
+    /// Refuses, before anything is served, what would leave a partition opened later unable to serve: keys adopted
+    /// while the partitions come and go, which only the unnamed one may take, and a key-encryption key the custodian
+    /// cannot show, which a ring keeping no partition yet would otherwise first meet on its first tenant.
+    /// </summary>
+    public async Task CheckAsync(CancellationToken cancellationToken)
+    {
+        // The settings' partitions are fixed at startup, so the ring meets each of them now; a host's own come later
+        if (policy.AdoptedKeys.Count > 0 && partitionsKept is not OptionsKeyRingPartitions)
+        {
+            throw new InvalidOperationException(
+                "Existing keys are adopted into a key ring whose partitions come and go while it runs, and adopted " +
+                "keys go only into the unnamed partition of a ring serving one issuer. Mint new keys instead.");
+        }
+
+        var custodian = serviceProvider.GetRequiredService<IKeyCustodian>();
+        if (await custodian.GetKeyVersionsAsync(policy.KeyEncryptionKeyName, cancellationToken)
+                .AnyAsync(cancellationToken))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The custodian holds no version of the key-encryption key '{policy.KeyEncryptionKeyName}', so the key " +
+            "ring could open no key it mints.");
     }
 
     /// <summary>
     /// Starts a refresh round: the ring of every partition kept, each with its view of one read of the store taken
     /// for this round alone.
     /// </summary>
-    public IReadOnlyList<(string Partition, KeyRing Ring, IKeyRingStore Source)> BeginRound()
+    /// <param name="exceptOpened">Leaves out the partitions refreshed when they were opened, as the round the
+    /// ring starts with does.</param>
+    public IReadOnlyList<(string Partition, KeyRing Ring, IKeyRingStore Source)> BeginRound(bool exceptOpened = false)
     {
         var round = new KeyRingStoreRound(store);
-        return partitions.Kept
+        return partitionsKept.Kept
+            .Where(partition => !exceptOpened || !_opened.ContainsKey(partition))
             .Select(partition => (
                 partition,
                 Ring(partition),
@@ -78,22 +135,22 @@ internal sealed class KeyRings(
     /// <summary>
     /// <paramref name="partition"/>, when the ring keeps it.
     /// </summary>
+    /// <remarks>
+    /// The refusal counts the partitions kept rather than naming them: under multi-tenancy they name every tenant.
+    /// </remarks>
     private string Kept(string partition)
     {
-        var kept = partitions.Kept;
+        var kept = partitionsKept.Kept;
         if (kept.Contains(partition, StringComparer.Ordinal))
             return partition;
 
         // The unnamed ring is what code written for a ring of one partition asks for
         throw new InvalidOperationException(partition == KeyRingOptions.DefaultPartition
-            ? $"The key ring keeps {Listed(kept)} and no unnamed one, so there is no single {nameof(IKeyRing)} to " +
-              $"serve: take the ring of one of its partitions from {nameof(IKeyRings)}.{nameof(IKeyRings.For)}."
-            : $"The key ring keeps no partition '{partition}'; it keeps {Listed(kept)}.");
+            ? $"The key ring keeps {kept.Count} named partitions and no unnamed one, so there is no single " +
+              $"{nameof(IKeyRing)} to serve: take the ring of one of its partitions from " +
+              $"{nameof(IKeyRings)}.{nameof(IKeyRings.For)}."
+            : $"The key ring keeps no partition '{partition}' among the {kept.Count} it keeps.");
     }
-
-    private static string Listed(IReadOnlyCollection<string> kept) => kept.Count == 0
-        ? "no partitions"
-        : "the partitions " + string.Join(", ", kept.Select(partition => $"'{partition}'"));
 
     private KeyRing Build(string partition)
     {

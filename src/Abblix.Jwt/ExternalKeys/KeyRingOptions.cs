@@ -35,8 +35,8 @@ public sealed class KeyRingOptions
     /// <summary>
     /// The partitions the key ring keeps, each a ring of its own that mints, rotates and serves keys apart from the
     /// others, so no two partitions share a key. A server with one issuer keeps the default one. A server whose
-    /// issuers come and go while it runs registers an <see cref="IKeyRingPartitions"/> instead, and these are then
-    /// not read.
+    /// issuers come and go while it runs registers an <see cref="IKeyRingPartitions"/> instead, and the ring keeps
+    /// the partitions it names rather than these, which are still checked at startup.
     /// </summary>
     /// <remarks>
     /// All partitions share the store: an entry of a partition other than the default is stored under its id with

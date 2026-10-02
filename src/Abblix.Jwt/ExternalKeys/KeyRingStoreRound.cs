@@ -30,17 +30,26 @@ internal sealed class KeyRingStoreRound(IKeyRingStore store) : IKeyRingStore
         => _entries ??= await store.LoadAsync(cancellationToken);
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A write this round won keeps the round's read, the entry added to it, so the partitions it opens or
+    /// refreshes one after another share one read of the store. A write another pod won, or one that failed, leaves
+    /// the store holding what this round has not seen, so the next load reads it again.
+    /// </remarks>
     public async Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
     {
+        bool added;
         try
         {
-            return await store.TryAddAsync(key, cancellationToken);
+            added = await store.TryAddAsync(key, cancellationToken);
         }
-        finally
+        catch
         {
-            // Whether this write or another pod's won, the store changed since the round's read
             _entries = null;
+            throw;
         }
+
+        _entries = added && _entries is { } read ? [..read, key] : null;
+        return added;
     }
 
     /// <inheritdoc />

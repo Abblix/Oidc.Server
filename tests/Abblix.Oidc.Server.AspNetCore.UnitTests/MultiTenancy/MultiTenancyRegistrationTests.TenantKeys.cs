@@ -512,6 +512,8 @@ public partial class MultiTenancyRegistrationTests
                 .Returns([JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { KeyId = partition }]);
             return ring.Object;
         });
+        rings.Setup(r => r.OpenAsync(Moq.It.IsAny<IReadOnlyCollection<string>>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<IReadOnlyDictionary<string, Exception>>(new Dictionary<string, Exception>()));
 
         var services = new ServiceCollection();
         services.AddLogging();

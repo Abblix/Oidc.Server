@@ -22,7 +22,7 @@ public sealed partial class StoreTenantCatalog
     [LoggerMessage(
         EventId = LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotOpened,
         Level = LogLevel.Error,
-        Message = "The tenant {TenantId} is left out of the tenants served until the next reading, and requests to " +
-                  "it are answered as to no tenant: it could not be readied to be served")]
+        Message = "The tenant {TenantId} could not be readied to be served, so it is left out of the tenants " +
+                  "served until a reading readies it, and requests to it are answered as to no tenant")]
     private partial void LogTenantNotOpened(Exception exception, string tenantId);
 }

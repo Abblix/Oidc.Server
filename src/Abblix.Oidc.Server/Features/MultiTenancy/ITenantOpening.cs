@@ -11,21 +11,26 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Readies what a tenant needs before the server starts serving it, as the first key it signs with.
+/// Readies what a tenant needs before the server first serves it, as the first key it signs with.
 /// </summary>
 /// <remarks>
-/// The catalog opens each tenant of a reading after the checks pass it and before the reading is served, so the
-/// tenant's first request finds what was readied. A tenant it cannot open is left out of that reading and logged,
-/// and tried again at the next one; on the first reading, which the server starts with, the failure refuses the
-/// start, as the store failing to answer does.
+/// The catalog hands over the tenants of one reading it has not served before, after the checks pass them, and
+/// serves each once it is readied, so its first request finds what was readied. A tenant not readied is left out
+/// of that reading and logged, and handed over again at the next one; a tenant the settings declare that is not
+/// readied on the reading the server starts with refuses the start. The openings of one reading share one refresh
+/// period, and the token is canceled when it runs out.
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantOpening
 {
     /// <summary>
-    /// Readies <paramref name="tenant"/> to be served, doing nothing when it is ready already.
+    /// Readies <paramref name="tenants"/> to be served, each one on its own, so one that fails leaves the others
+    /// ready.
     /// </summary>
-    /// <param name="tenant">The tenant about to be served.</param>
+    /// <param name="tenants">The tenants about to be served for the first time.</param>
     /// <param name="cancellationToken">Cancels the opening.</param>
-    Task OpenAsync(TenantDefinition tenant, CancellationToken cancellationToken);
+    /// <returns>Why each tenant that could not be readied was not, by its id; the others are ready.</returns>
+    Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+        IReadOnlyCollection<TenantDefinition> tenants,
+        CancellationToken cancellationToken);
 }

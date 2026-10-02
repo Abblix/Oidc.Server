@@ -21,13 +21,17 @@ public interface IKeyRings
     IKeyRing For(string partition);
 
     /// <summary>
-    /// Readies the ring of <paramref name="partition"/> to serve: builds it and refreshes it once, which mints its
-    /// first key, so the first request for it finds a key to produce with. A ring already built is left as it is.
+    /// Readies the rings of <paramref name="partitions"/> to serve, each on its own: builds each not built yet and
+    /// refreshes each not kept now, which mints a first key where none is due, so the first request for it finds a
+    /// key to produce with. One read of the store serves them all.
     /// </summary>
-    /// <param name="partition">The partition to open, named of letters, digits, '-', '_' and '~' only.</param>
-    /// <param name="cancellationToken">Cancels the refresh.</param>
-    /// <exception cref="ArgumentException">The name cannot name a partition.</exception>
-    /// <exception cref="InvalidOperationException">Existing keys are adopted, which only the unnamed partition
-    /// takes.</exception>
-    Task OpenAsync(string partition, CancellationToken cancellationToken);
+    /// <param name="partitions">The partitions to open, each named of letters, digits, '-', '_' and '~' only.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the opening of those not opened yet.</param>
+    /// <returns>Why each partition that could not be opened was not, by its name: a name that cannot name a
+    /// partition, keys adopted into the ring, which only the unnamed partition takes, or the store or the custodian
+    /// failing. The others are ready.</returns>
+    Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+        IReadOnlyCollection<string> partitions,
+        CancellationToken cancellationToken);
 }

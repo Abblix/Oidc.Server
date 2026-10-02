@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 #pragma warning disable ABXMT001
@@ -84,15 +85,29 @@ public class StoreTenantCatalogTests
         }
     }
 
-    /// <summary>Readies each tenant it is asked to, failing those named in <see cref="Failing"/>.</summary>
+    /// <summary>
+    /// Readies each tenant it is asked to, failing those named in <see cref="Failing"/>, and holds every opening
+    /// back while <see cref="Hold"/> is set, as a custodian that does not answer.
+    /// </summary>
     private sealed class FakeOpening : ITenantOpening
     {
         public HashSet<string> Failing { get; } = [];
 
-        public Task OpenAsync(TenantDefinition tenant, CancellationToken cancellationToken)
-            => Failing.Contains(tenant.Id)
-                ? Task.FromException(new InvalidOperationException("the tenant's first key could not be minted"))
-                : Task.CompletedTask;
+        public TaskCompletionSource? Hold { get; set; }
+
+        public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
+        {
+            if (Hold is { } hold)
+                await hold.Task.WaitAsync(cancellationToken);
+
+            return tenants
+                .Where(tenant => Failing.Contains(tenant.Id))
+                .ToDictionary(
+                    tenant => tenant.Id,
+                    Exception (_) => new InvalidOperationException("the tenant's first key could not be minted"));
+        }
     }
 
     private const string Version = "1";
@@ -101,7 +116,14 @@ public class StoreTenantCatalogTests
     private readonly RecordingLogger _logger = new();
     private readonly FakeOpening _opening = new();
 
-    private StoreTenantCatalog Catalog() => new(_logger, _store, [new TenantDefinitionsCheck()], [_opening]);
+    private readonly MultiTenancyOptions _options = new();
+
+    private StoreTenantCatalog Catalog(ITenantStore? store = null) => new(
+        _logger,
+        store ?? _store,
+        [new TenantDefinitionsCheck()],
+        [_opening],
+        Options.Create(_options));
 
     private static StoredTenant Stored(string id, string issuer, string version = Version)
         => new(new TenantDefinition { Id = id, Issuer = issuer, Generation = "g1" }, version);
@@ -199,6 +221,7 @@ public class StoreTenantCatalogTests
 
         Assert.Null(await catalog.FindByIdAsync("globex", ct));
         Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        await catalog.RefreshAsync(ct);
         Assert.Single(_logger.Errors);
 
         _opening.Failing.Clear();
@@ -208,21 +231,89 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
-    /// The first reading is what the server starts with, so a tenant it cannot ready fails that reading, as the
-    /// store failing to answer does, and the reading is not kept.
+    /// A tenant of a store of the host's own that cannot be readied on the reading the server starts with is left
+    /// out and logged like any other, so one failing tenant does not stop the server serving the rest.
     /// </summary>
     [Fact]
-    public async Task ATenantThatCannotBeOpened_FailsTheFirstReading()
+    public async Task ATenantOfAStoreThatCannotBeOpened_OnTheFirstReading_IsLeftOut()
     {
         var ct = TestContext.Current.CancellationToken;
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
         _opening.Failing.Add("acme");
         var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant the settings declare that cannot be readied on the reading the server starts with refuses the start,
+    /// as the settings would refuse it; the reading is not kept.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheSettingsDeclare_ThatCannotBeOpened_FailsTheFirstReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var declared = new MultiTenancyOptions
+        {
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }],
+        };
+        _opening.Failing.Add("acme");
+        var catalog = Catalog(new OptionsTenantStore(Options.Create(declared)));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => catalog.RefreshAsync(ct));
 
         _opening.Failing.Clear();
         Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// While a tenant new to the catalog is being readied, the changes and removals of the tenants served before
+    /// are served already, so a custodian slow to answer holds back only the new tenant.
+    /// </summary>
+    [Fact]
+    public async Task WhileANewTenantIsReadied_ARemovalIsServedAlready()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var hold = new TaskCompletionSource();
+        _opening.Hold = hold;
+        var reading = catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+
+        hold.SetResult();
+        await reading;
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// The openings of one reading may take one refresh period, so a custodian that never answers leaves the new
+    /// tenants out of that reading instead of stopping the readings.
+    /// </summary>
+    [Fact]
+    public async Task OpeningsThatDoNotFinishWithinTheRefreshPeriod_LeaveTheNewTenantsOut()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
+        _opening.Hold = new TaskCompletionSource();
+        var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Single(_logger.Errors);
     }
 
     /// <summary>

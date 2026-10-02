@@ -26,6 +26,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// the tenant list judge what the server's own catalog reads, so a catalog of the host's own gets none of them, while
 /// one wrapping the server's passes on only what they let through.
 /// </para>
+/// <para>
+/// Likewise only the server's own catalog readies a tenant before serving it (<see cref="ITenantOpening"/>), and a
+/// server minting its keys keeps a key only for the tenants that catalog serves. So a catalog of the host's own
+/// answers with no tenant the server's catalog does not serve, or that tenant has no key to sign with.
+/// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantCatalog

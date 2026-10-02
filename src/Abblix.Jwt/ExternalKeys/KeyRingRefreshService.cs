@@ -37,7 +37,10 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        foreach (var (_, ring, source) in rings.BeginRound())
+        await rings.CheckAsync(cancellationToken);
+
+        // A partition opened before this start was refreshed then, so it is not refreshed again now
+        foreach (var (_, ring, source) in rings.BeginRound(exceptOpened: true))
             await ring.RefreshAsync(source, cancellationToken);
 
         await base.StartAsync(cancellationToken);
