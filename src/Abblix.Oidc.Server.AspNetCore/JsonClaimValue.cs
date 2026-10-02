@@ -165,12 +165,13 @@ internal static class JsonClaimValue
 		=> value.TryGetValue<double>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
 
 	/// <summary>
-	/// The text a floating kind would write for <paramref name="value"/>, or null when that kind does not hold it.
+	/// The text a non-integer kind would write for <paramref name="value"/>, or null when that kind does not hold it.
 	/// </summary>
 	/// <remarks>
-	/// A number parsed from JSON text converts to every non-integer kind, rounding to its precision and overflowing to
-	/// infinity past its range, so the narrowest kind tried first would keep only what it can hold. Such a number is
-	/// held when the kind's text carries the same number as the JSON text did, which an infinity's text never does.
+	/// A number parsed from JSON text converts to every non-integer kind whose range it fits, rounding to that kind's
+	/// precision, and a single or double also turns a number past its range into an infinity or a zero, so the
+	/// narrowest kind tried first would keep only what it can hold. Such a number is held when the kind's text
+	/// carries the same number as the JSON text did, which an infinity's text never does.
 	/// The texts are compared digit by digit rather than through another numeric kind, which would round both sides
 	/// alike at the edges of its own range. A value the host created is its own kind and is written as it is.
 	/// </remarks>
@@ -181,10 +182,10 @@ internal static class JsonClaimValue
 		=> Canonical(text) is { } written && written == Canonical(element.GetRawText());
 
 	/// <summary>
-	/// The number a JSON or invariant-culture numeric text denotes, as its sign, its significant digits and the power
-	/// of ten of the first of them, so two texts of one number compare equal however they place the point.
+	/// The number a JSON or invariant-culture numeric text denotes, as its sign, its significant digits and where the
+	/// point stands counted from the first of them, so two texts of one number compare equal however they write it.
 	/// </summary>
-	/// <returns>Null when the exponent is past the range of any number a claim kind can hold.</returns>
+	/// <returns>Null when the text's exponent does not fit an <see cref="int"/>.</returns>
 	private static (bool Negative, string Digits, int Exponent)? Canonical(string text)
 	{
 		var mantissa = text.TrimStart('-');
