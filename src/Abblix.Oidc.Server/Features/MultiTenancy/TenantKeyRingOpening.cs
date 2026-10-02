@@ -33,13 +33,25 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
         if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
             return new Dictionary<string, Exception>();
 
-        var byPartition = tenants.ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
-        var failures = await serviceProvider.GetRequiredService<IKeyRings>()
-            .OpenAsync(byPartition.Keys, cancellationToken);
-
-        return failures.ToDictionary(
-            failure => byPartition[failure.Key].Id,
-            failure => failure.Value,
+        // Tenants sharing a partition would sign with each other's keys, so none of them is opened; the checks of
+        // the tenant list refuse such tenants, unless a host left those checks out
+        var byPartition = tenants.ToLookup(TenantKey.PartitionOf, StringComparer.Ordinal);
+        var shared = byPartition.Where(sharing => sharing.Count() > 1).ToArray();
+        var alone = byPartition.Where(sharing => sharing.Count() == 1).ToDictionary(
+            sharing => sharing.Key,
+            sharing => sharing.Single(),
             StringComparer.Ordinal);
+
+        var failures = await serviceProvider.GetRequiredService<IKeyRings>()
+            .OpenAsync(alone.Keys, cancellationToken);
+
+        return failures
+            .Select(failure => (alone[failure.Key].Id, failure.Value))
+            .Concat(
+                from sharing in shared
+                from tenant in sharing
+                select (tenant.Id, (Exception)new InvalidOperationException(
+                    $"Tenant '{tenant.Id}' shares the key ring partition '{sharing.Key}' with another tenant.")))
+            .ToDictionary(failure => failure.Item1, failure => failure.Item2, StringComparer.Ordinal);
     }
 }

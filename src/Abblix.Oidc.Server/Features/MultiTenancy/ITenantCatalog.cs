@@ -29,7 +29,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <para>
 /// Likewise only the server's own catalog readies a tenant before serving it (<see cref="ITenantOpening"/>), and a
 /// server minting its keys keeps a key only for the tenants that catalog serves. So a catalog of the host's own
-/// answers with no tenant the server's catalog does not serve, or that tenant has no key to sign with.
+/// answers with no tenant the server's catalog does not serve, or every request to that tenant needing a key fails,
+/// the key ring keeping no partition for it.
 /// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]

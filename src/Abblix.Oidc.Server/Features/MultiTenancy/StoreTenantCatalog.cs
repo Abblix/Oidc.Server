@@ -155,8 +155,12 @@ public sealed partial class StoreTenantCatalog(
         if (fresh.Length == 0)
             return ([], new HashSet<string>(StringComparer.Ordinal));
 
-        var failures = await _opening.OpenAsync([..fresh.Select(tenant => tenant.Tenant)], cancellationToken);
-        if (previous is null && store is OptionsTenantStore && failures.Count > 0)
+        var startingWithTheSettings = previous is null && store is OptionsTenantStore;
+        var failures = await _opening.OpenAsync(
+            [..fresh.Select(tenant => tenant.Tenant)],
+            !startingWithTheSettings,
+            cancellationToken);
+        if (startingWithTheSettings && failures.Count > 0)
         {
             var (tenantId, exception) = failures.First();
             throw new InvalidOperationException(

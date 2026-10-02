@@ -49,9 +49,7 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Half the propagation window: a freshly minted key is announced for that window before it signs, so
-        // refreshing twice per window means no pod meets a token signed by a key it has not loaded.
-        var period = options.Value.KeyRolloverPropagation / 2;
+        var period = options.Value.RefreshPeriod;
         using var timer = new PeriodicTimer(period, timeProvider);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))

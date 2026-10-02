@@ -560,6 +560,27 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// Tenants whose ids and generations spell one partition would sign with each other's keys, so none of them is
+    /// opened, each refused on its own, while the other tenants open as usual.
+    /// </summary>
+    [Fact]
+    public async Task TenantsSharingAPartition_AreEachRefused_AndTheOthersOpened()
+    {
+        using var provider = MintingKeys();
+        var opening = provider.GetServices<ITenantOpening>().OfType<TenantKeyRingOpening>().Single();
+
+        var failures = await opening.OpenAsync(
+            [
+                new TenantDefinition { Id = "acme~g1", Issuer = AcmeIssuer },
+                new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Generation = "g1" },
+                new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
+            ],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(["acme", "acme~g1"], failures.Keys.Order());
+    }
+
+    /// <summary>
     /// Encryption keys a tenant declares while the server mints its keys are never read, so startup refuses them.
     /// </summary>
     [Fact]

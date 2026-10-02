@@ -15,8 +15,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// A server whose issuers come and go while it runs registers its own, answering with the partitions of the issuers
 /// it serves now, and opens each new one through <see cref="IKeyRings.OpenAsync"/> before naming it here: the
 /// refresh loop builds a partition it meets for the first time without opening it, so one named before it is opened
-/// is served with no key until the loop's next round, and keys adopted into the ring refuse a named partition there,
-/// which stops the loop and the host with it.
+/// is served with no key until the loop's next round. Keys adopted into the ring refuse the start once a host
+/// registers its own partitions, since only the unnamed partition of a ring serving one issuer takes them.
 /// </remarks>
 public interface IKeyRingPartitions
 {

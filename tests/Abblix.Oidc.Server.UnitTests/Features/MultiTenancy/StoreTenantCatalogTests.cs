@@ -298,6 +298,31 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
+    /// The server starts only once every tenant the settings declare is readied, so on the reading it starts with
+    /// their openings are not cut short by the refresh period.
+    /// </summary>
+    [Fact]
+    public async Task TheTenantsTheSettingsDeclare_AreOpenedWithoutALimit_OnTheFirstReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var declared = new MultiTenancyOptions
+        {
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }],
+        };
+        _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
+        var hold = new TaskCompletionSource();
+        _opening.Hold = hold;
+        var catalog = Catalog(new OptionsTenantStore(Options.Create(declared)));
+
+        var reading = catalog.RefreshAsync(ct);
+        await Task.Delay(_options.RefreshEvery * 100, ct);
+        hold.SetResult();
+        await reading;
+
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
     /// The openings of one reading may take one refresh period, so a custodian that never answers leaves the new
     /// tenants out of that reading instead of stopping the readings.
     /// </summary>

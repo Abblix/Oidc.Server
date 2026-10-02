@@ -8,6 +8,7 @@
 using System.Collections.Concurrent;
 using Abblix.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -27,8 +28,9 @@ internal sealed class KeyRings(
 {
     private readonly ConcurrentDictionary<string, KeyRing> _rings = new(StringComparer.Ordinal);
 
-    // The partitions refreshed when opened, which the refresh loop's first round need not refresh again
-    private readonly ConcurrentDictionary<string, bool> _opened = new(StringComparer.Ordinal);
+    // When each partition was last refreshed by an opening: the refresh loop's first round need not refresh such a
+    // partition again, and an opening within one refresh period finds it current
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _openedAt = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public IKeyRing For(string partition) => Ring(partition);
@@ -39,25 +41,65 @@ internal sealed class KeyRings(
         CancellationToken cancellationToken)
     {
         var kept = partitionsKept.Kept;
+        var due = partitions.Where(partition => !IsCurrent(partition, kept)).ToArray();
         var round = new KeyRingStoreRound(store);
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
-
-        // A ring built and kept is current; one built but not kept now has not been refreshed since it left
-        foreach (var partition in partitions.Where(partition =>
-                     !_rings.ContainsKey(partition) || !kept.Contains(partition, StringComparer.Ordinal)))
+        for (var index = 0; index < due.Length; index++)
         {
-            try
+            if (await FailureOfAsync(due[index], round, cancellationToken) is not { } failure)
+                continue;
+
+            failures[due[index]] = failure;
+            if (cancellationToken.IsCancellationRequested)
             {
-                await OpenAsync(partition, round, cancellationToken);
-            }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
-            {
-                failures[partition] = exception;
+                // What was opened stays open, so the next opening goes on from where this one was stopped
+                foreach (var unreached in due.Skip(index + 1))
+                    failures[unreached] = failure;
+
+                break;
             }
         }
 
         return failures;
     }
+
+    /// <summary>
+    /// Why opening <paramref name="partition"/> failed, or null when it opened.
+    /// </summary>
+    private async Task<Exception?> FailureOfAsync(
+        string partition,
+        KeyRingStoreRound round,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await OpenAsync(partition, round, cancellationToken);
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
+    /// <summary>
+    /// Whether the ring of <paramref name="partition"/> is built and current: kept, so the refresh loop keeps it
+    /// current, or opened within one refresh period. A ring built and left out of the kept partitions since, as a
+    /// tenant dropped and served again, has missed its refreshes.
+    /// </summary>
+    private bool IsCurrent(string partition, IReadOnlyCollection<string> kept)
+    {
+        if (!_rings.ContainsKey(partition))
+            return false;
+
+        if (kept.Contains(partition, StringComparer.Ordinal))
+            return true;
+
+        var period = serviceProvider.GetRequiredService<IOptions<KeyRingOptions>>().Value.RefreshPeriod;
+        return _openedAt.TryGetValue(partition, out var openedAt) && Now - openedAt < period;
+    }
+
+    private DateTimeOffset Now => serviceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
 
     private async Task OpenAsync(string partition, KeyRingStoreRound round, CancellationToken cancellationToken)
     {
@@ -74,7 +116,7 @@ internal sealed class KeyRings(
         var ring = _rings.TryGetValue(partition, out var built) ? built : Build(partition);
         await ring.RefreshAsync(new PartitionedKeyRingStore(round, partition), cancellationToken);
         _rings.TryAdd(partition, ring);
-        _opened.TryAdd(partition, true);
+        _openedAt[partition] = Now;
     }
 
     /// <summary>
@@ -114,7 +156,7 @@ internal sealed class KeyRings(
     {
         var round = new KeyRingStoreRound(store);
         return partitionsKept.Kept
-            .Where(partition => !exceptOpened || !_opened.ContainsKey(partition))
+            .Where(partition => !exceptOpened || !_openedAt.ContainsKey(partition))
             .Select(partition => (
                 partition,
                 Ring(partition),

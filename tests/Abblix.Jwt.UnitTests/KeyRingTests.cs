@@ -275,6 +275,9 @@ public sealed class KeyRingTests : IDisposable
     private static Task<IReadOnlyDictionary<string, Exception>> Open(KeyRings rings, params string[] partitions)
         => rings.OpenAsync(partitions, TestContext.Current.CancellationToken);
 
+    // The clock of the rings RingsKeeping builds, which a test moves on
+    private readonly FakeTimeProvider _ringsTime = new(Now);
+
     /// <summary>
     /// Rings keeping the partitions <paramref name="kept"/> names, as a host registering its own does, over a fresh
     /// store, with keys from <paramref name="custodian"/>.
@@ -291,7 +294,7 @@ public sealed class KeyRingTests : IDisposable
         services.AddSingleton(custodian);
         services.ComposeExternalKeyBackends();
         services.AddSingleton<KeyEnvelope>();
-        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.AddSingleton<TimeProvider>(_ringsTime);
         services.AddSingleton(Options.Create(new KeyRingOptions()));
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
@@ -408,21 +411,65 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// A ring kept now is current and is not refreshed again when opened, while one built but no longer kept, as a
-    /// tenant dropped and served again, has missed its refreshes and is refreshed before it is served.
+    /// A ring kept now, or opened within one refresh period, is current and is not refreshed again when opened,
+    /// while one built but neither kept nor opened since, as a tenant dropped and served again, has missed its
+    /// refreshes and is refreshed before it is served.
     /// </summary>
     [Fact]
-    public async Task OpeningARingNoLongerKept_RefreshesIt_AndOneKeptIsLeftAsItIs()
+    public async Task OpeningARingNoLongerCurrent_RefreshesIt_AndACurrentOneIsLeftAsItIs()
     {
         var (rings, store) = RingsKeeping(Keeping("acme"), StubCustodian(_keyEncryptionKey));
         Assert.Empty(await Open(rings, "acme", "globex"));
 
         var before = store.Loads;
-        Assert.Empty(await Open(rings, "acme"));
+        Assert.Empty(await Open(rings, "acme", "globex"));
         Assert.Equal(before, store.Loads);
 
-        Assert.Empty(await Open(rings, "globex"));
+        _ringsTime.Advance(new KeyRingOptions().KeyRolloverPropagation);
+        Assert.Empty(await Open(rings, "acme", "globex"));
         Assert.Equal(before + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// An opening stopped part way keeps what it opened and reports only what it did not reach, so openings that
+    /// never fit in the time they are given still bring partitions up, some each time.
+    /// </summary>
+    [Fact]
+    public async Task AnOpeningStoppedPartWay_KeepsWhatItOpened()
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var listings = 0;
+        var custodian = new Mock<IKeyCustodian>();
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                // A partition minting its first key lists the versions twice, to seal the key and to open it, so
+                // the third listing is the second partition's, where the time runs out
+                if (++listings == 3)
+                {
+                    stop.Cancel();
+                    stop.Token.ThrowIfCancellationRequested();
+                }
+
+                return new[] { new KeyVersion(_keyEncryptionKey.Sanitize(false), Now.AddDays(-100)) }
+                    .ToAsyncEnumerable();
+            });
+        custodian
+            .Setup(c => c.UnwrapKeyAsync(
+                _keyEncryptionKey.KeyId!, It.IsAny<string>(), It.IsAny<JsonWebTokenHeader>(), It.IsAny<byte[]>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
+                Task.FromResult<byte[]?>(UnwrapLocally((RsaJsonWebKey)_keyEncryptionKey, algorithm, encryptedKey)));
+        var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
+
+        var failures = await rings.OpenAsync(["acme", "globex", "initech"], stop.Token);
+
+        Assert.Equal(["globex", "initech"], failures.Keys.Order());
+        Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
+
+        // Once stopped, the opening asks the custodian nothing more for the partitions it did not reach
+        Assert.Equal(3, listings);
     }
 
     /// <summary>

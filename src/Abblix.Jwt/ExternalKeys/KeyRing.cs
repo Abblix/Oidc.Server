@@ -83,8 +83,8 @@ internal sealed class KeyRing(
     public Task RefreshAsync(CancellationToken cancellationToken) => RefreshAsync(store, cancellationToken);
 
     /// <summary>
-    /// Refreshes the ring from <paramref name="source"/>: a view of the store the refresh service read once for
-    /// every partition refreshed in its round.
+    /// Refreshes the ring from <paramref name="source"/>: a view of the store read once for every partition
+    /// refreshed or opened in one round.
     /// </summary>
     /// <param name="source">Where the entries are read from and written to.</param>
     /// <param name="cancellationToken">Cancels the refresh.</param>

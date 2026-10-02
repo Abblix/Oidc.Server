@@ -28,6 +28,13 @@ public sealed class KeyRingOptions
     public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
+    /// How often the ring is refreshed: half the propagation window. A freshly minted key is announced for that
+    /// window before it signs, so refreshing twice per window means no pod meets a token signed by a key it has not
+    /// loaded.
+    /// </summary>
+    internal TimeSpan RefreshPeriod => KeyRolloverPropagation / 2;
+
+    /// <summary>
     /// The partition a ring serving one issuer keeps, whose entries are stored under their own ids.
     /// </summary>
     public const string DefaultPartition = "";

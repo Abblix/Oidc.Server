@@ -14,7 +14,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// The openings of one reading as one (Composite): each readies every tenant, and a tenant any of them fails is not
 /// ready. They share one refresh period, so a custodian that does not answer delays the next reading by no more
-/// than that; when it runs out, every tenant handed over counts as not ready.
+/// than that; when it runs out, an opening reports what it readied by then, and every tenant of one that does not
+/// counts as not ready.
 /// </summary>
 /// <param name="openings">The openings, in the order they run.</param>
 /// <param name="options">The refresh period the openings share.</param>
@@ -24,12 +25,26 @@ internal sealed class CompositeTenantOpening(
     IOptions<MultiTenancyOptions> options) : ITenantOpening
 {
     /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+        IReadOnlyCollection<TenantDefinition> tenants,
+        CancellationToken cancellationToken)
+        => OpenAsync(tenants, true, cancellationToken);
+
+    /// <summary>
+    /// Readies <paramref name="tenants"/>, within one refresh period when <paramref name="limited"/>.
+    /// </summary>
+    /// <param name="tenants">The tenants about to be served for the first time.</param>
+    /// <param name="limited">Whether the openings must finish within one refresh period; the tenants the settings
+    /// declare are opened without a limit when the server starts, since the start waits for all of them.</param>
+    /// <param name="cancellationToken">Cancels the openings.</param>
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
+        bool limited,
         CancellationToken cancellationToken)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        limit.CancelAfter(options.Value.RefreshEvery);
+        if (limited)
+            limit.CancelAfter(options.Value.RefreshEvery);
 
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
         try

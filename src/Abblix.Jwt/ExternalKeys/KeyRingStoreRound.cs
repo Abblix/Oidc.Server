@@ -8,9 +8,10 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// The store every partition shares, read once for one refresh round: each partition's refresh in the round takes
-/// the same read, and a write makes the next load read the store again. A round lives only as long as the refresh
-/// service's pass over the partitions, so nothing it read outlives the pass.
+/// The store every partition shares, read once for one round: each partition refreshed or opened in the round
+/// takes the same read, a write the round won is added to it, and a write another pod won makes the next load read
+/// the store again. A round lives only as long as one pass of the refresh service or one opening of partitions, so
+/// nothing it read outlives that pass.
 /// </summary>
 /// <remarks>
 /// Every backend reads each entry's body to load, so a read per partition would cost the number of partitions
