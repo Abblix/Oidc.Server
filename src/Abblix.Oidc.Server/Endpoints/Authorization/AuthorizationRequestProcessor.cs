@@ -113,7 +113,7 @@ public class AuthorizationRequestProcessor(
 			// If no sessions exist, or the request explicitly asks for a login, prompt the user for login.
 			case (0, _) or (_, Prompts.Login):
 				// Otherwise, prompt the user to log in.
-				return new LoginRequired(prompt == Prompts.Login ? model with { PromptedAt = clock.GetUtcNow() } : model);
+				return SendToLogin(model, prompt);
 
 			// If multiple sessions exist, or the request requires account selection, prompt the user to select an account.
 			case (> 1, _) or (_, Prompts.SelectAccount):
@@ -277,6 +277,13 @@ public class AuthorizationRequestProcessor(
 		// Return the final authorization result containing codes and tokens as needed.
 		return result;
 	}
+
+	/// <summary>
+	/// Sends the end user to log in, stamping the request with the moment when the client asked for that login,
+	/// so the request coming back with a session opened since is not sent there again.
+	/// </summary>
+	private LoginRequired SendToLogin(Model.AuthorizationRequest model, string? prompt)
+		=> new(prompt == Prompts.Login ? model with { PromptedAt = clock.GetUtcNow() } : model);
 
 	/// <summary>
 	/// The prompt the request still asks for, and the sessions that may answer it.
