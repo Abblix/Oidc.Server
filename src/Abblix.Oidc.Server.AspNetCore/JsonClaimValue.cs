@@ -156,13 +156,33 @@ internal static class JsonClaimValue
 		=> long.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
 
 	private static string? WriteFloat(JsonValue value)
-		=> value.TryGetValue<float>(out var number) ? number.ToString(InvariantCulture) : null;
+		=> value.TryGetValue<float>(out var number)
+			? Exactly(value, number.ToString(InvariantCulture), float.IsFinite(number))
+			: null;
 
 	private static JsonNode? ReadFloat(string text)
 		=> float.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
 
 	private static string? WriteDouble(JsonValue value)
-		=> value.TryGetValue<double>(out var number) ? number.ToString(InvariantCulture) : null;
+		=> value.TryGetValue<double>(out var number)
+			? Exactly(value, number.ToString(InvariantCulture), double.IsFinite(number))
+			: null;
+
+	/// <summary>
+	/// The text a floating kind would write for <paramref name="value"/>, or null when that kind does not hold it.
+	/// </summary>
+	/// <remarks>
+	/// A number parsed from JSON text converts to every floating kind, rounding to its precision and overflowing to
+	/// infinity past its range, so the narrowest kind tried first would keep only what it can hold. Such a number is
+	/// held when the kind's value is finite - JSON has no infinity - and the text reads back as the same decimal the
+	/// number reads as, where it has one. A single or double the host created is its own kind and is written as it is.
+	/// </remarks>
+	private static string? Exactly(JsonValue value, string text, bool finite)
+		=> !value.TryGetValue<JsonElement>(out var element) || (finite && ReadsBackAs(element, text)) ? text : null;
+
+	private static bool ReadsBackAs(JsonElement element, string text)
+		=> !element.TryGetDecimal(out var exact) ||
+		   (decimal.TryParse(text, Float, InvariantCulture, out var written) && written == exact);
 
 	private static JsonNode? ReadDouble(string text)
 		=> double.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;

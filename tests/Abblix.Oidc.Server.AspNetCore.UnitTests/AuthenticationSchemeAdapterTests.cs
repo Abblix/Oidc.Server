@@ -495,6 +495,23 @@ public class AuthenticationSchemeAdapterTests
 	}
 
 	/// <summary>
+	/// A number parsed from JSON text comes back as the same number, not rounded to the narrowest floating kind that
+	/// happens to accept it: a single-precision float takes 1.23456789012 and keeps only seven of its digits, and a
+	/// double takes twenty significant digits and keeps about sixteen.
+	/// </summary>
+	[Theory]
+	[InlineData("1.23456789012")]
+	[InlineData("0.1")]
+	[InlineData("1.0000000000000000001")]
+	[InlineData("1E+300")]
+	public async Task RoundTrip_FractionalNumberParsedFromJson_KeepsEveryDigit(string json)
+	{
+		var result = await RoundTripAsync(Session(new JsonObject { ["n"] = JsonNode.Parse(json) }));
+
+		Assert.Equal(json, result!.AdditionalClaims!["n"]!.ToJsonString());
+	}
+
+	/// <summary>
 	/// A claim tagged with a primitive type whose text does not parse as that type is still the host's value, so it
 	/// reads back as the raw string rather than being dropped or parsed as JSON.
 	/// </summary>
