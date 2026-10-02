@@ -156,19 +156,63 @@ internal static class JsonClaimValue
 		=> long.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
 
 	private static string? WriteFloat(JsonValue value)
-		=> value.TryGetValue<float>(out var number) ? number.ToString(InvariantCulture) : null;
+		=> value.TryGetValue<float>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
 
 	private static JsonNode? ReadFloat(string text)
 		=> float.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
 
 	private static string? WriteDouble(JsonValue value)
-		=> value.TryGetValue<double>(out var number) ? number.ToString(InvariantCulture) : null;
+		=> value.TryGetValue<double>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
+
+	/// <summary>
+	/// The text a non-integer kind would write for <paramref name="value"/>, or null when that kind does not hold it.
+	/// </summary>
+	/// <remarks>
+	/// A number parsed from JSON text converts to every non-integer kind whose range it fits, rounding to that kind's
+	/// precision, and a single or double also turns a number past its range into an infinity or a zero, so the
+	/// narrowest kind tried first would keep only what it can hold. Such a number is held when the kind's text
+	/// carries the same number as the JSON text did, which an infinity's text never does.
+	/// The texts are compared digit by digit rather than through another numeric kind, which would round both sides
+	/// alike at the edges of its own range. A value the host created is its own kind and is written as it is.
+	/// </remarks>
+	private static string? Exactly(JsonValue value, string text)
+		=> !value.TryGetValue<JsonElement>(out var element) || Denotes(text, element) ? text : null;
+
+	private static bool Denotes(string text, JsonElement element)
+		=> Canonical(text) is { } written && written == Canonical(element.GetRawText());
+
+	/// <summary>
+	/// The number a JSON or invariant-culture numeric text denotes, as its sign, its significant digits and where the
+	/// point stands counted from the first of them, so two texts of one number compare equal however they write it.
+	/// </summary>
+	/// <returns>Null when the text's exponent does not fit an <see cref="int"/>.</returns>
+	private static (bool Negative, string Digits, int Exponent)? Canonical(string text)
+	{
+		var mantissa = text.TrimStart('-');
+		var exponentAt = mantissa.IndexOfAny(['e', 'E']);
+		var exponent = 0;
+		if (exponentAt >= 0)
+		{
+			if (!int.TryParse(mantissa[(exponentAt + 1)..], AllowLeadingSign, InvariantCulture, out exponent))
+				return null;
+
+			mantissa = mantissa[..exponentAt];
+		}
+
+		var point = mantissa.IndexOf('.');
+		var digits = mantissa.Replace(".", string.Empty);
+		var significant = digits.TrimStart('0');
+		var position = exponent + (point < 0 ? mantissa.Length : point) - (digits.Length - significant.Length);
+
+		significant = significant.TrimEnd('0');
+		return significant.Length == 0 ? (false, string.Empty, 0) : (text.StartsWith('-'), significant, position);
+	}
 
 	private static JsonNode? ReadDouble(string text)
 		=> double.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
 
 	private static string? WriteDecimal(JsonValue value)
-		=> value.TryGetValue<decimal>(out var number) ? number.ToString(InvariantCulture) : null;
+		=> value.TryGetValue<decimal>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
 
 	private static JsonNode? ReadDecimal(string text)
 		=> decimal.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
