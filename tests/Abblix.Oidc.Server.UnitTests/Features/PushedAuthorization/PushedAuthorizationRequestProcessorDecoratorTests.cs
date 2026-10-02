@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -32,6 +33,8 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     private readonly Mock<IAuthorizationRequestProcessor> _inner;
     private readonly Mock<IAuthorizationRequestStorage> _storage;
     private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
+    private readonly FakeTimeProvider _timeProvider = new();
+    private readonly OidcOptions _options = new() { LoginSessionExpiresIn = TimeSpan.FromMinutes(7) };
     private readonly PushedAuthorizationRequestProcessorDecorator _decorator;
 
     public PushedAuthorizationRequestProcessorDecoratorTests()
@@ -42,8 +45,8 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             _inner.Object,
             _storage.Object,
             _consumedRequestUris.Object,
-            Options.Create(new OidcOptions()),
-            TimeProvider.System);
+            Options.Create(_options),
+            _timeProvider);
     }
 
     private static ValidAuthorizationRequest CreateValidRequest(
@@ -105,7 +108,28 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
 
         _storage.Verify(s => s.TryGetAsync(pageUri, true), Times.Once);
         _storage.Verify(s => s.TryGetAsync(pushedUri, true), Times.Once);
-        _consumedRequestUris.Verify(r => r.MarkConsumedAsync(pushedUri, It.IsAny<DateTimeOffset>()), Times.Once);
+        _consumedRequestUris.Verify(
+            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.LoginSessionExpiresIn),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// A code issued on the request_uri the flow began with still records the end of the flow: a page that flow
+    /// was sent to before is one of its pages all the same.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_SuccessOnRequestUriFlowBeganWith_RecordsFlowEnded()
+    {
+        var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = CreateValidRequest(pushedUri, pushedBy: pushedUri);
+        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _storage.Setup(s => s.TryGetAsync(pushedUri, true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        await _decorator.ProcessAsync(request);
+
+        _consumedRequestUris.Verify(
+            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.LoginSessionExpiresIn),
+            Times.Once);
     }
 
     /// <summary>

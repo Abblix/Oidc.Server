@@ -20,7 +20,9 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// token has been minted - the <c>request_uri</c> is removed from storage so it cannot be replayed within
 /// its remaining time-to-live. Interactive continuations (login, consent, account selection) leave it in
 /// place so the user agent can re-enter the authorization endpoint with the same <c>request_uri</c>, except
-/// the one a request came back with from the login or account-creation page, which it is done with.
+/// the one a request came back with from the login or account-creation page, which it is done with. A success
+/// also records that the flow ended, under the <c>request_uri</c> it began with, so the other pages of the flow
+/// are refused while they could still be presented.
 /// </summary>
 /// <param name="inner">The authorization request processor being decorated.</param>
 /// <param name="authorizationRequestStorage">The storage backing pushed authorization requests, from which

@@ -11,6 +11,8 @@ import "google/protobuf/timestamp.proto";
 // A message rather than a bare timestamp because the serializer dispatches on the stored
 // type, and only types with a definition here avoid the JSON fallback and the warning it logs.
 message ConsumedRequestUri {
-  // When the flow the URN began ended.
+  // When the flow the URN began ended. Never read, and still what makes the record exist: a
+  // message with no field set is written as no bytes, which reads back as no record, and an
+  // ended flow would read as one still open.
   google.protobuf.Timestamp consumed_at = 1;
 }

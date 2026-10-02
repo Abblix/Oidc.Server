@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -62,6 +63,26 @@ public class PushedRequestFetcherTests
         RedirectUri = TestConstants.DefaultRedirectUri,
         Scope = [Scopes.OpenId],
     };
+
+    /// <summary>
+    /// A request stored for a page of a flow that already ended with a code is refused, though the record is still
+    /// there.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_PageOfEndedFlow_ReturnsInvalidRequestUri()
+    {
+        var pageUri = new Uri(RequestUrn.Prefix + "page");
+        var originUri = new Uri(RequestUrn.Prefix + "pushed");
+        _storage
+            .Setup(s => s.TryGetAsync(pageUri, false))
+            .ReturnsAsync(CreateRequest() with { OriginRequestUri = originUri });
+        _consumedRequestUris.Setup(r => r.IsConsumedAsync(originUri)).ReturnsAsync(true);
+
+        var result = await CreateFetcher().FetchAsync(CreateRequest() with { RequestUri = pageUri });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
+    }
 
     [Fact]
     public async Task FetchAsync_FlaggedClientWithoutPushedRequest_ReturnsError()
