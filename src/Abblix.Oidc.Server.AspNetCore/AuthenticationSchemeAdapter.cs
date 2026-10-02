@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using static System.Globalization.CultureInfo;
-using static System.Globalization.DateTimeStyles;
 using static System.Globalization.NumberStyles;
 
 namespace Abblix.Oidc.Server.AspNetCore;
@@ -37,45 +36,6 @@ public class AuthenticationSchemeAdapter(
 	IAuthSessionTerminator authSessionTerminator,
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
-	/// <summary>
-	/// Claim <see cref="Claim.ValueType"/> markers for the JSON node kinds the standard <see cref="ClaimValueTypes"/>
-	/// set does not distinguish. The value type is the only channel that survives a claim being serialized into the
-	/// authentication cookie, so the read side relies on these markers to reconstruct the exact node kind written.
-	/// </summary>
-	private static class CustomValueTypes
-	{
-		/// <summary>
-		/// A JSON object, serialized to its JSON text. Matches <c>JsonClaimValueTypes.Json</c> of
-		/// System.IdentityModel.Tokens.Jwt / Microsoft.IdentityModel, declared here by value
-		/// so claims interoperate with JWT handlers without taking a dependency on those packages.
-		/// </summary>
-		public const string Json = "JSON";
-
-		/// <summary>
-		/// A JSON array, serialized to its JSON text. Matches <c>JsonClaimValueTypes.JsonArray</c> of
-		/// System.IdentityModel.Tokens.Jwt / Microsoft.IdentityModel.
-		/// </summary>
-		public const string JsonArray = "JSON_ARRAY";
-
-		/// <summary>
-		/// A single-precision floating-point value - the <c>xs:float</c> XSD primitive type URI, a sibling of
-		/// <c>ClaimValueTypes.Double</c> = <c>xs:double</c>.
-		/// </summary>
-		public const string Float = "http://www.w3.org/2001/XMLSchema#float";
-
-		/// <summary>
-		/// A decimal value - the <c>xs:decimal</c> XSD primitive type URI, a sibling of
-		/// <c>ClaimValueTypes.Double</c> = <c>xs:double</c>.
-		/// </summary>
-		public const string Decimal = "http://www.w3.org/2001/XMLSchema#decimal";
-
-		/// <summary>
-		/// A <c>DateTimeOffset</c> - it has no XSD primitive distinct from <c>xs:dateTime</c> (which
-		/// <c>ClaimValueTypes.DateTime</c> already uses for a <c>DateTime</c>), so it keeps a library-specific marker.
-		/// </summary>
-		public const string DateTimeOffset = "urn:abblix:datetimeoffset";
-	}
-
 	/// <summary>
 	/// Claim names this adapter manages itself (the standard OIDC session claims). They are emitted from the typed
 	/// <see cref="AuthSession"/> fields, so they must never be re-emitted from <see cref="AuthSession.AdditionalClaims"/>
@@ -157,7 +117,19 @@ public class AuthenticationSchemeAdapter(
 	/// <summary>
 	/// Reads the OIDC session a principal written by this adapter carries, or null when it carries none.
 	/// </summary>
+	/// <remarks>
+	/// Built in two steps: the claims no session exists without, then the ones a session may carry.
+	/// </remarks>
 	private static AuthSession? ReadSession(ClaimsPrincipal principal)
+		=> ReadRequiredClaims(principal) is { } authSession
+			? WithOptionalClaims(authSession, principal)
+			: null;
+
+	/// <summary>
+	/// The session the claims a session cannot exist without describe, or null when any of them is missing or
+	/// malformed.
+	/// </summary>
+	private static AuthSession? ReadRequiredClaims(ClaimsPrincipal principal)
 	{
 		if (!principal.IsAuthenticated())
 			return null;
@@ -193,11 +165,19 @@ public class AuthenticationSchemeAdapter(
 			return null;
 
 		// NOTE: Future enhancement - consider supporting multiple user accounts per session
-		var authSession = new AuthSession(
+		return new AuthSession(
 			subject,
 			sessionId,
 			authenticationTimeValue,
-			identityProvider)
+			identityProvider);
+	}
+
+	/// <summary>
+	/// Adds to a session the claims it may carry.
+	/// </summary>
+	private static AuthSession WithOptionalClaims(AuthSession authSession, ClaimsPrincipal principal)
+	{
+		authSession = authSession with
 		{
 			AuthContextClassRef = principal.FindFirstValue(JwtClaimTypes.AuthContextClassRef),
 			Email = principal.FindFirstValue(JwtClaimTypes.Email),
@@ -232,6 +212,35 @@ public class AuthenticationSchemeAdapter(
 	/// <returns>The session written, and the replaced session when it belonged to another end user.</returns>
 	public async Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
 	{
+		RequireReadableBack(authSession);
+
+		var replaced = await AuthenticateAsync();
+		AuthSession[] endedSessions = [];
+		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
+			authSession = authSession with { SessionId = replaced.SessionId };
+		else if (replaced != null)
+			endedSessions = [replaced];
+
+		var principal = BuildPrincipal(authSession);
+
+		await HttpContext.SignInAsync(authenticationScheme, principal);
+
+		// What the next request will read from this cookie, rather than the session passed in, so a read in this
+		// request and the result get the same filtering and precision the cookie applies.
+		var written = ReadSession(principal).NotNull(nameof(principal));
+		HttpContext.Items[WrittenInThisRequest] = written;
+
+		foreach (var endedSession in endedSessions)
+			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);
+
+		return new AuthSessionSignInResult(written, endedSessions);
+	}
+
+	/// <summary>
+	/// Refuses a session that would be written and then read back as no session.
+	/// </summary>
+	private static void RequireReadableBack(AuthSession authSession)
+	{
 		// IdentityProvider becomes the authentication type of the issued identity. An empty value produces an
 		// unauthenticated principal: SignInAsync would appear to succeed, yet AuthenticateAsync would read it back as
 		// "not authenticated" and return null, manifesting as a silent login loop. Fail fast at the source instead.
@@ -252,14 +261,13 @@ public class AuthenticationSchemeAdapter(
 			throw new ArgumentException(
 				$"{nameof(AuthSession.SessionId)} must be a non-empty value; a session without one is read back as no session.",
 				nameof(authSession));
+	}
 
-		var replaced = await AuthenticateAsync();
-		AuthSession[] endedSessions = [];
-		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
-			authSession = authSession with { SessionId = replaced.SessionId };
-		else if (replaced != null)
-			endedSessions = [replaced];
-
+	/// <summary>
+	/// The principal the cookie stores for a session: its fields as claims, under its identity provider.
+	/// </summary>
+	private static ClaimsPrincipal BuildPrincipal(AuthSession authSession)
+	{
 		// Critical claims stored in principal for access in cookie events (especially SigningOut)
 		var claims = new List<Claim>
 		{
@@ -284,90 +292,25 @@ public class AuthenticationSchemeAdapter(
 		if (authSession.EmailVerified.HasValue)
 			claims.Add(new (JwtClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
 
-		// Additional claims from JsonObject - serialize each property. A claim keyed on a reserved name is skipped so it
-		// cannot shadow or duplicate a managed claim already emitted from the typed AuthSession fields above.
 		if (authSession.AdditionalClaims != null)
-		{
-			foreach (var (claimType, jsonNode) in authSession.AdditionalClaims)
-			{
-				if (jsonNode == null || ReservedClaimTypes.Contains(claimType))
-					continue;
+			AddAdditionalClaims(claims, authSession.AdditionalClaims);
 
-				claims.Add(CreateClaim(claimType, jsonNode));
-			}
-		}
-
-		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
-
-		await HttpContext.SignInAsync(authenticationScheme, principal);
-
-		// What the next request will read from this cookie, rather than the session passed in, so a read in this
-		// request and the result get the same filtering and precision the cookie applies.
-		var written = ReadSession(principal).NotNull(nameof(principal));
-		HttpContext.Items[WrittenInThisRequest] = written;
-
-		foreach (var endedSession in endedSessions)
-			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);
-
-		return new AuthSessionSignInResult(written, endedSessions);
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 	}
 
 	/// <summary>
-	/// Creates a Claim from a JsonNode value.
-	/// Primitives are converted to their string representation with a value type that pins the exact JSON kind,
-	/// complex types (arrays and objects) are JSON-serialized and tagged so the read side parses them back.
+	/// Serializes each additional claim. A claim keyed on a reserved name is skipped so it cannot shadow or duplicate
+	/// a managed claim already emitted from the typed <see cref="AuthSession"/> fields.
 	/// </summary>
-	private static Claim CreateClaim(string claimType, JsonNode claimValue)
+	private static void AddAdditionalClaims(List<Claim> claims, JsonObject additionalClaims)
 	{
-		// Arrays and objects - serialize as JSON and tag so TryParseJsonValue parses them back into a JsonArray/JsonObject
-		// rather than handing back the serialized string.
-		if (claimValue is JsonObject)
-			return new (claimType, claimValue.ToJsonString(), CustomValueTypes.Json);
+		foreach (var (claimType, jsonNode) in additionalClaims)
+		{
+			if (jsonNode == null || ReservedClaimTypes.Contains(claimType))
+				continue;
 
-		if (claimValue is JsonArray)
-			return new (claimType, claimValue.ToJsonString(), CustomValueTypes.JsonArray);
-
-		// Handle JsonValue<T> primitives
-		if (claimValue is not JsonValue jsonValue)
-			return new (claimType, claimValue.ToJsonString(), CustomValueTypes.Json);
-
-		// Try to get the underlying value type. The order matters: string and bool first, then integers widest-last,
-		// then the floating kinds, each tagged distinctly so the read side reconstructs the exact CLR/JSON type.
-		if (jsonValue.TryGetValue<string>(out var stringValue))
-			return new (claimType, stringValue, ClaimValueTypes.String);
-
-		if (jsonValue.TryGetValue<bool>(out var boolValue))
-			return new (claimType, boolValue.ToString().ToLowerInvariant(), ClaimValueTypes.Boolean);
-
-		if (jsonValue.TryGetValue<int>(out var intValue))
-			return new (claimType, intValue.ToString(InvariantCulture), ClaimValueTypes.Integer32);
-
-		if (jsonValue.TryGetValue<long>(out var longValue))
-			return new (claimType, longValue.ToString(InvariantCulture), ClaimValueTypes.Integer64);
-
-		if (jsonValue.TryGetValue<float>(out var floatValue))
-			return new (claimType, floatValue.ToString(InvariantCulture), CustomValueTypes.Float);
-
-		if (jsonValue.TryGetValue<double>(out var doubleValue))
-			return new (claimType, doubleValue.ToString(InvariantCulture), ClaimValueTypes.Double);
-
-		if (jsonValue.TryGetValue<decimal>(out var decimalValue))
-			return new (claimType, decimalValue.ToString(InvariantCulture), CustomValueTypes.Decimal);
-
-		// ISO 8601 round-trip format ("O") with full precision. DateTime and DateTimeOffset are tagged distinctly so the
-		// read side rebuilds the same CLR type: a DateTime keeps its Kind, a DateTimeOffset keeps its offset, neither is
-		// silently coerced into the other (which would otherwise bake in the server's local offset).
-
-		// For DateTime: "2009-06-15T13:45:30.0000000" or "2009-06-15T13:45:30.0000000Z"
-		if (jsonValue.TryGetValue<DateTime>(out var dateTimeValue))
-			return new (claimType, dateTimeValue.ToString("O", InvariantCulture), ClaimValueTypes.DateTime);
-
-		// For DateTimeOffset: "2009-06-15T13:45:30.0000000-07:00"
-		if (jsonValue.TryGetValue<DateTimeOffset>(out var dateTimeOffsetValue))
-			return new (claimType, dateTimeOffsetValue.ToString("O", InvariantCulture), CustomValueTypes.DateTimeOffset);
-
-		// Fallback for any other JsonValue type
-		return new (claimType, claimValue.ToJsonString(), CustomValueTypes.Json);
+			claims.Add(JsonClaimValue.ToClaim(claimType, jsonNode));
+		}
 	}
 
 	/// <summary>
@@ -393,74 +336,9 @@ public class AuthenticationSchemeAdapter(
 			if (ReservedClaimTypes.Contains(claim.Type))
 				continue;
 
-			additionalClaims[claim.Type] = TryParseJsonValue(claim);
+			additionalClaims[claim.Type] = JsonClaimValue.FromClaim(claim);
 		}
 
 		return additionalClaims;
-	}
-
-	/// <summary>
-	/// Parses a claim back to JsonNode using the claim's ValueType to preserve exact type information.
-	/// Falls back to JSON parsing for complex types, then the raw string value if all else fails.
-	/// </summary>
-	private static JsonNode? TryParseJsonValue(Claim claim)
-	{
-		var value = claim.Value;
-
-		if (string.IsNullOrEmpty(value))
-			return null;
-
-		// Use ValueType to reconstruct the exact type CreateClaim recorded.
-		return claim.ValueType switch
-		{
-			ClaimValueTypes.Boolean when bool.TryParse(value, out var boolValue) => JsonValue.Create(boolValue),
-
-			ClaimValueTypes.Integer32 when int.TryParse(value, Integer, InvariantCulture, out var intValue)
-				=> JsonValue.Create(intValue),
-
-			ClaimValueTypes.Integer64 when long.TryParse(value, Integer, InvariantCulture, out var longValue)
-				=> JsonValue.Create(longValue),
-
-			CustomValueTypes.Float when float.TryParse(value, Float, InvariantCulture, out var floatValue)
-				=> JsonValue.Create(floatValue),
-
-			ClaimValueTypes.Double when double.TryParse(value, Float, InvariantCulture, out var doubleValue)
-				=> JsonValue.Create(doubleValue),
-
-			CustomValueTypes.Decimal when decimal.TryParse(value, Float, InvariantCulture, out var decimalValue)
-				=> JsonValue.Create(decimalValue),
-
-			ClaimValueTypes.DateTime when DateTime.TryParse(value, InvariantCulture, RoundtripKind, out var dateTimeValue)
-				=> JsonValue.Create(dateTimeValue),
-
-			CustomValueTypes.DateTimeOffset when DateTimeOffset.TryParse(value, InvariantCulture, RoundtripKind, out var dateTimeOffsetValue)
-				=> JsonValue.Create(dateTimeOffsetValue),
-
-			ClaimValueTypes.String or
-				ClaimValueTypes.Boolean or
-				ClaimValueTypes.Integer32 or
-				ClaimValueTypes.Integer64 or
-				ClaimValueTypes.Double or
-				ClaimValueTypes.DateTime or
-				CustomValueTypes.Float or
-				CustomValueTypes.Decimal or
-				CustomValueTypes.DateTimeOffset => JsonValue.Create(value),
-
-			// The JSON markers, or a claim written by something other than CreateClaim - try to parse as JSON, and
-			// fall back to the raw string when it is not valid JSON.
-			_ => TryParseJsonNode(value),
-		};
-	}
-
-	private static JsonNode? TryParseJsonNode(string value)
-	{
-		try
-		{
-			return JsonNode.Parse(value) ?? JsonValue.Create(value);
-		}
-		catch (JsonException)
-		{
-			return JsonValue.Create(value);
-		}
 	}
 }

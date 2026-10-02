@@ -51,7 +51,10 @@ public class ConfigurationResponseFormatter(
 			UserInfoEndpoint = userInfoEndpoint,
 			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession, response.Issuer),
 			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession, response.Issuer),
-			PushedAuthorizationRequestEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.PushAuthorizeAsync), OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
+			PushedAuthorizationRequestEndpoint = Resolve<BackChannelAuthorizationController>(
+				nameof(BackChannelAuthorizationController.PushAuthorizeAsync),
+				OidcEndpoints.PushedAuthorizationRequest,
+				response.Issuer),
 
 			TokenEndpoint = tokenEndpoint,
 			RevocationEndpoint = revocationEndpoint,
@@ -59,9 +62,15 @@ public class ConfigurationResponseFormatter(
 
 			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient, response.Issuer),
 
-			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication, response.Issuer),
+			BackChannelAuthenticationEndpoint = Resolve<BackChannelAuthorizationController>(
+				nameof(BackChannelAuthorizationController.BackChannelAuthenticationAsync),
+				OidcEndpoints.BackChannelAuthentication,
+				response.Issuer),
 
-			DeviceAuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.DeviceAuthorizationAsync), OidcEndpoints.DeviceAuthorization, response.Issuer),
+			DeviceAuthorizationEndpoint = Resolve<BackChannelAuthorizationController>(
+				nameof(BackChannelAuthorizationController.DeviceAuthorizationAsync),
+				OidcEndpoints.DeviceAuthorization,
+				response.Issuer),
 
 			FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -115,23 +124,7 @@ public class ConfigurationResponseFormatter(
 			AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
 		};
 
-		// Add mTLS endpoint aliases if configured
-		var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-		var mtlsBaseUri = issuerSettings.MtlsBaseUri;
-
-		if (mtlsOptions != null || mtlsBaseUri != null)
-		{
-			mvcResponse = mvcResponse with
-			{
-				MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
-				{
-					TokenEndpoint = mtlsOptions?.TokenEndpoint ?? Rebase(tokenEndpoint, mtlsBaseUri),
-					RevocationEndpoint = mtlsOptions?.RevocationEndpoint ?? Rebase(revocationEndpoint, mtlsBaseUri),
-					IntrospectionEndpoint = mtlsOptions?.IntrospectionEndpoint ?? Rebase(introspectionEndpoint, mtlsBaseUri),
-					UserInfoEndpoint = mtlsOptions?.UserInfoEndpoint ?? Rebase(userInfoEndpoint, mtlsBaseUri),
-				}
-			};
-		}
+		mvcResponse = WithMtlsAliases(mvcResponse);
 
 		if (options.Value.Discovery.SignedMetadata)
 		{
@@ -139,6 +132,33 @@ public class ConfigurationResponseFormatter(
 		}
 
 		return mvcResponse;
+	}
+
+	/// <summary>
+	/// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, when either the configuration
+	/// names them or the issuer has a mutual-TLS host to rebase them onto. An alias the configuration names wins.
+	/// </summary>
+	private ModelResponse WithMtlsAliases(ModelResponse document)
+	{
+		var configured = options.Value.Discovery.MtlsEndpointAliases;
+		var mtlsBaseUri = issuerSettings.MtlsBaseUri;
+
+		if (configured == null && mtlsBaseUri == null)
+			return document;
+
+		// Read through an empty set when nothing is configured, so each alias falls back to the rebased endpoint.
+		configured ??= new MtlsAliasesOptions();
+		return document with
+		{
+			MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
+			{
+				TokenEndpoint = configured.TokenEndpoint ?? Rebase(document.TokenEndpoint, mtlsBaseUri),
+				RevocationEndpoint = configured.RevocationEndpoint ?? Rebase(document.RevocationEndpoint, mtlsBaseUri),
+				IntrospectionEndpoint =
+					configured.IntrospectionEndpoint ?? Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
+				UserInfoEndpoint = configured.UserInfoEndpoint ?? Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+			},
+		};
 	}
 
 	/// <summary>

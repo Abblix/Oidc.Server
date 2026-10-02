@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -447,11 +448,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			// into explicit constructor arguments; rendering them back would couple the output to one
 			// specific overload shape. Trailing arguments equal to their parameter's declared default
 			// are therefore omitted, restoring the attribute as it reads in the core source.
-			while (count > 0 &&
-			       parameters is { } knownParameters &&
-			       count <= knownParameters.Length &&
-			       knownParameters[count - 1] is { HasExplicitDefaultValue: true } parameter &&
-			       Equals(arguments[count - 1].Value, parameter.ExplicitDefaultValue))
+			while (count > 0 && EqualsDeclaredDefault(arguments[count - 1], parameters, count - 1))
 			{
 				count--;
 			}
@@ -461,6 +458,16 @@ public class MvcModelGenerator : IIncrementalGenerator
 				yield return arguments[i];
 			}
 		}
+
+		/// <summary>
+		/// Whether an argument spells out the default its parameter declares, so dropping it reads the same.
+		/// </summary>
+		private static bool EqualsDeclaredDefault(
+			TypedConstant argument, ImmutableArray<IParameterSymbol>? parameters, int index)
+			=> parameters is { } knownParameters &&
+			   index < knownParameters.Length &&
+			   knownParameters[index] is { HasExplicitDefaultValue: true } parameter &&
+			   Equals(argument.Value, parameter.ExplicitDefaultValue);
 
 		private static string RenderConstructorArgument(TypedConstant constant)
 			// A trailing array constructor argument is rendered in expanded form on the assumption
@@ -486,11 +493,21 @@ public class MvcModelGenerator : IIncrementalGenerator
 				{ Kind: TypedConstantKind.Array }
 					=> $"new[] {{ {string.Join(", ", constant.Values.Select(RenderTypedConstant))} }}",
 
-				{ Value: string text } => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true),
-				{ Value: char character } => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(character, quote: true),
-				{ Value: bool flag } => flag ? "true" : "false",
+				_ => RenderPrimitive(constant.Value),
+			};
 
-				_ => Convert.ToString(constant.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
+		/// <summary>
+		/// Renders a primitive constant - the last link of the chain <see cref="RenderTypedConstant"/> starts, reached
+		/// once the constant is neither null, a type, an enum nor an array.
+		/// </summary>
+		private static string RenderPrimitive(object? value)
+			=> value switch
+			{
+				string text => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true),
+				char character => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(character, quote: true),
+				bool flag => flag ? "true" : "false",
+
+				_ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
 			};
 
 		private AttributeData? TryGetSourceMarker(IPropertySymbol property)

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Frozen;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.Options;
@@ -31,33 +32,33 @@ public class OidcEndpointResolver(IUriResolver uriResolver, IOptions<OidcOptions
     /// <inheritdoc />
     public Uri? Resolve(OidcEndpoints endpoint)
     {
-        var template = TemplateOf(endpoint);
-        if (template == null || !options.Value.EnabledEndpoints.HasFlag(endpoint))
+        if (!TemplatesByEndpoint.TryGetValue(endpoint, out var template) ||
+            !options.Value.EnabledEndpoints.HasFlag(endpoint))
             return null;
 
         return uriResolver.Content(template);
     }
 
     /// <summary>
-    /// Maps an endpoint to the route template its controller action carries. A flag combination names a set
-    /// rather than an endpoint; so does the client configuration endpoint, whose route carries a client
-    /// identifier this contract has no way to supply.
+    /// The route template each endpoint's controller action carries. A flag combination names a set rather than an
+    /// endpoint, so it has no entry; the client configuration endpoint is answered by the registration endpoint,
+    /// since its own route carries a client identifier this contract has no way to supply.
     /// </summary>
-    private static string? TemplateOf(OidcEndpoints endpoint) => endpoint switch
-    {
-        OidcEndpoints.Configuration => Path.Configuration,
-        OidcEndpoints.Keys => Path.Keys,
-        OidcEndpoints.Authorize => Path.Authorize,
-        OidcEndpoints.Token => Path.Token,
-        OidcEndpoints.UserInfo => Path.UserInfo,
-        OidcEndpoints.CheckSession => Path.CheckSession,
-        OidcEndpoints.EndSession => Path.EndSession,
-        OidcEndpoints.Revocation => Path.Revocation,
-        OidcEndpoints.Introspection => Path.Introspection,
-        OidcEndpoints.RegisterClient => Path.Register,
-        OidcEndpoints.PushedAuthorizationRequest => Path.PushAuthorizationRequest,
-        OidcEndpoints.BackChannelAuthentication => Path.BackChannelAuthentication,
-        OidcEndpoints.DeviceAuthorization => Path.DeviceAuthorization,
-        _ => null,
-    };
+    internal static readonly FrozenDictionary<OidcEndpoints, string> TemplatesByEndpoint =
+        new Dictionary<OidcEndpoints, string>
+        {
+            [OidcEndpoints.Configuration] = Path.Configuration,
+            [OidcEndpoints.Keys] = Path.Keys,
+            [OidcEndpoints.Authorize] = Path.Authorize,
+            [OidcEndpoints.Token] = Path.Token,
+            [OidcEndpoints.UserInfo] = Path.UserInfo,
+            [OidcEndpoints.CheckSession] = Path.CheckSession,
+            [OidcEndpoints.EndSession] = Path.EndSession,
+            [OidcEndpoints.Revocation] = Path.Revocation,
+            [OidcEndpoints.Introspection] = Path.Introspection,
+            [OidcEndpoints.RegisterClient] = Path.Register,
+            [OidcEndpoints.PushedAuthorizationRequest] = Path.PushAuthorizationRequest,
+            [OidcEndpoints.BackChannelAuthentication] = Path.BackChannelAuthentication,
+            [OidcEndpoints.DeviceAuthorization] = Path.DeviceAuthorization,
+        }.ToFrozenDictionary();
 }
