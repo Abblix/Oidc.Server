@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -25,6 +26,13 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// right after the write and answered as not made. So a registrant choosing an id ahead of the administrator is never
 /// served in the configured client's place, and does not come back once the settings let the id go. Every
 /// registration dropped this way is logged, a write answered as not made included.
+/// <para>
+/// Whether the settings configure an id is asked of the settings in force rather than of the clients built: by a
+/// lookup, and by a build before it drops a registration. So a request begun before the settings changed, and a
+/// build of former settings ending after the change, answer by what the settings now configure. A write under an id
+/// the settings in force configure is dropped and answered as not made, whatever the settings the request holds
+/// say.
+/// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
@@ -35,7 +43,7 @@ internal partial class ReloadableClientInfoStorage(
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
     IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered)
-    : IClientInfoProvider, IClientInfoManager
+    : IClientInfoStore
 {
     private Dictionary<string, ClientInfo> Configured
     {
@@ -49,11 +57,13 @@ internal partial class ReloadableClientInfoStorage(
 
     /// <summary>
     /// Drops every registration stored under an id <paramref name="clients"/> configure, as the store first reads
-    /// them.
+    /// them, where the settings in force still configure it: a build of former settings may end after a registration
+    /// the current ones allow.
     /// </summary>
     private Dictionary<string, ClientInfo> Evicting(Dictionary<string, ClientInfo> clients)
     {
-        foreach (var registration in Registered.Where(registration => clients.ContainsKey(registration.Key)))
+        foreach (var registration in Registered.Where(
+                     registration => clients.ContainsKey(registration.Key) && ConfiguredInForce(registration.Key)))
             Evict(registration);
 
         return clients;
@@ -62,18 +72,18 @@ internal partial class ReloadableClientInfoStorage(
     private void Evict(KeyValuePair<string, RegisteredClient> registration)
     {
         if (Registered.TryRemove(registration))
-            LogRegistrationEvicted(registration.Key);
+            LogRegistrationEvicted(registration.Key, settings.Id);
     }
 
     /// <summary>
-    /// Drops a registration just stored under an id the settings configure, including one they came to configure after
-    /// the write was decided.
+    /// Drops a registration under an id the settings in force configure: one a lookup found, or one just written,
+    /// including under an id they came to configure after the write was decided.
     /// </summary>
     /// <returns>Whether the settings configure the id, and so the registration is not kept - dropped here, or already
-    /// by the eviction reading them brought about.</returns>
+    /// by a build of the clients.</returns>
     private bool Recheck(RegisteredClient client)
     {
-        if (!IsConfigured(client.ClientInfo.ClientId))
+        if (!ConfiguredInForce(client.ClientInfo.ClientId))
             return false;
 
         Evict(new KeyValuePair<string, RegisteredClient>(client.ClientInfo.ClientId, client));
@@ -84,7 +94,18 @@ internal partial class ReloadableClientInfoStorage(
     private ConcurrentDictionary<string, RegisteredClient> Registered
         => registered.GetOrCreate(null, () => new(StringComparer.OrdinalIgnoreCase));
 
-    private bool IsConfigured(string clientId) => Configured.ContainsKey(clientId);
+    /// <summary>
+    /// Whether the settings in force configure <paramref name="clientId"/>, read from them rather than from the
+    /// clients built: a request begun before the settings changed holds the former ones, and the clients of the
+    /// current ones may not be built yet, or be built from former settings.
+    /// </summary>
+    private bool ConfiguredInForce(string clientId)
+    {
+#pragma warning disable ABXMT001
+        var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
+#pragma warning restore ABXMT001
+        return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -96,9 +117,11 @@ internal partial class ReloadableClientInfoStorage(
     public Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        return Task.FromResult(Configured.TryGetValue(clientId, out var client)
-            ? client
-            : Registered.GetValueOrDefault(clientId)?.ClientInfo);
+        if (Configured.TryGetValue(clientId, out var configuredClient))
+            return Task.FromResult<ClientInfo?>(configuredClient);
+
+        var registration = Registered.GetValueOrDefault(clientId);
+        return Task.FromResult(registration is null || Recheck(registration) ? null : registration.ClientInfo);
     }
 
     /// <summary>
@@ -108,21 +131,25 @@ internal partial class ReloadableClientInfoStorage(
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
     /// <returns>Whether the client was added and kept.</returns>
     public Task<bool> TryAddClientAsync(RegisteredClient client)
-        => Task.FromResult(Registered.TryAdd(client.ClientInfo.ClientId, client) && !Recheck(client));
+        => Task.FromResult(
+            Registered.TryAdd(client.ClientInfo.ClientId, client) &&
+            !Recheck(client));
 
     /// <inheritdoc />
     public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
     {
         // The settings are read last, so the answer is theirs as they stand once the registration was read: a reload
-        // configuring the id before that drops the registration, or hides it here
+        // configuring the id before that drops the registration here, so it does not come back once they let it go
         var client = Registered.GetValueOrDefault(clientId);
-        return Task.FromResult(client is null || IsConfigured(clientId) ? null : client);
+        return Task.FromResult(client is null || Recheck(client) ? null : client);
     }
 
     /// <inheritdoc />
     public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
     {
-        return Task.FromResult(Registered.TryReplace(current, updated) && !Recheck(updated));
+        return Task.FromResult(
+            Registered.TryReplace(current, updated) &&
+            !Recheck(updated));
     }
 
     /// <inheritdoc />

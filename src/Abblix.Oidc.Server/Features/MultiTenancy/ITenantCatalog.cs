@@ -16,11 +16,15 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, so an implementation answers from memory where it can.
 /// <para>
-/// What is built from a tenant's definition - its scopes, resources and pairwise converter, and its clients in a
-/// store that follows changes - is kept for the tenant and built again once the definition hands out other objects
-/// for them. So a catalog answers with the same objects until the definition really changes: one building a fresh
-/// definition for every lookup has all of them rebuilt on every request. The checks of the tenant list judge what
-/// the server's own catalog reads (<see cref="StoreTenantCatalog"/>); a catalog of the host's own gets none of them.
+/// What is built from a tenant's definition - its scopes, resources, pairwise converter and clients - is kept for
+/// the tenant and built again once the definition hands out other objects for them. So a catalog answers with the
+/// same objects until the definition really changes: one building a fresh definition for every lookup has all of
+/// them rebuilt on every request. With the server's own catalog (<see cref="StoreTenantCatalog"/>) what was built
+/// from a tenant's definition in force - the one it serves now, or the last one it served - is not replaced from
+/// another, so a request still holding one it replaced is answered with what was built; with any other catalog, one
+/// wrapping the server's own included, such a request builds them back from the definition it holds. The checks of
+/// the tenant list judge what the server's own catalog reads, so a catalog of the host's own gets none of them, while
+/// one wrapping the server's passes on only what they let through.
 /// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]

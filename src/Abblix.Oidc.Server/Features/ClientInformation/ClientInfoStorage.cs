@@ -19,7 +19,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <remarks>
 /// The clients are read from the settings once for each issuer, so a reload of the settings does not reach them;
 /// a host that wants it registers <see cref="ReloadableClientInfoStorage"/> through
-/// <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>. Registrations are kept apart from them,
+/// <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>, which is the default under
+/// multi-tenancy, where a tenant's definition changes while the server runs. Registrations are kept apart from them,
 /// each with the identifier of the token that manages it, and never under an id the settings configured.
 /// </remarks>
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
@@ -28,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 internal class ClientInfoStorage(
     IIssuerSettings settings,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
-    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : IClientInfoProvider, IClientInfoManager
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : IClientInfoStore
 {
     // Built once for each issuer, whatever its settings become
     private Dictionary<string, ClientInfo> Configured => configured.GetOrCreate(null, () =>

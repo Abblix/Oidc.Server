@@ -27,8 +27,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="tenantAccessor">Resolves the current tenant.</param>
 /// <param name="options">The server-wide settings a tenant's own are derived from.</param>
+/// <param name="catalog">The catalog the tenants are resolved from, asked which definition is in force now.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOptionsMonitor<OidcOptions> options)
+public sealed class TenantIssuerSettings(
+    ITenantAccessor tenantAccessor,
+    IOptionsMonitor<OidcOptions> options,
+    ITenantCatalog catalog)
     : IIssuerSettings
 {
     /// <inheritdoc />
@@ -39,6 +43,15 @@ public sealed class TenantIssuerSettings(ITenantAccessor tenantAccessor, IOption
 
     /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
+
+    /// <summary>
+    /// The clients the current tenant's definition in force configures (<see cref="StoreTenantCatalog.InForce"/>),
+    /// which a request begun before the definition changed does not hold; those of the definition the request holds
+    /// where the server's own catalog has no definition in force for this creation of the tenant, or is not the
+    /// catalog in use.
+    /// </summary>
+    internal IEnumerable<ClientInfo> ClientsInForce
+        => (catalog is StoreTenantCatalog own ? own.InForce(Tenant) ?? Tenant : Tenant).Clients;
 
     /// <inheritdoc />
     public ScopeDefinition[]? Scopes => Tenant.Scopes;

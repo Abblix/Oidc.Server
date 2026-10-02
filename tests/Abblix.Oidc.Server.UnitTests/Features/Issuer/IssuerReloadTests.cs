@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -105,6 +107,59 @@ public class IssuerReloadTests
 
     private static IClientInfoManager StoreOf(bool reloadable, IOptionsMonitor<OidcOptions> options)
         => reloadable ? ClientsOf(options) : DefaultClientsOf(options);
+
+    /// <summary>
+    /// Clients the settings configure, whose reading, once armed, stops until the test lets it go on: it holds the
+    /// store mid-way through building them.
+    /// </summary>
+    private sealed class HeldClients(params ClientInfo[] clients) : IEnumerable<ClientInfo>
+    {
+        // How long a test waits for the other side of a held build before failing rather than hanging
+        public static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
+        public bool Armed { get; set; }
+        public SemaphoreSlim Reached { get; } = new(0);
+        public SemaphoreSlim Released { get; } = new(0);
+
+        public IEnumerator<ClientInfo> GetEnumerator()
+        {
+            if (Armed)
+            {
+                Armed = false;
+                Reached.Release();
+                if (!Released.Wait(Patience))
+                    throw new TimeoutException("The test never let the held build go on.");
+            }
+
+            return ((IEnumerable<ClientInfo>)clients).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// A build of the clients a former reload configured, begun before the next reload and ending after, does not
+    /// drop a registration made meanwhile under an id the next reload freed.
+    /// </summary>
+    [Fact]
+    public async Task BuildOfFormerSettingsEndingLate_KeepsRegistrationMadeMeanwhile()
+    {
+        var held = new HeldClients(new ClientInfo("freed"));
+        var options = new ReloadableOptions(new OidcOptions());
+        var clients = ClientsOf(options);
+        Assert.Null(await clients.TryFindClientAsync("other"));
+        options.Reload(new OidcOptions { Clients = held });
+        held.Armed = true;
+        var building = Task.Run(() => clients.TryFindClientAsync("other"));
+        Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
+
+        options.Reload(new OidcOptions());
+        Assert.True(await clients.TryAddClientAsync(Registration("freed")));
+        held.Released.Release();
+        await building.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(await clients.TryFindRegisteredClientAsync("freed"));
+    }
 
     private static RegisteredClient Registration(string clientId, string? name = null, string tokenId = "jti-1")
         => new(new ClientInfo(clientId) { ClientName = name }, tokenId);

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
@@ -18,7 +19,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// Asked on every request, static files included, so it answers from the last reading and never from the store.
 /// A tenant whose id, generation and version are unchanged keeps the definition read before, so what was built
-/// from it is not built again.
+/// from it is not built again. What was built for a tenant from its definition in force (<see cref="InForce"/>) is
+/// not replaced from another definition, so a request still holding one this catalog replaced is answered with what
+/// was built.
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
@@ -47,6 +50,11 @@ public sealed partial class StoreTenantCatalog(
     private readonly SemaphoreSlim _readingOne = new(1, 1);
 
     private Reading? _reading;
+
+    // The last definition served under each id, kept once the tenant is refused or dropped: a request still holding
+    // one of its definitions is judged by the last one in force rather than by none. One entry for each id ever
+    // served, its keys included, kept for the life of the process
+    private readonly ConcurrentDictionary<string, TenantDefinition> _lastServed = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Reads the store again and serves what the checks let through.
@@ -81,6 +89,8 @@ public sealed partial class StoreTenantCatalog(
 
         var refused = refusals.SelectMany(refusal => refusal.TenantIds).ToHashSet(StringComparer.Ordinal);
         var served = stored.Where(tenant => !refused.Contains(tenant.Tenant.Id)).ToArray();
+        foreach (var tenant in served.Select(entry => entry.Tenant))
+            _lastServed[tenant.Id] = tenant;
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
@@ -116,6 +126,18 @@ public sealed partial class StoreTenantCatalog(
            held.Version == fresh.Version &&
            held.Tenant.Generation == fresh.Tenant.Generation
             ? held
+            : null;
+
+    /// <summary>
+    /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the
+    /// last one served when the tenant is refused or dropped since; null when this catalog never served this
+    /// creation of the tenant, or has served another creation of it since.
+    /// </summary>
+    internal TenantDefinition? InForce(TenantDefinition held)
+        => (Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant ??
+            _lastServed.GetValueOrDefault(held.Id)) is { } inForce &&
+           inForce.Generation == held.Generation
+            ? inForce
             : null;
 
     /// <summary>
