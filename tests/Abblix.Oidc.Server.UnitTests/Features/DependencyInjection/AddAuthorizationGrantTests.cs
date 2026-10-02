@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
 /// <summary>
 /// Locks the dual-presence invariant of
-/// <see cref="Abblix.Oidc.Server.Endpoints.ServiceCollectionExtensions.AddAuthorizationGrant{TImpl}"/>:
+/// <see cref="AuthorizationGrantServiceCollectionExtensions.AddAuthorizationGrant{TImpl}"/>:
 /// every <see cref="IAuthorizationGrantHandler"/> registered through the helper must also be
 /// observable as <see cref="IGrantTypeInformer"/>, so the discovery endpoint and registration-time
 /// validators that aggregate <see cref="IGrantTypeInformer"/> see the same set the token endpoint

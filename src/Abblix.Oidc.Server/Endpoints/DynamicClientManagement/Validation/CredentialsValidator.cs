@@ -88,9 +88,14 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
     /// Checks if the request contains TLS metadata for certificate-based authentication.
     /// </summary>
     private static bool HasTlsMetadata(ClientRegistrationRequest request)
+        => request is { TlsClientAuthSubjectDn.Length: > 0 } || HasSubjectAlternativeName(request);
+
+    /// <summary>
+    /// Checks if the request names the client certificate by any of its subject alternative name fields.
+    /// </summary>
+    private static bool HasSubjectAlternativeName(ClientRegistrationRequest request)
         => request
-            is { TlsClientAuthSubjectDn.Length: > 0 }
-            or { TlsClientAuthSanDns.Length: > 0 }
+            is { TlsClientAuthSanDns.Length: > 0 }
             or { TlsClientAuthSanUri.Length: > 0 }
             or { TlsClientAuthSanIp.Length: > 0 }
             or { TlsClientAuthSanEmail.Length: > 0 };

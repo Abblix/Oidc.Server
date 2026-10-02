@@ -51,5 +51,5 @@ public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
     }
 
     private static bool IsBase64UrlAlphabet(string value)
-        => value.All(ch => ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
+        => value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_');
 }

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
-partial class BackChannelAuthenticationGrantHandler
+partial class BackChannelGrantRedeemer
 {
     /// <summary>
     /// The per-type validator's own words, which the client never sees.

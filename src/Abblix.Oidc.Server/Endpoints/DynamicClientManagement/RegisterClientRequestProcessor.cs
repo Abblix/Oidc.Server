@@ -139,6 +139,7 @@ public partial class RegisterClientRequestProcessor(
         return response;
     }
 
+
     /// <summary>
     /// Converts the registration request and credentials into a ClientInfo entity for storage.
     /// </summary>
@@ -146,138 +147,35 @@ public partial class RegisterClientRequestProcessor(
         ClientRegistrationRequest model,
         ClientCredentials credentials,
         string? sectorIdentifier)
+        => new ClientInfoBuilder(credentials.ClientId, model)
+            .WithSectorIdentifier(sectorIdentifier)
+            .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
+            .Build();
+
+    /// <summary>
+    /// The secrets a newly registered client authenticates with, or null when its method uses none.
+    /// </summary>
+    /// <remarks>
+    /// Only client_secret_jwt keeps the secret itself, since verifying the client's HMAC-signed assertion
+    /// needs it; every other method is verified against the hash.
+    /// </remarks>
+    private static ClientSecret[]? ToClientSecrets(string tokenEndpointAuthMethod, ClientCredentials credentials)
     {
-        var clientInfo = new ClientInfo(credentials.ClientId)
-        {
-            TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
-            AllowedResponseTypes = model.ResponseTypes,
-            AllowedGrantTypes = model.GrantTypes,
-            // A client that registers none has none: the flows that redirect are the ones that require
-            // them, and a device-flow or CIBA client runs neither. Empty rather than null so every reader
-            // downstream - the authorization endpoint's redirect check among them - sees a set to compare
-            // against instead of having to ask whether there is one.
-            RedirectUris = model.RedirectUris ?? [],
-            Jwks = model.Jwks,
-            JwksUri = model.JwksUri,
-            PkceRequired = model.PkceRequired,
-            OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 section 5.2: dpop_bound_access_tokens - when omitted, defaults to false.
-            RequireDPoP = model.DpopBoundAccessTokens ?? false,
-            // RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: per-client FAPI-grade enforcement
-            // flags - when omitted, default to false.
-            RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
-            RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
-            TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
-            // RFC 9396 section 10: authorization_details_types per-client allowlist.
-            AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
-            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
-            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
-            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
-            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
-            LogoUri = model.LogoUri,
-            PolicyUri = model.PolicyUri,
-            TermsOfServiceUri = model.TermsOfServiceUri,
-            InitiateLoginUri = model.InitiateLoginUri,
-            SubjectType = model.SubjectType,
-            SectorIdentifier = sectorIdentifier,
-            PostLogoutRedirectUris = model.PostLogoutRedirectUris,
-            BackChannelTokenDeliveryMode = model.BackChannelTokenDeliveryMode,
-            BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
-            BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
-            BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
-            AllowedScopes = model.Scope,
-            SoftwareId = model.SoftwareId,
-            SoftwareVersion = model.SoftwareVersion,
-            ApplicationType = model.ApplicationType,
-            Contacts = model.Contacts,
-            ClientName = model.ClientName,
-            ClientUri = model.ClientUri,
-            DefaultMaxAge = model.DefaultMaxAge,
-            RequireAuthTime = model.RequireAuthTime,
-            DefaultAcrValues = model.DefaultAcrValues,
-            IdentityTokenEncryptedResponseAlgorithm = model.IdTokenEncryptedResponseAlg,
-            IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
-            UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
-            IntrospectionEncryptedResponseAlgorithm = model.IntrospectionEncryptedResponseAlg,
-            IntrospectionEncryptedResponseEncryption = model.IntrospectionEncryptedResponseEnc,
-            AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
-            AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
-            RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
-            RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
-            RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
-            TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
-        };
+        if (!credentials.ClientSecret.HasValue())
+            return null;
 
-        // Map tls_client_auth metadata if selected
-        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
-        {
-            clientInfo.TlsClientAuth = new ()
+        return
+        [
+            new ClientSecret
             {
-                SubjectDn = model.TlsClientAuthSubjectDn,
-                SanDns = model.TlsClientAuthSanDns,
-                SanUris = model.TlsClientAuthSanUri,
-                SanIps = model.TlsClientAuthSanIp,
-                SanEmails = model.TlsClientAuthSanEmail,
-            };
-        }
-
-        if (credentials.ClientSecret.HasValue())
-        {
-            clientInfo.ClientSecrets =
-            [
-                new ClientSecret
+                Value = tokenEndpointAuthMethod switch
                 {
-                    Value = clientInfo.TokenEndpointAuthMethod switch
-                    {
-                        ClientAuthenticationMethods.ClientSecretJwt => credentials.ClientSecret,
-                        _ => null,
-                    },
-                    Sha512Hash = credentials.Sha512Hash,
-                    ExpiresAt = credentials.ExpiresAt,
-                }
-            ];
-        }
-
-        if (model.RequestUris != null)
-        {
-            clientInfo.RequestUris = model.RequestUris;
-        }
-
-        if (model.UserInfoSignedResponseAlg.HasValue())
-        {
-            clientInfo.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
-        }
-
-        if (model.IntrospectionSignedResponseAlg.HasValue())
-        {
-            clientInfo.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
-        }
-
-        if (model.IdTokenSignedResponseAlg.HasValue())
-        {
-            clientInfo.IdentityTokenSignedResponseAlgorithm = model.IdTokenSignedResponseAlg;
-        }
-
-        if (model.AuthorizationSignedResponseAlg.HasValue())
-        {
-            clientInfo.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
-        }
-
-        if (model.BackChannelLogoutUri != null)
-        {
-            clientInfo.BackChannelLogout = new (
-                model.BackChannelLogoutUri,
-                model.BackChannelLogoutSessionRequired ?? false);
-        }
-
-        if (model.FrontChannelLogoutUri != null)
-        {
-            clientInfo.FrontChannelLogout = new (
-                model.FrontChannelLogoutUri,
-                model.FrontChannelLogoutSessionRequired ?? false);
-        }
-
-        return clientInfo;
+                    ClientAuthenticationMethods.ClientSecretJwt => credentials.ClientSecret,
+                    _ => null,
+                },
+                Sha512Hash = credentials.Sha512Hash,
+                ExpiresAt = credentials.ExpiresAt,
+            }
+        ];
     }
 }

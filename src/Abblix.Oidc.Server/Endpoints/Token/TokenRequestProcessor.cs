@@ -12,6 +12,7 @@ using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -54,6 +55,11 @@ public class TokenRequestProcessor(
 	/// new access tokens to be obtained without re-authentication; ID tokens provide identity information about
 	/// the user, crucial for OpenID Connect authentication flows. This method ensures secure and compliant token
 	/// generation.
+	/// <para>
+	/// The response is assembled one token at a time (Builder): the access token, then the refresh token,
+	/// then the ID token. That order is load-bearing - the ID token's push bindings read the refresh token
+	/// minted in the step before.
+	/// </para>
 	/// </remarks>
 	public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
 	{
@@ -62,59 +68,22 @@ public class TokenRequestProcessor(
 
 		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
-		// RFC 6749 section 5.2/section 6 and RFC 8707 section 2.2: a token request may only narrow what the grant carries,
-		// never reach for scopes or resources it never held. The evaluator intersects requested with
-		// granted; a non-empty request that collapses to an empty intersection means the client asked
-		// for scopes/resources the grant does not cover. Issuing a scopeless token, or one whose audience
-		// silently falls back to the client id, would hand back different authority than was asked for.
-		if (request.Scope is { Length: > 0 } && authContext.Scope is not { Length: > 0 })
-		{
-			return new OidcError(
-				ErrorCodes.InvalidScope,
-				"The requested scope exceeds the scope granted by the resource owner.");
-		}
-
-		if (request.Resources is { Length: > 0 }
-			&& request.AuthorizedGrant.Context.Resources is { Length: > 0 }
-			&& authContext.Resources is not { Length: > 0 })
-		{
-			return new OidcError(
-				ErrorCodes.InvalidTarget,
-				"The requested resource is not among the resources granted by the resource owner.");
-		}
+		if (RefuseWidening(request, authContext) is { } refusal)
+			return refusal;
 
 		// Read before the token service is handed the context: the response advertises what was granted,
 		// and a service that narrowed the context in place would have this answer say what it decided
 		// rather than what the end user did.
 		string[] grantedScope = [..authContext.Scope];
 
-		// RFC 6749 section 4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
-		// returns neither a refresh token nor an ID token - the exchanged access token is the whole
-		// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
-		// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
-		// cannot mint a credential these grants must never produce. All user-facing grants
-		// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
-		var grantType = request.Model.GrantType;
-		var mayIssueDerivedTokens =
-			grantType != GrantTypes.ClientCredentials &&
-			grantType != GrantTypes.TokenExchange;
-
+		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
 		var issuesRefreshToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess);
 
 		var presentedRefreshToken = request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
 			? refreshToken
 			: null;
 
-		// Decided here, before either token is minted, because both belong to the family and the access token
-		// is minted first: a replay that revokes the family (RFC 9700 section 4.14.2) then refuses the access
-		// tokens it produced as well as its refresh tokens. A grant that arrives with a family continues it,
-		// and a grant issuing its first refresh token starts one. A grant with no refresh token and no family
-		// of its own has none to revoke, so its access token carries none.
-		// A grant presenting a refresh token states its family in that token, which is what a rotation carries
-		// forward; any other grant states it on itself, as a token exchange does from its subject token.
-		var grantId = presentedRefreshToken?.Payload.GrantId
-		              ?? request.AuthorizedGrant.GrantId
-		              ?? (issuesRefreshToken ? grantIdGenerator.GenerateGrantId() : null);
+		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
@@ -122,13 +91,98 @@ public class TokenRequestProcessor(
 			clientInfo,
 			grantId);
 
+		var response = CreateResponse(accessToken, authContext, clientInfo);
+
+		if (issuesRefreshToken)
+			await AddRefreshTokenAsync(response, request, authContext, presentedRefreshToken, grantId);
+
+		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
+			await AddIdentityTokenAsync(response, request, authContext, accessToken);
+
+		return response;
+	}
+
+	/// <summary>
+	/// Refuses a token request that reaches for scopes or resources the grant never held.
+	/// </summary>
+	/// <remarks>
+	/// RFC 6749 section 5.2/section 6 and RFC 8707 section 2.2: a token request may only narrow what the grant carries,
+	/// never reach for scopes or resources it never held. The evaluator intersects requested with
+	/// granted; a non-empty request that collapses to an empty intersection means the client asked
+	/// for scopes/resources the grant does not cover. Issuing a scopeless token, or one whose audience
+	/// silently falls back to the client id, would hand back different authority than was asked for.
+	/// </remarks>
+	private static OidcError? RefuseWidening(ValidTokenRequest request, AuthorizationContext authContext)
+	{
+		if (request.Scope is { Length: > 0 } && authContext.Scope is not { Length: > 0 })
+		{
+			return new OidcError(
+				ErrorCodes.InvalidScope,
+				"The requested scope exceeds the scope granted by the resource owner.");
+		}
+
+		var resourcesRequested = request.Resources is { Length: > 0 };
+		var resourcesGranted = request.AuthorizedGrant.Context.Resources is { Length: > 0 };
+		if (resourcesRequested && resourcesGranted && authContext.Resources is not { Length: > 0 })
+		{
+			return new OidcError(
+				ErrorCodes.InvalidTarget,
+				"The requested resource is not among the resources granted by the resource owner.");
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Whether the grant type may produce a refresh token or an ID token besides its access token.
+	/// </summary>
+	/// <remarks>
+	/// RFC 6749 section 4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
+	/// returns neither a refresh token nor an ID token - the exchanged access token is the whole
+	/// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
+	/// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
+	/// cannot mint a credential these grants must never produce. All user-facing grants
+	/// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
+	/// </remarks>
+	private static bool MayIssueDerivedTokens(string grantType)
+		=> grantType != GrantTypes.ClientCredentials &&
+		   grantType != GrantTypes.TokenExchange;
+
+	/// <summary>
+	/// The refresh token family the issued tokens belong to, or null when there is none.
+	/// </summary>
+	/// <remarks>
+	/// Decided before either token is minted, because both belong to the family and the access token
+	/// is minted first: a replay that revokes the family (RFC 9700 section 4.14.2) then refuses the access
+	/// tokens it produced as well as its refresh tokens. A grant that arrives with a family continues it,
+	/// and a grant issuing its first refresh token starts one. A grant with no refresh token and no family
+	/// of its own has none to revoke, so its access token carries none.
+	/// A grant presenting a refresh token states its family in that token, which is what a rotation carries
+	/// forward; any other grant states it on itself, as a token exchange does from its subject token.
+	/// </remarks>
+	private string? ResolveGrantId(
+		ValidTokenRequest request,
+		JsonWebToken? presentedRefreshToken,
+		bool issuesRefreshToken)
+		=> presentedRefreshToken?.Payload.GrantId
+		   ?? request.AuthorizedGrant.GrantId
+		   ?? (issuesRefreshToken ? grantIdGenerator.GenerateGrantId() : null);
+
+	/// <summary>
+	/// The response carrying the access token, before any derived token is added to it.
+	/// </summary>
+	private static TokenIssued CreateResponse(
+		EncodedJsonWebToken accessToken,
+		AuthorizationContext authContext,
+		ClientInfo clientInfo)
+	{
 		// RFC 9449 section 7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
 		// from the proof key) advertises token_type "DPoP"; otherwise "Bearer".
 		var tokenType = !string.IsNullOrEmpty(authContext.ProofKeyThumbprint)
 			? TokenTypes.DPoP
 			: TokenTypes.Bearer;
 
-		var response = new TokenIssued(
+		return new TokenIssued(
 			accessToken,
 			tokenType,
 			clientInfo.AccessTokenExpiresIn,
@@ -154,63 +208,71 @@ public class TokenRequestProcessor(
 					? (JsonArray)issued.DeepClone()
 					: null,
 		};
+	}
 
-		if (issuesRefreshToken)
+	private async Task AddRefreshTokenAsync(
+		TokenIssued response,
+		ValidTokenRequest request,
+		AuthorizationContext authContext,
+		JsonWebToken? presentedRefreshToken,
+		string? grantId)
+	{
+		var clientInfo = request.ClientInfo;
+		var refreshContext = request.AuthorizedGrant.Context with
 		{
-			var refreshContext = request.AuthorizedGrant.Context with
+			// RFC 9449 section 5 confidential-vs-public split:
+			ProofKeyThumbprint = clientInfo.ClientType switch
 			{
-				// RFC 9449 section 5 confidential-vs-public split:
-				ProofKeyThumbprint = clientInfo.ClientType switch
-				{
-					//   * Confidential clients: refresh tokens are not separately DPoP-bound,
-					//     client authentication already sender-constrains them. Stripping the
-					//     committed jkt from the persisted refresh-token context lets a follow-up
-					//     refresh call skip the committed-vs-presented compare in
-					//     DPoPBindingValidator, allowing key rotation per section 5's carve-out.
-					ClientType.Confidential => null,
+				//   * Confidential clients: refresh tokens are not separately DPoP-bound,
+				//     client authentication already sender-constrains them. Stripping the
+				//     committed jkt from the persisted refresh-token context lets a follow-up
+				//     refresh call skip the committed-vs-presented compare in
+				//     DPoPBindingValidator, allowing key rotation per section 5's carve-out.
+				ClientType.Confidential => null,
 
-					//   * Public clients: DPoP is the SOLE sender-constraint, so section 5 mandates
-					//     same-key MUST on every refresh. Source the binding from authContext
-					//     (the evaluator stamps the live proof's thumbprint) rather than from
-					//     the original grant context, otherwise a non-PAR initial flow loses
-					//     the binding and the next refresh would accept any key - a section 5 violation.
-					//     authContext.ProofKeyThumbprint is null when the request carried no proof,
-					//     which keeps Bearer-only public flows unchanged.
-					_ => authContext.ProofKeyThumbprint,
-				},
-			};
+				//   * Public clients: DPoP is the SOLE sender-constraint, so section 5 mandates
+				//     same-key MUST on every refresh. Source the binding from authContext
+				//     (the evaluator stamps the live proof's thumbprint) rather than from
+				//     the original grant context, otherwise a non-PAR initial flow loses
+				//     the binding and the next refresh would accept any key - a section 5 violation.
+				//     authContext.ProofKeyThumbprint is null when the request carried no proof,
+				//     which keeps Bearer-only public flows unchanged.
+				_ => authContext.ProofKeyThumbprint,
+			},
+		};
 
-			response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
-				request.AuthorizedGrant.AuthSession,
-				refreshContext,
-				clientInfo,
-				presentedRefreshToken,
-				grantId.NotNull(nameof(grantId)));
-		}
+		response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
+			request.AuthorizedGrant.AuthSession,
+			refreshContext,
+			clientInfo,
+			presentedRefreshToken,
+			grantId.NotNull(nameof(grantId)));
+	}
 
-		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
-		{
-			// The bindings exist only when the caller says it IS the push path. The mode could be read
-			// off clientInfo instead, and is not, so that this method does not have to know CIBA's
-			// delivery rules to serve every other grant type - see PushDeliveryBindings.
-			//
-			// The refresh token is read from the RESPONSE because it was minted above. That order is
-			// load-bearing: assembling these bindings before the branch that mints it silently drops
-			// rt_hash from every push notification that carries one.
-			var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
-				? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
-				: null;
+	private async Task AddIdentityTokenAsync(
+		TokenIssued response,
+		ValidTokenRequest request,
+		AuthorizationContext authContext,
+		EncodedJsonWebToken accessToken)
+	{
+		// The bindings exist only when the caller says it IS the push path. The mode could be read
+		// off clientInfo instead, and is not, so that this method does not have to know CIBA's
+		// delivery rules to serve every other grant type - see PushDeliveryBindings.
+		//
+		// The refresh token is read from the RESPONSE because it was minted in the step before. That order
+		// is load-bearing: assembling these bindings before the step that mints it silently drops
+		// rt_hash from every push notification that carries one.
+		var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
+			? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
+			: null;
 
-			response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-				request.AuthorizedGrant.AuthSession,
-				authContext,
-				clientInfo,
-				false,
-				null,
-				accessToken.EncodedJwt,
-				pushBindings);
-		}
-
-		return response;
+		response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
+			request.AuthorizedGrant.AuthSession,
+			authContext,
+			request.ClientInfo,
+			false,
+			null,
+			accessToken.EncodedJwt,
+			pushBindings);
 	}
 }

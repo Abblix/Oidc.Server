@@ -48,41 +48,62 @@ public class PkceValidator(
 	{
 		var profile = SecurityProfileRequirements.For(context.ClientInfo, issuerSettings.DefaultSecurityProfile);
 
-		if (context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue())
+		return context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue()
+			? await ValidatePresentedChallengeAsync(context, profile, codeChallenge)
+			: ValidateMissingChallenge(context, profile);
+	}
+
+	/// <summary>
+	/// The rules a request carrying a code_challenge answers to: the method the profile and the client allow,
+	/// and a value not used before.
+	/// </summary>
+	private async Task<AuthorizationRequestValidationError?> ValidatePresentedChallengeAsync(
+		AuthorizationValidationContext context,
+		SecurityProfileRequirements profile,
+		string codeChallenge)
+	{
+		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
+		// rejected - including plain and the non-standard S512 - before the per-client plain check,
+		// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
+		// defaults to plain (RFC 7636 section 4.3), which fails this S256 comparison as it should.
+		if (profile.RequireS256CodeChallenge &&
+		    context.Request.CodeChallengeMethod != CodeChallengeMethods.S256)
 		{
-			// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
-			// rejected - including plain and the non-standard S512 - before the per-client plain check,
-			// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
-			// defaults to plain (RFC 7636 section 4.3), which fails this S256 comparison as it should.
-			if (profile.RequireS256CodeChallenge &&
-			    context.Request.CodeChallengeMethod != CodeChallengeMethods.S256)
-			{
-				return context.InvalidRequest(
-					"The security profile requires the S256 PKCE code challenge method");
-			}
-
-			if (context.Request.CodeChallengeMethod == CodeChallengeMethods.Plain &&
-			    !context.ClientInfo.PlainPkceAllowed)
-			{
-				return context.InvalidRequest("The client is not allowed PKCE plain method");
-			}
-
-			// A code_challenge must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on,
-			// reject a value this client already used for a previously issued authorization code.
-			if (await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
-			{
-				return context.InvalidRequest("The PKCE code_challenge must be unique per authorization request");
-			}
+			return context.InvalidRequest(
+				"The security profile requires the S256 PKCE code challenge method");
 		}
-		else if ((profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true)) &&
-		         context.Request.ResponseType.HasFlag(ResponseTypes.Code))
+
+		if (context.Request.CodeChallengeMethod == CodeChallengeMethods.Plain &&
+		    !context.ClientInfo.PlainPkceAllowed)
 		{
-			// PKCE (RFC 7636) protects the authorization code exchange, so a missing code_challenge is
-			// only a failure when the response_type actually yields a code (authorization code or hybrid).
-			// A pure implicit request (token / id_token, no code) has nothing for a code_challenge to
-			// protect, so it must not be rejected for the absence of one.
+			return context.InvalidRequest("The client is not allowed PKCE plain method");
+		}
+
+		// A code_challenge must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on,
+		// reject a value this client already used for a previously issued authorization code.
+		if (await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
+		{
+			return context.InvalidRequest("The PKCE code_challenge must be unique per authorization request");
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// The rule a request without a code_challenge answers to: refused when PKCE is required of it.
+	/// </summary>
+	private static AuthorizationRequestValidationError? ValidateMissingChallenge(
+		AuthorizationValidationContext context,
+		SecurityProfileRequirements profile)
+	{
+		var pkceRequired = profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true);
+
+		// PKCE (RFC 7636) protects the authorization code exchange, so a missing code_challenge is
+		// only a failure when the response_type actually yields a code (authorization code or hybrid).
+		// A pure implicit request (token / id_token, no code) has nothing for a code_challenge to
+		// protect, so it must not be rejected for the absence of one.
+		if (pkceRequired && context.Request.ResponseType.HasFlag(ResponseTypes.Code))
 			return context.InvalidRequest("The client requires PKCE code challenge");
-		}
 
 		return null;
 	}

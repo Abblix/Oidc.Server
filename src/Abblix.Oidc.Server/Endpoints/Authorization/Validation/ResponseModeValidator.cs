@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Frozen;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -69,31 +70,52 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 	/// <returns>A boolean value indicating whether the response mode is allowed for the specified flow type.</returns>
 	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType)
 	{
-		// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
-		// is then subject to the same flow-compatibility rules as its plaintext counterpart - so query.jwt
-		// inherits query's prohibition for token-bearing flows (JARM section 2.3.1). The `jwt` shortcut resolves to
-		// query for the code flow and fragment otherwise (JARM section 2.3.4), both of which are acceptable.
-		if (responseMode.IsJwtMode())
-		{
-			responseMode = responseMode switch
-			{
-				ResponseModes.QueryJwt => ResponseModes.Query,
-				ResponseModes.FragmentJwt => ResponseModes.Fragment,
-				ResponseModes.FormPostJwt => ResponseModes.FormPost,
-				ResponseModes.Jwt when flowType == FlowTypes.AuthorizationCode => ResponseModes.Query,
-				ResponseModes.Jwt => ResponseModes.Fragment,
-				_ => responseMode,
-			};
-		}
+		if (!DeliveryModesByFlow.TryGetValue(flowType, out var deliveryModes))
+			throw new UnexpectedTypeException(nameof(flowType), flowType.GetType());
 
-		return flowType switch
+		return deliveryModes.Contains(ToBaseDeliveryMode(responseMode, flowType));
+	}
+
+	/// <summary>
+	/// The plaintext delivery modes each flow may use. A test walks every <see cref="FlowTypes"/> value and
+	/// requires an entry here, so a new flow cannot reach the lookup above without one.
+	/// </summary>
+	internal static readonly FrozenDictionary<FlowTypes, string[]> DeliveryModesByFlow =
+		new Dictionary<FlowTypes, string[]>
 		{
-			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
-			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
+			[FlowTypes.AuthorizationCode] = [ResponseModes.Query, ResponseModes.FormPost, ResponseModes.Fragment],
+
+			// Implicit and hybrid flows put credentials in the response, which must not travel in a URL query.
+			[FlowTypes.Implicit] = [ResponseModes.FormPost, ResponseModes.Fragment],
+			[FlowTypes.Hybrid] = [ResponseModes.FormPost, ResponseModes.Fragment],
+
 			// The none response type returns no credentials, so every delivery mode is safe - including
 			// query, which OAuth 2.0 Multiple Response Type Encoding Practices section 4 makes its default.
-			FlowTypes.None => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
-			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
+			[FlowTypes.None] = [ResponseModes.Query, ResponseModes.FormPost, ResponseModes.Fragment],
+		}.ToFrozenDictionary();
+
+	/// <summary>
+	/// The plaintext delivery mode a response mode is judged by.
+	/// </summary>
+	/// <remarks>
+	/// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
+	/// is then subject to the same flow-compatibility rules as its plaintext counterpart - so query.jwt
+	/// inherits query's prohibition for token-bearing flows (JARM section 2.3.1). The `jwt` shortcut resolves to
+	/// query for the code flow and fragment otherwise (JARM section 2.3.4), both of which are acceptable.
+	/// </remarks>
+	private static string ToBaseDeliveryMode(string responseMode, FlowTypes flowType)
+	{
+		if (!responseMode.IsJwtMode())
+			return responseMode;
+
+		return responseMode switch
+		{
+			ResponseModes.QueryJwt => ResponseModes.Query,
+			ResponseModes.FragmentJwt => ResponseModes.Fragment,
+			ResponseModes.FormPostJwt => ResponseModes.FormPost,
+			ResponseModes.Jwt when flowType == FlowTypes.AuthorizationCode => ResponseModes.Query,
+			ResponseModes.Jwt => ResponseModes.Fragment,
+			_ => responseMode,
 		};
 	}
 }
