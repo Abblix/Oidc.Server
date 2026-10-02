@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -25,6 +26,10 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITenantOpening
 {
+    // The partitions whose ring is closed when their tenant is released, each registered once however often it is
+    // opened again
+    private readonly ConcurrentDictionary<string, byte> _watched = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
@@ -47,7 +52,10 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
 
         var catalog = serviceProvider.GetRequiredService<ITenantCatalog>();
         foreach (var (partition, tenant) in alone.Where(opened => !failures.ContainsKey(opened.Key)))
-            StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => rings.Close(partition));
+        {
+            if (_watched.TryAdd(partition, default))
+                StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => Close(rings, partition));
+        }
 
         return failures
             .Select(failure => (alone[failure.Key].Id, failure.Value))
@@ -57,5 +65,11 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
                 select (tenant.Id, (Exception)new InvalidOperationException(
                     $"Tenant '{tenant.Id}' shares the key ring partition '{sharing.Key}' with another tenant.")))
             .ToDictionary(failure => failure.Item1, failure => failure.Item2, StringComparer.Ordinal);
+    }
+
+    private void Close(IKeyRings rings, string partition)
+    {
+        _watched.TryRemove(partition, out _);
+        rings.Close(partition);
     }
 }

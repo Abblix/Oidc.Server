@@ -80,7 +80,8 @@ public class TenantResolutionMiddlewareTests
                 new OptionsTenantStore(Options.Create(Declared)),
                 [],
                 [],
-                Options.Create(Declared)));
+                Options.Create(Declared),
+                TimeProvider.System));
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Host = new HostString(host);

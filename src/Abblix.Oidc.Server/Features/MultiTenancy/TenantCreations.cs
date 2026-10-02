@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -16,14 +17,17 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// the server keeps in memory for a creation is let go with it.
 /// </summary>
 /// <remarks>
-/// A creation is released at the reading after the one that first found it gone, so a request begun while it was
-/// served has one refresh period to finish with what was kept for it. A tenant the store still holds is not
-/// released, whatever the checks make of it, so a mistake in its definition costs nothing kept for it.
+/// A creation is released at the first reading at least one refresh period after a reading first found it gone,
+/// however often the store is read, so a request begun while it was served has that long to finish with what was
+/// kept for it. A tenant the store still holds is not released, whatever the checks make of it, so a mistake in its
+/// definition costs nothing kept for it.
 /// </remarks>
+/// <param name="timeProvider">Tells how long a creation has been gone.</param>
+/// <param name="logger">Records a release that failed.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-internal sealed class TenantCreations
+internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger logger)
 {
-    /// <summary>A creation, and whether the last reading found it gone.</summary>
+    /// <summary>A creation, and when a reading first found it gone.</summary>
     private sealed class Creation(TenantDefinition tenant)
     {
         public TenantDefinition Tenant { get; } = tenant;
@@ -32,7 +36,7 @@ internal sealed class TenantCreations
         // holds nothing a collection does not free
         public CancellationTokenSource Release { get; } = new();
 
-        public bool MissingBefore { get; set; }
+        public DateTimeOffset? MissingSince { get; set; }
     }
 
     private static readonly CancellationToken ReleasedAlready = new(true);
@@ -72,36 +76,57 @@ internal sealed class TenantCreations
     }
 
     /// <summary>
-    /// Takes in what the store lists now, and releases each creation found gone by this reading and the last,
+    /// Takes in what the store lists now, and releases each creation gone for at least <paramref name="pause"/>,
     /// forgetting the definition last served for it unless a later creation of its id has been served since.
     /// </summary>
-    public void Track(IEnumerable<TenantDefinition> listed)
+    /// <param name="listed">The tenants the store lists now.</param>
+    /// <param name="pause">How long a creation stays gone before it is released.</param>
+    public void Track(IEnumerable<TenantDefinition> listed, TimeSpan pause)
     {
         var spaces = new HashSet<string>(StringComparer.Ordinal);
         foreach (var tenant in listed.Where(tenant => !string.IsNullOrEmpty(tenant.Id)))
         {
             var space = TenantKey.SpaceOf(tenant);
             spaces.Add(space);
-            _creations.GetOrAdd(space, _ => new Creation(tenant)).MissingBefore = false;
+            _creations.GetOrAdd(space, _ => new Creation(tenant)).MissingSince = null;
         }
 
-        var released = new HashSet<string>(StringComparer.Ordinal);
+        var now = timeProvider.GetUtcNow();
+        var due = new Dictionary<string, Creation>(StringComparer.Ordinal);
         foreach (var (space, creation) in _creations.Where(entry => !spaces.Contains(entry.Key)))
         {
-            if (!creation.MissingBefore)
-            {
-                creation.MissingBefore = true;
-                continue;
-            }
-
-            released.Add(space);
-            _creations.TryRemove(space, out _);
-            Forget(creation.Tenant);
-            creation.Release.Cancel();
+            creation.MissingSince ??= now;
+            if (now - creation.MissingSince >= pause)
+                due[space] = creation;
         }
 
-        Volatile.Write(ref _releasedLately, released);
+        // Published before any creation is taken out, so a request asking meanwhile gets either the live token,
+        // canceled with the rest, or one canceled already, and never one that is not canceled at all
+        Volatile.Write(ref _releasedLately, due.Keys.ToHashSet(StringComparer.Ordinal));
+        foreach (var (space, creation) in due)
+        {
+            _creations.TryRemove(space, out _);
+            Forget(creation.Tenant);
+            Cancel(creation);
+        }
     }
+
+    /// <summary>
+    /// Cancels the token of <paramref name="creation"/>; something kept for it that fails to be let go is logged
+    /// rather than fail the reading, and the creations after it are released all the same.
+    /// </summary>
+    private void Cancel(Creation creation)
+    {
+        try
+        {
+            creation.Release.Cancel();
+        }
+        catch (AggregateException exception)
+        {
+            LogTenantNotReleased(exception, creation.Tenant.Id);
+        }
+    }
+
 
     private void Forget(TenantDefinition released)
     {

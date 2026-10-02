@@ -28,22 +28,42 @@ internal sealed class CompositeTenantOpening(
     public Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
         CancellationToken cancellationToken)
-        => OpenAsync(tenants, true, cancellationToken);
+        => OpenAsync(tenants, false, cancellationToken);
 
     /// <summary>
-    /// Readies <paramref name="tenants"/>, within one refresh period when <paramref name="limited"/>.
+    /// Readies <paramref name="tenants"/> within one refresh period, unless they are the tenants the settings
+    /// declare and the server is starting with them.
     /// </summary>
     /// <param name="tenants">The tenants about to be served for the first time.</param>
-    /// <param name="limited">Whether the openings must finish within one refresh period; the tenants the settings
-    /// declare are opened without a limit when the server starts, since the start waits for all of them.</param>
+    /// <param name="startingWithTheSettings">Whether these are the tenants the settings declare, on the reading the
+    /// server starts with: the start waits for all of them, so they are opened without a limit, and one that cannot
+    /// be readied refuses the start as the settings themselves would.</param>
     /// <param name="cancellationToken">Cancels the openings.</param>
+    /// <exception cref="InvalidOperationException">A tenant the settings declare could not be readied at start.
+    /// </exception>
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
-        bool limited,
+        bool startingWithTheSettings,
+        CancellationToken cancellationToken)
+    {
+        var failures = await FailuresAsync(tenants, startingWithTheSettings, cancellationToken);
+        if (startingWithTheSettings && failures.Count > 0)
+        {
+            var (tenantId, exception) = failures.First();
+            throw new InvalidOperationException(
+                $"The tenant '{tenantId}' the settings declare could not be readied to be served.", exception);
+        }
+
+        return failures;
+    }
+
+    private async Task<IReadOnlyDictionary<string, Exception>> FailuresAsync(
+        IReadOnlyCollection<TenantDefinition> tenants,
+        bool unlimited,
         CancellationToken cancellationToken)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        if (limited)
+        if (!unlimited)
             limit.CancelAfter(options.Value.RefreshEvery);
 
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);

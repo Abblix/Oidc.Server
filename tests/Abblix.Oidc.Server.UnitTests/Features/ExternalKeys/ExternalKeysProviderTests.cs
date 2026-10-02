@@ -246,6 +246,44 @@ public class ExternalKeysProviderTests
     }
 
     [Fact]
+    public async Task ATenantCreatedAgainUnderAKeyName_KeepsItsSet_WhenTheFormerCreationIsReleased()
+    {
+        // The set is kept per issuer and key name, so releasing the former creation of a tenant does not take the
+        // set the new creation published under the same key name
+        using var rsa = RSA.Create(2048);
+        var version = BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
+        var custodian = new Mock<IKeyCustodian>();
+        var sealedUp = false;
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
+            .Returns(() => sealedUp ? Throwing() : new[] { version }.ToAsyncEnumerable());
+        using var former = new CancellationTokenSource();
+        var partition = "acme";
+        var released = former.Token;
+        var settings = new Mock<IIssuerSettings>();
+        settings
+            .Setup(s => s.CustodianKeys)
+            .Returns(new CustodianHeldKeys { SigningKeyName = "sign-key", SigningAlgorithm = SigningAlgorithms.RS256 });
+        settings.Setup(s => s.KeyPartition).Returns(() => partition);
+        settings.Setup(s => s.Released).Returns(() => released);
+        var provider = new ExternalKeysProvider(
+            NullLogger<ExternalKeysProvider>.Instance,
+            custodian.Object,
+            settings.Object,
+            Options.Create(new OidcOptions { KeyRolloverPropagation = TimeSpan.FromHours(1) }),
+            TimeProvider.System);
+        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+
+        partition = "acme~2";
+        released = CancellationToken.None;
+        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        await former.CancelAsync();
+        sealedUp = true;
+
+        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task AColdStartHasNothingToServeAndSaysSo()
     {
         // The control for ThePublishedSetSurvivesAnOutageOnceItHasBeenRead. Falling back to an empty set would

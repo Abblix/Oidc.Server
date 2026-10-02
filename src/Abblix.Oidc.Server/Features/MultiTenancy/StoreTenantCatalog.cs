@@ -30,14 +30,17 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
 /// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
 /// <param name="openings">What readies each tenant the checks pass before it is first served.</param>
-/// <param name="options">How long the openings of one reading may take.</param>
+/// <param name="options">How long the openings of one reading may take, and how long a tenant gone from the store
+/// is kept.</param>
+/// <param name="timeProvider">Tells how long a tenant has been gone from the store.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class StoreTenantCatalog(
     ILogger<StoreTenantCatalog> logger,
     ITenantStore store,
     IEnumerable<ITenantsCheck> checks,
     IEnumerable<ITenantOpening> openings,
-    IOptions<MultiTenancyOptions> options) : ITenantCatalog
+    IOptions<MultiTenancyOptions> options,
+    TimeProvider timeProvider) : ITenantCatalog
 {
     /// <summary>A tenant and where it is served.</summary>
     private sealed record Served(TenantAddress Address, TenantDefinition Tenant);
@@ -62,7 +65,7 @@ public sealed partial class StoreTenantCatalog(
 
     private Reading? _reading;
 
-    private readonly TenantCreations _creations = new();
+    private readonly TenantCreations _creations = new(timeProvider, logger);
 
     /// <summary>
     /// Reads the store again and serves what the checks let through.
@@ -90,7 +93,7 @@ public sealed partial class StoreTenantCatalog(
         var listed = await store.ListAsync(cancellationToken);
         var previous = Volatile.Read(ref _reading);
 
-        _creations.Track(listed.Select(entry => entry.Tenant));
+        _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshEvery);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
         var refusals = (
@@ -154,17 +157,10 @@ public sealed partial class StoreTenantCatalog(
         if (fresh.Length == 0)
             return ([], new HashSet<string>(StringComparer.Ordinal));
 
-        var startingWithTheSettings = previous is null && store is OptionsTenantStore;
         var failures = await _opening.OpenAsync(
             [..fresh.Select(tenant => tenant.Tenant)],
-            !startingWithTheSettings,
+            previous is null && store is OptionsTenantStore,
             cancellationToken);
-        if (startingWithTheSettings && failures.Count > 0)
-        {
-            var (tenantId, exception) = failures.First();
-            throw new InvalidOperationException(
-                $"The tenant '{tenantId}' the settings declare could not be readied to be served.", exception);
-        }
 
         foreach (var (tenantId, exception) in failures)
         {
@@ -222,7 +218,7 @@ public sealed partial class StoreTenantCatalog(
     /// The token <see cref="Released"/> gives when <paramref name="catalog"/> is this server's own; none that is ever
     /// canceled for a catalog of the host's own, which this server cannot tell a tenant is gone from.
     /// </summary>
-    public static CancellationToken ReleasedOf(ITenantCatalog catalog, TenantDefinition tenant)
+    internal static CancellationToken ReleasedOf(ITenantCatalog catalog, TenantDefinition tenant)
         => catalog is StoreTenantCatalog own ? own.Released(tenant) : CancellationToken.None;
 
     /// <summary>

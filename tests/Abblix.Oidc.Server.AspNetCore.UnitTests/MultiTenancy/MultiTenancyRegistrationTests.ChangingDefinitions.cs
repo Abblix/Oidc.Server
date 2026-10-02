@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
 #pragma warning disable ABXMT001
@@ -71,6 +72,7 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(CancellationToken.None);
         Assert.Same(built, local.GetOrCreate(null, () => new object()));
 
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
         await catalog.RefreshAsync(CancellationToken.None);
         Assert.NotSame(built, local.GetOrCreate(null, () => new object()));
     }
@@ -112,6 +114,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantStore>(store);
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider());
         if (hostCatalog)
         {
             services.AddSingleton<HostCatalog>();

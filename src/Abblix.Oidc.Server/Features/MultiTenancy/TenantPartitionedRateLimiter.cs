@@ -54,7 +54,10 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
                 return Unlimited;
 
             var space = TenantKey.SpaceOf(tenant);
-            return _limiters.GetOrAdd(space, held => new(() => Build(held, released))).Value;
+            var limiter = _limiters.GetOrAdd(space, held => new(() => Build(held, released))).Value;
+
+            // Released while its limiter was built, which disposed it
+            return released.IsCancellationRequested ? Unlimited : limiter;
         }
     }
 

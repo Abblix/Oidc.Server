@@ -80,7 +80,11 @@ public sealed partial class ExternalKeysProvider(
     // ITS failure, not the custodian's, so another instance may have rotated meanwhile and this set would miss
     // the new version. KeyRingRefreshService says the same of the minted-key path. That is why the fallback is
     // reported rather than silent.
-    private readonly ConcurrentDictionary<string, IReadOnlyList<KeyVersion>> _lastPublished = new();
+    //
+    // Kept per issuer and key name, so a tenant created again under a key name another creation used keeps a set of
+    // its own, and each creation's sets go with it
+    private readonly ConcurrentDictionary<(string Issuer, string KeyName), IReadOnlyList<KeyVersion>> _lastPublished =
+        new();
 
     private async IAsyncEnumerable<JsonWebKey> PublishAsync(
         string keyName,
@@ -92,16 +96,17 @@ public sealed partial class ExternalKeysProvider(
         try
         {
             versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
-            if (_lastPublished.TryAdd(keyName, versions))
-                settings.Released.Register(() => _lastPublished.TryRemove(keyName, out _));
+            var issuerKey = (settings.KeyPartition, keyName);
+            if (_lastPublished.TryAdd(issuerKey, versions))
+                settings.Released.Register(() => _lastPublished.TryRemove(issuerKey, out _));
             else
-                _lastPublished[keyName] = versions;
+                _lastPublished[issuerKey] = versions;
         }
         catch (KeyCustodianUnavailableException failure)
         {
             // A cold start has nothing to fall back on, and saying so is the honest answer: the endpoint turns
             // this into the status that says whether to come back.
-            if (!_lastPublished.TryGetValue(keyName, out var lastKnown))
+            if (!_lastPublished.TryGetValue((settings.KeyPartition, keyName), out var lastKnown))
                 throw;
 
             LogServingLastKnownKeys(keyName, lastKnown.Count, failure);

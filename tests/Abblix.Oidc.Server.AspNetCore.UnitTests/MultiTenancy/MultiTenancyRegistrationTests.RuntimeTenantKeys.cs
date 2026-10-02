@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Options;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -84,7 +85,7 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider());
         services.AddSingleton(custodian.Object);
         services.AddSingleton<IKeyRingStore>(new MemoryKeyRingStore());
         services.AddSingleton<ITenantStore>(store);
@@ -180,6 +181,7 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
 
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.Throws<InvalidOperationException>(() => rings.For("acme"));
     }
