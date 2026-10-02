@@ -61,39 +61,7 @@ public class PushedRequestFetcher(
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            // Do not consume the request_uri here. RFC 9126 section 7.3 says request_uri SHOULD be
-            // one-time-use, and the natural moment to consume is at authorization-code
-            // issuance - not at the first /authorize fetch. Consuming on fetch makes any
-            // multi-step UI flow brittle: page refresh during login, back-button after
-            // ConsentRequired, or the OIDF Conformance Suite's reuse-protection probes all
-            // produce a spurious "Can't find a request by urn:..." instead of the expected
-            // continuation. Single-use is still enforced - by the cache TTL upper bound and,
-            // when the flow completes, by PushedAuthorizationRequestProcessorDecorator, which
-            // consumes the request_uri carried forward below once a code or token is issued.
-            var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, shouldRemove: false);
-
-            // A page of a flow that already ended with a code, as a refresh of the page made
-            if (requestObject?.OriginRequestUri is { } originRequestUri &&
-                await consumedRequestUris.IsConsumedAsync(originRequestUri))
-            {
-                return ErrorFactory.InvalidRequestUri($"The request by {requestUrn} has already been used");
-            }
-
-            return requestObject switch
-            {
-                null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
-
-                // Carry the URN forward on a dedicated, non-wire field - not RequestUri, whose https
-                // validation a urn: value would fail in the next fetcher - so the validator can surface it
-                // on ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
-                // The first URN the request was fetched under is kept across the pages it is stored for, so it is
-                // consumed with the last one
-                _ => requestObject with
-                {
-                    PushedRequestUri = requestUrn,
-                    OriginRequestUri = requestObject.OriginRequestUri ?? requestUrn,
-                },
-            };
+            return await FetchPushedAsync(requestUrn);
         }
 
         // If PAR is required by server configuration, return an error if no pushed authorization request is provided
@@ -102,19 +70,7 @@ public class PushedRequestFetcher(
             return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
         }
 
-        // RFC 9126 section 6: the per-client require_pushed_authorization_requests metadata makes PAR the
-        // only way for this client to start an authorization flow, independent of the server-wide
-        // flag. A code-only/high-assurance profile (FAPI 2.0) imposes the same requirement on the
-        // client even when neither the server-wide flag nor the per-client metadata is set - the
-        // profile tightens and the granular toggle cannot weaken it. Enforced here (not in the shared
-        // context-validator pipeline) because this fetcher participates only in the authorization
-        // endpoint's chain - the PAR endpoint itself runs a different fetcher set and must not trip
-        // over the requirement it is there to satisfy.
-        if (request.ClientId is { } clientId &&
-            await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings) is { } clientInfo &&
-            (clientInfo.RequirePushedAuthorizationRequests ||
-             SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
-                 .RequirePushedAuthorizationRequests))
+        if (await ClientRequiresPushedRequestsAsync(request.ClientId))
         {
             return ErrorFactory.InvalidRequestObject(
                 "The client is required to use Pushed Authorization Requests (PAR)");
@@ -122,5 +78,74 @@ public class PushedRequestFetcher(
 
         // If no URN is provided and PAR is not required, return the original request
         return request;
+    }
+
+    /// <summary>
+    /// Fetches the request stored under the URN, refusing a page of a flow that already ended.
+    /// </summary>
+    private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchPushedAsync(
+        Uri requestUrn)
+    {
+        // Do not consume the request_uri here. RFC 9126 section 7.3 says request_uri SHOULD be
+        // one-time-use, and the natural moment to consume is at authorization-code
+        // issuance - not at the first /authorize fetch. Consuming on fetch makes any
+        // multi-step UI flow brittle: page refresh during login, back-button after
+        // ConsentRequired, or the OIDF Conformance Suite's reuse-protection probes all
+        // produce a spurious "Can't find a request by urn:..." instead of the expected
+        // continuation. Single-use is still enforced - by the cache TTL upper bound and,
+        // when the flow completes, by PushedAuthorizationRequestProcessorDecorator, which
+        // consumes the request_uri carried forward below once a code or token is issued.
+        var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, shouldRemove: false);
+
+        // A page of a flow that already ended with a code, as a refresh of the page made
+        if (requestObject?.OriginRequestUri is { } originRequestUri &&
+            await consumedRequestUris.IsConsumedAsync(originRequestUri))
+        {
+            return ErrorFactory.InvalidRequestUri($"The request by {requestUrn} has already been used");
+        }
+
+        return requestObject switch
+        {
+            null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
+
+            // Carry the URN forward on a dedicated, non-wire field - not RequestUri, whose https
+            // validation a urn: value would fail in the next fetcher - so the validator can surface it
+            // on ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
+            // The first URN the request was fetched under is kept across the pages it is stored for, so it is
+            // consumed with the last one
+            _ => requestObject with
+            {
+                PushedRequestUri = requestUrn,
+                OriginRequestUri = requestObject.OriginRequestUri ?? requestUrn,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Whether the client is required to start its authorization flows by a pushed request.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9126 section 6: the per-client require_pushed_authorization_requests metadata makes PAR the
+    /// only way for this client to start an authorization flow, independent of the server-wide
+    /// flag. A code-only/high-assurance profile (FAPI 2.0) imposes the same requirement on the
+    /// client even when neither the server-wide flag nor the per-client metadata is set - the
+    /// profile tightens and the granular toggle cannot weaken it. Enforced here (not in the shared
+    /// context-validator pipeline) because this fetcher participates only in the authorization
+    /// endpoint's chain - the PAR endpoint itself runs a different fetcher set and must not trip
+    /// over the requirement it is there to satisfy.
+    /// The rule is a Specification of its own, so the fetch above reads as the order of checks it performs.
+    /// </remarks>
+    private async Task<bool> ClientRequiresPushedRequestsAsync(string? clientId)
+    {
+        if (clientId is null)
+            return false;
+
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
+        if (clientInfo is null)
+            return false;
+
+        return clientInfo.RequirePushedAuthorizationRequests ||
+               SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
+                   .RequirePushedAuthorizationRequests;
     }
 }

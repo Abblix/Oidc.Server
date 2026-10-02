@@ -16,6 +16,17 @@ trim_trailing_whitespace = false
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:suggestion
 
+# Size and complexity at Sonar's default limits, held by the build rather than by the dashboard: warnings
+# are errors here, so a file, class or method growing past one fails where the change is made. A method
+# that is one exhaustive switch over a set of values becomes a table a test holds complete; one with real
+# logic is split along a named pattern. Never suppressed.
+dotnet_diagnostic.S104.severity = warning
+dotnet_diagnostic.S138.severity = warning
+dotnet_diagnostic.S1541.severity = warning
+dotnet_diagnostic.S1200.severity = warning
+dotnet_diagnostic.S1067.severity = warning
+dotnet_diagnostic.S134.severity = warning
+
 # One Sonar rule CRASHES on a union declaration rather than reporting anything: the analyzer throws
 # NullReferenceException, which arrives as AD0001 and fails the build here, where warnings are errors.
 # Reproduced on the newest analyzer available as well, so it is a gap in the tool rather than a stale
