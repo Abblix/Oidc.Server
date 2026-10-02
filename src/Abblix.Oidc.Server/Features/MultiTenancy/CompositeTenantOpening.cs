@@ -54,6 +54,10 @@ internal sealed class CompositeTenantOpening(
                 foreach (var (tenantId, exception) in await opening.OpenAsync(tenants, limit.Token))
                     failures.TryAdd(tenantId, exception);
             }
+
+            // An opening may report a stop as failures of the tenants it did not reach; the caller's own stop is a
+            // stop, not tenants that cannot be readied
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {

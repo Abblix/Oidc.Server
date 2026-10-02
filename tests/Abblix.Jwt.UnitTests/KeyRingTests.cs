@@ -411,7 +411,7 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// A ring kept now, or opened within one refresh period, is current and is not refreshed again when opened,
+    /// A ring kept now, or opened within half a refresh period, is current and is not refreshed again when opened,
     /// while one built but neither kept nor opened since, as a tenant dropped and served again, has missed its
     /// refreshes and is refreshed before it is served.
     /// </summary>
@@ -421,11 +421,13 @@ public sealed class KeyRingTests : IDisposable
         var (rings, store) = RingsKeeping(Keeping("acme"), StubCustodian(_keyEncryptionKey));
         Assert.Empty(await Open(rings, "acme", "globex"));
 
+        var halfPeriod = new KeyRingOptions().RefreshPeriod / 2;
         var before = store.Loads;
+        _ringsTime.Advance(halfPeriod - TimeSpan.FromSeconds(1));
         Assert.Empty(await Open(rings, "acme", "globex"));
         Assert.Equal(before, store.Loads);
 
-        _ringsTime.Advance(new KeyRingOptions().KeyRolloverPropagation);
+        _ringsTime.Advance(TimeSpan.FromSeconds(1));
         Assert.Empty(await Open(rings, "acme", "globex"));
         Assert.Equal(before + 1, store.Loads);
     }

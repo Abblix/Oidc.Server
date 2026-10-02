@@ -33,8 +33,8 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
         if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
             return new Dictionary<string, Exception>();
 
-        // Tenants sharing a partition would sign with each other's keys, so none of them is opened; the checks of
-        // the tenant list refuse such tenants, unless a host left those checks out
+        // Tenants opened together that share a partition would sign with each other's keys, so none of them is
+        // opened; across the whole list the checks of the tenant list refuse such tenants
         var byPartition = tenants.ToLookup(TenantKey.PartitionOf, StringComparer.Ordinal);
         var shared = byPartition.Where(sharing => sharing.Count() > 1).ToArray();
         var alone = byPartition.Where(sharing => sharing.Count() == 1).ToDictionary(

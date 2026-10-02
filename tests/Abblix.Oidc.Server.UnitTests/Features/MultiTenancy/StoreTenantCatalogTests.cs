@@ -95,12 +95,31 @@ public class StoreTenantCatalogTests
 
         public TaskCompletionSource? Hold { get; set; }
 
+        /// <summary>
+        /// Whether a stop while held is reported as failures of the tenants not in <see cref="ReadyBeforeTheStop"/>,
+        /// as the key rings report the partitions they did not reach.
+        /// </summary>
+        public bool ReportsAStopAsFailures { get; set; }
+
+        public HashSet<string> ReadyBeforeTheStop { get; } = [];
+
         public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
             IReadOnlyCollection<TenantDefinition> tenants,
             CancellationToken cancellationToken)
         {
             if (Hold is { } hold)
-                await hold.Task.WaitAsync(cancellationToken);
+            {
+                try
+                {
+                    await hold.Task.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException stop) when (ReportsAStopAsFailures)
+                {
+                    return tenants
+                        .Where(tenant => !ReadyBeforeTheStop.Contains(tenant.Id))
+                        .ToDictionary(tenant => tenant.Id, Exception (_) => stop);
+                }
+            }
 
             return tenants
                 .Where(tenant => Failing.Contains(tenant.Id))
@@ -320,6 +339,54 @@ public class StoreTenantCatalogTests
         await reading;
 
         Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// A reading stopped while its new tenants are readied, as the host stopping, is a stop: it serves nothing new,
+    /// keeps the tenants read last and logs no tenant as not readied, though the opening reports the stop as
+    /// failures of the tenants it did not reach.
+    /// </summary>
+    [Fact]
+    public async Task AReadingStoppedWhileOpening_IsAStop_AndNoTenantIsLoggedAsNotReadied()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _opening.Hold = new TaskCompletionSource();
+        _opening.ReportsAStopAsFailures = true;
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var reading = catalog.RefreshAsync(stop.Token);
+        await stop.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+        Assert.Empty(_logger.Errors);
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// Openings that run out of their refresh period serve the tenants they readied by then, so new tenants too
+    /// many to ready within one period come into service over several readings rather than never.
+    /// </summary>
+    [Fact]
+    public async Task OpeningsThatRunOutOfTime_ServeWhatTheyReadiedByThen()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
+        _opening.Hold = new TaskCompletionSource();
+        _opening.ReportsAStopAsFailures = true;
+        _opening.ReadyBeforeTheStop.Add("acme");
+        var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
     }
 
     /// <summary>

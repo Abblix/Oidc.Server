@@ -29,7 +29,7 @@ internal sealed class KeyRings(
     private readonly ConcurrentDictionary<string, KeyRing> _rings = new(StringComparer.Ordinal);
 
     // When each partition was last refreshed by an opening: the refresh loop's first round need not refresh such a
-    // partition again, and an opening within one refresh period finds it current
+    // partition again, and an opening soon after finds it current
     private readonly ConcurrentDictionary<string, DateTimeOffset> _openedAt = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
@@ -84,9 +84,14 @@ internal sealed class KeyRings(
 
     /// <summary>
     /// Whether the ring of <paramref name="partition"/> is built and current: kept, so the refresh loop keeps it
-    /// current, or opened within one refresh period. A ring built and left out of the kept partitions since, as a
+    /// current, or opened within half a refresh period. A ring built and left out of the kept partitions since, as a
     /// tenant dropped and served again, has missed its refreshes.
     /// </summary>
+    /// <remarks>
+    /// Half a period, because a ring opened but not yet kept waits for the loop's next round once it is kept: opened
+    /// within the window and kept at its end, it is refreshed again within one and a half periods, short of the
+    /// propagation window a pod must not miss a new key for.
+    /// </remarks>
     private bool IsCurrent(string partition, IReadOnlyCollection<string> kept)
     {
         if (!_rings.ContainsKey(partition))
@@ -96,7 +101,7 @@ internal sealed class KeyRings(
             return true;
 
         var period = serviceProvider.GetRequiredService<IOptions<KeyRingOptions>>().Value.RefreshPeriod;
-        return _openedAt.TryGetValue(partition, out var openedAt) && Now - openedAt < period;
+        return _openedAt.TryGetValue(partition, out var openedAt) && Now - openedAt < period / 2;
     }
 
     private DateTimeOffset Now => serviceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
