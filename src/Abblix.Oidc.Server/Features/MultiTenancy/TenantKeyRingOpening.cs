@@ -42,8 +42,12 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
             sharing => sharing.Single(),
             StringComparer.Ordinal);
 
-        var failures = await serviceProvider.GetRequiredService<IKeyRings>()
-            .OpenAsync(alone.Keys, cancellationToken);
+        var rings = serviceProvider.GetRequiredService<IKeyRings>();
+        var failures = await rings.OpenAsync(alone.Keys, cancellationToken);
+
+        var catalog = serviceProvider.GetRequiredService<ITenantCatalog>();
+        foreach (var (partition, tenant) in alone.Where(opened => !failures.ContainsKey(opened.Key)))
+            StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => rings.Close(partition));
 
         return failures
             .Select(failure => (alone[failure.Key].Id, failure.Value))

@@ -26,5 +26,7 @@ public interface ICheckSessionResponseCache
     /// A <see cref="Task{TResult}"/> representing the asynchronous operation. The task result contains
     /// the cached or newly generated ActionResult.
     /// </returns>
-    Task<ActionResult> GetOrAddAsync(object key, Func<Task<ActionResult>> factory);
+    /// <param name="released">Canceled once the issuer the result is for is gone for good, which drops it.
+    /// </param>
+    Task<ActionResult> GetOrAddAsync(object key, Func<Task<ActionResult>> factory, CancellationToken released);
 }

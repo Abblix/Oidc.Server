@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
 
@@ -17,9 +18,10 @@ namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 /// </summary>
 public class CheckSessionResponseCachingDecorator(
     ICheckSessionResponseFormatter inner,
-    ICheckSessionResponseCache cache) : ICheckSessionResponseFormatter
+    ICheckSessionResponseCache cache,
+    IIssuerSettings issuer) : ICheckSessionResponseFormatter
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(CheckSessionResponse response)
-        => cache.GetOrAddAsync(response.CacheKey, () => inner.FormatResponseAsync(response));
+        => cache.GetOrAddAsync(response.CacheKey, () => inner.FormatResponseAsync(response), issuer.Released);
 }

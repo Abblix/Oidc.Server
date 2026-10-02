@@ -9,6 +9,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 
@@ -21,6 +22,10 @@ public class CheckSessionResponseCache(IOptions<MemoryCacheOptions> cacheOptions
     private readonly MemoryCache _cache = new(cacheOptions);
 
     /// <inheritdoc />
-    public Task<IResult> GetOrAddAsync(object key, Func<Task<IResult>> factory)
-        => _cache.GetOrCreateAsync<IResult>(key, _ => factory())!;
+    public Task<IResult> GetOrAddAsync(object key, Func<Task<IResult>> factory, CancellationToken released)
+        => _cache.GetOrCreateAsync<IResult>(key, entry =>
+        {
+            entry.AddExpirationToken(new CancellationChangeToken(released));
+            return factory();
+        })!;
 }

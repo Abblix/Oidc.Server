@@ -24,11 +24,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="createLimiter">Builds a new limiter for a tenant that has none yet.</param>
 /// <param name="tenantAccessor">Names the tenant a budget is spent for.</param>
+/// <param name="catalog">Tells when a tenant is released, and its limiter with it.</param>
 /// <typeparam name="TResource">What the budget is partitioned by.</typeparam>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantPartitionedRateLimiter<TResource>(
     Func<PartitionedRateLimiter<TResource>> createLimiter,
-    ITenantAccessor tenantAccessor) : PartitionedRateLimiter<TResource>
+    ITenantAccessor tenantAccessor,
+    ITenantCatalog catalog) : PartitionedRateLimiter<TResource>
 {
     // Lazy, so two first calls of one tenant racing each other still build one limiter between them
     private readonly ConcurrentDictionary<string, Lazy<PartitionedRateLimiter<TResource>>> _limiters =
@@ -38,8 +40,23 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     // cannot both find it absent
     private readonly ConcurrentDictionary<object, byte> _handedOut = new(ReferenceEqualityComparer.Instance);
 
+    // What a request still holding a released tenant spends against: nothing kept for that tenant is built again
+    private static readonly PartitionedRateLimiter<TResource> Unlimited =
+        PartitionedRateLimiter.Create<TResource, bool>(_ => RateLimitPartition.GetNoLimiter(true));
+
     private PartitionedRateLimiter<TResource> Current
-        => _limiters.GetOrAdd(TenantKey.CurrentSpace(tenantAccessor), _ => new(Build)).Value;
+    {
+        get
+        {
+            var tenant = TenantKey.CurrentTenant(tenantAccessor);
+            var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
+            if (released.IsCancellationRequested)
+                return Unlimited;
+
+            var space = TenantKey.SpaceOf(tenant);
+            return _limiters.GetOrAdd(space, held => new(() => Build(held, released))).Value;
+        }
+    }
 
     /// <summary>
     /// A new limiter for a tenant, refused when it is one another tenant already holds.
@@ -48,7 +65,7 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     /// A registration can build its limiter by handing out one it keeps, and then the tenants would spend one
     /// budget between them. Nothing earlier can see that: the registration is a factory until it is called.
     /// </remarks>
-    private PartitionedRateLimiter<TResource> Build()
+    private PartitionedRateLimiter<TResource> Build(string space, CancellationToken released)
     {
         var limiter = createLimiter();
         if (!_handedOut.TryAdd(limiter, default))
@@ -59,7 +76,18 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
                 "every call.");
         }
 
+        released.Register(() => Release(space, limiter));
         return limiter;
+    }
+
+    /// <summary>
+    /// Lets the limiter of a released tenant go, its timer included.
+    /// </summary>
+    private void Release(string space, PartitionedRateLimiter<TResource> limiter)
+    {
+        _limiters.TryRemove(space, out _);
+        _handedOut.TryRemove(limiter, out _);
+        limiter.Dispose();
     }
 
     /// <inheritdoc />

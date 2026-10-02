@@ -118,6 +118,7 @@ public class AuthorizationResponseFormatterTests
     {
         public string Id => string.Empty;
         public string KeyPartition => string.Empty;
+        public CancellationToken Released => CancellationToken.None;
         public IEnumerable<ClientInfo> Clients => [];
         public ScopeDefinition[]? Scopes => null;
         public ResourceDefinition[]? Resources => null;

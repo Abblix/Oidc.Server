@@ -42,6 +42,9 @@ public sealed class TenantIssuerSettings(
     public string KeyPartition => TenantKey.PartitionOf(Tenant);
 
     /// <inheritdoc />
+    public CancellationToken Released => StoreTenantCatalog.ReleasedOf(catalog, Tenant);
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
 
     /// <summary>

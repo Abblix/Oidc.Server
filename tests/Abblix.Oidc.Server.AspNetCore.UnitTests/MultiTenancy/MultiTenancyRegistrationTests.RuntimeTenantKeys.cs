@@ -164,6 +164,27 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// The ring of a tenant the store no longer holds, its keys with it, is let go once the tenant is released; until
+    /// then a request still holding the tenant signs with it.
+    /// </summary>
+    [Fact]
+    public async Task TheRingOfAReleasedTenant_IsLetGo()
+    {
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var rings = provider.GetRequiredService<IKeyRings>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
+
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Throws<InvalidOperationException>(() => rings.For("acme"));
+    }
+
+    /// <summary>
     /// Keys adopted into the ring would be seeded into each tenant's part of it, so a server serving tenants refuses
     /// to start with them, its store empty or not.
     /// </summary>

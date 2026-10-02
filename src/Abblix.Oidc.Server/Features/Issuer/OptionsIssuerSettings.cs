@@ -37,6 +37,9 @@ internal sealed class OptionsIssuerSettings(
     public string KeyPartition => KeyRingOptions.DefaultPartition;
 
     /// <inheritdoc />
+    public CancellationToken Released => CancellationToken.None;
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => options.CurrentValue.Clients;
 
     /// <inheritdoc />

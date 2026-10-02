@@ -16,6 +16,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Oidc.Server.Features.Issuer;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -207,6 +208,41 @@ public class ExternalKeysProviderTests
         var afterTheOutage = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
 
         Assert.Equal(first.KeyId, afterTheOutage.KeyId);
+    }
+
+    [Fact]
+    public async Task ThePublishedSet_IsLetGo_OnceItsIssuerIsReleased()
+    {
+        // The set kept against an outage is kept per key name, so a tenant gone for good must take its names'
+        // sets with it, or a server whose tenants come and go keeps every set any of them ever published
+        using var rsa = RSA.Create(2048);
+        var version = BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
+        var custodian = new Mock<IKeyCustodian>();
+        var sealedUp = false;
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
+            .Returns(() => sealedUp ? Throwing() : new[] { version }.ToAsyncEnumerable());
+        using var released = new CancellationTokenSource();
+        var settings = new Mock<IIssuerSettings>();
+        settings
+            .Setup(s => s.CustodianKeys)
+            .Returns(new CustodianHeldKeys { SigningKeyName = "sign-key", SigningAlgorithm = SigningAlgorithms.RS256 });
+        settings.Setup(s => s.Released).Returns(released.Token);
+        var options = Options.Create(new OidcOptions { KeyRolloverPropagation = TimeSpan.FromHours(1) });
+        var provider = new ExternalKeysProvider(
+            NullLogger<ExternalKeysProvider>.Instance,
+            custodian.Object,
+            settings.Object,
+            options,
+            TimeProvider.System);
+
+        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        sealedUp = true;
+        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+
+        await released.CancelAsync();
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken));
     }
 
     [Fact]

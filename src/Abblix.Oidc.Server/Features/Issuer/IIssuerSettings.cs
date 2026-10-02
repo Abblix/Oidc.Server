@@ -38,6 +38,12 @@ public interface IIssuerSettings
     string KeyPartition { get; }
 
     /// <summary>
+    /// Canceled once the issuer is gone for good, so a service keeping something in memory for it lets that go:
+    /// never for a server without tenants, and for a tenant once its store no longer holds it.
+    /// </summary>
+    CancellationToken Released { get; }
+
+    /// <summary>
     /// The clients registered with the issuer.
     /// </summary>
     IEnumerable<ClientInfo> Clients { get; }

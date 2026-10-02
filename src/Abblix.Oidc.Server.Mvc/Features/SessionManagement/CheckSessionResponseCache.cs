@@ -9,6 +9,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 
@@ -35,6 +36,12 @@ public class CheckSessionResponseCache(IOptions<MemoryCacheOptions> cacheOptions
     /// A <see cref="Task{TResult}"/> representing the asynchronous operation. The task result contains
     /// the cached or newly generated ActionResult.
     /// </returns>
-    public Task<ActionResult> GetOrAddAsync(object key, Func<Task<ActionResult>> factory)
-        => _cache.GetOrCreateAsync<ActionResult>(key, _ => factory())!;
+    /// <param name="released">Canceled once the issuer the result is for is gone for good, which drops it.
+    /// </param>
+    public Task<ActionResult> GetOrAddAsync(object key, Func<Task<ActionResult>> factory, CancellationToken released)
+        => _cache.GetOrCreateAsync<ActionResult>(key, entry =>
+        {
+            entry.AddExpirationToken(new CancellationChangeToken(released));
+            return factory();
+        })!;
 }

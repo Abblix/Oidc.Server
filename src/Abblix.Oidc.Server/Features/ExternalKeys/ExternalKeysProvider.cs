@@ -92,7 +92,10 @@ public sealed partial class ExternalKeysProvider(
         try
         {
             versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
-            _lastPublished[keyName] = versions;
+            if (_lastPublished.TryAdd(keyName, versions))
+                settings.Released.Register(() => _lastPublished.TryRemove(keyName, out _));
+            else
+                _lastPublished[keyName] = versions;
         }
         catch (KeyCustodianUnavailableException failure)
         {

@@ -21,5 +21,7 @@ public interface ICheckSessionResponseCache
     /// <param name="key">The key identifying the cached result.</param>
     /// <param name="factory">Produces the result when the key is not yet cached.</param>
     /// <returns>The cached or newly produced <see cref="IResult"/>.</returns>
-    Task<IResult> GetOrAddAsync(object key, Func<Task<IResult>> factory);
+    /// <param name="released">Canceled once the issuer the result is for is gone for good, which drops it.
+    /// </param>
+    Task<IResult> GetOrAddAsync(object key, Func<Task<IResult>> factory, CancellationToken released);
 }
