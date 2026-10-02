@@ -36,7 +36,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
 /// <param name="serviceProvider">Resolves the mode-specific grant processors and the redeemer that judges an
-/// authenticated request before it is exchanged for tokens.</param>
+/// authenticated request before it is exchanged for tokens. The redeemer is internal and registered by
+/// <c>AddBackChannelAuthentication</c>, so a provider built without that call cannot construct the handler.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,

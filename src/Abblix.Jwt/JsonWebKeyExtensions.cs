@@ -321,8 +321,8 @@ public static class JsonWebKeyExtensions
 	/// Two differences from <see cref="RsaSectionFor"/>, and both matter at a call site. This one never
 	/// throws for a non-null algorithm, because an unknown algorithm must not replace the refusal the
 	/// operator was about to read with a complaint about the citation - and it is reachable, since an RSA
-	/// key carrying no <c>alg</c> resolves to <c>SigningAlgorithms.None</c>. And this one carries the words "per RFC
-	/// 7518" itself, where <see cref="RsaSectionFor"/> returns the bare section and leaves them to the
+	/// key carrying no <c>alg</c> resolves to <c>SigningAlgorithms.None</c>. And this one carries the words
+	/// "per RFC 7518" itself, where <see cref="RsaSectionFor"/> returns the bare section and leaves them to the
 	/// caller. Interpolate this one into a sentence that writes them too and the message says them twice.
 	/// </remarks>
 	public static string RsaSectionForOrNothing(string algorithm)
