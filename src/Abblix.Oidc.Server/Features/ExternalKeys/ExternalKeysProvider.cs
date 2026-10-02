@@ -83,8 +83,8 @@ public sealed partial class ExternalKeysProvider(
     //
     // Kept per issuer and key name, so a tenant created again under a key name another creation used keeps a set of
     // its own, and each creation's sets go with it
-    private readonly ConcurrentDictionary<(string Issuer, string KeyName), IReadOnlyList<KeyVersion>> _lastPublished =
-        new();
+    private readonly ConcurrentDictionary<(string Partition, string KeyName), IReadOnlyList<KeyVersion>>
+        _lastPublished = new();
 
     private async IAsyncEnumerable<JsonWebKey> PublishAsync(
         string keyName,

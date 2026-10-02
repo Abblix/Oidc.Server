@@ -560,8 +560,11 @@ public class StoreTenantCatalogTests
         Assert.False(catalog.Released(new TenantDefinition { Id = "globex", Issuer = "https://globex.example.com" })
             .CanBeCanceled);
 
-        // The creations released are remembered for one reading only, so the record does not grow
+        // Released already through every reading of one pause, however often the store is read, and forgotten
+        // after it, so the record does not grow
         await catalog.RefreshAsync(ct);
+        Assert.True(catalog.Released(acme).IsCancellationRequested);
+        await ReadAfterAPeriodAsync(catalog, ct);
         Assert.False(catalog.Released(acme).CanBeCanceled);
     }
 

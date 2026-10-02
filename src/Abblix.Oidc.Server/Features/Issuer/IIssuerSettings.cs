@@ -39,9 +39,9 @@ public interface IIssuerSettings
 
     /// <summary>
     /// Canceled once the issuer is gone for good, so a service keeping something in memory for it lets that go:
-    /// for a tenant, one refresh period after its store stopped listing it, so a request under way finishes first;
-    /// never for a server without tenants, nor for the tenants of a catalog of the host's own, which the server
-    /// cannot tell are gone.
+    /// for a tenant, at least one refresh period after its store stopped listing it, so a request under way finishes
+    /// first; never for a server without tenants, nor for the tenants of a catalog of the host's own, which the
+    /// server cannot tell are gone.
     /// </summary>
     CancellationToken Released { get; }
 

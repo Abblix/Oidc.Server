@@ -43,9 +43,10 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
 
     private readonly ConcurrentDictionary<string, Creation> _creations = new(StringComparer.Ordinal);
 
-    // The creations the last reading released, for a request still holding one: kept for one reading, so the set
-    // does not grow with every tenant ever released
-    private IReadOnlySet<string> _releasedLately = new HashSet<string>(StringComparer.Ordinal);
+    // The creations released lately, each with when, for a request still holding one: each is kept for one pause,
+    // however often the store is read, so the record does not grow with every tenant ever released
+    private IReadOnlyDictionary<string, DateTimeOffset> _releasedLately =
+        new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
 
     // The last definition served under each id, kept once the tenant is refused or dropped: a request still holding
     // one of its definitions is judged by the last one in force rather than by none, until its creation is released
@@ -72,7 +73,7 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
         if (_creations.TryGetValue(space, out var creation))
             return creation.Release.Token;
 
-        return Volatile.Read(ref _releasedLately).Contains(space) ? ReleasedAlready : CancellationToken.None;
+        return Volatile.Read(ref _releasedLately).ContainsKey(space) ? ReleasedAlready : CancellationToken.None;
     }
 
     /// <summary>
@@ -102,7 +103,11 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
 
         // Published before any creation is taken out, so a request asking meanwhile gets either the live token,
         // canceled with the rest, or one canceled already, and never one that is not canceled at all
-        Volatile.Write(ref _releasedLately, due.Keys.ToHashSet(StringComparer.Ordinal));
+        var releasedLately = Volatile.Read(ref _releasedLately)
+            .Where(released => now - released.Value < pause)
+            .Concat(due.Keys.Select(space => KeyValuePair.Create(space, now)))
+            .ToDictionary(StringComparer.Ordinal);
+        Volatile.Write(ref _releasedLately, releasedLately);
         foreach (var (space, creation) in due)
         {
             _creations.TryRemove(space, out _);
@@ -126,7 +131,6 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
             LogTenantNotReleased(exception, creation.Tenant.Id);
         }
     }
-
 
     private void Forget(TenantDefinition released)
     {
