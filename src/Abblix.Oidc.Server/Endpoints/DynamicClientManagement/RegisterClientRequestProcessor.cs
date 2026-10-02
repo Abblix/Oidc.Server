@@ -139,7 +139,6 @@ public partial class RegisterClientRequestProcessor(
         return response;
     }
 
-
     /// <summary>
     /// Converts the registration request and credentials into a ClientInfo entity for storage.
     /// </summary>

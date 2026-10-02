@@ -32,8 +32,9 @@ public static class ServiceCollectionExtensions
     /// This call registers NO validator: validation lives in named profiles, each created by
     /// <see cref="ValidationProfileServiceCollectionExtensions.AddSecurityEventValidationProfile"/>
     /// from the documented default steps and owned by the one consumer that names it. There is
-    /// deliberately no unnamed shared family. It existed once, and it is the shape that produced the collision this API replaces: two
-    /// consumers of security event tokens in one host shaped one family to contradictory demands,
+    /// deliberately no unnamed shared family. It existed once, and it is the shape that produced the
+    /// collision this API replaces: two consumers of security event tokens in one host shaped one
+    /// family to contradictory demands,
     /// the outcome depended on registration order, and the loser saw every one of its tokens
     /// refused. An unnamed family invites exactly that consumer back - each editor believes the
     /// shared copy is its own - so the ceremony of naming a profile is the point, not a cost.

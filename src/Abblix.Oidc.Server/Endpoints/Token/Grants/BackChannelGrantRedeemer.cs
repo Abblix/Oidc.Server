@@ -28,17 +28,21 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// Each of those is a specification the grant must satisfy (Specification), and the grant is judged against
 /// them twice - see <see cref="RedeemAsync"/> for why.
 /// </remarks>
-/// <param name="logger">Records a refusal the client is deliberately told nothing specific about.</param>
+/// <param name="loggerFactory">Creates the logger that records a refusal the client is deliberately told nothing
+/// specific about. It writes under the grant handler's category, since the refusal is the token endpoint's answer
+/// to a CIBA grant.</param>
 /// <param name="subjectTypeConverter">Seals the authenticated session's subject the way the requesting
 /// client sees it, so it can be compared against the end user the original request named.</param>
 /// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
 /// authorization_details are still acceptable, which is the only comparison that can see inside an
 /// entry.</param>
 internal sealed partial class BackChannelGrantRedeemer(
-    ILogger logger,
+    ILoggerFactory loggerFactory,
     ISubjectTypeConverter subjectTypeConverter,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy)
 {
+    private readonly ILogger _logger = loggerFactory.CreateLogger<BackChannelAuthenticationGrantHandler>();
+
     /// <summary>
     /// Redeems an authenticated request, refusing it when the end user who authenticated is not one it
     /// named.

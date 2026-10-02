@@ -35,7 +35,7 @@ public partial class DPoPUserInfoValidator(
 {
     /// <inheritdoc/>
     /// <remarks>
-    /// Whether the access token is bound decides which rules the presentation answers to (State): an unbound
+    /// Whether the access token is bound decides which rules the presentation answers to: an unbound
     /// token is judged by its scheme alone, a bound one by its scheme, its proof and the proof's nonce.
     /// </remarks>
     public async Task<OidcError?> ValidateAsync(

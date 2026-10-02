@@ -13,12 +13,9 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
@@ -38,29 +35,21 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="keyFactory">Names the key that instant lives under.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
-/// <param name="logger">Records a refusal the client is deliberately told nothing specific about.</param>
-/// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
-/// authorization_details are still acceptable, which is the only comparison that can see inside an
-/// entry.</param>
-/// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
+/// <param name="serviceProvider">Resolves the mode-specific grant processors and the redeemer that judges an
+/// authenticated request before it is exchanged for tokens.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
-/// <param name="subjectTypeConverter">
-/// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
-/// against the end user the original request named.
-/// </param>
 public class BackChannelAuthenticationGrantHandler(
-    ILogger<BackChannelAuthenticationGrantHandler> logger,
     IBackChannelRequestStorage storage,
     IPollScheduleStore pollSchedule,
     IEntityStorageKeyFactory keyFactory,
-    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
-    ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
-    private readonly BackChannelGrantRedeemer _redeemer = new(logger, subjectTypeConverter, authorizationDetailsPolicy);
+    // Resolved rather than injected: the redeemer is internal, and a public constructor cannot name it.
+    private readonly BackChannelGrantRedeemer _redeemer =
+        serviceProvider.GetRequiredService<BackChannelGrantRedeemer>();
 
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel

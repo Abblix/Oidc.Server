@@ -133,7 +133,7 @@ public class PushedRequestFetcher(
     /// context-validator pipeline) because this fetcher participates only in the authorization
     /// endpoint's chain - the PAR endpoint itself runs a different fetcher set and must not trip
     /// over the requirement it is there to satisfy.
-    /// The rule is a Specification of its own, so the fetch above reads as the order of checks it performs.
+    /// The rule is a predicate method of its own, so the fetch above reads as the order of checks it performs.
     /// </remarks>
     private async Task<bool> ClientRequiresPushedRequestsAsync(string? clientId)
     {

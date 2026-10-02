@@ -46,9 +46,8 @@ internal static class ClientManagementServiceCollectionExtensions
             .AddClientConfigurationEndpoint();
     }
 
-    private static IServiceCollection AddDefaultInitialAccessTokenRevocationProvider(this IServiceCollection services)
+    private static void AddDefaultInitialAccessTokenRevocationProvider(this IServiceCollection services)
     {
         services.TryAddSingleton<IInitialAccessTokenRevocationProvider, InitialAccessTokenRevocationProvider>();
-        return services;
     }
 }

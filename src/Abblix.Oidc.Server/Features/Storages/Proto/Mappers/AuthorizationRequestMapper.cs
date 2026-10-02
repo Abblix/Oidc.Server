@@ -53,21 +53,24 @@ internal static class AuthorizationRequestMapper
 
     private static void CopyOptionalScalars(Model.AuthorizationRequest source, AuthorizationRequest proto)
     {
-        SetIfPresent(source.ClientId, value => proto.ClientId = value);
-        SetIfPresent(source.RedirectUri?.ToString(), value => proto.RedirectUri = value);
-        SetIfPresent(source.State, value => proto.State = value);
-        SetIfPresent(source.ResponseMode, value => proto.ResponseMode = value);
-        SetIfPresent(source.Nonce, value => proto.Nonce = value);
-        SetIfPresent(source.Display, value => proto.Display = value);
-        SetIfPresent(source.Prompt, value => proto.Prompt = value);
-        SetIfPresent(source.IdTokenHint, value => proto.IdTokenHint = value);
-        SetIfPresent(source.LoginHint, value => proto.LoginHint = value);
-        SetIfPresent(source.CodeChallenge, value => proto.CodeChallenge = value);
-        SetIfPresent(source.CodeChallengeMethod, value => proto.CodeChallengeMethod = value);
-        SetIfPresent(source.Request, value => proto.Request = value);
-        SetIfPresent(source.RequestUri?.ToString(), value => proto.RequestUri = value);
-        SetIfPresent(source.ProofKeyThumbprint, value => proto.ProofKeyThumbprint = value);
-        SetIfPresent(source.OriginRequestUri?.OriginalString, value => proto.OriginRequestUri = value);
+        SetIfPresent(proto, source.ClientId, static (message, value) => message.ClientId = value);
+        SetIfPresent(proto, source.RedirectUri?.ToString(), static (message, value) => message.RedirectUri = value);
+        SetIfPresent(proto, source.State, static (message, value) => message.State = value);
+        SetIfPresent(proto, source.ResponseMode, static (message, value) => message.ResponseMode = value);
+        SetIfPresent(proto, source.Nonce, static (message, value) => message.Nonce = value);
+        SetIfPresent(proto, source.Display, static (message, value) => message.Display = value);
+        SetIfPresent(proto, source.Prompt, static (message, value) => message.Prompt = value);
+        SetIfPresent(proto, source.IdTokenHint, static (message, value) => message.IdTokenHint = value);
+        SetIfPresent(proto, source.LoginHint, static (message, value) => message.LoginHint = value);
+        SetIfPresent(proto, source.CodeChallenge, static (message, value) => message.CodeChallenge = value);
+        SetIfPresent(proto, source.CodeChallengeMethod, static (message, value) => message.CodeChallengeMethod = value);
+        SetIfPresent(proto, source.Request, static (message, value) => message.Request = value);
+        SetIfPresent(proto, source.RequestUri?.ToString(), static (message, value) => message.RequestUri = value);
+        SetIfPresent(proto, source.ProofKeyThumbprint, static (message, value) => message.ProofKeyThumbprint = value);
+        SetIfPresent(
+            proto,
+            source.OriginRequestUri?.OriginalString,
+            static (message, value) => message.OriginRequestUri = value);
     }
 
     /// <summary>
@@ -78,10 +81,13 @@ internal static class AuthorizationRequestMapper
     /// refuses null, and an unset field is how the message says the record had none, which
     /// <see cref="ProtoMapper.GetString"/> reads back as null.
     /// </remarks>
-    private static void SetIfPresent(string? value, Action<string> set)
+    private static void SetIfPresent(
+        AuthorizationRequest proto,
+        string? value,
+        Action<AuthorizationRequest, string> set)
     {
         if (value != null)
-            set(value);
+            set(proto, value);
     }
 
     /// <summary>

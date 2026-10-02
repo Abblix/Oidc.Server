@@ -109,8 +109,8 @@ public static class RequestedClaimsExtensions
     /// or the two leave nothing acceptable.
     /// </summary>
     /// <remarks>
-    /// Template Method: each public reader supplies the claim-specific steps - which entry it reads and the
-    /// refusal it gives - and this is the skeleton they share, reading the qualifiers and then combining them.
+    /// A helper parameterized by each public reader: the reader passes the refusals that are specific to its
+    /// claim, and this reads the qualifiers and then combines them the same way for all of them.
     /// </remarks>
     /// <param name="details">The requested claim's qualifiers.</param>
     /// <param name="malformed">The refusal for a qualifier that is not a string.</param>

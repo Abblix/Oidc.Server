@@ -56,7 +56,7 @@ public class TokenRequestProcessor(
 	/// the user, crucial for OpenID Connect authentication flows. This method ensures secure and compliant token
 	/// generation.
 	/// <para>
-	/// The response is assembled one token at a time (Builder): the access token, then the refresh token,
+	/// The response is assembled in sequential steps, one token at a time: the access token, then the refresh token,
 	/// then the ID token. That order is load-bearing - the ID token's push bindings read the refresh token
 	/// minted in the step before.
 	/// </para>

@@ -50,6 +50,23 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     protected TimeProvider Clock => timeProvider;
 
     /// <summary>
+    /// The checks a validated assertion must pass before its timestamps are read.
+    /// </summary>
+    /// <remarks>
+    /// Chain of Responsibility: each link may refuse the assertion and logs why; All stops at the first
+    /// refusal, so the links run in the order listed and none of them spends anything. Held once for every
+    /// authentication rather than built per request, which is why each link takes its subject as arguments.
+    /// </remarks>
+    private static readonly Func<JwtAssertionAuthenticatorBase, JsonWebToken, ClientInfo, bool>[] AssertionLinks =
+    [
+        static (self, _, client) => self.AuthMethodIsSupported(client),
+        static (self, token, client) => self.SigningAlgorithmMatchesRegistration(token, client),
+        static (self, token, _) => self.IssuerMatchesSubject(token),
+        static (self, token, client) => self.TypeIsClientAuthentication(token, client),
+        static (self, token, client) => self.AudienceSatisfiesTheProfile(token, client),
+    ];
+
+    /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
     /// </summary>
     public abstract IEnumerable<string> ClientAuthenticationMethodsSupported { get; }
@@ -150,18 +167,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         var token = validJwt.Token;
         var clientInfo = validJwt.Client;
 
-        // Chain of Responsibility: each link may refuse the assertion and logs why; All stops at the first
-        // refusal, so the links run in the order listed and none of them spends anything.
-        Func<bool>[] links =
-        [
-            () => AuthMethodIsSupported(clientInfo),
-            () => SigningAlgorithmMatchesRegistration(token, clientInfo),
-            () => IssuerMatchesSubject(token),
-            () => TypeIsClientAuthentication(token, clientInfo),
-            () => AudienceSatisfiesTheProfile(token, clientInfo),
-        ];
-
-        if (!links.All(link => link()))
+        if (!AssertionLinks.All(link => link(this, token, clientInfo)))
         {
             return null;
         }

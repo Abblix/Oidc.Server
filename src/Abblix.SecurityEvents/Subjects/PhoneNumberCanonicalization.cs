@@ -53,7 +53,7 @@ public static class PhoneNumberCanonicalization
     }
 
     /// <summary>
-    /// The four separators E.164 presentation adds for a human reader, and nothing else.
+    /// The separators E.164 presentation adds for a human reader, and nothing else.
     /// </summary>
     private static readonly SearchValues<char> PresentationSeparators = SearchValues.Create(" -().");
 }

@@ -45,7 +45,7 @@ public class AuthorizationRequestProcessor(
 {
 	// Extracted collaborator: which session answers the request is one question with its own dependencies,
 	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
-	private readonly AuthSessionSelector sessionSelector =
+	private readonly AuthSessionSelector _sessionSelector =
 		new(authSessionService, cutoffChecker, subjectTypeConverter, clock);
 
 	/// <summary>
@@ -63,7 +63,7 @@ public class AuthorizationRequestProcessor(
 		// Ensures the client is permitted to make requests by the current license.
 		request.ClientInfo.CheckClientLicense(issuerSettings);
 
-		var selected = await sessionSelector.SelectAsync(request);
+		var selected = await _sessionSelector.SelectAsync(request);
 		return await selected.MatchAsync(
 			authSession => AuthorizeAsync(request, authSession),
 			answered => answered);

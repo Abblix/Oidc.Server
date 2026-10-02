@@ -6,9 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>

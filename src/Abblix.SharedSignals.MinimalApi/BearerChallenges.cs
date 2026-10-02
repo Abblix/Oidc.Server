@@ -35,8 +35,9 @@ internal static class BearerChallenges
     /// receiver has one place to read a refusal from.
     /// <para>
     /// This answers only where the parameter is REQUIRED.
-    /// <see cref="StreamManagementHandlers.GetStreamsAsync"/> takes the same query parameter and lists every stream when it names nothing, so an unnamed stream there is an
-    /// answer rather than an error. Both routes read "named" the same way; they differ in what it means.
+    /// <see cref="StreamManagementHandlers.GetStreamsAsync"/> takes the same query parameter and lists
+    /// every stream when it names nothing, so an unnamed stream there is an answer rather than an error.
+    /// Both routes read "named" the same way; they differ in what it means.
     /// </para>
     /// </remarks>
     internal static IResult MissingRequiredParameter(HttpContext http, string parameterName)

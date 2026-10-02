@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -14,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
@@ -36,14 +36,14 @@ public class UpdateClientRequestProcessor(
     /// - All client metadata can be updated except client_id, client_secret, and issuance timestamps
     /// - Omitted fields are treated as null/empty
     /// - A new registration_access_token may be issued
-    /// - Client secrets cannot be updated via this endpoint (they're stored as hashes)
+    /// - Client secrets cannot be updated via this endpoint
     /// </remarks>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidUpdateClientRequest request)
     {
         var existingClient = request.Client.ClientInfo;
 
-        // RFC 7592 section 2.2 replaces the metadata but not the credentials: secrets are stored as hashes
-        // and cannot be updated here, and the sector identifier the pairwise subjects hang on is kept.
+        // RFC 7592 section 2.2 replaces the metadata but not the credentials, so the client's secrets are kept
+        // rather than updated here; the sector identifier the pairwise subjects hang on is kept too.
         var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
             .WithSectorIdentifier(existingClient.SectorIdentifier)
             .WithClientSecrets(existingClient.ClientSecrets)
@@ -78,7 +78,7 @@ public class UpdateClientRequestProcessor(
         return new ReadClientSuccessfulResponse
         {
             ClientId = updatedClient.ClientId,
-            ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
+            ClientSecret = null, // The update issues no new secret, so there is none to return
             ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
             TokenEndpointAuthMethod = updatedClient.TokenEndpointAuthMethod,

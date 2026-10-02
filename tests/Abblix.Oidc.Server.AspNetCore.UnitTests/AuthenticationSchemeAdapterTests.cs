@@ -478,6 +478,23 @@ public class AuthenticationSchemeAdapterTests
 	}
 
 	/// <summary>
+	/// A number parsed from JSON text converts to every numeric kind wide enough to hold it, so the kind it reads
+	/// back as is decided by the order the formats are tried in rather than by the value: reordering two formats
+	/// that can both write it changes the CLR type a host gets back.
+	/// </summary>
+	[Theory]
+	[InlineData("42", typeof(int))]
+	[InlineData("9000000000", typeof(long))]
+	[InlineData("1.5", typeof(float))]
+	public async Task RoundTrip_NumberParsedFromJson_ReadsBackAsFirstKindThatTakesIt(string json, Type expected)
+	{
+		var result = await RoundTripAsync(Session(new JsonObject { ["n"] = JsonNode.Parse(json) }));
+
+		var value = Assert.IsAssignableFrom<JsonValue>(result!.AdditionalClaims!["n"]);
+		Assert.IsType(expected, value.GetValue<object>());
+	}
+
+	/// <summary>
 	/// A claim tagged with a primitive type whose text does not parse as that type is still the host's value, so it
 	/// reads back as the raw string rather than being dropped or parsed as JSON.
 	/// </summary>

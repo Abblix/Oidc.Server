@@ -87,15 +87,12 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         var serviceProvider = CreateMockServiceProvider(_storage.Object);
 
         _handler = new BackChannelAuthenticationGrantHandler(
-            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             _storage.Object,
             _pollSchedule,
             new EntityStorageKeyFactory(),
-            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
-            serviceProvider,
-            PublicSubjects());
+            serviceProvider);
     }
 
     /// <summary>
@@ -115,16 +112,25 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         return converter.Object;
     }
 
-    private static IServiceProvider CreateMockServiceProvider(IBackChannelRequestStorage storage)
+    private static IServiceProvider CreateMockServiceProvider(
+        IBackChannelRequestStorage storage,
+        StubAuthorizationDetailsPolicy? policy = null)
     {
-        return new TestServiceProvider(storage);
+        return new TestServiceProvider(storage, policy);
     }
 
-    private class TestServiceProvider(IBackChannelRequestStorage storage) : IKeyedServiceProvider
+    private class TestServiceProvider(
+        IBackChannelRequestStorage storage,
+        StubAuthorizationDetailsPolicy? policy = null) : IKeyedServiceProvider
     {
         private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
         private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage);
         private readonly IBackChannelGrantProcessor _pushProcessor = new PushModeGrantProcessor();
+
+        private readonly BackChannelGrantRedeemer _redeemer = new(
+            NullLoggerFactory.Instance,
+            PublicSubjects(),
+            policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
         public object? GetKeyedService(Type serviceType, object? serviceKey)
         {
@@ -148,7 +154,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         public object? GetService(Type serviceType)
         {
-            return null;
+            return serviceType == typeof(BackChannelGrantRedeemer) ? _redeemer : null;
         }
     }
 
@@ -424,18 +430,15 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
     private BackChannelAuthenticationGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
         => new(
-            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             _storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
-            policy,
             new FakeTimeProvider(_currentTime),
             Options.Create(new OidcOptions
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            CreateMockServiceProvider(_storage.Object),
-            PublicSubjects());
+            CreateMockServiceProvider(_storage.Object, policy));
 
     /// <summary>
     /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
@@ -667,18 +670,15 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     /// </summary>
     private BackChannelAuthenticationGrantHandler HandlerOver(IBackChannelRequestStorage requests)
         => new(
-            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             requests,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
-            StubAuthorizationDetailsPolicy.Accepting,
             new FakeTimeProvider(_currentTime),
             Options.Create(new OidcOptions
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            new TestServiceProvider(requests),
-            PublicSubjects());
+            new TestServiceProvider(requests));
 
     /// <summary>
     /// Verifies that when the authentication request is still pending (user hasn't authenticated yet)

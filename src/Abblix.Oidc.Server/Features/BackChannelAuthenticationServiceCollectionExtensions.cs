@@ -102,6 +102,7 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
         });
 
         // Register CIBA grant handler (dual: IAuthorizationGrantHandler + IGrantTypeInformer).
+        services.TryAddSingleton<BackChannelGrantRedeemer>();
         services.AddAuthorizationGrant<BackChannelAuthenticationGrantHandler>();
 
         // Single opt-in: registering the feature also brings in the backchannel endpoint services and turns the

@@ -185,7 +185,7 @@ internal static class JsonNodeExtensions
     /// <returns>Protobuf Value representation, or null if input is null.</returns>
     public static Value? ToValue(this object? obj)
     {
-        // Chain of Responsibility: the shapes read directly, then the numbers, then serialization for the rest
+        // One switch split in two: the shapes read directly, then the numbers, then serialization for the rest
         return obj switch
         {
             null => null,

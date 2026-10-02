@@ -35,7 +35,7 @@ internal static class MappedProtobufCodecs
         ProtobufCodec.Mapped(
             Proto.RequestedClaims.Parser,
             (Model.RequestedClaims requestedClaims) => requestedClaims.ToProto(),
-            proto => proto.FromProto()!),
+            proto => proto.FromProto()),
         ProtobufCodec.Mapped(
             Proto.AuthSession.Parser,
             (UserAuthentication.AuthSession authSession) => authSession.ToProto(),

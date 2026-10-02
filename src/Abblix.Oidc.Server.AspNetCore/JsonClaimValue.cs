@@ -73,49 +73,15 @@ internal static class JsonClaimValue
 	/// </remarks>
 	private static readonly PrimitiveClaimFormat[] PrimitiveFormats =
 	[
-		new(ClaimValueTypes.String,
-			value => value.TryGetValue<string>(out var text) ? text : null,
-			text => JsonValue.Create(text)),
-
-		new(ClaimValueTypes.Boolean,
-			value => value.TryGetValue<bool>(out var flag) ? flag.ToString().ToLowerInvariant() : null,
-			text => bool.TryParse(text, out var flag) ? JsonValue.Create(flag) : null),
-
-		new(ClaimValueTypes.Integer32,
-			value => value.TryGetValue<int>(out var number) ? number.ToString(InvariantCulture) : null,
-			text => int.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null),
-
-		new(ClaimValueTypes.Integer64,
-			value => value.TryGetValue<long>(out var number) ? number.ToString(InvariantCulture) : null,
-			text => long.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null),
-
-		new(CustomValueTypes.Float,
-			value => value.TryGetValue<float>(out var number) ? number.ToString(InvariantCulture) : null,
-			text => float.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null),
-
-		new(ClaimValueTypes.Double,
-			value => value.TryGetValue<double>(out var number) ? number.ToString(InvariantCulture) : null,
-			text => double.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null),
-
-		new(CustomValueTypes.Decimal,
-			value => value.TryGetValue<decimal>(out var number) ? number.ToString(InvariantCulture) : null,
-			text => decimal.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null),
-
-		// For DateTime: "2009-06-15T13:45:30.0000000" or "2009-06-15T13:45:30.0000000Z"
-		new(ClaimValueTypes.DateTime,
-			value => value.TryGetValue<DateTime>(out var instant) ? instant.ToString("O", InvariantCulture) : null,
-			text => DateTime.TryParse(text, InvariantCulture, RoundtripKind, out var instant)
-				? JsonValue.Create(instant)
-				: null),
-
-		// For DateTimeOffset: "2009-06-15T13:45:30.0000000-07:00"
-		new(CustomValueTypes.DateTimeOffset,
-			value => value.TryGetValue<DateTimeOffset>(out var instant)
-				? instant.ToString("O", InvariantCulture)
-				: null,
-			text => DateTimeOffset.TryParse(text, InvariantCulture, RoundtripKind, out var instant)
-				? JsonValue.Create(instant)
-				: null),
+		new(ClaimValueTypes.String, WriteString, ReadString),
+		new(ClaimValueTypes.Boolean, WriteBoolean, ReadBoolean),
+		new(ClaimValueTypes.Integer32, WriteInt32, ReadInt32),
+		new(ClaimValueTypes.Integer64, WriteInt64, ReadInt64),
+		new(CustomValueTypes.Float, WriteFloat, ReadFloat),
+		new(ClaimValueTypes.Double, WriteDouble, ReadDouble),
+		new(CustomValueTypes.Decimal, WriteDecimal, ReadDecimal),
+		new(ClaimValueTypes.DateTime, WriteDateTime, ReadDateTime),
+		new(CustomValueTypes.DateTimeOffset, WriteDateTimeOffset, ReadDateTimeOffset),
 	];
 
 	private static readonly FrozenDictionary<string, PrimitiveClaimFormat> FormatsByValueType =
@@ -165,6 +131,63 @@ internal static class JsonClaimValue
 
 		return null;
 	}
+
+	private static string? WriteString(JsonValue value)
+		=> value.TryGetValue<string>(out var text) ? text : null;
+
+	private static JsonNode? ReadString(string text) => JsonValue.Create(text);
+
+	private static string? WriteBoolean(JsonValue value)
+		=> value.TryGetValue<bool>(out var flag) ? flag.ToString().ToLowerInvariant() : null;
+
+	private static JsonNode? ReadBoolean(string text)
+		=> bool.TryParse(text, out var flag) ? JsonValue.Create(flag) : null;
+
+	private static string? WriteInt32(JsonValue value)
+		=> value.TryGetValue<int>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadInt32(string text)
+		=> int.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteInt64(JsonValue value)
+		=> value.TryGetValue<long>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadInt64(string text)
+		=> long.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteFloat(JsonValue value)
+		=> value.TryGetValue<float>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadFloat(string text)
+		=> float.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteDouble(JsonValue value)
+		=> value.TryGetValue<double>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadDouble(string text)
+		=> double.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteDecimal(JsonValue value)
+		=> value.TryGetValue<decimal>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadDecimal(string text)
+		=> decimal.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	// For DateTime: "2009-06-15T13:45:30.0000000" or "2009-06-15T13:45:30.0000000Z"
+	private static string? WriteDateTime(JsonValue value)
+		=> value.TryGetValue<DateTime>(out var instant) ? instant.ToString("O", InvariantCulture) : null;
+
+	private static JsonNode? ReadDateTime(string text)
+		=> DateTime.TryParse(text, InvariantCulture, RoundtripKind, out var instant) ? JsonValue.Create(instant) : null;
+
+	// For DateTimeOffset: "2009-06-15T13:45:30.0000000-07:00"
+	private static string? WriteDateTimeOffset(JsonValue value)
+		=> value.TryGetValue<DateTimeOffset>(out var instant) ? instant.ToString("O", InvariantCulture) : null;
+
+	private static JsonNode? ReadDateTimeOffset(string text)
+		=> DateTimeOffset.TryParse(text, InvariantCulture, RoundtripKind, out var instant)
+			? JsonValue.Create(instant)
+			: null;
 
 	private static JsonNode? ParseJsonOrString(string value)
 	{

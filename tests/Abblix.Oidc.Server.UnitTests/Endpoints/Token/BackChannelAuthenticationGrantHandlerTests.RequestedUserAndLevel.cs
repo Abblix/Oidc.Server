@@ -367,15 +367,12 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         });
 
         var handler = new BackChannelAuthenticationGrantHandler(
-            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
-            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             CreateMockServiceProvider(storage.Object),
-            PublicSubjects(),
             statusNotifier.Object);
 
         var clientInfo = new ClientInfo(ClientId)
