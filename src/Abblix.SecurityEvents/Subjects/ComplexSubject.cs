@@ -136,14 +136,12 @@ public sealed class ComplexSubject() : SubjectIdentifier(SubjectFormats.Complex)
     /// on this field", so a subject naming none restricts nothing and stands for every event.
     /// </remarks>
     public bool HasMembers
-        => User is not null
-           || Device is not null
-           || Session is not null
-           || Application is not null
-           || Tenant is not null
-           || OrgUnit is not null
-           || Group is not null
-           || AdditionalMembers is { Count: > 0 };
+        => RegisteredMembers.Any(member => member is not null) || AdditionalMembers is { Count: > 0 };
+
+    /// <summary>
+    /// The seven members Section 3.3 registers, set or not.
+    /// </summary>
+    private SubjectIdentifier?[] RegisteredMembers => [User, Device, Session, Application, Tenant, OrgUnit, Group];
 
     /// <summary>
     /// Returns <paramref name="value"/> unless it is itself a Complex Subject: the members of a

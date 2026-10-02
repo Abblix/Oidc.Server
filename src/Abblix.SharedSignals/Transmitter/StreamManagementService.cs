@@ -6,11 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net;
-using Abblix.SecurityEvents.Subjects;
-using Abblix.SharedSignals.Events;
 using Abblix.SharedSignals.Model;
-using Abblix.SharedSignals.Model.Delivery;
 
 namespace Abblix.SharedSignals.Transmitter;
 
@@ -51,6 +47,8 @@ public sealed class StreamManagementService(
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
+    private readonly StreamDeliveryFactory _deliveries = new(addressPolicy, pollEndpoints);
+
     /// <summary>
     /// Creates a stream for the receiver (SSF 1.0 Section 8.1.1.1): the transmitter supplies
     /// identity, audience and the delivered-events intersection; the receiver's proposal
@@ -67,34 +65,23 @@ public sealed class StreamManagementService(
         ArgumentException.ThrowIfNullOrEmpty(receiverId);
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!options.AllowMultipleStreamsPerReceiver
-            && (await store.ListAsync(receiverId, cancellationToken)).Count > 0)
+        var singleStream = new SingleStreamPerReceiverRule(store, options);
+        if (await singleStream.ForbidsAnotherAsync(receiverId, cancellationToken))
         {
             return ManagementResult<StreamConfiguration>.Conflict(
                 "The receiver already has a stream, and this transmitter allows one per receiver "
                 + "(SSF 1.0 Section 8.1.1.1); read it and update or replace what differs.");
         }
 
-        var streamId = Guid.NewGuid().ToString("N");
+        var streamId = StreamConfigurations.NewStreamId();
 
-        var accepted = AcceptDelivery(request.Delivery, streamId);
+        var accepted = _deliveries.Create(request.Delivery, streamId);
         if (accepted.Body is not { } delivery)
         {
-            return RefusalOf(accepted);
+            return StreamDeliveryFactory.RefusalOf(accepted);
         }
 
-        var configuration = new StreamConfiguration
-        {
-            StreamId = streamId,
-            Issuer = options.Issuer,
-            Audiences = [.. options.AudiencesFactory?.Invoke(receiverId) ?? [receiverId]],
-            EventsSupported = options.EventsSupported is { Count: > 0 } supported ? supported : null,
-            EventsRequested = request.EventsRequested,
-            EventsDelivered = DeliveredOf(request.EventsRequested),
-            Delivery = delivery,
-            MinVerificationInterval = options.MinVerificationInterval,
-            Description = request.Description,
-        };
+        var configuration = StreamConfigurations.New(options, receiverId, streamId, request, delivery);
 
         var created = new StreamState
         {
@@ -109,25 +96,12 @@ public sealed class StreamManagementService(
                 "A stream with the generated identifier already exists.");
         }
 
-        // The count above was read before this stream existed, and the identifier is freshly
-        // generated, so nothing collides and two creates arriving together both pass. Re-read now
-        // that ours is on record: without this the one-per-receiver policy never refuses anything,
-        // and an option that cannot fire is a promise the deployment cannot keep.
-        if (!options.AllowMultipleStreamsPerReceiver)
+        if (await singleStream.LosesToAnotherAsync(receiverId, streamId, cancellationToken))
         {
-            var streams = await store.ListAsync(receiverId, cancellationToken);
-
-            // The lowest identifier stays, whoever asked first. A rule both racers can evaluate
-            // the same way is what keeps them from both withdrawing and leaving the receiver with
-            // no stream at all.
-            if (streams.Count > 1
-                && streams.Select(existing => existing.StreamId).Order(StringComparer.Ordinal).First() != streamId)
-            {
-                await store.DeleteAsync(receiverId, streamId, cancellationToken);
-                return ManagementResult<StreamConfiguration>.Conflict(
-                    "The receiver already has a stream, and this transmitter allows one per receiver "
-                    + "(SSF 1.0 Section 8.1.1.1); read it and update or replace what differs.");
-            }
+            await store.DeleteAsync(receiverId, streamId, cancellationToken);
+            return ManagementResult<StreamConfiguration>.Conflict(
+                "The receiver already has a stream, and this transmitter allows one per receiver "
+                + "(SSF 1.0 Section 8.1.1.1); read it and update or replace what differs.");
         }
 
         return ManagementResult<StreamConfiguration>.Created(configuration);
@@ -184,10 +158,10 @@ public sealed class StreamManagementService(
 
         if (request.Delivery is { } proposedDelivery)
         {
-            var accepted = AcceptDelivery(proposedDelivery, stream.StreamId);
+            var accepted = _deliveries.Create(proposedDelivery, stream.StreamId);
             if (accepted.Body is not { } delivery)
             {
-                return RefusalOf(accepted);
+                return StreamDeliveryFactory.RefusalOf(accepted);
             }
 
             configuration = configuration with { Delivery = delivery };
@@ -198,7 +172,7 @@ public sealed class StreamManagementService(
             configuration = configuration with
             {
                 EventsRequested = requested,
-                EventsDelivered = DeliveredOf(requested),
+                EventsDelivered = StreamConfigurations.DeliveredOf(options, requested),
             };
         }
 
@@ -237,17 +211,17 @@ public sealed class StreamManagementService(
                 + "without a delivery method (SSF 1.0 Section 8.1.1.4).");
         }
 
-        var accepted = AcceptDelivery(request.Delivery, stream.StreamId);
+        var accepted = _deliveries.Create(request.Delivery, stream.StreamId);
         if (accepted.Body is not { } delivery)
         {
-            return RefusalOf(accepted);
+            return StreamDeliveryFactory.RefusalOf(accepted);
         }
 
         var configuration = stream.Configuration with
         {
             Delivery = delivery,
             EventsRequested = request.EventsRequested,
-            EventsDelivered = DeliveredOf(request.EventsRequested),
+            EventsDelivered = StreamConfigurations.DeliveredOf(options, request.EventsRequested),
             Description = request.Description,
         };
 
@@ -353,34 +327,17 @@ public sealed class StreamManagementService(
         // misconfigured stream leaks nothing - one such request turns it into a subscription to
         // everything. The shape is refused where it arrives, since nothing downstream can tell it
         // from a deliberate partial match.
-        if (request.Subject is ComplexSubject { HasMembers: false })
+        if (StreamSubjectCommands.NamesNothing(request.Subject))
         {
             return ManagementResult<object>.BadRequest(
                 "A complex subject carries at least one member (SSF 1.0 Section 3.3); one with none "
                 + "would match every event on the stream.");
         }
 
-        var subject = new StreamSubject(request.Subject, request.Verified ?? true);
-
         var (written, missing) = await MutateAsync(
             receiverId,
             request.StreamId,
-            stream => stream with
-            {
-                AddedSubjects =
-                [
-                    .. stream.AddedSubjects.Where(
-                        added => !SubjectMatcher.Identical(added.Subject, request.Subject)),
-                    subject,
-                ],
-                // Under ALL, an addition undoes an earlier removal; under NONE the removal list is
-                // inert, and dropping a stale entry there costs nothing.
-                RemovedSubjects =
-                [
-                    .. stream.RemovedSubjects.Where(
-                        removed => !SubjectMatcher.Identical(removed, request.Subject)),
-                ],
-            },
+            StreamSubjectCommands.Add(request.Subject, request.Verified ?? true),
             cancellationToken);
 
         if (missing)
@@ -409,22 +366,7 @@ public sealed class StreamManagementService(
         var (written, missing) = await MutateAsync(
             receiverId,
             request.StreamId,
-            stream => stream with
-            {
-                AddedSubjects =
-                [
-                    .. stream.AddedSubjects.Where(
-                        added => !SubjectMatcher.Identical(added.Subject, request.Subject)),
-                ],
-                RemovedSubjects = stream.SubjectsMode switch
-                {
-                    // Under ALL a removal carves the subject out of the default coverage.
-                    StreamSubjectsMode.All when !stream.RemovedSubjects.Any(
-                            removed => SubjectMatcher.Identical(removed, request.Subject)) =>
-                        [.. stream.RemovedSubjects, request.Subject],
-                    _ => stream.RemovedSubjects,
-                },
-            },
+            StreamSubjectCommands.Remove(request.Subject),
             cancellationToken);
 
         if (missing)
@@ -483,13 +425,7 @@ public sealed class StreamManagementService(
 
         await dispatcher.DispatchToStreamAsync(
             stream,
-            new SecurityEventDescriptor
-            {
-                EventType = SharedSignalsEventTypes.Verification,
-                // The stream's own subject: opaque, its id the stream's (Section 8.1.4.1).
-                Subject = new OpaqueSubject(stream.StreamId),
-                Payload = new VerificationEventPayload { State = request.State },
-            },
+            StreamEventDescriptors.Verification(stream.StreamId, request.State),
             cancellationToken: cancellationToken);
 
         return ManagementResult<object>.NoContent();
@@ -556,155 +492,12 @@ public sealed class StreamManagementService(
 
         await dispatcher.DispatchToStreamAsync(
             stream,
-            new SecurityEventDescriptor
-            {
-                EventType = SharedSignalsEventTypes.StreamUpdated,
-                Subject = new OpaqueSubject(stream.StreamId),
-                Payload = new StreamUpdatedEventPayload { Status = status, Reason = reason },
-            },
+            StreamEventDescriptors.StreamUpdated(stream.StreamId, status, reason),
             asStatusAnnouncement: true,
             cancellationToken);
 
         return true;
     }
-
-    /// <summary>
-    /// The delivery this transmitter will store for a proposal, or the refusal that stops it.
-    /// </summary>
-    /// <remarks>
-    /// Resolving a method and judging its address are one decision, so they are one call. Three verbs
-    /// write a stream's delivery - create, update and replace - and nothing in the type system makes
-    /// the second check happen beside the first, so a path that asks only whether the METHOD is served
-    /// stores an address every delivery pass then refuses. Any future write path has one method to
-    /// reach for and gets both halves by having no way to ask for one.
-    ///
-    /// 400 on all three verbs, which is a decision rather than an oversight. SSF 1.0 Sections 8.1.1.3
-    /// and 8.1.1.4 list it for a request that is "otherwise invalid", which covers update and replace
-    /// outright. Section 8.1.1.1's table does not carry that phrase - its 400 is for a request that
-    /// cannot be parsed, and its prose adds only that a transmitter MAY answer 400 when it does not
-    /// support the delivery METHOD. An unusable ENDPOINT is unlisted there, and 403 ("the Event Receiver
-    /// is not allowed to create a stream") reads as a verdict about the receiver's permission rather
-    /// than about the address it wrote. Since the refusal reaches the receiver as a bare status code,
-    /// one answer across the three verbs is worth more than a per-verb code that would make a receiver
-    /// branch on the method it used to say the same wrong thing.
-    /// </remarks>
-    private ManagementResult<StreamDeliveryMethod> AcceptDelivery(
-        StreamDeliveryMethod? proposed,
-        string streamId)
-    {
-        if (ResolveDelivery(proposed, streamId) is not { } delivery)
-        {
-            // Two refusals wearing one answer send half the readers to the wrong place. A transmitter
-            // that offers poll and still has no address for THIS stream advertises urn:ietf:rfc:8936 in
-            // its configuration document, so calling the method unsupported contradicts what the same
-            // host publishes.
-            //
-            // Who reads this at all: not the receiver. Render writes the status and drops the
-            // description, and nothing here logs it - so over HTTP the two refusals are one 400 either
-            // way, and this text reaches only a host driving this service directly.
-            return ManagementResult<StreamDeliveryMethod>.BadRequest(
-                proposed is PollDeliveryMethod or null && pollEndpoints.IsOffered
-                    ? "This transmitter serves poll delivery, but has no poll address for this stream: "
-                      + "its identifier cannot be carried into one. Name the stream something a URL path "
-                      + "carries unchanged, or ask for push delivery, which needs no address of ours."
-                    : "The requested delivery method is not supported by this transmitter.");
-        }
-
-        if (AddressRefusalOf(delivery) is { } refusal)
-        {
-            return ManagementResult<StreamDeliveryMethod>.BadRequest(
-                $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
-        }
-
-        return ManagementResult<StreamDeliveryMethod>.Ok(delivery);
-    }
-
-    /// <summary>The same refusal, for an endpoint whose successful body is the configuration.</summary>
-    /// <remarks>
-    /// A refusal carries no body, so only the status and the operator-facing description travel. This
-    /// exists so the three write paths return the ONE decision above rather than each restating it -
-    /// restating is how two paths come to answer differently for the same cause.
-    ///
-    /// A success throws rather than being re-typed. The callers reach this on "no delivery to store",
-    /// which is not the same statement as "refused": <see cref="ManagementResult{TBody}"/> publishes a
-    /// body-less SUCCESS too, so an outcome added to <see cref="AcceptDelivery"/> through it would
-    /// otherwise be re-typed into a 2xx carrying nothing - a create answered to the receiver as having
-    /// succeeded while it stored no stream. Loud is the right failure for that: silent is a refusal
-    /// dressed as an acceptance, which is the one shape a caller cannot detect.
-    /// </remarks>
-    private static ManagementResult<StreamConfiguration> RefusalOf(
-        ManagementResult<StreamDeliveryMethod> refused)
-        => refused.StatusCode >= HttpStatusCode.BadRequest
-            ? new(refused.StatusCode, default, refused.Description)
-            : throw new ArgumentOutOfRangeException(
-                nameof(refused),
-                refused.StatusCode,
-                "Only a refusal is re-typed here, and this status is not one.");
-
-    /// <summary>
-    /// The receiver-visible delivery for a proposal: push keeps the receiver's endpoint, poll
-    /// gets this transmitter's own URL - the "endpoint_url value is supplied by the
-    /// Transmitter" (SSF 1.0 Section 8.1.1.1) - and an absent proposal means poll. Null when
-    /// the transmitter cannot serve the method.
-    /// </summary>
-    private StreamDeliveryMethod? ResolveDelivery(StreamDeliveryMethod? proposed, string streamId)
-        => proposed switch
-        {
-            PushDeliveryMethod push => push,
-            PollDeliveryMethod or null when pollEndpoints.Of(streamId) is { } pollEndpoint =>
-                new PollDeliveryMethod(pollEndpoint),
-            _ => null,
-        };
-
-    /// <summary>
-    /// Why this transmitter will never deliver to the proposed address, or null when it will.
-    /// </summary>
-    /// <remarks>
-    /// Asked here as well as at delivery, and by the same policy on purpose. The reasons an address is
-    /// refused by its NAME - cleartext, or a host spelling out this deployment's own network - are true
-    /// the moment the receiver writes it, so accepting the stream and refusing every push afterwards
-    /// tells the receiver nothing: its create succeeded, and the refusal lives only in a log it cannot
-    /// read. Two checks over one fact would drift; one policy consulted twice cannot.
-    ///
-    /// <see cref="ReceiverAddressPolicy.RejectionOfName"/> rather than the whole question, because what
-    /// a name RESOLVES to is not settled at registration: it is looked up again for every pass, and a
-    /// resolver that is briefly down is a condition an operator recovers from - which delivery treats as
-    /// one by holding the queue. Answered here it would become a terminal 400, and a receiver
-    /// registering while its own record is still propagating could not tell that from a permanent
-    /// refusal. Asking only the fixed half also keeps this endpoint from driving the transmitter's
-    /// resolver at request rate against names a caller chooses.
-    ///
-    /// Poll delivery is not judged: the address in it is this transmitter's own, minted by
-    /// <see cref="PollEndpointLocator"/> rather than proposed from outside, and nothing arrives from the
-    /// receiver to judge.
-    ///
-    /// Every method is named and an unnamed one throws, though nothing can reach that arm as the code
-    /// stands: <see cref="ResolveDelivery"/> answers null for a method this transmitter does not serve,
-    /// and the caller refuses before asking here. The arm is for the day somebody teaches that method a
-    /// third delivery and not this one. The build is green either way, so the choice is between a loud
-    /// throw and a quiet "nothing to judge" that exempts the new method from the check - and a delivery
-    /// method carries an address from somewhere, so the exemption is the shape this guards against.
-    /// </remarks>
-    private string? AddressRefusalOf(StreamDeliveryMethod delivery)
-        => delivery switch
-        {
-            PushDeliveryMethod push => addressPolicy.RejectionOfName(push.EndpointUrl),
-            PollDeliveryMethod => null,
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(delivery),
-                delivery.Method,
-                "This delivery method has no address rule, so nothing decided whether its endpoint may "
-                    + "be used. Name it here rather than letting it deliver unjudged."),
-        };
-
-    /// <summary>
-    /// "events_delivered" as SSF 1.0 Section 8.1.1 defines it: a subset of the intersection of
-    /// supported and requested, kept in the receiver's request order.
-    /// </summary>
-    private IReadOnlyList<string> DeliveredOf(IReadOnlyList<string>? requested)
-        => requested is null
-            ? []
-            : [.. requested.Where(eventType => options.EventsSupported.Contains(eventType, StringComparer.Ordinal))];
 
     private async Task<ManagementResult<StreamConfiguration>> SaveConfigurationAsync(
         StreamState stream,
