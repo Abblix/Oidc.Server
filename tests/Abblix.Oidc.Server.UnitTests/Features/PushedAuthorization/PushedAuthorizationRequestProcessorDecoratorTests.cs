@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -16,6 +17,8 @@ using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -29,16 +32,27 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
 {
     private readonly Mock<IAuthorizationRequestProcessor> _inner;
     private readonly Mock<IAuthorizationRequestStorage> _storage;
+    private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
+    private readonly FakeTimeProvider _timeProvider = new();
+    private readonly OidcOptions _options = new() { LoginSessionExpiresIn = TimeSpan.FromMinutes(7) };
     private readonly PushedAuthorizationRequestProcessorDecorator _decorator;
 
     public PushedAuthorizationRequestProcessorDecoratorTests()
     {
         _inner = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
         _storage = new Mock<IAuthorizationRequestStorage>(MockBehavior.Strict);
-        _decorator = new PushedAuthorizationRequestProcessorDecorator(_inner.Object, _storage.Object);
+        _decorator = new PushedAuthorizationRequestProcessorDecorator(
+            _inner.Object,
+            _storage.Object,
+            _consumedRequestUris.Object,
+            Options.Create(_options),
+            _timeProvider);
     }
 
-    private static ValidAuthorizationRequest CreateValidRequest(Uri? requestUri)
+    private static ValidAuthorizationRequest CreateValidRequest(
+        Uri? requestUri,
+        DateTimeOffset? promptedAt = null,
+        Uri? pushedBy = null)
     {
         var model = new AuthorizationRequest
         {
@@ -47,6 +61,8 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [Scopes.OpenId],
             PushedRequestUri = requestUri,
+            PromptedAt = promptedAt,
+            OriginRequestUri = pushedBy,
         };
         var context = new AuthorizationValidationContext(model)
         {
@@ -76,6 +92,47 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     }
 
     /// <summary>
+    /// A success reached through the login page consumes both the request_uri it came back with and the one the
+    /// client pushed the request under, which would otherwise outlive the code.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_SuccessThroughLoginPage_ConsumesPushedRequestUriToo()
+    {
+        var pageUri = new Uri("urn:ietf:params:oauth:request_uri:login-page");
+        var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = CreateValidRequest(pageUri, pushedBy: pushedUri);
+        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _storage.Setup(s => s.TryGetAsync(It.IsAny<Uri>(), true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        await _decorator.ProcessAsync(request);
+
+        _storage.Verify(s => s.TryGetAsync(pageUri, true), Times.Once);
+        _storage.Verify(s => s.TryGetAsync(pushedUri, true), Times.Once);
+        _consumedRequestUris.Verify(
+            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.LoginSessionExpiresIn),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// A code issued on the request_uri the flow began with still records the end of the flow: a page that flow
+    /// was sent to before is one of its pages all the same.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_SuccessOnRequestUriFlowBeganWith_RecordsFlowEnded()
+    {
+        var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = CreateValidRequest(pushedUri, pushedBy: pushedUri);
+        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _storage.Setup(s => s.TryGetAsync(pushedUri, true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        await _decorator.ProcessAsync(request);
+
+        _consumedRequestUris.Verify(
+            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.LoginSessionExpiresIn),
+            Times.Once);
+    }
+
+    /// <summary>
     /// A success on a non-pushed request (no request_uri) leaves storage untouched.
     /// </summary>
     [Fact]
@@ -87,6 +144,24 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         await _decorator.ProcessAsync(request);
 
         _storage.Verify(s => s.TryGetAsync(It.IsAny<Uri>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A request coming back from the login or account-creation page and moving on to another page leaves the
+    /// request_uri of the page it came back from behind: the next page has a request_uri of its own, and the one it
+    /// came back with would otherwise let the end user's browser skip signing in again until it expires.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ReturnFromPromptedPageSentOnward_ConsumesRequestUri()
+    {
+        var requestUri = new Uri("urn:ietf:params:oauth:request_uri:login-page");
+        var request = CreateValidRequest(requestUri, promptedAt: DateTimeOffset.UnixEpoch);
+        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(new LoginRequired(request.Model));
+        _storage.Setup(s => s.TryGetAsync(requestUri, true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        await _decorator.ProcessAsync(request);
+
+        _storage.Verify(s => s.TryGetAsync(requestUri, true), Times.Once);
     }
 
     /// <summary>

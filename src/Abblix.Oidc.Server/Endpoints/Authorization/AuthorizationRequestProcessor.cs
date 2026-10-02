@@ -63,15 +63,18 @@ public class AuthorizationRequestProcessor(
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
 		var (authSessions, authenticationLevelUnmet) = await GetAvailableAuthSessionsAsync(request);
 
+		var (prompt, sessionsAnswering) = PromptStillAsked(model, authSessions);
+		authSessions = sessionsAnswering;
+
 		AuthSession authSession;
-		switch (authSessions.Count, model.Prompt)
+		switch (authSessions.Count, prompt)
 		{
 			// Initiating User Registration via OpenID Connect 1.0: prompt=create takes the user to
 			// the account-creation experience regardless of whether a session exists. An OP that
 			// advertises create in prompt_values_supported must act on it. Without its own arm the
 			// value falls through to the generic branches and the registration intent is lost.
 			case (_, Prompts.Create):
-				return new RegistrationRequired(model);
+				return new RegistrationRequired(model with { PromptedAt = clock.GetUtcNow() });
 
 			// A request requiring an authentication level, forbidding interaction and left with no session is
 			// the failed authentication attempt section 5.5.1.1 demands, and the OpenID Foundation gives it a
@@ -110,7 +113,7 @@ public class AuthorizationRequestProcessor(
 			// If no sessions exist, or the request explicitly asks for a login, prompt the user for login.
 			case (0, _) or (_, Prompts.Login):
 				// Otherwise, prompt the user to log in.
-				return new LoginRequired(model);
+				return SendToLogin(model, prompt);
 
 			// If multiple sessions exist, or the request requires account selection, prompt the user to select an account.
 			case (> 1, _) or (_, Prompts.SelectAccount):
@@ -273,6 +276,36 @@ public class AuthorizationRequestProcessor(
 
 		// Return the final authorization result containing codes and tokens as needed.
 		return result;
+	}
+
+	/// <summary>
+	/// Sends the end user to log in, stamping the request with the moment when the client asked for that login,
+	/// so the request coming back with a session opened since is not sent there again.
+	/// </summary>
+	private LoginRequired SendToLogin(Model.AuthorizationRequest model, string? prompt)
+		=> new(prompt == Prompts.Login ? model with { PromptedAt = clock.GetUtcNow() } : model);
+
+	/// <summary>
+	/// The prompt the request still asks for, and the sessions that may answer it.
+	/// </summary>
+	/// <remarks>
+	/// The request comes back from the login or account-creation page still carrying prompt=login or
+	/// prompt=create, and asking again would send the end user round in a loop. A session authenticated
+	/// since the server sent the end user there is the one the client asked for, so the request proceeds
+	/// with it alone. A session's authentication time is kept to the second, so the comparison is too.
+	/// </remarks>
+	private static (string? Prompt, List<AuthSession> Sessions) PromptStillAsked(
+		Model.AuthorizationRequest model,
+		List<AuthSession> authSessions)
+	{
+		if (model.Prompt is not (Prompts.Login or Prompts.Create) || model.PromptedAt is not { } promptedAt)
+			return (model.Prompt, authSessions);
+
+		var openedSince = authSessions
+			.Where(session => promptedAt.ToUnixTimeSeconds() <= session.AuthenticationTime.ToUnixTimeSeconds())
+			.ToList();
+
+		return openedSince.Count > 0 ? (null, openedSince) : (model.Prompt, authSessions);
 	}
 
 	/// <summary>

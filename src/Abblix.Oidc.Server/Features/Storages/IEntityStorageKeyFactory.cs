@@ -53,6 +53,13 @@ public interface IEntityStorageKeyFactory
     string AuthorizationRequestKey(Uri requestUri);
 
     /// <summary>
+    /// Generates a storage key for the record that a request URN's flow ended with a code or token.
+    /// </summary>
+    /// <param name="requestUri">The request URN the flow began with.</param>
+    /// <returns>A formatted storage key for the record, never one a stored request is held under.</returns>
+    string ConsumedRequestUriKey(Uri requestUri);
+
+    /// <summary>
     /// Generates a storage key for an authorized grant by authorization code.
     /// </summary>
     /// <param name="authorizationCode">The OAuth 2.0 authorization code.</param>

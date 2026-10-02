@@ -86,6 +86,18 @@ public class EntityStorageKeyFactoryTests
     }
 
     /// <summary>
+    /// The record that a flow ended is never held under the key of a stored request, so writing it cannot replace
+    /// a request still in flight.
+    /// </summary>
+    [Fact]
+    public void ConsumedRequestUriKey_IsNeverSpelledLikeRequestKey()
+    {
+        var requestUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+
+        Assert.NotEqual(Factory.AuthorizationRequestKey(requestUri), Factory.ConsumedRequestUriKey(requestUri));
+    }
+
+    /// <summary>
     /// Distinct attempts from distinct sources never share a key, however the source is spelled.
     /// </summary>
     /// <remarks>

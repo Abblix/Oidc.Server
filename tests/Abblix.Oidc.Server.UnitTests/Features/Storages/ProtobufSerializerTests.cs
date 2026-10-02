@@ -171,6 +171,20 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
+    /// The record that a flow ended survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_ConsumedRequestUri_RoundTrip()
+    {
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        var record = _serializer.Deserialize<ConsumedRequestUri>(
+            _serializer.Serialize(new ConsumedRequestUri { ConsumedAt = instant.ToTimestamp() }));
+
+        Assert.Equal(instant, record?.ConsumedAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
     /// The shapes named here do not reach the JSON fallback, which is the reason they have definitions at all.
     /// </summary>
     /// <remarks>
@@ -217,6 +231,8 @@ public class ProtobufSerializerTests
             composite.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
         composite.Deserialize<NonceSecret>(
             composite.Serialize(new NonceSecret { Value = ByteString.CopyFromUtf8("a-rotation-secret") }));
+        composite.Deserialize<ConsumedRequestUri>(
+            composite.Serialize(new ConsumedRequestUri { ConsumedAt = instant.ToTimestamp() }));
 
         Assert.Empty(recorder.Entries);
     }

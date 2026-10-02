@@ -42,8 +42,16 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         var fetchResult = await requestObjectFetcher.FetchAsync(
             request, request.Request, client => client.RequestObjectSigningAlgorithm);
 
+        // The merge rebuilds the request from its wire form, which leaves out what the server set on the request it
+        // stored: carried over, or a pushed request_uri is never consumed and a stored request never learns the end
+        // user was sent to log in
         return fetchResult
-            .Bind(merged => ValidateMergedParameters(request, merged))
+            .Bind(merged => ValidateMergedParameters(request, merged with
+            {
+                PushedRequestUri = request.PushedRequestUri,
+                OriginRequestUri = request.OriginRequestUri,
+                PromptedAt = request.PromptedAt,
+            }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
 

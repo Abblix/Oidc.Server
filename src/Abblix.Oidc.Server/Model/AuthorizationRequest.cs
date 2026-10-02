@@ -222,6 +222,25 @@ public record AuthorizationRequest
 	public Uri? PushedRequestUri { get; init; }
 
 	/// <summary>
+	/// When the server last sent the end user to log in or to create an account for this request, set by the
+	/// server and kept with the request it stores for that page. A session authenticated since then is the one
+	/// <c>prompt=login</c> or <c>prompt=create</c> asked for, so the request coming back with it proceeds rather
+	/// than sending the end user to the page again. Kept off the wire, so no client can claim it.
+	/// </summary>
+	[JsonIgnore]
+	public DateTimeOffset? PromptedAt { get; init; }
+
+	/// <summary>
+	/// The request URN this request was first fetched under - the one the client pushed it under (RFC 9126), or that
+	/// of the first page a request sent by value was stored for - set by the server and kept with the request it
+	/// stores for each page the end user is sent to. The request comes back from a page under a URN of that page's
+	/// own, so this is how the first URN is consumed once a code or token is issued. Kept off the wire, so no client
+	/// can claim it.
+	/// </summary>
+	[JsonIgnore]
+	public Uri? OriginRequestUri { get; init; }
+
+	/// <summary>
 	/// Specifies the resource for which the access token is requested.
 	/// As defined in RFC 8707, this parameter is used to request access tokens with a specific scope for a particular
 	/// resource.

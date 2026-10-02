@@ -30,11 +30,13 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// The storage system used to retrieve pushed authorization request objects.</param>
 /// <param name="clientInfoProvider">
 /// Resolves the requesting client's registration to enforce the per-client PAR requirement.</param>
+/// <param name="consumedRequestUris">The flows that ended, whose remaining pages are refused.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
     IIssuerSettings issuerSettings,
     IAuthorizationRequestStorage authorizationRequestStorage,
-    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
+    IClientInfoProvider clientInfoProvider,
+    IConsumedRequestUriRegistry consumedRequestUris) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously retrieves the pushed authorization request object associated with the specified URN.
@@ -69,6 +71,14 @@ public class PushedRequestFetcher(
             // when the flow completes, by PushedAuthorizationRequestProcessorDecorator, which
             // consumes the request_uri carried forward below once a code or token is issued.
             var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, shouldRemove: false);
+
+            // A page of a flow that already ended with a code, as a refresh of the page made
+            if (requestObject?.OriginRequestUri is { } originRequestUri &&
+                await consumedRequestUris.IsConsumedAsync(originRequestUri))
+            {
+                return ErrorFactory.InvalidRequestUri($"The request by {requestUrn} has already been used");
+            }
+
             return requestObject switch
             {
                 null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
@@ -76,7 +86,13 @@ public class PushedRequestFetcher(
                 // Carry the URN forward on a dedicated, non-wire field - not RequestUri, whose https
                 // validation a urn: value would fail in the next fetcher - so the validator can surface it
                 // on ValidAuthorizationRequest and the single-use decorator can consume it at code issuance.
-                _ => requestObject with { PushedRequestUri = requestUrn },
+                // The first URN the request was fetched under is kept across the pages it is stored for, so it is
+                // consumed with the last one
+                _ => requestObject with
+                {
+                    PushedRequestUri = requestUrn,
+                    OriginRequestUri = requestObject.OriginRequestUri ?? requestUrn,
+                },
             };
         }
 
