@@ -53,33 +53,7 @@ public static class RequestedClaimsExtensions
             details is null)
             return Array.Empty<string>();
 
-        string? value = null;
-        if (details.Value is not null && !TryReadQualifier(details.Value, out value))
-            return MalformedSubject;
-
-        string[]? values = null;
-        if (details.Values is { } requestedValues)
-        {
-            values = new string[requestedValues.Length];
-            for (var i = 0; i < requestedValues.Length; i++)
-            {
-                if (!TryReadQualifier(requestedValues[i], out var subject))
-                    return MalformedSubject;
-
-                values[i] = subject;
-            }
-        }
-
-        return (value, values) switch
-        {
-            (null, null) => Array.Empty<string>(),
-            (null, []) => NoAcceptableSubject,
-            (null, { } many) => many,
-            ({ } one, null) => new[] { one },
-            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal)
-                ? new[] { one }
-                : NoAcceptableSubject,
-        };
+        return details.AcceptedValues(MalformedSubject, NoAcceptableSubject);
     }
 
     /// <summary>
@@ -114,33 +88,7 @@ public static class RequestedClaimsExtensions
             details is not { Essential: true })
             return Array.Empty<string>();
 
-        string? value = null;
-        if (details.Value is not null && !TryReadQualifier(details.Value, out value))
-            return MalformedAcr;
-
-        string[]? values = null;
-        if (details.Values is { } requestedValues)
-        {
-            values = new string[requestedValues.Length];
-            for (var i = 0; i < requestedValues.Length; i++)
-            {
-                if (!TryReadQualifier(requestedValues[i], out var level))
-                    return MalformedAcr;
-
-                values[i] = level;
-            }
-        }
-
-        return (value, values) switch
-        {
-            (null, null) => Array.Empty<string>(),
-            (null, []) => NoAcceptableAcr,
-            (null, { } many) => many,
-            ({ } one, null) => new[] { one },
-            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal)
-                ? new[] { one }
-                : NoAcceptableAcr,
-        };
+        return details.AcceptedValues(MalformedAcr, NoAcceptableAcr);
     }
 
     /// <summary>
@@ -155,6 +103,67 @@ public static class RequestedClaimsExtensions
     public static bool AcceptsAuthenticationLevel(this RequestedClaims? claims, string? level)
         => claims.RequiredAuthContextClassRefs().TryGetSuccess(out var levels) &&
            AuthenticationLevels.Accept(levels, level);
+
+    /// <summary>
+    /// The values a requested claim's qualifiers accept together, or a failure when one of them is malformed
+    /// or the two leave nothing acceptable.
+    /// </summary>
+    /// <remarks>
+    /// A helper parameterized by each public reader: the reader passes the refusals that are specific to its
+    /// claim, and this reads the qualifiers and then combines them the same way for all of them.
+    /// </remarks>
+    /// <param name="details">The requested claim's qualifiers.</param>
+    /// <param name="malformed">The refusal for a qualifier that is not a string.</param>
+    /// <param name="noneAcceptable">The refusal for qualifiers nothing can satisfy.</param>
+    private static Result<string[], string> AcceptedValues(
+        this RequestedClaimDetails details,
+        string malformed,
+        string noneAcceptable)
+        => TryReadQualifiers(details, out var value, out var values)
+            ? Combined(value, values, noneAcceptable)
+            : malformed;
+
+    /// <summary>
+    /// Reads both qualifiers of a requested claim, failing when either holds a value that is not a string.
+    /// </summary>
+    private static bool TryReadQualifiers(RequestedClaimDetails details, out string? value, out string[]? values)
+    {
+        value = null;
+        values = null;
+        if (details.Value is not null && !TryReadQualifier(details.Value, out value))
+            return false;
+
+        if (details.Values is not { } requestedValues)
+            return true;
+
+        var read = new string[requestedValues.Length];
+        for (var i = 0; i < requestedValues.Length; i++)
+        {
+            if (!TryReadQualifier(requestedValues[i], out var qualifier))
+                return false;
+
+            read[i] = qualifier;
+        }
+
+        values = read;
+        return true;
+    }
+
+    /// <summary>
+    /// What <c>value</c> and <c>values</c> accept together: <c>value</c> AND one of <c>values</c>, each
+    /// constraining only when present.
+    /// </summary>
+    private static Result<string[], string> Combined(string? value, string[]? values, string noneAcceptable)
+        => (value, values) switch
+        {
+            (null, null) => Array.Empty<string>(),
+            (null, []) => noneAcceptable,
+            (null, { } many) => many,
+            ({ } one, null) => new[] { one },
+            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal)
+                ? new[] { one }
+                : noneAcceptable,
+        };
 
     private const string MalformedAcr = "The acr claim was requested with a value that is not a string";
 

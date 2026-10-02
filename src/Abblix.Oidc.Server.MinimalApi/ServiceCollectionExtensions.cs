@@ -7,15 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization.Metadata;
-using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
-using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Utils.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -104,30 +100,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
 
         // Response formatters turn a core result into an IResult. TryAdd lets a host swap any of them.
-        services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
-
-        services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
-        services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
-        services.TryAddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>();
-
-        services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
-        services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
-        services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
-        services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
-        services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
-        services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
-        services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
-
-        services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
-        services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
-
-        services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
-
-        services.TryAddScoped<RegistrationClientUriBuilder>();
-        services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
-        services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
-        services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
-        services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
+        services
+            .AddOidcProtocolFormatters()
+            .AddOidcInteractionFormatters();
 
         // Results.Json serializes through Http.Json options (not MVC's), so the null-omission modifier the OIDC
         // wire format relies on is attached there. WithAddedModifier extends the resolver already in place rather

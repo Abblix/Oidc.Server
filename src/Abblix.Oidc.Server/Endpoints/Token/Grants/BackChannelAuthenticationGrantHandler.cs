@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -14,12 +13,9 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
@@ -39,159 +35,22 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="keyFactory">Names the key that instant lives under.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
-/// <param name="logger">Records a refusal the client is deliberately told nothing specific about.</param>
-/// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
-/// authorization_details are still acceptable, which is the only comparison that can see inside an
-/// entry.</param>
-/// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
+/// <param name="serviceProvider">Resolves the mode-specific grant processors and the redeemer that judges an
+/// authenticated request before it is exchanged for tokens. The redeemer is internal and registered by
+/// <c>AddBackChannelAuthentication</c>, so a provider built without that call cannot construct the handler.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
-/// <param name="subjectTypeConverter">
-/// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
-/// against the end user the original request named.
-/// </param>
-public partial class BackChannelAuthenticationGrantHandler(
-    ILogger<BackChannelAuthenticationGrantHandler> logger,
+public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
     IPollScheduleStore pollSchedule,
     IEntityStorageKeyFactory keyFactory,
-    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
-    ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
-    /// <summary>
-    /// Whether this grant belongs to the end user the request named, or the request named nobody.
-    /// </summary>
-    /// <remarks>
-    /// The name is taken from the request as it was read, since it is written once when the request is
-    /// created and a host has no reason to touch it. What a host does replace is the session, which is what
-    /// each caller passes in.
-    /// </remarks>
-    private bool NamesTheRequestedEndUser(
-        string[]? requestedSubjects, AuthorizedGrant grant, ClientInfo clientInfo)
-        => requestedSubjects is not { } accepted ||
-           subjectTypeConverter.Names(grant.AuthSession, accepted, clientInfo);
-
-    /// <summary>
-    /// Redeems an authenticated request, refusing it when the end user who authenticated is not one it
-    /// named.
-    /// </summary>
-    /// <remarks>
-    /// OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token
-    /// for a different user, even if they have an active session with the Authorization Server". In a
-    /// decoupled flow the end user authenticates out of band, so what the request named is compared against
-    /// whoever the host reported by the time a grant is asked for.
-    /// <para>
-    /// Judged twice, on two different objects, because one comparison cannot do both jobs. Before the
-    /// request is consumed, so an ordinary mismatch spends nothing - redeeming removes the stored entry.
-    /// And again on the grant the processor returned, because the processor consumes the stored request
-    /// itself, and between the earlier read and that removal a host - writing to that same storage through
-    /// the public seam - can replace what is stored. Judging only the earlier copy would approve one grant and hand over another.
-    /// </para>
-    /// </remarks>
-    private async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
-        string authenticationRequestId,
-        StoredRequest request,
-        ClientInfo clientInfo,
-        IBackChannelGrantProcessor processor)
-    {
-        // Refused before the request is consumed, so an ordinary mismatch costs the client nothing it could
-        // have used: redeeming removes the entry, and a request answerable only for the wrong end user is
-        // worth keeping just long enough to say so again if the client polls twice.
-        if (!NamesTheRequestedEndUser(request.RequestedSubjects, request.AuthorizedGrant, clientInfo))
-            return NotTheRequestedEndUser();
-
-        if (WidensTheRequest(request, request.AuthorizedGrant))
-            return NotWhatTheRequestAskedFor();
-
-        // The completion path refuses an authentication at a level the request's essential acr does not
-        // accept, but a host writing Authenticated straight into the storage it owns never passes through
-        // it, and the client then simply polls. OpenID Connect Core 1.0 Section 5.5.1.1 makes that outcome a
-        // failed authentication attempt either way.
-        string[]? recordedLevels = request.RequiredAuthContextClassRefs is { } recorded ? [..recorded] : null;
-        var requiredClaims = request.AuthorizedGrant.Context.RequestedClaims;
-        if (!AuthenticationLevels.Accept(recordedLevels, requiredClaims, request.AuthorizedGrant.AuthSession.AuthContextClassRef))
-            return NotTheRequiredAuthenticationLevel();
-
-        // Whom the request named, read before the processor is handed the request. The comparison below
-        // exists because what is stored can change between the two checks; taking its yardstick from the
-        // same object the processor holds would let one change move both sides together. The level's
-        // yardstick above is read before the same call for the same reason.
-        string[]? namedEndUsers = request.RequestedSubjects is { } named ? [..named] : null;
-
-        var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
-        if (result.TryGetFailure(out var error))
-            return error;
-
-        var grant = result.GetSuccess();
-
-        // Judged again, on what was actually consumed. The processor removes the stored entry and returns
-        // the grant it found there, so between the check above and that removal a host - writing to that
-        // same storage through the public seam - can replace what is stored, which is the ordinary shape
-        // of a retried or corrected completion rather than an attack. Approving one grant and handing over
-        // another is the whole failure this comparison exists to prevent.
-        if (!NamesTheRequestedEndUser(namedEndUsers, grant, clientInfo))
-            return NotTheRequestedEndUser();
-
-        if (!AuthenticationLevels.Accept(recordedLevels, requiredClaims, grant.AuthSession.AuthContextClassRef))
-            return NotTheRequiredAuthenticationLevel();
-
-        // And the same for what the grant authorises. The completion path judges this too, but a host can
-        // complete with a narrowed grant and then store a wider one before the client polls - the same
-        // window the subject comparison above exists for, and the same answer.
-        if (WidensTheRequest(request, grant))
-            return NotWhatTheRequestAskedFor();
-
-        // And what the type comparison structurally cannot see: an entry of a type the request DID ask
-        // for, carrying content it did not. RFC 9396 section 6.1 leaves that to the type's own validator, so this
-        // asks it - on a copy, because the question must not rewrite its own subject. Without the caller's
-        // cancellation token, because the request is already taken: giving up here would spend it and issue
-        // nothing, where finishing issues tokens a departed client simply never reads.
-        if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, CancellationToken.None)
-            is not { } refusal)
-            return grant;
-
-        // The reason goes to the log and a fixed string to the client: a granted-phase rejection names
-        // a host-side defect, and its text is written for whoever has to fix it.
-        LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
-        return refusal.Error;
-    }
-
-    private static OidcError NotTheRequestedEndUser()
-        => new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
-
-    private static OidcError NotTheRequiredAuthenticationLevel()
-        => new(ErrorCodes.AccessDenied, "The end user authenticated at a level the request does not accept");
-
-    private static OidcError NotWhatTheRequestAskedFor()
-        => new(ErrorCodes.AccessDenied,
-            "The grant carries authorization_details the authentication request did not ask for");
-
-    /// <summary>
-    /// Whether the grant carries an <c>authorization_details</c> type the request never asked for.
-    /// </summary>
-    /// <remarks>
-    /// Types only, for the reason the completion path gives: RFC 9396 section 6.1 defines no universal
-    /// comparator for
-    /// intra-entry narrowing. A null baseline means the request predates the field rather than asked for
-    /// nothing, and is left alone, since refusing it would deny an authentication the end user approved
-    /// before the upgrade.
-    /// </remarks>
-    private static bool WidensTheRequest(StoredRequest request, AuthorizedGrant grant)
-    {
-        if (grant.Context.AuthorizationDetails is not { Count: > 0 } granted ||
-            request.RequestedAuthorizationDetails is not { } requested)
-            return false;
-
-        if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
-            return true;
-
-        var requestedTypes = AuthorizationDetailTypes.NamedBy(requested);
-
-        return !typed.All(detail => detail.Type is { } type && requestedTypes.Contains(type));
-    }
+    // Resolved rather than injected: the redeemer is internal, and a public constructor cannot name it.
+    private readonly BackChannelGrantRedeemer _redeemer =
+        serviceProvider.GetRequiredService<BackChannelGrantRedeemer>();
 
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
@@ -272,7 +131,7 @@ public partial class BackChannelAuthenticationGrantHandler(
 
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                => await RedeemAsync(
+                => await _redeemer.RedeemAsync(
                     request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the user has not yet been authenticated and the request is still pending, either
@@ -434,7 +293,7 @@ public partial class BackChannelAuthenticationGrantHandler(
         switch (updatedRequest)
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
-                return await RedeemAsync(
+                return await _redeemer.RedeemAsync(
                     authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:

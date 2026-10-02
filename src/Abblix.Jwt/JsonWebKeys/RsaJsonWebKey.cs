@@ -140,11 +140,12 @@ public sealed record RsaJsonWebKey : JsonWebKey
     /// <c>dp</c>, <c>dq</c>, <c>qi</c>), since those alone reconstruct the private key.
     /// </remarks>
     [JsonIgnore]
-    public override bool HasPrivateKey
-        => PrivateExponent is { Length: > 0 }
-        || FirstPrimeFactor is { Length: > 0 }
-        || SecondPrimeFactor is { Length: > 0 }
-        || FirstFactorCrtExponent is { Length: > 0 }
+    public override bool HasPrivateKey => PrivateExponent is { Length: > 0 } || HasPrimeFactors || HasCrtValues;
+
+    private bool HasPrimeFactors => FirstPrimeFactor is { Length: > 0 } || SecondPrimeFactor is { Length: > 0 };
+
+    private bool HasCrtValues
+        => FirstFactorCrtExponent is { Length: > 0 }
         || SecondFactorCrtExponent is { Length: > 0 }
         || FirstCrtCoefficient is { Length: > 0 };
 

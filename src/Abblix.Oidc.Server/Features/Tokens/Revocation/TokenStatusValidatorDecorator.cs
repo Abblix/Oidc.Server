@@ -68,9 +68,23 @@ public class TokenStatusValidatorDecorator(
 		if (!result.TryGetSuccess(out var token))
 			return result;
 
-		// Checked before the per-token arms below, and outside them: a cutoff is a fact about the principal
+		// Chain of Responsibility: what is recorded about the principal, then about the token's grant family,
+		// then about the token itself; the first refusal answers
+		var refusal = await CutoffRefusalAsync(token, parameters)
+		              ?? await GrantFamilyRefusalAsync(token)
+		              ?? await TokenStatusRefusalAsync(token);
+
+		return refusal ?? result;
+	}
+
+	/// <summary>
+	/// The refusal a revocation cutoff on the principal behind <paramref name="token"/> produces, if any.
+	/// </summary>
+	private async Task<JwtValidationError?> CutoffRefusalAsync(JsonWebToken token, ValidationParameters parameters)
+	{
+		// Checked before the per-token links, and outside them: a cutoff is a fact about the principal
 		// rather than about one token, so it must also refuse a token that carries no identifier of its
-		// own. Those arms are all guarded by jti, which RFC 7519 Section 4.1.7 makes OPTIONAL. Access
+		// own. Those links are all guarded by jti, which RFC 7519 Section 4.1.7 makes OPTIONAL. Access
 		// tokens do carry one - RFC 9068 Section 2.2 makes it REQUIRED for the at+jwt profile they use -
 		// so the tokens this placement actually protects are the rest of what this server mints.
 		//
@@ -79,45 +93,60 @@ public class TokenStatusValidatorDecorator(
 		// reads this token as a reference to something past rather than as authority. The logout endpoint is
 		// exactly that - an id_token_hint names the session that just ended, and refusing it because that
 		// session was revoked would break the second logout of a session the first one revoked.
-		if (parameters.Options.HasFlag(ValidationOptions.ValidateLifetime)
-			&& await cutoffChecker.CheckAsync(token.Payload) is { } cutoffError)
-			return cutoffError;
+		if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
+			return null;
 
-		if (token.Payload.JwtId is { } jwtId)
+		return await cutoffChecker.CheckAsync(token.Payload);
+	}
+
+	/// <summary>
+	/// The refusal a revoked grant family produces for an identified <paramref name="token"/> exercising it.
+	/// </summary>
+	private async Task<JwtValidationError?> GrantFamilyRefusalAsync(JsonWebToken token)
+	{
+		// A token exercising a family's authority carries its grant id (Payload.GrantId); the rest leave it
+		// null, so the family logic is inert for them. A revoked grant is a kill switch that outlives any single
+		// token: once one member's replay trips it, every member of the family - including the currently active
+		// refresh token and the access tokens minted beside them - is rejected here on its next use
+		// (RFC 9700 section 4.14.2).
+		if (token.Payload is not { JwtId: not null, GrantId: { } grantId })
+			return null;
+
+		return await tokenRegistry.GetStatusAsync(grantId) == JsonWebTokenStatus.Revoked
+			? new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked")
+			: null;
+	}
+
+	/// <summary>
+	/// The refusal what is recorded about an identified <paramref name="token"/> itself produces, if any.
+	/// </summary>
+	private async Task<JwtValidationError?> TokenStatusRefusalAsync(JsonWebToken token)
+	{
+		if (token.Payload.JwtId is not { } jwtId)
+			return null;
+
+		switch (await tokenRegistry.GetStatusAsync(jwtId))
 		{
-			// A token exercising a family's authority carries its grant id (Payload.GrantId); the rest leave it
-			// null, so the family logic below is inert for them. A
-			// revoked grant is a kill switch that outlives any single token: once one member's replay trips it,
-			// every member of the family - including the currently active refresh token and the access tokens
-			// minted beside them - is rejected here on its next use (RFC 9700 section 4.14.2).
-			var grantId = token.Payload.GrantId;
+			case JsonWebTokenStatus.Used:
+				// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
+				// so revoke the whole grant family; the active token dies with it on its next use.
+				if (token.Payload is { GrantId: { } grantId, ExpiresAt: { } grantExpiresAt })
+					await tokenRegistry.SetStatusAsync(grantId, JsonWebTokenStatus.Revoked, grantExpiresAt);
 
-			if (grantId is not null && await tokenRegistry.GetStatusAsync(grantId) == JsonWebTokenStatus.Revoked)
-				return new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked");
+				return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
 
-			switch (await tokenRegistry.GetStatusAsync(jwtId))
-			{
-				case JsonWebTokenStatus.Used:
-					// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
-					// so revoke the whole grant family; the active token dies with it on its next use.
-					if (grantId is not null && token.Payload.ExpiresAt is { } grantExpiresAt)
-						await tokenRegistry.SetStatusAsync(grantId, JsonWebTokenStatus.Revoked, grantExpiresAt);
+			case JsonWebTokenStatus.Revoked:
+				return new JwtValidationError(JwtError.TokenRevoked, "Token was revoked");
 
-					return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
-
-				case JsonWebTokenStatus.Revoked:
-					return new JwtValidationError(JwtError.TokenRevoked, "Token was revoked");
-
-				case JsonWebTokenStatus.Unknown:
-					// Nothing is recorded about this token, which is what an ordinary one looks like: the
-					// registry holds an entry only once a token has been rotated or revoked. Spelled out
-					// rather than left to fall through, because acceptance is the outcome here and a status
-					// added later must not inherit it silently. TokenStatusCoverageTests walks the enum and
-					// fails when one does.
-					break;
-			}
+			case JsonWebTokenStatus.Unknown:
+				// Nothing is recorded about this token, which is what an ordinary one looks like: the
+				// registry holds an entry only once a token has been rotated or revoked. Spelled out
+				// rather than left to fall through, because acceptance is the outcome here and a status
+				// added later must not inherit it silently. TokenStatusCoverageTests walks the enum and
+				// fails when one does.
+				break;
 		}
 
-		return result;
+		return null;
 	}
 }

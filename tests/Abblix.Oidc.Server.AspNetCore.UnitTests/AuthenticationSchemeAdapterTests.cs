@@ -464,6 +464,76 @@ public class AuthenticationSchemeAdapterTests
 	}
 
 	[Fact]
+	public async Task RoundTrip_FloatAndDecimalAdditionalClaims_KeepTheirTypes()
+	{
+		var result = await RoundTripAsync(Session(new JsonObject
+		{
+			["f"] = JsonValue.Create(1.5f),
+			["m"] = JsonValue.Create(12.345m),
+		}));
+
+		var claims = result!.AdditionalClaims!;
+		Assert.Equal(1.5f, claims["f"]!.GetValue<float>());
+		Assert.Equal(12.345m, claims["m"]!.GetValue<decimal>());
+	}
+
+	/// <summary>
+	/// A number parsed from JSON text converts to every numeric kind wide enough to hold it, so the kind it reads
+	/// back as is decided by the order the formats are tried in rather than by the value: reordering two formats
+	/// that can both write it changes the CLR type a host gets back.
+	/// </summary>
+	[Theory]
+	[InlineData("42", typeof(int))]
+	[InlineData("9000000000", typeof(long))]
+	[InlineData("1.5", typeof(float))]
+	public async Task RoundTrip_NumberParsedFromJson_ReadsBackAsFirstKindThatTakesIt(string json, Type expected)
+	{
+		var result = await RoundTripAsync(Session(new JsonObject { ["n"] = JsonNode.Parse(json) }));
+
+		var value = Assert.IsAssignableFrom<JsonValue>(result!.AdditionalClaims!["n"]);
+		Assert.IsType(expected, value.GetValue<object>());
+	}
+
+	/// <summary>
+	/// A claim tagged with a primitive type whose text does not parse as that type is still the host's value, so it
+	/// reads back as the raw string rather than being dropped or parsed as JSON.
+	/// </summary>
+	[Theory]
+	[InlineData(ClaimValueTypes.Boolean)]
+	[InlineData(ClaimValueTypes.Integer32)]
+	[InlineData(ClaimValueTypes.Integer64)]
+	[InlineData(ClaimValueTypes.Double)]
+	[InlineData(ClaimValueTypes.DateTime)]
+	[InlineData("http://www.w3.org/2001/XMLSchema#float")]
+	[InlineData("http://www.w3.org/2001/XMLSchema#decimal")]
+	[InlineData("urn:abblix:datetimeoffset")]
+	public async Task AuthenticateAsync_TypedClaimThatDoesNotParse_ReadsBackAsString(string valueType)
+	{
+		SetupAuthenticate(PrincipalWith(new Claim("extra", "[1]", valueType)));
+
+		var extra = (await _adapter.AuthenticateAsync())!.AdditionalClaims!["extra"];
+
+		Assert.Equal("[1]", extra!.GetValue<string>());
+	}
+
+	[Fact]
+	public async Task AuthenticateAsync_ClaimOfUnknownTypeHoldingJson_ReadsBackAsJson()
+	{
+		SetupAuthenticate(PrincipalWith(new Claim("extra", "[1]", "urn:unknown")));
+
+		var extra = (await _adapter.AuthenticateAsync())!.AdditionalClaims!["extra"];
+
+		Assert.IsType<JsonArray>(extra);
+	}
+
+	private static ClaimsPrincipal PrincipalWith(Claim extra) => new(new ClaimsIdentity([
+		new Claim(JwtClaimTypes.Subject, "user"),
+		new Claim(JwtClaimTypes.SessionId, "s"),
+		new Claim(JwtClaimTypes.AuthenticationTime, "1700000000"),
+		extra,
+	], Scheme));
+
+	[Fact]
 	public async Task RoundTrip_ArrayAdditionalClaim_StaysJsonArray()
 	{
 		var result = await RoundTripAsync(Session(new JsonObject { ["roles"] = new JsonArray("admin", "user") }));

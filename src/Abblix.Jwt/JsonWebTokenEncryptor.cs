@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -139,27 +138,33 @@ internal class JsonWebTokenEncryptor(
     /// Validates and decrypts JWE tokens using decoded byte parts and original string parts.
     /// Implements RFC 7516 (JWE) decryption.
     /// </summary>
-    [SuppressMessage("Major Code Smell", "S3776:Cognitive Complexity of methods should not be too high",
-        Justification = "The complexity is the linear sequence of RFC 7516 section 5.2 mandated validation guards " +
-                        "(base64, header JSON, enc/alg presence, decryptor resolution, per-key decryption); " +
-                        "splitting the single decrypt flow would fragment it without improving readability. " +
-                        "Covered by the JwtEncryptionTests decryption suite.")]
+    /// <remarks>
+    /// A Chain of Responsibility over the RFC 7516 section 5.2 steps: decoding, reading the protected header,
+    /// then decrypting. Each link either refuses the token with its error or hands it to the next one.
+    /// </remarks>
     public async Task<Result<byte[], JwtValidationError>> DecryptAsync(
         string[] jwtParts,
         IAsyncEnumerable<JsonWebKey> decryptionKeys,
         CancellationToken cancellationToken = default)
+        => await DecodeParts(jwtParts)
+            .Bind(ReadEnvelope)
+            .BindAsync(envelope => DecryptContentAsync(envelope, jwtParts[0], decryptionKeys, cancellationToken));
+
+    private static Result<byte[][], JwtValidationError> DecodeParts(string[] jwtParts)
     {
-        // Decode all JWE parts - invalid base64 means invalid token
-        byte[][] decodedParts;
+        // Invalid base64 means invalid token
         try
         {
-            decodedParts = Array.ConvertAll(jwtParts, static s => Base64Url.DecodeFromChars(s));
+            return Array.ConvertAll(jwtParts, static s => Base64Url.DecodeFromChars(s));
         }
         catch (FormatException)
         {
             return new JwtValidationError(JwtError.InvalidToken, "Invalid base64url encoding in JWE");
         }
+    }
 
+    private static Result<JweEnvelope, JwtValidationError> ReadEnvelope(byte[][] decodedParts)
+    {
         // Decode header JSON to get algorithms and key ID. A base64url-valid but non-JSON header (e.g. a
         // truncated object) makes JsonNode.Parse throw JsonException; catch it and map to a typed validation
         // error so an attacker-crafted JWE fails as invalid_token rather than surfacing as an unhandled 500.
@@ -213,6 +218,17 @@ internal class JsonWebTokenEncryptor(
                 $"Unknown critical header parameter in JWE header: {crit[0]}");
         }
 
+        return new JweEnvelope(decodedParts, header, algorithm, encryptionAlgorithm);
+    }
+
+    private async Task<Result<byte[], JwtValidationError>> DecryptContentAsync(
+        JweEnvelope envelope,
+        string encodedHeader,
+        IAsyncEnumerable<JsonWebKey> decryptionKeys,
+        CancellationToken cancellationToken)
+    {
+        var header = envelope.Header;
+
         // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL
         // Filter only by kid when present - algorithm compatibility is validated during decryption attempt
         if (header.KeyId.HasValue())
@@ -221,15 +237,16 @@ internal class JsonWebTokenEncryptor(
         // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
         // encryption algorithms for incoming JWE - an unregistered 'enc' yields no decryptor and is
         // rejected outright.
-        var contentDecryptor = serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(encryptionAlgorithm);
+        var contentDecryptor = serviceProvider
+            .GetKeyedService<IContentEncryptionAlgorithm>(envelope.EncryptionAlgorithm);
         if (contentDecryptor == null)
             return new JwtValidationError(JwtError.InvalidToken, "Unsupported 'enc' content encryption algorithm in JWE");
 
-        var encryptedKey = decodedParts[1];
-        var iv = decodedParts[2];
-        var ciphertext = decodedParts[3];
-        var authTag = decodedParts[4];
-        var aad = Encoding.ASCII.GetBytes(jwtParts[0]);
+        var encryptedKey = envelope.Parts[1];
+        var iv = envelope.Parts[2];
+        var ciphertext = envelope.Parts[3];
+        var authTag = envelope.Parts[4];
+        var aad = Encoding.ASCII.GetBytes(encodedHeader);
 
         var keyFound = false;
         await foreach (var key in decryptionKeys.WithCancellation(cancellationToken))
@@ -252,7 +269,8 @@ internal class JsonWebTokenEncryptor(
             // This is what makes RSA1_5 (RSAES-PKCS1-v1_5) safe to support: it closes the
             // Bleichenbacher/Manger padding oracle by removing the observable difference between valid
             // and invalid padding.
-            var contentEncryptionKey = await contentKeyDecryptor.DecryptKeyAsync(header, key, algorithm, encryptedKey, cancellationToken);
+            var contentEncryptionKey = await contentKeyDecryptor.DecryptKeyAsync(
+                header, key, envelope.Algorithm, encryptedKey, cancellationToken);
             if (contentEncryptionKey == null || contentEncryptionKey.Length != contentDecryptor.KeySizeInBytes)
                 contentEncryptionKey = CryptoRandom.GetRandomBytes(contentDecryptor.KeySizeInBytes);
 
@@ -271,4 +289,13 @@ internal class JsonWebTokenEncryptor(
             JwtError.InvalidToken,
             keyFound ? "Failed to decrypt JWE with any available key" : "No decryption keys found");
     }
+
+    /// <summary>
+    /// A JWE whose parts decoded and whose protected header names both of its algorithms.
+    /// </summary>
+    private sealed record JweEnvelope(
+        byte[][] Parts,
+        JsonWebTokenHeader Header,
+        string Algorithm,
+        string EncryptionAlgorithm);
 }

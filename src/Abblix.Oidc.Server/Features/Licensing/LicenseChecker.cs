@@ -80,39 +80,40 @@ public static partial class LicenseChecker
     /// </remarks>
     public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
     {
-        if (clientInfo != null)
+        // Guard clauses: nothing is counted for an absent client, or under a license that sets no client limit
+        if (clientInfo == null)
+            return clientInfo;
+
+        var utcNow = TimeProvider.System.GetUtcNow();
+        var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
+        if (!currentLicense.ClientLimit.HasValue)
+            return clientInfo;
+
+        _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), object>();
+        var client = (issuer.Id, clientInfo.ClientId);
+        if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
+            !_knownClientIds.ContainsKey(client))
         {
-            var utcNow = TimeProvider.System.GetUtcNow();
-            var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
-            if (currentLicense.ClientLimit.HasValue)
+            if (LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(1)))
             {
-                _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), object>();
-                var client = (issuer.Id, clientInfo.ClientId);
-                if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
-                    !_knownClientIds.ContainsKey(client))
-                {
-                    if (LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(1)))
-                    {
-                        LogClientLimitExceededByMargin(
-                            LicenseLogger.Instance,
-                            currentLicense.ClientLimit,
-                            _knownClientIds.Keys.Select(Named),
-                            Named(client));
-                    }
-
-                    return null; // Prevents processing of clients exceeding the limit by more than 30%
-                }
-
-                _knownClientIds.TryAdd(client, null!);
-                if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
-                    LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
-                {
-                    LogClientLimitExceeded(
-                        LicenseLogger.Instance,
-                        currentLicense.ClientLimit.Value,
-                        _knownClientIds.Keys.Select(Named));
-                }
+                LogClientLimitExceededByMargin(
+                    LicenseLogger.Instance,
+                    currentLicense.ClientLimit,
+                    _knownClientIds.Keys.Select(Named),
+                    Named(client));
             }
+
+            return null; // Prevents processing of clients exceeding the limit by more than 30%
+        }
+
+        _knownClientIds.TryAdd(client, null!);
+        if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
+            LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
+        {
+            LogClientLimitExceeded(
+                LicenseLogger.Instance,
+                currentLicense.ClientLimit.Value,
+                _knownClientIds.Keys.Select(Named));
         }
 
         return clientInfo;

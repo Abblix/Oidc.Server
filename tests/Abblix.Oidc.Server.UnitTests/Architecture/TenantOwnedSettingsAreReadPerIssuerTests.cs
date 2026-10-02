@@ -48,7 +48,8 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         // The server without tenants: its one issuer and the settings it serves from these options
         typeof(OptionsIssuerSettings).FullName!,
         typeof(PreconfiguredIssuerProvider).FullName!,
-        $"{typeof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions).FullName}.{nameof(Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddIssuer)}",
+        $"{typeof(Abblix.Oidc.Server.Features.IssuerServiceCollectionExtensions).FullName}." +
+        nameof(Abblix.Oidc.Server.Features.IssuerServiceCollectionExtensions.AddIssuer),
 
         // The issuer's session cookie name, derived from the configured one
         $"{typeof(TenantIssuerSettings).FullName}.get_{nameof(TenantIssuerSettings.CheckSessionCookieName)}",

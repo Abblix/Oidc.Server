@@ -40,21 +40,10 @@ internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        if (request.Options.TryGetValue(SelfAuthenticated, out var selfAuthenticated) && selfAuthenticated)
+        if (IsSelfAuthenticated(request))
             return await base.SendAsync(request, cancellationToken);
 
-        var token = await tokens.GetTokenAsync(cancellationToken);
-        if (token is null && tokens.AuthenticationConfigured)
-        {
-            // A deployment that logs in has no token only while a failed login waits out its backoff. Sending
-            // the request anyway draws Vault's answer to a request with no credentials, and that answer reads
-            // as permanent - the caller would be told never to come back over a login that is retrying. The
-            // condition is ours and it is temporary, so it is reported as what it is.
-            throw new KeyCustodianUnavailableException(
-                request.RequestUri?.AbsolutePath ?? "vault",
-                "The vault login has no token yet; a failed login is waiting out its backoff.");
-        }
-
+        var token = await GetTokenAsync(request, cancellationToken);
         if (token is not null)
         {
             // Replace rather than add: the same request may be retried through this handler, and a second header
@@ -65,20 +54,46 @@ internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
 
         var response = await base.SendAsync(request, cancellationToken);
 
-        // A refusal of a token this deployment minted is about the credential, not the request, and the login
-        // that minted it renews on its own schedule - so waiting is exactly what helps. Read from the status
-        // alone it would be permanent, and the published keys would go with it. A deployment carrying a token
-        // it did not mint has nothing that will replace it, so its refusal keeps the ordinary reading.
-        if (token is not null &&
-            tokens.AuthenticationConfigured &&
-            response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        if (token is not null && RefusesMintedToken(response))
         {
             response.Dispose();
             throw new KeyCustodianUnavailableException(
-                request.RequestUri?.AbsolutePath ?? "vault",
+                VaultPath(request),
                 "The vault refused the token this deployment logged in for.");
         }
 
         return response;
     }
+
+    private static bool IsSelfAuthenticated(HttpRequestMessage request)
+        => request.Options.TryGetValue(SelfAuthenticated, out var selfAuthenticated) && selfAuthenticated;
+
+    private async Task<string?> GetTokenAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var token = await tokens.GetTokenAsync(cancellationToken);
+        if (token is null && tokens.AuthenticationConfigured)
+        {
+            // A deployment that logs in has no token only while a failed login waits out its backoff. Sending
+            // the request anyway draws Vault's answer to a request with no credentials, and that answer reads
+            // as permanent - the caller would be told never to come back over a login that is retrying. The
+            // condition is ours and it is temporary, so it is reported as what it is.
+            throw new KeyCustodianUnavailableException(
+                VaultPath(request),
+                "The vault login has no token yet; a failed login is waiting out its backoff.");
+        }
+
+        return token;
+    }
+
+    /// <summary>
+    /// A refusal of a token this deployment minted is about the credential, not the request, and the login
+    /// that minted it renews on its own schedule - so waiting is exactly what helps. Read from the status
+    /// alone it would be permanent, and the published keys would go with it. A deployment carrying a token
+    /// it did not mint has nothing that will replace it, so its refusal keeps the ordinary reading.
+    /// </summary>
+    private bool RefusesMintedToken(HttpResponseMessage response)
+        => tokens.AuthenticationConfigured &&
+           response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+
+    private static string VaultPath(HttpRequestMessage request) => request.RequestUri?.AbsolutePath ?? "vault";
 }

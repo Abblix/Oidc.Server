@@ -114,22 +114,7 @@ public class ConfigurationResponseFormatter(
             AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
         };
 
-        var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-        var mtlsBaseUri = issuerSettings.MtlsBaseUri;
-
-        if (mtlsOptions != null || mtlsBaseUri != null)
-        {
-            modelResponse = modelResponse with
-            {
-                MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
-                {
-                    TokenEndpoint = mtlsOptions?.TokenEndpoint ?? Rebase(tokenEndpoint, mtlsBaseUri),
-                    RevocationEndpoint = mtlsOptions?.RevocationEndpoint ?? Rebase(revocationEndpoint, mtlsBaseUri),
-                    IntrospectionEndpoint = mtlsOptions?.IntrospectionEndpoint ?? Rebase(introspectionEndpoint, mtlsBaseUri),
-                    UserInfoEndpoint = mtlsOptions?.UserInfoEndpoint ?? Rebase(userInfoEndpoint, mtlsBaseUri),
-                }
-            };
-        }
+        modelResponse = WithMtlsAliases(modelResponse);
 
         if (options.Value.Discovery.SignedMetadata)
         {
@@ -137,6 +122,33 @@ public class ConfigurationResponseFormatter(
         }
 
         return Results.Json(modelResponse);
+    }
+
+    /// <summary>
+    /// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, when either the configuration
+    /// names them or the issuer has a mutual-TLS host to rebase them onto. An alias the configuration names wins.
+    /// </summary>
+    private ModelResponse WithMtlsAliases(ModelResponse document)
+    {
+        var configured = options.Value.Discovery.MtlsEndpointAliases;
+        var mtlsBaseUri = issuerSettings.MtlsBaseUri;
+
+        if (configured == null && mtlsBaseUri == null)
+            return document;
+
+        // Read through an empty set when nothing is configured, so each alias falls back to the rebased endpoint.
+        configured ??= new MtlsAliasesOptions();
+        return document with
+        {
+            MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
+            {
+                TokenEndpoint = configured.TokenEndpoint ?? Rebase(document.TokenEndpoint, mtlsBaseUri),
+                RevocationEndpoint = configured.RevocationEndpoint ?? Rebase(document.RevocationEndpoint, mtlsBaseUri),
+                IntrospectionEndpoint =
+                    configured.IntrospectionEndpoint ?? Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
+                UserInfoEndpoint = configured.UserInfoEndpoint ?? Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+            },
+        };
     }
 
     /// <summary>

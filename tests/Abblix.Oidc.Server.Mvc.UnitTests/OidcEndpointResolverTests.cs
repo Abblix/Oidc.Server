@@ -142,4 +142,19 @@ public class OidcEndpointResolverTests
     [InlineData(OidcEndpoints.Base)]
     public void A_set_of_endpoints_resolves_to_nothing(OidcEndpoints endpoints)
         => Assert.Null(CreateResolver().Resolve(endpoints));
+
+    /// <summary>
+    /// Every single endpoint the enum declares has the route template its action carries, so adding an endpoint
+    /// without one fails here rather than resolving to nothing in a host. Flag combinations name sets and are
+    /// left out by design.
+    /// </summary>
+    [Fact]
+    public void Each_single_endpoint_has_entry()
+    {
+        var singleEndpoints = Enum.GetValues<OidcEndpoints>()
+            .Where(endpoint => System.Numerics.BitOperations.IsPow2((int)endpoint));
+
+        Assert.All(singleEndpoints, endpoint => Assert.True(
+            OidcEndpointResolver.TemplatesByEndpoint.ContainsKey(endpoint), $"{endpoint} has no entry"));
+    }
 }

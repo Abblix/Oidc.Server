@@ -134,4 +134,19 @@ public class OidcEndpointResolverTests
         Assert.Null(resolver.Resolve(OidcEndpoints.Authorize));
         Assert.Null(links.RequestedName);
     }
+
+    /// <summary>
+    /// Every single endpoint the enum declares has the name it is mapped under, so adding an endpoint
+    /// without one fails here rather than resolving to nothing in a host. Flag combinations name sets and are
+    /// left out by design.
+    /// </summary>
+    [Fact]
+    public void Each_single_endpoint_has_entry()
+    {
+        var singleEndpoints = Enum.GetValues<OidcEndpoints>()
+            .Where(endpoint => System.Numerics.BitOperations.IsPow2((int)endpoint));
+
+        Assert.All(singleEndpoints, endpoint => Assert.True(
+            OidcEndpointResolver.NamesByEndpoint.ContainsKey(endpoint), $"{endpoint} has no entry"));
+    }
 }

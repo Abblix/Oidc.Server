@@ -8,7 +8,6 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -64,6 +63,10 @@ public partial class JwtBearerGrantHandler(
 	TimeProvider timeProvider,
 	IIssuerSettings issuerSettings) : IAuthorizationGrantHandler
 {
+	private readonly JwtBearerAudienceValidator _audienceValidator = new(logger, issuerProvider, requestInfoProvider);
+	private readonly JwtBearerAssertionPolicy _assertionPolicy =
+		new(logger, issuerProvider, timeProvider, issuerSettings);
+
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
 	/// </summary>
@@ -71,25 +74,6 @@ public partial class JwtBearerGrantHandler(
 	{
 		get { yield return GrantTypes.JwtBearer; }
 	}
-
-	/// <summary>
-	/// Default secure algorithms allowed for JWT signatures when not configured per issuer.
-	/// Excludes symmetric (HMAC) and 'none' algorithms for security.
-	/// </summary>
-	private static readonly string[] DefaultAllowedAlgorithms =
-	[
-		SigningAlgorithms.RS256,
-		SigningAlgorithms.RS384,
-		SigningAlgorithms.RS512,
-
-		SigningAlgorithms.ES256,
-		SigningAlgorithms.ES384,
-		SigningAlgorithms.ES512,
-
-		SigningAlgorithms.PS256,
-		SigningAlgorithms.PS384,
-		SigningAlgorithms.PS512,
-	];
 
 	/// <summary>
 	/// Asynchronously processes the token request using the JWT Bearer grant type.
@@ -110,45 +94,13 @@ public partial class JwtBearerGrantHandler(
 		return ValidateAssertionParameter(request, clientInfo)
 			.BindAsync(assertion => ValidateJwtAsync(assertion, clientInfo))
 			.BindAsync(jwt => ValidateSubjectAsync(jwt, clientInfo))
-			.Bind(ctx => ValidateExpiration(ctx, clientInfo))
-			.Bind(ctx => ValidateAlgorithm(ctx, clientInfo))
-			.Bind(ctx => ValidateTokenType(ctx, clientInfo))
-			.Bind(ctx => ValidateJwtAge(ctx, clientInfo))
+			.Bind(ctx => _assertionPolicy.ValidateExpiration(ctx, clientInfo))
+			.Bind(ctx => _assertionPolicy.ValidateAlgorithm(ctx, clientInfo))
+			.Bind(ctx => _assertionPolicy.ValidateTokenType(ctx, clientInfo))
+			.Bind(ctx => _assertionPolicy.ValidateJwtAge(ctx, clientInfo))
 			.BindAsync(ctx => ValidateReplayProtectionAsync(ctx, clientInfo))
 			.Bind(ctx => ValidateScopes(ctx, request.Scope))
 			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, request.Resources, clientInfo)));
-	}
-
-	/// <summary>
-	/// The tolerance applied to this client's bearer assertion, resolved once so the two checks that
-	/// use it - the timestamp comparison and the age limit - cannot disagree about what an unset
-	/// value meant.
-	/// </summary>
-	/// <remarks>
-	/// The CLIENT's profile decides, falling back to the deployment's, the way every other reader of
-	/// a profile in this codebase resolves one. Reading the server default alone would ignore a
-	/// client that asks for a tighter window than the deployment demands.
-	/// </remarks>
-	private ClockSkew ResolveClockSkew(ClientInfo clientInfo)
-		=> issuerProvider.Options.ResolveClockSkew(Profile(clientInfo));
-
-	/// <summary>
-	/// The control bundle this client is held to: what the deployment demands of everyone,
-	/// tightened by whatever the client names for itself.
-	/// </summary>
-	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile);
-
-	/// <summary>
-	/// Contains validated JWT data passed through the validation pipeline.
-	/// </summary>
-	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer)
-	{
-		/// <summary>
-		/// The assertion's expiry as ValidateExpiration read it, carried so that the replay reservation
-		/// keys off a value already read rather than reading the accessor a second time.
-		/// </summary>
-		public DateTimeOffset? ExpiresAt { get; init; }
 	}
 
 	/// <summary>
@@ -189,11 +141,11 @@ public partial class JwtBearerGrantHandler(
 				// omitting exp would be treated as having nothing to check rather than as invalid.
 				Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
 				ValidateIssuer = ValidateIssuer,
-				ValidateAudience = ValidateAudience,
+				ValidateAudience = _audienceValidator.ValidateAsync,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
 				// The tolerance belongs to the profile this CLIENT is held to, ceiling included -
 				// RFC 7523 Section 3 names no ceiling of its own.
-				ClockSkew = ResolveClockSkew(clientInfo),
+				ClockSkew = _assertionPolicy.ResolveClockSkew(clientInfo),
 			});
 
 		return validationResult.MapFailure(failure =>
@@ -209,7 +161,8 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Validates the subject claim is present and retrieves trusted issuer configuration.
 	/// </summary>
-	private async Task<Result<ValidationContext, OidcError>> ValidateSubjectAsync(JsonWebToken jwt, ClientInfo clientInfo)
+	private async Task<Result<JwtBearerValidationContext, OidcError>> ValidateSubjectAsync(
+		JsonWebToken jwt, ClientInfo clientInfo)
 	{
 		var subject = jwt.Payload.Subject;
 		if (string.IsNullOrWhiteSpace(subject))
@@ -221,102 +174,14 @@ public partial class JwtBearerGrantHandler(
 		var issuer = jwt.Payload.Issuer ?? "unknown";
 		var trustedIssuer = await issuerProvider.GetTrustedIssuerAsync(issuer);
 
-		return new ValidationContext(jwt, subject, issuer, trustedIssuer);
-	}
-
-	/// <summary>
-	/// Validates that the JWT assertion carries an 'exp' (expiration) claim. RFC 7523 Section 3
-	/// requires the assertion to contain an 'exp' claim that limits the window during which it can
-	/// be used; the generic lifetime check treats a token with neither 'nbf' nor 'exp' as valid, so
-	/// this enforces the grant-specific MUST and is also what bounds the replay-cache entry's TTL.
-	/// </summary>
-	private Result<ValidationContext, OidcError> ValidateExpiration(ValidationContext ctx, ClientInfo clientInfo)
-	{
-		// Through the guarded reader rather than the accessor: the validator that ran first is
-		// whichever one the host registered, which may not have read this claim, and a value the
-		// issuer wrote is refused rather than thrown at.
-		if (!ctx.Jwt.Payload.TryReadTimestamp(JwtClaimTypes.ExpiresAt, out var expiresAt, out var whyUnreadable))
-			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
-
-		if (expiresAt.HasValue)
-			return ctx with { ExpiresAt = expiresAt };
-
-		LogMissingExpiration(clientInfo.ClientId, ctx.Issuer);
-
-		return new OidcError(ErrorCodes.InvalidGrant,
-			"The JWT assertion must contain an 'exp' (expiration) claim");
-	}
-
-	/// <summary>
-	/// Validates that the JWT signing algorithm is in the allowed list.
-	/// </summary>
-	private Result<ValidationContext, OidcError> ValidateAlgorithm(ValidationContext ctx, ClientInfo clientInfo)
-	{
-		var allowedAlgorithms = ctx.TrustedIssuer?.AllowedAlgorithms ?? DefaultAllowedAlgorithms;
-		var algorithm = ctx.Jwt.Header.Algorithm;
-
-		if (allowedAlgorithms.Contains(algorithm, StringComparer.OrdinalIgnoreCase))
-			return ctx;
-
-		LogAlgorithmNotAllowed(algorithm, ctx.Issuer, clientInfo.ClientId);
-
-		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion uses an unsupported signature algorithm");
-	}
-
-	/// <summary>
-	/// Validates the JWT token type header against allowed types if configured.
-	/// </summary>
-	private Result<ValidationContext, OidcError> ValidateTokenType(ValidationContext ctx, ClientInfo clientInfo)
-	{
-		var options = issuerProvider.Options;
-		if (options.AllowedTokenTypes is not { Length: > 0 } allowedTypes)
-			return ctx;
-
-		var tokenType = ctx.Jwt.Header.Type;
-		if (allowedTypes.Contains(tokenType, StringComparer.OrdinalIgnoreCase))
-			return ctx;
-
-		LogTokenTypeNotAllowed(tokenType ?? "(none)", string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
-
-		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has an unsupported token type");
-	}
-
-	/// <summary>
-	/// Validates that the JWT is not too old based on MaxJwtAge configuration.
-	/// </summary>
-	private Result<ValidationContext, OidcError> ValidateJwtAge(ValidationContext ctx, ClientInfo clientInfo)
-	{
-		var options = issuerProvider.Options;
-		if (options.MaxJwtAge is not { } maxAge)
-			return ctx;
-
-		if (!ctx.Jwt.Payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out var issuedAt, out var whyUnreadable))
-			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
-
-		if (issuedAt == null)
-		{
-			LogMissingIssuedAt(clientInfo.ClientId, ctx.Issuer);
-
-			return new OidcError(ErrorCodes.InvalidGrant,
-				"The JWT assertion must contain an 'iat' (issued at) claim when age validation is enabled");
-		}
-
-		var now = timeProvider.GetUtcNow();
-		var jwtAge = now - issuedAt.Value;
-
-		if (jwtAge <= maxAge + ResolveClockSkew(clientInfo).Past)
-			return ctx;
-
-		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
-
-		return new OidcError(ErrorCodes.InvalidGrant,
-			"The JWT assertion is too old. Please use a freshly issued JWT.");
+		return new JwtBearerValidationContext(jwt, subject, issuer, trustedIssuer);
 	}
 
 	/// <summary>
 	/// Validates that the JWT has not been used before (replay protection per RFC 7523 Section 3).
 	/// </summary>
-	private async Task<Result<ValidationContext, OidcError>> ValidateReplayProtectionAsync(ValidationContext ctx, ClientInfo clientInfo)
+	private async Task<Result<JwtBearerValidationContext, OidcError>> ValidateReplayProtectionAsync(
+		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var options = issuerProvider.Options;
 		if (!options.RequireJti)
@@ -346,7 +211,8 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Validates that requested scopes are allowed for the issuer.
 	/// </summary>
-	private Result<ValidationContext, OidcError> ValidateScopes(ValidationContext ctx, string[]? scope)
+	private Result<JwtBearerValidationContext, OidcError> ValidateScopes(
+		JwtBearerValidationContext ctx, string[]? scope)
 	{
 		if (ctx is not { TrustedIssuer.AllowedScopes: { Length: > 0 } allowedScopes} || scope is null)
 			return ctx;
@@ -366,7 +232,7 @@ public partial class JwtBearerGrantHandler(
 	/// Creates the authorized grant after successful validation.
 	/// </summary>
 	private AuthorizedGrant CreateAuthorizedGrant(
-		ValidationContext ctx, string[] scope, Uri[]? resources, ClientInfo clientInfo)
+		JwtBearerValidationContext ctx, string[] scope, Uri[]? resources, ClientInfo clientInfo)
 	{
 		LogGrantSucceeded(
 			clientInfo.ClientId, ctx.Subject, ctx.Issuer, ctx.Jwt.Payload.JwtId ?? "none",
@@ -403,67 +269,4 @@ public partial class JwtBearerGrantHandler(
 		}
 		return isTrusted;
 	}
-
-	/// <summary>
-	/// Validates that the JWT audience includes this authorization server's token endpoint per RFC 7523 Section 3.
-	/// The audience must match the token endpoint URI where the assertion is being presented.
-	/// Uses URI normalization per RFC 3986 for proper comparison.
-	/// </summary>
-	/// <param name="audiences">The audience claims from the JWT.</param>
-	/// <returns>
-	/// A task that completes with true if the audience is valid; otherwise, false.
-	/// </returns>
-	private Task<bool> ValidateAudience(IEnumerable<string> audiences)
-	{
-		var options = issuerProvider.Options;
-		var audienceList = audiences.Materialize();
-
-		if (!Uri.TryCreate(requestInfoProvider.RequestUri, UriKind.Absolute, out var tokenEndpoint))
-			return Task.FromResult(false);
-
-		var isValid = options.StrictAudienceValidation
-			? ValidateStrict(audienceList, tokenEndpoint)
-			: ValidatePermissive(audienceList, tokenEndpoint, requestInfoProvider.ApplicationUri);
-
-		if (isValid)
-			return Task.FromResult(true);
-
-		var actualAudiences = string.Join(", ", audienceList);
-		if (options.StrictAudienceValidation)
-		{
-			LogAudienceFailedStrict(tokenEndpoint, actualAudiences);
-		}
-		else
-		{
-			LogAudienceFailedPermissive(tokenEndpoint, requestInfoProvider.ApplicationUri, actualAudiences);
-		}
-
-		return Task.FromResult(false);
-	}
-
-	private static bool ValidateStrict(IEnumerable<string> audiences, Uri tokenEndpoint)
-	{
-		return audiences.Any(aud =>
-			Uri.TryCreate(aud, UriKind.Absolute, out var audience) &&
-			NormalizedUriEquals(audience, tokenEndpoint));
-	}
-
-	private static bool ValidatePermissive(IEnumerable<string> audiences, Uri tokenEndpoint, string applicationUri)
-	{
-		return Uri.TryCreate(applicationUri, UriKind.Absolute, out var appUri) &&
-		       audiences.Any(aud =>
-			       Uri.TryCreate(aud, UriKind.Absolute, out var audience) &&
-			       (NormalizedUriEquals(audience, tokenEndpoint) ||
-			        NormalizedUriEquals(audience, appUri)));
-	}
-
-	/// <summary>
-	/// Compares two URIs using RFC 3986 normalization rules:
-	/// scheme and host are case-insensitive, path is case-sensitive.
-	/// </summary>
-	private static bool NormalizedUriEquals(Uri uri1, Uri uri2)
-		=> string.Equals(uri1.Scheme, uri2.Scheme, StringComparison.OrdinalIgnoreCase) &&
-		   string.Equals(uri1.Host, uri2.Host, StringComparison.OrdinalIgnoreCase) &&
-		   uri1.Port == uri2.Port &&
-		   uri1.AbsolutePath.TrimEnd('/') == uri2.AbsolutePath.TrimEnd('/');
 }

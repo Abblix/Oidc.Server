@@ -51,26 +51,43 @@ internal static class AuthorizationRequestMapper
         return proto;
     }
 
-    // Lifted out of ToProto so its cognitive complexity stays in budget - each
-    // if-not-null scalar copy adds 1 by Sonar's counting; with fourteen of them
-    // in the parent method the rule's threshold tripped (S3776).
     private static void CopyOptionalScalars(Model.AuthorizationRequest source, AuthorizationRequest proto)
     {
-        if (source.ClientId != null) proto.ClientId = source.ClientId;
-        if (source.RedirectUri != null) proto.RedirectUri = source.RedirectUri.ToString();
-        if (source.State != null) proto.State = source.State;
-        if (source.ResponseMode != null) proto.ResponseMode = source.ResponseMode;
-        if (source.Nonce != null) proto.Nonce = source.Nonce;
-        if (source.Display != null) proto.Display = source.Display;
-        if (source.Prompt != null) proto.Prompt = source.Prompt;
-        if (source.IdTokenHint != null) proto.IdTokenHint = source.IdTokenHint;
-        if (source.LoginHint != null) proto.LoginHint = source.LoginHint;
-        if (source.CodeChallenge != null) proto.CodeChallenge = source.CodeChallenge;
-        if (source.CodeChallengeMethod != null) proto.CodeChallengeMethod = source.CodeChallengeMethod;
-        if (source.Request != null) proto.Request = source.Request;
-        if (source.RequestUri != null) proto.RequestUri = source.RequestUri.ToString();
-        if (source.ProofKeyThumbprint != null) proto.ProofKeyThumbprint = source.ProofKeyThumbprint;
-        if (source.OriginRequestUri != null) proto.OriginRequestUri = source.OriginRequestUri.OriginalString;
+        SetIfPresent(proto, source.ClientId, static (message, value) => message.ClientId = value);
+        SetIfPresent(proto, source.RedirectUri?.ToString(), static (message, value) => message.RedirectUri = value);
+        SetIfPresent(proto, source.State, static (message, value) => message.State = value);
+        SetIfPresent(proto, source.ResponseMode, static (message, value) => message.ResponseMode = value);
+        SetIfPresent(proto, source.Nonce, static (message, value) => message.Nonce = value);
+        SetIfPresent(proto, source.Display, static (message, value) => message.Display = value);
+        SetIfPresent(proto, source.Prompt, static (message, value) => message.Prompt = value);
+        SetIfPresent(proto, source.IdTokenHint, static (message, value) => message.IdTokenHint = value);
+        SetIfPresent(proto, source.LoginHint, static (message, value) => message.LoginHint = value);
+        SetIfPresent(proto, source.CodeChallenge, static (message, value) => message.CodeChallenge = value);
+        SetIfPresent(proto, source.CodeChallengeMethod, static (message, value) => message.CodeChallengeMethod = value);
+        SetIfPresent(proto, source.Request, static (message, value) => message.Request = value);
+        SetIfPresent(proto, source.RequestUri?.ToString(), static (message, value) => message.RequestUri = value);
+        SetIfPresent(proto, source.ProofKeyThumbprint, static (message, value) => message.ProofKeyThumbprint = value);
+        SetIfPresent(
+            proto,
+            source.OriginRequestUri?.OriginalString,
+            static (message, value) => message.OriginRequestUri = value);
+    }
+
+    /// <summary>
+    /// Sets an optional message field only when the record carries a value for it.
+    /// </summary>
+    /// <remarks>
+    /// The one rule every optional scalar follows, held here rather than repeated per field: a protobuf field
+    /// refuses null, and an unset field is how the message says the record had none, which
+    /// <see cref="ProtoMapper.GetString"/> reads back as null.
+    /// </remarks>
+    private static void SetIfPresent(
+        AuthorizationRequest proto,
+        string? value,
+        Action<AuthorizationRequest, string> set)
+    {
+        if (value != null)
+            set(proto, value);
     }
 
     /// <summary>

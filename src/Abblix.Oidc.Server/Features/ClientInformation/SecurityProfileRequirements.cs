@@ -380,24 +380,49 @@ public sealed record SecurityProfileRequirements
     /// </para>
     /// </remarks>
     /// <param name="other">The bundle whose demands are added to this one's.</param>
-    private SecurityProfileRequirements TightenedBy(SecurityProfileRequirements other) => new()
+    private SecurityProfileRequirements TightenedBy(SecurityProfileRequirements other)
+        // Builder: each step settles one family of controls and leaves the others as it found them, so the
+        // steps compose in any order
+        => WithRequestControlsTightenedBy(other)
+            .WithClientAndTokenControlsTightenedBy(other)
+            .WithClockTightenedBy(other);
+
+    /// <summary>
+    /// This bundle with the controls on the authorization request itself tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithRequestControlsTightenedBy(SecurityProfileRequirements other) => this with
     {
         RequirePkce = RequirePkce || other.RequirePkce,
         RequireS256CodeChallenge = RequireS256CodeChallenge || other.RequireS256CodeChallenge,
         RequirePushedAuthorizationRequests =
             RequirePushedAuthorizationRequests || other.RequirePushedAuthorizationRequests,
-        RequireSenderConstrainedTokens =
-            RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
         RequireStrictRequestObjectProcessing =
             RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
-        RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
-        RequireKeyBasedClientAuthentication =
-            RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
-        RequireIssuerAudienceInClientAssertion =
-            RequireIssuerAudienceInClientAssertion || other.RequireIssuerAudienceInClientAssertion,
-        ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+    };
 
+    /// <summary>
+    /// This bundle with the controls on the client's credentials and on the tokens it is issued tightened by
+    /// <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithClientAndTokenControlsTightenedBy(SecurityProfileRequirements other)
+        => this with
+        {
+            RequireSenderConstrainedTokens =
+                RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
+            RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
+            RequireKeyBasedClientAuthentication =
+                RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
+            RequireIssuerAudienceInClientAssertion =
+                RequireIssuerAudienceInClientAssertion || other.RequireIssuerAudienceInClientAssertion,
+            ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+        };
+
+    /// <summary>
+    /// This bundle with its clock ceiling and default tolerance tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithClockTightenedBy(SecurityProfileRequirements other) => this with
+    {
         MaxClockSkew = Tighter(MaxClockSkew, other.MaxClockSkew),
         DefaultClockSkew = new ClockSkew
         {

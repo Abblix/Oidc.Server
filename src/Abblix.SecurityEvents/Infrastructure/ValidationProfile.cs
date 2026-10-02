@@ -13,7 +13,7 @@ namespace Abblix.SecurityEvents.Infrastructure;
 
 /// <summary>
 /// One named validation profile under construction: the editing surface
-/// <see cref="ServiceCollectionExtensions.AddSecurityEventValidationProfile"/> hands to its
+/// <see cref="ValidationProfileServiceCollectionExtensions.AddSecurityEventValidationProfile"/> hands to its
 /// configure delegate.
 /// </summary>
 /// <remarks>
@@ -82,7 +82,7 @@ public sealed class ValidationProfile
             throw new InvalidOperationException(
                 $"The validation profile '{Key}' lists no steps, so it would have no validator at all. "
                 + $"List its pipeline with {nameof(Use)}, or take the documented default order with "
-                + $"{nameof(ServiceCollectionExtensions.UseDefaultPipeline)}.");
+                + $"{nameof(ValidationProfileServiceCollectionExtensions.UseDefaultPipeline)}.");
         }
 
         _services.ComposeKeyed<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>(Key);

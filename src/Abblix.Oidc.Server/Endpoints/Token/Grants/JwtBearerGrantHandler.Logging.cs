@@ -39,36 +39,6 @@ partial class JwtBearerGrantHandler
 	private partial void LogMissingSubject(string ClientId);
 
 	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.MissingExpiration,
-		Level = LogLevel.Warning,
-		Message = "JWT assertion missing required 'exp' claim for issuer {Issuer}, client {ClientId}")]
-	private partial void LogMissingExpiration(string ClientId, string Issuer);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.AlgorithmNotAllowed,
-		Level = LogLevel.Warning,
-		Message = "JWT assertion rejected: algorithm {Algorithm} not allowed for issuer {Issuer}, client {ClientId}")]
-	private partial void LogAlgorithmNotAllowed(string? Algorithm, string Issuer, string ClientId);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.TokenTypeNotAllowed,
-		Level = LogLevel.Warning,
-		Message = "JWT assertion rejected: token type '{TokenType}' not in allowed types [{AllowedTypes}], client {ClientId}, issuer {Issuer}")]
-	private partial void LogTokenTypeNotAllowed(string TokenType, string AllowedTypes, string ClientId, string Issuer);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.MissingIssuedAt,
-		Level = LogLevel.Warning,
-		Message = "JWT assertion rejected: missing 'iat' claim but MaxJwtAge is configured, client {ClientId}, issuer {Issuer}")]
-	private partial void LogMissingIssuedAt(string ClientId, string Issuer);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.TooOld,
-		Level = LogLevel.Warning,
-		Message = "JWT assertion rejected: JWT too old. Issued at {IssuedAt}, age {JwtAge}, max allowed {MaxAge}, client {ClientId}, issuer {Issuer}")]
-	private partial void LogTooOld(DateTimeOffset IssuedAt, TimeSpan JwtAge, TimeSpan MaxAge, string ClientId, string Issuer);
-
-	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.MissingJti,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion missing required 'jti' claim for client {ClientId}, issuer {Issuer}")]
@@ -97,16 +67,4 @@ partial class JwtBearerGrantHandler
 		Level = LogLevel.Warning,
 		Message = "JWT Bearer assertion rejected: issuer {Issuer} is not trusted")]
 	private partial void LogIssuerNotTrusted(string Issuer);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedStrict,
-		Level = LogLevel.Warning,
-		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint}, got {Audiences}")]
-	private partial void LogAudienceFailedStrict(Uri TokenEndpoint, string Audiences);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedPermissive,
-		Level = LogLevel.Warning,
-		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {ApplicationUri}, got {Audiences}")]
-	private partial void LogAudienceFailedPermissive(Uri TokenEndpoint, string ApplicationUri, string Audiences);
 }

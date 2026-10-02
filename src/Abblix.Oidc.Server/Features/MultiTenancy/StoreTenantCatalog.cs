@@ -121,12 +121,14 @@ public sealed partial class StoreTenantCatalog(
     /// It runs before the checks, so it meets a tenant the store holds with no id, which the checks refuse.
     /// </remarks>
     private static StoredTenant? Unchanged(Reading? previous, StoredTenant fresh)
-        => fresh.Tenant.Id is { } id &&
-           previous?.ById.GetValueOrDefault(id) is { } held &&
-           held.Version == fresh.Version &&
-           held.Tenant.Generation == fresh.Tenant.Generation
-            ? held
-            : null;
+    {
+        if (fresh.Tenant.Id is not { } id || previous?.ById.GetValueOrDefault(id) is not { } held)
+            return null;
+
+        var sameStoredVersion = held.Version == fresh.Version;
+        var sameCreation = held.Tenant.Generation == fresh.Tenant.Generation;
+        return sameStoredVersion && sameCreation ? held : null;
+    }
 
     /// <summary>
     /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Frozen;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -36,8 +37,7 @@ public class OidcEndpointResolver(
         if (httpContext == null)
             return null;
 
-        var endpointName = NameOf(endpoint);
-        if (endpointName == null)
+        if (!NamesByEndpoint.TryGetValue(endpoint, out var endpointName))
             return null;
 
         var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
@@ -45,25 +45,25 @@ public class OidcEndpointResolver(
     }
 
     /// <summary>
-    /// Maps an endpoint to the name it was mapped under. A flag combination names a set rather than an
-    /// endpoint and has no single name; so does the client configuration endpoint, whose route carries a
-    /// client identifier this contract has no way to supply.
+    /// The name each endpoint was mapped under. A flag combination names a set rather than an endpoint and has no
+    /// single name, so it has no entry; the client configuration endpoint is answered by the registration endpoint,
+    /// since its own route carries a client identifier this contract has no way to supply.
     /// </summary>
-    private static string? NameOf(OidcEndpoints endpoint) => endpoint switch
-    {
-        OidcEndpoints.Configuration => EndpointNames.Configuration,
-        OidcEndpoints.Keys => EndpointNames.Keys,
-        OidcEndpoints.Authorize => EndpointNames.Authorize,
-        OidcEndpoints.Token => EndpointNames.Token,
-        OidcEndpoints.UserInfo => EndpointNames.UserInfo,
-        OidcEndpoints.CheckSession => EndpointNames.CheckSession,
-        OidcEndpoints.EndSession => EndpointNames.EndSession,
-        OidcEndpoints.Revocation => EndpointNames.Revocation,
-        OidcEndpoints.Introspection => EndpointNames.Introspection,
-        OidcEndpoints.RegisterClient => EndpointNames.Register,
-        OidcEndpoints.PushedAuthorizationRequest => EndpointNames.PushedAuthorizationRequest,
-        OidcEndpoints.BackChannelAuthentication => EndpointNames.BackChannelAuthentication,
-        OidcEndpoints.DeviceAuthorization => EndpointNames.DeviceAuthorization,
-        _ => null,
-    };
+    internal static readonly FrozenDictionary<OidcEndpoints, string> NamesByEndpoint =
+        new Dictionary<OidcEndpoints, string>
+        {
+            [OidcEndpoints.Configuration] = EndpointNames.Configuration,
+            [OidcEndpoints.Keys] = EndpointNames.Keys,
+            [OidcEndpoints.Authorize] = EndpointNames.Authorize,
+            [OidcEndpoints.Token] = EndpointNames.Token,
+            [OidcEndpoints.UserInfo] = EndpointNames.UserInfo,
+            [OidcEndpoints.CheckSession] = EndpointNames.CheckSession,
+            [OidcEndpoints.EndSession] = EndpointNames.EndSession,
+            [OidcEndpoints.Revocation] = EndpointNames.Revocation,
+            [OidcEndpoints.Introspection] = EndpointNames.Introspection,
+            [OidcEndpoints.RegisterClient] = EndpointNames.Register,
+            [OidcEndpoints.PushedAuthorizationRequest] = EndpointNames.PushedAuthorizationRequest,
+            [OidcEndpoints.BackChannelAuthentication] = EndpointNames.BackChannelAuthentication,
+            [OidcEndpoints.DeviceAuthorization] = EndpointNames.DeviceAuthorization,
+        }.ToFrozenDictionary();
 }

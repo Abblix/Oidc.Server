@@ -108,8 +108,7 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         => value.IsAbsoluteUri &&
            value.Scheme == Uri.UriSchemeHttps &&
            value.AbsolutePath == "/" &&
-           string.IsNullOrEmpty(value.Query) &&
-           string.IsNullOrEmpty(value.Fragment);
+           HasNoQueryOrFragment(value);
 
     /// <remarks>
     /// OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 make the issuer an https URL; http is let
@@ -118,7 +117,15 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     /// </remarks>
     private static bool IsIssuer(string? value)
         => Uri.TryCreate(value, UriKind.Absolute, out var issuer) &&
-           (issuer.Scheme == Uri.UriSchemeHttps || issuer.Scheme == Uri.UriSchemeHttp) &&
-           string.IsNullOrEmpty(issuer.Query) &&
-           string.IsNullOrEmpty(issuer.Fragment);
+           IsWebScheme(issuer) &&
+           HasNoQueryOrFragment(issuer);
+
+    private static bool IsWebScheme(Uri value)
+        => value.Scheme == Uri.UriSchemeHttps || value.Scheme == Uri.UriSchemeHttp;
+
+    /// <remarks>
+    /// Asked only of an absolute address, since a relative one throws on either read.
+    /// </remarks>
+    private static bool HasNoQueryOrFragment(Uri value)
+        => string.IsNullOrEmpty(value.Query) && string.IsNullOrEmpty(value.Fragment);
 }

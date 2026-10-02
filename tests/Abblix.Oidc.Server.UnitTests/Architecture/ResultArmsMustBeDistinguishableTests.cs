@@ -45,54 +45,61 @@ public class ResultArmsMustBeDistinguishableTests
     {
         var found = new HashSet<Type>();
 
-        foreach (var assembly in assemblies)
-        {
-            Type[] types;
-            try
-            {
-                types = assembly.GetTypes();
-            }
-            catch (ReflectionTypeLoadException e)
-            {
-                types = e.Types.Where(t => t is not null).ToArray()!;
-            }
-
-            foreach (var type in types)
-            {
-                const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic
-                    | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-
-                foreach (var field in type.GetFields(all))
-                    Collect(field.FieldType, found);
-
-                foreach (var property in type.GetProperties(all))
-                    Collect(property.PropertyType, found);
-
-                foreach (var method in type.GetMethods(all).Cast<MethodBase>().Concat(type.GetConstructors(all)))
-                {
-                    if (method is MethodInfo info)
-                        Collect(info.ReturnType, found);
-
-                    foreach (var parameter in method.GetParameters())
-                        Collect(parameter.ParameterType, found);
-
-                    // A pair used only to hold an intermediate value appears nowhere in a signature.
-                    try
-                    {
-                        var body = method.GetMethodBody();
-                        if (body is not null)
-                            foreach (var local in body.LocalVariables)
-                                Collect(local.LocalType, found);
-                    }
-                    catch (Exception)
-                    {
-                        // Abstract and generated members have no body to read.
-                    }
-                }
-            }
-        }
+        // Iterator: each level of the metadata yields the types it mentions, so the walk is one flat sequence.
+        foreach (var mentioned in assemblies.SelectMany(LoadableTypes).SelectMany(TypesMentionedBy))
+            Collect(mentioned, found);
 
         return found.ToArray();
+    }
+
+    private const BindingFlags AllDeclared = BindingFlags.Public | BindingFlags.NonPublic
+        | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+    private static Type[] LoadableTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException e)
+        {
+            return e.Types.Where(t => t is not null).ToArray()!;
+        }
+    }
+
+    private static IEnumerable<Type> TypesMentionedBy(Type type)
+    {
+        var members = type.GetMethods(AllDeclared).Cast<MethodBase>().Concat(type.GetConstructors(AllDeclared));
+
+        return type.GetFields(AllDeclared).Select(field => field.FieldType)
+            .Concat(type.GetProperties(AllDeclared).Select(property => property.PropertyType))
+            .Concat(members.SelectMany(TypesMentionedBy));
+    }
+
+    private static IEnumerable<Type> TypesMentionedBy(MethodBase method)
+    {
+        if (method is MethodInfo info)
+            yield return info.ReturnType;
+
+        foreach (var parameter in method.GetParameters())
+            yield return parameter.ParameterType;
+
+        // A pair used only to hold an intermediate value appears nowhere in a signature.
+        foreach (var local in LocalTypes(method))
+            yield return local;
+    }
+
+    private static Type[] LocalTypes(MethodBase method)
+    {
+        try
+        {
+            return method.GetMethodBody()?.LocalVariables.Select(local => local.LocalType).ToArray() ?? [];
+        }
+        catch (Exception)
+        {
+            // Abstract and generated members have no body to read.
+            return [];
+        }
     }
 
     /// <summary>Walks a type and whatever it is built out of, keeping the constructed result pairs.</summary>

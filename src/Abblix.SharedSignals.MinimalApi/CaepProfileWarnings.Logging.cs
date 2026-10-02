@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.SharedSignals.MinimalApi;
 
-public static partial class SharedSignalsEndpointRouteBuilderExtensions
+internal static partial class CaepProfileWarnings
 {
     /// <summary>
     /// The configuration document names no key location, so nothing a receiver reads leads to a key.

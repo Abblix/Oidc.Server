@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -53,6 +54,23 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string AbsoluteUriMarkerName = "AbsoluteUriAttribute";
     private const string ElementsRequiredMarkerName = "ElementsRequiredAttribute";
     private const string RequiredMarkerName = "RequiredAttribute";
+
+    private static readonly ImmutableHashSet<string> WireFormatMarkerNames = ImmutableHashSet.Create(
+        StringComparer.Ordinal,
+        SpaceSeparatedStringMarkerName, TotalSecondsMarkerName, JsonObjectMarkerName, CultureListMarkerName);
+
+    private static readonly ImmutableHashSet<string> SourceMarkerNames = ImmutableHashSet.Create(
+        StringComparer.Ordinal,
+        RequestHeaderMarkerName, AuthorizationHeaderMarkerName, ClientCertificateMarkerName);
+
+    // RequiredMarkerName is left out: it lives in DataAnnotations, not among the declarative markers.
+    private static readonly ImmutableHashSet<string> ValidationMarkerNames = ImmutableHashSet.Create(
+        StringComparer.Ordinal,
+        AllowedValuesMarkerName, AbsoluteUriMarkerName, ElementsRequiredMarkerName);
+
+    // Every declarative marker the generator acts on; one outside it is reported rather than silently ignored.
+    private static readonly ImmutableHashSet<string> RecognizedMarkerNames =
+        SourceMarkerNames.Union(WireFormatMarkerNames).Union(ValidationMarkerNames);
 
     // The generator emits references to these helper types. Rather than hardcode their fully-qualified names -
     // which silently rot into broken generated code when a type moves namespace - they are resolved to their live
@@ -248,19 +266,22 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 diagnostics.Add(new DiagnosticInfo(
                     SupportsGetPropertyMissing, LocationInfo.None, SupportsGetPropertyName, GeneratedFromAttributeName));
 
-            if (formValues == null || requestValues == null || validatableModel == null ||
-                allowedValues == null || absoluteUri == null || elementsRequired == null || declarativeAnchor == null ||
-                !supportsGetDeclared)
+            // Each helper either resolved or left its diagnostic above, so the set is usable only when all resolved.
+            var resolved = (formValues, requestValues, validatableModel, allowedValues, absoluteUri, elementsRequired,
+                declarativeAnchor);
+            if (!supportsGetDeclared ||
+                resolved is not
+                    ({ } form, { } request, { } validatable, { } allowed, { } uri, { } elements, { } anchor))
                 return new KnownTypesResult(null, new EquatableArray<DiagnosticInfo>([.. diagnostics]));
 
             var known = new KnownTypes(
-                formValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                requestValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                validatableModel.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                EmitName(allowedValues),
-                EmitName(absoluteUri),
-                EmitName(elementsRequired),
-                declarativeAnchor.ContainingNamespace.ToDisplayString());
+                form.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                request.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                validatable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                EmitName(allowed),
+                EmitName(uri),
+                EmitName(elements),
+                anchor.ContainingNamespace.ToDisplayString());
 
             return new KnownTypesResult(known, new EquatableArray<DiagnosticInfo>([]));
         }
@@ -448,13 +469,22 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         /// <summary>
         /// Maps a wire-payload property to the expression that reads its value from <c>source</c> (which exposes a
         /// <c>this[string] -&gt; StringValues</c> indexer for both the form-only and query-or-form cases). The
-        /// wire-format marker selects the value conversion; otherwise the property type does.
+        /// wire-format marker selects the value conversion; otherwise the property type does - a two-link Chain of
+        /// Responsibility.
         /// </summary>
         private string GetBindExpression(IPropertySymbol property, string wireName)
         {
             var value = $"source[{Literal(wireName)}]";
+            return ConvertByWireFormat(property, value) ?? ConvertByType(property, value);
+        }
 
-            switch (GetWireFormatMarkerName(property))
+        /// <summary>
+        /// The conversion the property's wire-format marker selects, or null when it carries none.
+        /// </summary>
+        private string? ConvertByWireFormat(IPropertySymbol property, string value)
+        {
+            var markerName = GetWireFormatMarkerName(property);
+            switch (markerName)
             {
                 case SpaceSeparatedStringMarkerName:
                     return IsNonNullableReference(property.Type)
@@ -470,8 +500,22 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
                 case CultureListMarkerName:
                     return $"{known.FormValues}.Cultures({value})";
-            }
 
+                case null:
+                    return null;
+
+                default:
+                    throw new InvalidOperationException(
+                        $"The wire-format marker '{markerName}' that {nameof(GetWireFormatMarkerName)} recognizes " +
+                        "has no conversion.");
+            }
+        }
+
+        /// <summary>
+        /// The conversion the property's type selects.
+        /// </summary>
+        private string ConvertByType(IPropertySymbol property, string value)
+        {
             if (property.Type is IArrayTypeSymbol array)
             {
                 return array.ElementType.SpecialType == SpecialType.System_String
@@ -567,9 +611,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 .Where(attributeClass =>
                     attributeClass?.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace)
                 .Select(static attributeClass => attributeClass!.Name)
-                .FirstOrDefault(static name => name is
-                    SpaceSeparatedStringMarkerName or TotalSecondsMarkerName or
-                    JsonObjectMarkerName or CultureListMarkerName);
+                .FirstOrDefault(static name => WireFormatMarkerNames.Contains(name));
 
         /// <summary>
         /// Translates a core property's declarative validation markers into the executable Minimal API validation
@@ -634,10 +676,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
         private AttributeData? TryGetSourceMarker(IPropertySymbol property)
             => property.GetAttributes().FirstOrDefault(attribute =>
-                attribute.AttributeClass is
-                {
-                    Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
-                } attributeClass &&
+                attribute.AttributeClass is { } attributeClass &&
+                SourceMarkerNames.Contains(attributeClass.Name) &&
                 attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace);
 
         // A declarative-binding attribute the generator does not recognize - renamed on the core side without
@@ -650,17 +690,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 .Where(attributeClass =>
                     attributeClass is not null &&
                     attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace &&
-                    !IsRecognizedMarkerName(attributeClass.Name));
+                    !RecognizedMarkerNames.Contains(attributeClass.Name));
 
             foreach (var attributeClass in unrecognized)
                 _diagnostics.Add(new DiagnosticInfo(
                     UnrecognizedMarker, stub.Location, attributeClass!.Name, coreType.ToDisplayString(), property.Name));
         }
-
-        private static bool IsRecognizedMarkerName(string name) => name is
-            RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName or
-            SpaceSeparatedStringMarkerName or TotalSecondsMarkerName or JsonObjectMarkerName or CultureListMarkerName or
-            AllowedValuesMarkerName or AbsoluteUriMarkerName or ElementsRequiredMarkerName;
 
         private static bool IsExcludedFromWire(IPropertySymbol property)
             => property.GetAttributes().Any(static attribute =>

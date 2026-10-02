@@ -19,9 +19,9 @@ namespace Abblix.SecurityEvents.Subjects;
 /// <para>
 /// Section 3.3 requires at least one member, a rule spanning all of them at once, so it belongs to
 /// no single property; <see cref="HasMembers"/> is how a caller asks it, and the transmitter's
-/// subject door refuses the empty shape. What IS enforced per member is simplicity: a Complex Subject holds Simple Subject
-/// Members, so a nested Complex Subject is refused on the way in - built in code or read off
-/// the wire alike.
+/// subject door refuses the empty shape. What IS enforced per member is simplicity: a Complex
+/// Subject holds Simple Subject Members, so a nested Complex Subject is refused on the way in -
+/// built in code or read off the wire alike.
 /// </para>
 /// <para>
 /// Section 3.3 also allows additional member names beyond the registered seven. They land in
@@ -136,14 +136,21 @@ public sealed class ComplexSubject() : SubjectIdentifier(SubjectFormats.Complex)
     /// on this field", so a subject naming none restricts nothing and stands for every event.
     /// </remarks>
     public bool HasMembers
-        => User is not null
-           || Device is not null
-           || Session is not null
-           || Application is not null
-           || Tenant is not null
-           || OrgUnit is not null
-           || Group is not null
-           || AdditionalMembers is { Count: > 0 };
+        => RegisteredMembers.Any(member => member(this) is not null) || AdditionalMembers is { Count: > 0 };
+
+    /// <summary>
+    /// Reads each of the seven members Section 3.3 registers, set or not.
+    /// </summary>
+    private static readonly Func<ComplexSubject, SubjectIdentifier?>[] RegisteredMembers =
+    [
+        static subject => subject.User,
+        static subject => subject.Device,
+        static subject => subject.Session,
+        static subject => subject.Application,
+        static subject => subject.Tenant,
+        static subject => subject.OrgUnit,
+        static subject => subject.Group,
+    ];
 
     /// <summary>
     /// Returns <paramref name="value"/> unless it is itself a Complex Subject: the members of a

@@ -716,4 +716,17 @@ public class ResponseModeValidatorTests
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
     }
+
+    /// <summary>
+    /// The delivery-mode table is what the validator consults for every flow; a flow added to
+    /// <see cref="FlowTypes"/> without a row would reach the loud default at request time instead of here.
+    /// </summary>
+    [Fact]
+    public void DeliveryModesByFlow_CoversEveryFlowType()
+    {
+        foreach (var flowType in Enum.GetValues<FlowTypes>())
+            Assert.True(
+                ResponseModeValidator.DeliveryModesByFlow.ContainsKey(flowType),
+                $"{nameof(ResponseModeValidator.DeliveryModesByFlow)} has no entry for {flowType}");
+    }
 }

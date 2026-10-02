@@ -117,58 +117,12 @@ public sealed partial class PushDeliverySender(
             pending = pending.Where(item => item.IsStatusAnnouncement);
         }
 
-        var delivered = 0;
-        var rejected = 0;
-
-        // The first refusal of the pass, kept so the summary below can name a reason. Per-SET logging
-        // is what the queue's own shape rules out: it is read whole, so a receiver that refuses a
-        // backlog would write one line per event - thousands in one pass, differing only in the
-        // identifier, which is the drowning this line exists to prevent rather than cause.
-        DeliveryError? firstRefusal = null;
+        var tally = new PushDeliveryTally();
         foreach (var item in pending)
         {
-            HttpResponseMessage response;
-            try
+            if (!await TransmitAsync(stream, push, item, tally, cancellationToken))
             {
-                response = await SendAsync(push, item, cancellationToken);
-            }
-            catch (HttpRequestException)
-            {
-                // The transport failed before the receiver answered: transient by definition,
-                // so the pass ends and the item waits for the next one, order intact.
                 break;
-            }
-
-            using (response)
-            {
-                if (response.StatusCode == HttpStatusCode.BadRequest)
-                {
-                    var verdict = await ReadVerdictAsync(response, cancellationToken);
-                    if (!DeliveryErrorCodes.IsFinal(verdict?.Error))
-                    {
-                        // The receiver objects to this transmitter, not to this event: leave it queued so a
-                        // later pass can deliver it once the credentials or the grant are put right.
-                        // Non-null by construction: IsFinal answers false only for a code it recognizes.
-                        LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
-                        break;
-                    }
-
-                    firstRefusal ??= verdict ?? Unexplained;
-
-                    await outbox.AcknowledgeAsync(
-                        stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
-                    rejected++;
-                    continue;
-                }
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    break;
-                }
-
-                await outbox.AcknowledgeAsync(
-                    stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
-                delivered++;
             }
         }
 
@@ -176,13 +130,72 @@ public sealed partial class PushDeliverySender(
         // 400 (RFC 8935 Section 2.3) and it is read here to decide whether a retransmission could ever
         // succeed; nothing else carries it onward, so without this the only thing this side holds about
         // a stream refusing everything is a number that looks like a stream refusing nothing.
-        if (rejected > 0)
+        if (tally.Rejected > 0)
         {
             LogSetsRefused(
-                stream.StreamId, rejected, firstRefusal!.Error, Readable(firstRefusal.Description));
+                stream.StreamId,
+                tally.Rejected,
+                tally.FirstRefusal!.Error,
+                Readable(tally.FirstRefusal.Description));
         }
 
-        return new PushDeliveryPassOutcome(delivered, rejected);
+        return tally.ToOutcome();
+    }
+
+    /// <summary>
+    /// Transmits one queued SET and records its outcome in <paramref name="tally"/>.
+    /// </summary>
+    /// <returns>True when the pass may go on to the next item; false when it must stop here so the
+    /// item keeps its place at the head of the queue.</returns>
+    private async Task<bool> TransmitAsync(
+        StreamState stream,
+        PushDeliveryMethod push,
+        OutboxItem item,
+        PushDeliveryTally tally,
+        CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await SendAsync(push, item, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            // The transport failed before the receiver answered: transient by definition,
+            // so the pass ends and the item waits for the next one, order intact.
+            return false;
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var verdict = await ReadVerdictAsync(response, cancellationToken);
+                if (!DeliveryErrorCodes.IsFinal(verdict?.Error))
+                {
+                    // The receiver objects to this transmitter, not to this event: leave it queued so a
+                    // later pass can deliver it once the credentials or the grant are put right.
+                    // Non-null by construction: IsFinal answers false only for a code it recognizes.
+                    LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
+                    return false;
+                }
+
+                await outbox.AcknowledgeAsync(
+                    stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
+                tally.RecordRejected(verdict ?? Unexplained);
+                return true;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            await outbox.AcknowledgeAsync(
+                stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
+            tally.RecordDelivered();
+            return true;
+        }
     }
 
     /// <summary>

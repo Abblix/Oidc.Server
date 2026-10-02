@@ -34,6 +34,10 @@ public partial class DPoPUserInfoValidator(
     IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), IDPoPUserInfoValidator
 {
     /// <inheritdoc/>
+    /// <remarks>
+    /// Whether the access token is bound decides which rules the presentation answers to: an unbound
+    /// token is judged by its scheme alone, a bound one by its scheme, its proof and the proof's nonce.
+    /// </remarks>
     public async Task<OidcError?> ValidateAsync(
         ClientRequest clientRequest,
         JsonWebToken accessToken,
@@ -41,23 +45,34 @@ public partial class DPoPUserInfoValidator(
     {
         var schemeDPoP = clientRequest is { AuthorizationHeader.Scheme: TokenTypes.DPoP };
 
-        if (accessToken is not { Payload.Confirmation.JwkThumbprint: {} committed})
-        {
-            // Unbound (Bearer) access token. Reject the DPoP scheme to keep presentation
-            // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
-            // (RFC 9449 section 7.1) and presenting it via DPoP would bypass logging/policy
-            // gates that key off scheme.
-            if (schemeDPoP)
-            {
-                LogSchemeBindingMismatch(TokenTypes.DPoP, tokenIsBound: false);
-                return new OidcError(
-                    ErrorCodes.InvalidToken,
-                    "Access token is not DPoP-bound; use the Bearer scheme.");
-            }
+        return accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
+            ? await ValidateBoundPresentationAsync(clientRequest, schemeDPoP, committed, rawAccessToken)
+            : ValidateUnboundPresentation(schemeDPoP);
+    }
 
-            return null;
+    private OidcError? ValidateUnboundPresentation(bool schemeDPoP)
+    {
+        // Unbound (Bearer) access token. Reject the DPoP scheme to keep presentation
+        // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
+        // (RFC 9449 section 7.1) and presenting it via DPoP would bypass logging/policy
+        // gates that key off scheme.
+        if (schemeDPoP)
+        {
+            LogSchemeBindingMismatch(TokenTypes.DPoP, tokenIsBound: false);
+            return new OidcError(
+                ErrorCodes.InvalidToken,
+                "Access token is not DPoP-bound; use the Bearer scheme.");
         }
 
+        return null;
+    }
+
+    private async Task<OidcError?> ValidateBoundPresentationAsync(
+        ClientRequest clientRequest,
+        bool schemeDPoP,
+        string committed,
+        string rawAccessToken)
+    {
         if (!schemeDPoP)
         {
             LogSchemeBindingMismatch(clientRequest.AuthorizationHeader?.Scheme ?? "<missing>", tokenIsBound: true);

@@ -36,135 +36,19 @@ public class UpdateClientRequestProcessor(
     /// - All client metadata can be updated except client_id, client_secret, and issuance timestamps
     /// - Omitted fields are treated as null/empty
     /// - A new registration_access_token may be issued
-    /// - Client secrets cannot be updated via this endpoint (they're stored as hashes)
+    /// - Client secrets cannot be updated via this endpoint
     /// </remarks>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidUpdateClientRequest request)
     {
-        var model = request.RegistrationRequest;
         var existingClient = request.Client.ClientInfo;
 
-        // Create updated client info, preserving immutable fields
-        var updatedClient = new ClientInfo(existingClient.ClientId)
-        {
-            // Preserve client secrets (cannot be updated per RFC 7592)
-            ClientSecrets = existingClient.ClientSecrets,
+        // RFC 7592 section 2.2 replaces the metadata but not the credentials, so the client's secrets are kept
+        // rather than updated here; the sector identifier the pairwise subjects hang on is kept too.
+        var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
+            .WithSectorIdentifier(existingClient.SectorIdentifier)
+            .WithClientSecrets(existingClient.ClientSecrets)
+            .Build();
 
-            // Update metadata from request
-            TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
-            AllowedResponseTypes = model.ResponseTypes,
-            AllowedGrantTypes = model.GrantTypes,
-            // Empty rather than null when the client registers none, matching registration: RFC 7592 section 2
-            // replaces the whole metadata set, so a client dropping its redirect URIs must end up with an
-            // empty set rather than an absent one.
-            RedirectUris = model.RedirectUris ?? [],
-            Jwks = model.Jwks,
-            JwksUri = model.JwksUri,
-            PkceRequired = model.PkceRequired,
-            OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 section 5.2: dpop_bound_access_tokens - when omitted, defaults to false.
-            RequireDPoP = model.DpopBoundAccessTokens ?? false,
-            // RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: per-client FAPI-grade enforcement
-            // flags - RFC 7592 update is a full replacement, so omission resets them to false.
-            RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
-            RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
-            TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
-            // RFC 9396 section 10: authorization_details_types per-client allowlist.
-            AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
-            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
-            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
-            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
-            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
-            LogoUri = model.LogoUri,
-            PolicyUri = model.PolicyUri,
-            TermsOfServiceUri = model.TermsOfServiceUri,
-            InitiateLoginUri = model.InitiateLoginUri,
-            SubjectType = model.SubjectType,
-            SectorIdentifier = existingClient.SectorIdentifier, // Preserve existing sector identifier
-            PostLogoutRedirectUris = model.PostLogoutRedirectUris,
-            BackChannelTokenDeliveryMode = model.BackChannelTokenDeliveryMode,
-            BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
-            BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
-            BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
-            ApplicationType = model.ApplicationType,
-            Contacts = model.Contacts,
-            ClientName = model.ClientName,
-            ClientUri = model.ClientUri,
-            DefaultMaxAge = model.DefaultMaxAge,
-            RequireAuthTime = model.RequireAuthTime,
-            DefaultAcrValues = model.DefaultAcrValues,
-            IdentityTokenEncryptedResponseAlgorithm = model.IdTokenEncryptedResponseAlg,
-            IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
-            UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
-            IntrospectionEncryptedResponseAlgorithm = model.IntrospectionEncryptedResponseAlg,
-            IntrospectionEncryptedResponseEncryption = model.IntrospectionEncryptedResponseEnc,
-            AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
-            AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
-            RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
-            RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
-            RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
-            TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
-            RequestUris = model.RequestUris ?? [],
-            // RFC 7592 update is a full replacement: these must be re-applied or the update silently
-            // drops them. Omitting AllowedScopes in particular reverted the client to "any scope"
-            // (null = unrestricted), defeating the per-client scope enforcement on the update path.
-            AllowedScopes = model.Scope,
-            SoftwareId = model.SoftwareId,
-            SoftwareVersion = model.SoftwareVersion,
-        };
-
-        if (model.AuthorizationSignedResponseAlg.HasValue())
-        {
-            updatedClient.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
-        }
-
-        // Mirror the register path: these have non-null ClientInfo defaults (id_token → RS256,
-        // userinfo/introspection → none), so a full-replacement update that omits them here would silently
-        // reset a client's registered signing algorithm to the default and break its token signatures.
-        if (model.UserInfoSignedResponseAlg.HasValue())
-        {
-            updatedClient.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
-        }
-
-        if (model.IntrospectionSignedResponseAlg.HasValue())
-        {
-            updatedClient.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
-        }
-
-        if (model.IdTokenSignedResponseAlg.HasValue())
-        {
-            updatedClient.IdentityTokenSignedResponseAlgorithm = model.IdTokenSignedResponseAlg;
-        }
-
-        // Update logout configuration using wrapper objects
-        if (model.BackChannelLogoutUri != null)
-        {
-            updatedClient.BackChannelLogout = new (
-                model.BackChannelLogoutUri,
-                model.BackChannelLogoutSessionRequired ?? false);
-        }
-
-        if (model.FrontChannelLogoutUri != null)
-        {
-            updatedClient.FrontChannelLogout = new (
-                model.FrontChannelLogoutUri,
-                model.FrontChannelLogoutSessionRequired ?? false);
-        }
-
-        // Map tls_client_auth metadata if selected
-        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
-        {
-            updatedClient.TlsClientAuth = new()
-            {
-                SubjectDn = model.TlsClientAuthSubjectDn,
-                SanDns = model.TlsClientAuthSanDns,
-                SanUris = model.TlsClientAuthSanUri,
-                SanIps = model.TlsClientAuthSanIp,
-                SanEmails = model.TlsClientAuthSanEmail,
-            };
-        }
-
-        // Update client in storage
         // The response echoes the post-update registered state, so what the store now holds is the
         // answer - RFC 7592 section 3 asks the client to be able to verify that the full replacement
         // took effect.
@@ -194,7 +78,7 @@ public class UpdateClientRequestProcessor(
         return new ReadClientSuccessfulResponse
         {
             ClientId = updatedClient.ClientId,
-            ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
+            ClientSecret = null, // The update issues no new secret, so there is none to return
             ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
             TokenEndpointAuthMethod = updatedClient.TokenEndpointAuthMethod,
