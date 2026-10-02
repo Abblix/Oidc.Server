@@ -18,7 +18,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// serves each once it is readied, so its first request finds what was readied. A tenant not readied is left out
 /// of that reading and logged, and handed over again at the next one; a tenant the settings declare that is not
 /// readied on the reading the server starts with refuses the start. The openings of one reading share one refresh
-/// period, and the token is canceled when it runs out.
+/// period, and the token is canceled when it runs out, except on that reading for the tenants the settings declare,
+/// since the start waits for all of them.
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantOpening
