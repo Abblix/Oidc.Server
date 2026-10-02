@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -133,24 +134,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// <returns>The authenticated <see cref="ClientInfo"/>, or null if authentication fails.</returns>
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
-        if (request.ClientAssertionType is null)
+        if (!TryGetJwtBearerAssertion(request, out var assertion))
         {
             return null;
         }
 
-        if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
-        {
-            LogWrongAssertionType();
-            return null;
-        }
-
-        if (!request.ClientAssertion.HasValue())
-        {
-            LogMissingAssertion();
-            return null;
-        }
-
-        var validationResult = await ValidateJwtAsync(request.ClientAssertion);
+        var validationResult = await ValidateJwtAsync(assertion);
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
@@ -161,57 +150,18 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         var token = validJwt.Token;
         var clientInfo = validJwt.Client;
 
-        var tokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod;
-        if (!ClientAuthenticationMethodsSupported.Contains(tokenEndpointAuthMethod.NotNull(nameof(tokenEndpointAuthMethod))))
-        {
-            LogAuthMethodNotAllowed(clientInfo.ClientId);
-            return null;
-        }
+        // Chain of Responsibility: each link may refuse the assertion and logs why; All stops at the first
+        // refusal, so the links run in the order listed and none of them spends anything.
+        Func<bool>[] links =
+        [
+            () => AuthMethodIsSupported(clientInfo),
+            () => SigningAlgorithmMatchesRegistration(token, clientInfo),
+            () => IssuerMatchesSubject(token),
+            () => TypeIsClientAuthentication(token, clientInfo),
+            () => AudienceSatisfiesTheProfile(token, clientInfo),
+        ];
 
-        // OIDC Core section 9 / RFC 7591: when the client registered token_endpoint_auth_signing_alg, the
-        // assertion MUST use exactly that algorithm. The signature is already verified by here; this
-        // pins the registered algorithm so a client cannot authenticate with a different (e.g. weaker)
-        // algorithm its key happens to support.
-        var requiredSigningAlgorithm = clientInfo.TokenEndpointAuthSigningAlgorithm;
-        if (requiredSigningAlgorithm.HasValue() &&
-            !string.Equals(token.Header.Algorithm, requiredSigningAlgorithm, StringComparison.Ordinal))
-        {
-            LogSigningAlgorithmNotAllowed(clientInfo.ClientId, token.Header.Algorithm, requiredSigningAlgorithm);
-            return null;
-        }
-
-        string? subject;
-        try
-        {
-            subject = token.Payload.Subject;
-        }
-        catch (InvalidOperationException ex)
-        {
-            LogSubjectExtractionFailed(ex, ex.Message);
-            return null;
-        }
-
-        var issuer = token.Payload.Issuer;
-        if (issuer == null || subject == null || issuer != subject)
-        {
-            LogIssuerSubjectMismatch(issuer, subject);
-            return null;
-        }
-
-        // An assertion authenticates the client; it is not a token this server issued. RFC 7523bis asks that
-        // such a JWT be typed "client-authentication+jwt or another more specific explicit type value defined
-        // by a specification profiling this specification" - a SHOULD on the sender, and one that admits
-        // values we cannot list, so the exact value cannot be demanded. What can be refused is a JWT declaring
-        // itself some other type this class names, which is the replay RFC 8725 section 3.11 describes. The client
-        // signs this one itself, so the types within its reach are not only the ones this server issued.
-        var tokenType = token.Header.Type;
-        if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
-        {
-            LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
-            return null;
-        }
-
-        if (!AudienceSatisfiesTheProfile(token, clientInfo))
+        if (!links.All(link => link()))
         {
             return null;
         }
@@ -238,6 +188,119 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         }
 
         return clientInfo;
+    }
+
+    /// <summary>
+    /// Finds the JWT bearer assertion the request carries, logging a request that names another assertion type
+    /// or names this one without a value.
+    /// </summary>
+    /// <param name="request">The client request.</param>
+    /// <param name="assertion">The assertion when present.</param>
+    private bool TryGetJwtBearerAssertion(ClientRequest request, [NotNullWhen(true)] out string? assertion)
+    {
+        assertion = null;
+        if (request.ClientAssertionType is null)
+        {
+            return false;
+        }
+
+        if (request.ClientAssertionType != ClientAssertionTypes.JwtBearer)
+        {
+            LogWrongAssertionType();
+            return false;
+        }
+
+        if (!request.ClientAssertion.HasValue())
+        {
+            LogMissingAssertion();
+            return false;
+        }
+
+        assertion = request.ClientAssertion;
+        return true;
+    }
+
+    /// <summary>
+    /// Answers whether the client is registered for an authentication method this authenticator serves.
+    /// </summary>
+    private bool AuthMethodIsSupported(ClientInfo clientInfo)
+    {
+        var tokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod;
+        if (ClientAuthenticationMethodsSupported.Contains(
+                tokenEndpointAuthMethod.NotNull(nameof(tokenEndpointAuthMethod))))
+        {
+            return true;
+        }
+
+        LogAuthMethodNotAllowed(clientInfo.ClientId);
+        return false;
+    }
+
+    /// <summary>
+    /// Answers whether the assertion is signed with the algorithm the client registered, when it registered one.
+    /// </summary>
+    private bool SigningAlgorithmMatchesRegistration(JsonWebToken token, ClientInfo clientInfo)
+    {
+        // OIDC Core section 9 / RFC 7591: when the client registered token_endpoint_auth_signing_alg, the
+        // assertion MUST use exactly that algorithm. The signature is already verified by here; this
+        // pins the registered algorithm so a client cannot authenticate with a different (e.g. weaker)
+        // algorithm its key happens to support.
+        var requiredSigningAlgorithm = clientInfo.TokenEndpointAuthSigningAlgorithm;
+        if (!requiredSigningAlgorithm.HasValue() ||
+            string.Equals(token.Header.Algorithm, requiredSigningAlgorithm, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        LogSigningAlgorithmNotAllowed(clientInfo.ClientId, token.Header.Algorithm, requiredSigningAlgorithm);
+        return false;
+    }
+
+    /// <summary>
+    /// Answers whether the assertion names the same client as its issuer and its subject.
+    /// </summary>
+    private bool IssuerMatchesSubject(JsonWebToken token)
+    {
+        string? subject;
+        try
+        {
+            subject = token.Payload.Subject;
+        }
+        catch (InvalidOperationException ex)
+        {
+            LogSubjectExtractionFailed(ex, ex.Message);
+            return false;
+        }
+
+        var issuer = token.Payload.Issuer;
+        if (issuer != null && subject != null && issuer == subject)
+        {
+            return true;
+        }
+
+        LogIssuerSubjectMismatch(issuer, subject);
+        return false;
+    }
+
+    /// <summary>
+    /// Answers whether the assertion does not declare itself some other kind of token this server names.
+    /// </summary>
+    private bool TypeIsClientAuthentication(JsonWebToken token, ClientInfo clientInfo)
+    {
+        // An assertion authenticates the client; it is not a token this server issued. RFC 7523bis asks that
+        // such a JWT be typed "client-authentication+jwt or another more specific explicit type value defined
+        // by a specification profiling this specification" - a SHOULD on the sender, and one that admits
+        // values we cannot list, so the exact value cannot be demanded. What can be refused is a JWT declaring
+        // itself some other type this class names, which is the replay RFC 8725 section 3.11 describes. The client
+        // signs this one itself, so the types within its reach are not only the ones this server issued.
+        var tokenType = token.Header.Type;
+        if (JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
+        {
+            return true;
+        }
+
+        LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
+        return false;
     }
 
     /// <summary>

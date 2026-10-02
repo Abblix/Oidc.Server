@@ -185,23 +185,32 @@ internal static class JsonNodeExtensions
     /// <returns>Protobuf Value representation, or null if input is null.</returns>
     public static Value? ToValue(this object? obj)
     {
+        // Chain of Responsibility: the shapes read directly, then the numbers, then serialization for the rest
         return obj switch
         {
             null => null,
             bool b => Value.ForBool(b),
-            int i => Value.ForNumber(i),
-            long l => Value.ForNumber(l),
-            uint ui => Value.ForNumber(ui),
-            ulong ul => Value.ForNumber(ul),
-            double d => Value.ForNumber(d),
-            float f => Value.ForNumber(f),
-            decimal m => Value.ForNumber((double)m),
             string s => Value.ForString(s),
             JsonNode node => node.ToValue(),
             object[] array => Value.ForList(array.Select(ToValue).Where(v => v != null).ToArray()),
-            _ => JsonSerializer.SerializeToNode(obj).ToValue()  // Fallback for complex types only
+            _ => NumberToValue(obj) ?? JsonSerializer.SerializeToNode(obj).ToValue()  // Fallback for complex types only
         };
     }
+
+    /// <summary>
+    /// The protobuf number for a CLR numeric value, or null when <paramref name="obj"/> is not one.
+    /// </summary>
+    private static Value? NumberToValue(object obj) => obj switch
+    {
+        int i => Value.ForNumber(i),
+        long l => Value.ForNumber(l),
+        uint ui => Value.ForNumber(ui),
+        ulong ul => Value.ForNumber(ul),
+        double d => Value.ForNumber(d),
+        float f => Value.ForNumber(f),
+        decimal m => Value.ForNumber((double)m),
+        _ => null,
+    };
 
     /// <summary>
     /// Converts protobuf Value to C# object without serialization.

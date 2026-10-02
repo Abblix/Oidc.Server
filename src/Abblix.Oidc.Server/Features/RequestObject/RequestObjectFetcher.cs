@@ -108,27 +108,28 @@ public partial class RequestObjectFetcher(
 
         var defaults = JsonSerializer.SerializeToNode(Activator.CreateInstance<T>())?.AsObject();
 
-        var ignored = new List<string>();
-        foreach (var (name, value) in outer)
-        {
-            // Carried by the object as well - used, not dropped.
-            if (payload.ContainsKey(name))
-                continue;
-
-            // The parameter that carries the request object itself is expected to be outside it.
-            if (value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject)
-                continue;
-
-            // Left at its type default - the client did not actually supply it.
-            if (JsonNode.DeepEquals(value, defaults?[name]))
-                continue;
-
-            ignored.Add(name);
-        }
+        var ignored = outer
+            .Where(parameter => !payload.ContainsKey(parameter.Key) &&
+                                !CarriesRequestObject(parameter.Value, requestObject) &&
+                                !IsLeftAtDefault(parameter.Key, parameter.Value, defaults))
+            .Select(parameter => parameter.Key)
+            .ToList();
 
         if (ignored.Count > 0)
             LogParametersOutsideRequestObjectIgnored(string.Join(", ", ignored));
     }
+
+    /// <summary>
+    /// Whether this outside parameter is the one carrying the request object, which is expected to be outside it.
+    /// </summary>
+    private static bool CarriesRequestObject(JsonNode? value, string? requestObject)
+        => value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject;
+
+    /// <summary>
+    /// Whether this outside parameter is left at its type default, so the client did not actually supply it.
+    /// </summary>
+    private static bool IsLeftAtDefault(string name, JsonNode? value, JsonObject? defaults)
+        => JsonNode.DeepEquals(value, defaults?[name]);
 
     /// <summary>
     /// Validates the JWT request object to ensure it complies with the required signing algorithm

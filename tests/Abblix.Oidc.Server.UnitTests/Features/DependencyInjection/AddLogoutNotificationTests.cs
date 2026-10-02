@@ -25,10 +25,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 /// <summary>
 /// Locks the composed shape of the <see cref="ILogoutNotifier"/> family and the channels a provider serves.
 /// Each channel is the host's own choice, made by calling
-/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddFrontChannelLogout"/> or
-/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddBackChannelLogout"/>, and both are
+/// <see cref="Abblix.Oidc.Server.Features.LogoutServiceCollectionExtensions.AddFrontChannelLogout"/> or
+/// <see cref="Abblix.Oidc.Server.Features.LogoutServiceCollectionExtensions.AddBackChannelLogout"/>, and both are
 /// public, so the call may arrive after
-/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddLogoutNotification"/> has already
+/// <see cref="Abblix.Oidc.Server.Features.LogoutServiceCollectionExtensions.AddLogoutNotification"/> has already
 /// composed the family. The member must join it: landing beside the composite it would win the singular
 /// resolve, and then RP-initiated logout would notify one channel while the discovery document described
 /// another.

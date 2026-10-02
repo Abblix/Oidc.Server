@@ -35,21 +35,9 @@ public sealed class ServiceTokensAlgorithmsValidator(
     IKeyCustodian? custodian = null,
     IServiceProvider? services = null) : IValidateOptions<OidcOptions>
 {
-    private static string NoEncryptionKey(string tokenType, string keysSetting)
-        => $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
-           $"{keysSetting} is empty and no external key custodian is registered. " +
-           $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
-           $"this token as a signed JWS.";
-
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        var signingAlgorithms = jwtCreator.SignedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal);
-        var keyManagementAlgorithms = jwtCreator.EncryptedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal);
-
-        var failures = new List<string>();
-        var serviceTokens = options.ServiceTokens;
-
         // Under multi-tenancy the server's own settings carry no keys and each tenant's carry its own
         var ofTenant = MultiTenancyDetection.IsTenantsOwn(options);
         var keysJudgedHere = custodian is null &&
@@ -60,42 +48,80 @@ public sealed class ServiceTokensAlgorithmsValidator(
             : $"{nameof(OidcOptions)}.{nameof(OidcOptions.EncryptionKeys)}";
 #pragma warning restore ABXMT001
 
-        Check(failures, nameof(serviceTokens.AccessToken), serviceTokens.AccessToken);
-        Check(failures, nameof(serviceTokens.RefreshToken), serviceTokens.RefreshToken);
-        Check(failures, nameof(serviceTokens.RegistrationAccessToken), serviceTokens.RegistrationAccessToken);
-        Check(failures, nameof(serviceTokens.InitialAccessToken), serviceTokens.InitialAccessToken);
+        // The key set is only knowable here when it comes from the options; with a custodian registered the
+        // keys live outside them, so the emptiness of the options says nothing
+        var noKeyToEncryptWith = keysJudgedHere && options.EncryptionKeys.Count == 0;
+
+        var check = new ServiceTokenCheck(
+            jwtCreator.SignedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal),
+            jwtCreator.EncryptedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal),
+            noKeyToEncryptWith,
+            keysSetting);
+
+        var serviceTokens = options.ServiceTokens;
+        var failures = new List<string>();
+        failures.AddRange(check.Failures(nameof(serviceTokens.AccessToken), serviceTokens.AccessToken));
+        failures.AddRange(check.Failures(nameof(serviceTokens.RefreshToken), serviceTokens.RefreshToken));
+        failures.AddRange(check.Failures(
+            nameof(serviceTokens.RegistrationAccessToken),
+            serviceTokens.RegistrationAccessToken));
+        failures.AddRange(check.Failures(nameof(serviceTokens.InitialAccessToken), serviceTokens.InitialAccessToken));
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);
+    }
 
-        void Check(List<string> results, string tokenType, ServiceTokenOptions token)
+    /// <summary>
+    /// What one validation run settles before it looks at any token, applied to each token in turn.
+    /// </summary>
+    /// <remarks>
+    /// Method Object: the per-token rules share the algorithm sets and the key verdict that
+    /// <see cref="Validate"/> computes once, so they sit on one object rather than in a closure over its locals.
+    /// </remarks>
+    /// <param name="SigningAlgorithms">The signing algorithms the registered signers produce.</param>
+    /// <param name="KeyManagementAlgorithms">The JWE key-management algorithms the registered encryptors
+    /// produce.</param>
+    /// <param name="NoKeyToEncryptWith">Whether the options are known to hold no encryption key.</param>
+    /// <param name="KeysSetting">The setting a refusal names as the empty key set.</param>
+    private sealed record ServiceTokenCheck(
+        HashSet<string> SigningAlgorithms,
+        HashSet<string> KeyManagementAlgorithms,
+        bool NoKeyToEncryptWith,
+        string KeysSetting)
+    {
+        public IEnumerable<string> Failures(string tokenType, ServiceTokenOptions token)
         {
             var signingAlgorithm = token.Signing.Algorithm;
-            if (!signingAlgorithms.Contains(signingAlgorithm))
+            if (!SigningAlgorithms.Contains(signingAlgorithm))
             {
-                results.Add(
+                yield return
                     $"ServiceTokens.{tokenType}.Signing.Algorithm '{signingAlgorithm}' is not among the " +
-                    $"registered signing algorithms ({string.Join(", ", signingAlgorithms)}).");
+                    $"registered signing algorithms ({string.Join(", ", SigningAlgorithms)}).";
             }
 
             if (token.Encrypt == false)
-                return;
+                yield break;
 
             var encryptionAlgorithm = token.Encryption.Algorithm;
-            if (encryptionAlgorithm is not null && !keyManagementAlgorithms.Contains(encryptionAlgorithm))
+            if (encryptionAlgorithm is not null && !KeyManagementAlgorithms.Contains(encryptionAlgorithm))
             {
-                results.Add(
+                yield return
                     $"ServiceTokens.{tokenType}.Encryption.Algorithm '{encryptionAlgorithm}' is not among the " +
-                    $"registered JWE key-management algorithms ({string.Join(", ", keyManagementAlgorithms)}).");
+                    $"registered JWE key-management algorithms ({string.Join(", ", KeyManagementAlgorithms)}).";
             }
 
             // Asked to encrypt with nothing to encrypt with. Only an explicit true is refused: the null default
             // states nothing, and a host that never touched the setting must keep starting and issuing a signed
-            // JWS exactly as before. The key set is only knowable here when it comes from the options; with a
-            // custodian registered the keys live outside them, so the emptiness above says nothing.
-            if (token.Encrypt == true && keysJudgedHere && options.EncryptionKeys.Count == 0)
-                results.Add(NoEncryptionKey(tokenType, keysSetting));
+            // JWS exactly as before.
+            if (token.Encrypt == true && NoKeyToEncryptWith)
+                yield return NoEncryptionKey(tokenType, KeysSetting);
         }
+
+        private static string NoEncryptionKey(string tokenType, string keysSetting)
+            => $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
+               $"{keysSetting} is empty and no external key custodian is registered. " +
+               $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
+               $"this token as a signed JWS.";
     }
 }

@@ -148,32 +148,36 @@ public partial class TlsMetadataClientAuthenticator(
     /// </remarks>
     private static bool MatchSans(TlsClientAuthOptions options, X509Certificate2 cert)
     {
-        if (options.SanDns is not { Length: > 0 } &&
-            options.SanUris is not { Length: > 0 } &&
-            options.SanIps is not { Length: > 0 } &&
-            options.SanEmails is not { Length: > 0 })
-        {
-            return true; // nothing to check
-        }
+        var requirements = SanRequirements(options).ToArray();
+        if (requirements.Length == 0)
+            return true;
 
         var san = GetSubjectAlternativeName(cert);
-        if (san == null)
-            return false;
+        return san != null && requirements.All(isMetBy => isMetBy(san));
+    }
 
-        if (options.SanDns is { Length: > 0 } && !options.SanDns.All(d => san.DnsNames.Contains(d)))
-            return false;
+    /// <summary>
+    /// One requirement per SAN kind the client configured: every value it lists must be among the certificate's
+    /// entries of that kind.
+    /// </summary>
+    /// <remarks>
+    /// Specification: each kind is a predicate over the parsed entries, so a kind left unconfigured adds nothing
+    /// to check rather than a condition that has to be skipped.
+    /// </remarks>
+    /// <param name="options">The client's TLS client authentication options.</param>
+    private static IEnumerable<Func<SanEntries, bool>> SanRequirements(TlsClientAuthOptions options)
+    {
+        if (options.SanDns is { Length: > 0 } dnsNames)
+            yield return san => dnsNames.All(d => san.DnsNames.Contains(d));
 
-        if (options.SanUris is { Length: > 0 } && !options.SanUris.All(u => san.Uris.Contains(u)))
-            return false;
+        if (options.SanUris is { Length: > 0 } uris)
+            yield return san => uris.All(u => san.Uris.Contains(u));
 
-        if (options.SanIps is { Length: > 0 } && !options.SanIps.All(ip => san.Ips.Contains(ip)))
-            return false;
+        if (options.SanIps is { Length: > 0 } ips)
+            yield return san => ips.All(ip => san.Ips.Contains(ip));
 
-        if (options.SanEmails is { Length: > 0 } && !options.SanEmails.All(e => san.Emails.Contains(e)))
-            return false;
-
-        return true;
-
+        if (options.SanEmails is { Length: > 0 } emails)
+            yield return san => emails.All(e => san.Emails.Contains(e));
     }
 
     /// <summary>

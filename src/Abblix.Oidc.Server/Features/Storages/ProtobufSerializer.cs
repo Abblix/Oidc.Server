@@ -6,19 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Frozen;
 using System.Text;
-using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.BackChannelAuthentication;
-using Abblix.Oidc.Server.Features.DeviceAuthorization;
-using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 using Google.Protobuf;
-using AuthorizationRequest = Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationRequest;
-using AuthorizedGrant = Abblix.Oidc.Server.Features.Storages.Proto.AuthorizedGrant;
-using AuthSession = Abblix.Oidc.Server.Features.Storages.Proto.AuthSession;
-using JsonWebTokenStatus = Abblix.Oidc.Server.Features.Storages.Proto.JsonWebTokenStatus;
-using RequestedClaims = Abblix.Oidc.Server.Features.Storages.Proto.RequestedClaims;
-using TokenInfo = Abblix.Oidc.Server.Features.Storages.Proto.TokenInfo;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
@@ -33,20 +24,11 @@ namespace Abblix.Oidc.Server.Features.Storages;
 public class ProtobufSerializer : IBinarySerializer
 {
     /// <summary>
-    /// The messages stored as they are, with no domain type mapped onto them, each with the parser that reads it.
+    /// The codec of each stored type, keyed by that type.
     /// </summary>
-    private static readonly Dictionary<Type, MessageParser> StoredAsThemselves = new()
-    {
-        [typeof(Proto.RevocationCutoff)] = Proto.RevocationCutoff.Parser,
-        [typeof(Proto.PollSchedule)] = Proto.PollSchedule.Parser,
-        [typeof(Proto.RateLimitAttempt)] = Proto.RateLimitAttempt.Parser,
-        [typeof(Proto.RateLimitGeneration)] = Proto.RateLimitGeneration.Parser,
-        [typeof(Proto.SessionClient)] = Proto.SessionClient.Parser,
-        [typeof(Proto.SessionClientsGeneration)] = Proto.SessionClientsGeneration.Parser,
-        [typeof(Proto.LogoutConfirmation)] = Proto.LogoutConfirmation.Parser,
-        [typeof(Proto.NonceSecret)] = Proto.NonceSecret.Parser,
-        [typeof(Proto.ConsumedRequestUri)] = Proto.ConsumedRequestUri.Parser,
-    };
+    private static readonly FrozenDictionary<Type, ProtobufCodec> Codecs = MappedProtobufCodecs.All
+        .Concat(StoredProtobufCodecs.All)
+        .ToFrozenDictionary(codec => codec.ValueType);
 
     /// <summary>
     /// Serializes an object to a binary representation using Protocol Buffers.
@@ -61,33 +43,29 @@ public class ProtobufSerializer : IBinarySerializer
         if (obj is string str)
             return Encoding.UTF8.GetBytes(str);
 
-        IMessage protoMessage = obj switch
+        if (obj is null || CodecOf(obj.GetType()) is not { } codec)
         {
-            Tokens.Revocation.JsonWebTokenStatus status => status.ToProto(),
-            Endpoints.Token.Interfaces.TokenInfo tokenInfo => tokenInfo.ToProto(),
-            Model.RequestedClaims requestedClaims => requestedClaims.ToProto(),
-            UserAuthentication.AuthSession authSession => authSession.ToProto(),
-            AuthorizationContext authContext => authContext.ToProto(),
-            Endpoints.Token.Interfaces.AuthorizedGrant authorizedGrant => authorizedGrant.ToProto(),
-            Model.AuthorizationRequest authRequest => authRequest.ToProto(),
-            BackChannelAuthenticationRequest bcRequest => bcRequest.ToProto(),
-            DeviceAuthorizationRequest deviceRequest => deviceRequest.ToProto(),
-            Proto.RevocationCutoff revocationCutoff => revocationCutoff,
-            Proto.PollSchedule pollSchedule => pollSchedule,
-            Proto.RateLimitAttempt rateLimitAttempt => rateLimitAttempt,
-            Proto.RateLimitGeneration generation => generation,
-            Proto.SessionClient sessionClient => sessionClient,
-            Proto.SessionClientsGeneration sessionClientsGeneration => sessionClientsGeneration,
-            Proto.LogoutConfirmation logoutConfirmation => logoutConfirmation,
-            Proto.NonceSecret nonceSecret => nonceSecret,
-            Proto.ConsumedRequestUri consumedRequestUri => consumedRequestUri,
-
-            _ => throw new InvalidOperationException(
+            throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +
-                "Only OIDC storage types with protobuf definitions are supported.")
-        };
+                "Only OIDC storage types with protobuf definitions are supported.");
+        }
 
-        return protoMessage.ToByteArray();
+        return codec.ToMessage(obj).ToByteArray();
+    }
+
+    /// <summary>
+    /// The codec serving a value of <paramref name="runtimeType"/>: its own, or else the one of the nearest base
+    /// type that has one, as a type pattern would match a derived value.
+    /// </summary>
+    private static ProtobufCodec? CodecOf(Type runtimeType)
+    {
+        for (var type = runtimeType; type != null; type = type.BaseType)
+        {
+            if (Codecs.TryGetValue(type, out var codec))
+                return codec;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -108,65 +86,13 @@ public class ProtobufSerializer : IBinarySerializer
         if (targetType == typeof(string))
             return (T)(object)Encoding.UTF8.GetString(bytes);
 
-        if (targetType == typeof(Tokens.Revocation.JsonWebTokenStatus))
+        if (!Codecs.TryGetValue(targetType, out var codec))
         {
-            var proto = JsonWebTokenStatus.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
+            throw new InvalidOperationException(
+                $"Type {targetType.FullName} is not supported for protobuf deserialization. " +
+                "Only OIDC storage types with protobuf definitions are supported.");
         }
 
-        if (StoredAsThemselves.TryGetValue(targetType, out var parser))
-            return (T)(object)parser.ParseFrom(bytes);
-
-        if (targetType == typeof(Endpoints.Token.Interfaces.TokenInfo))
-        {
-            var proto = TokenInfo.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
-        }
-
-        if (targetType == typeof(Model.RequestedClaims))
-        {
-            var proto = RequestedClaims.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto()!;
-        }
-
-        if (targetType == typeof(UserAuthentication.AuthSession))
-        {
-            var proto = AuthSession.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
-        }
-
-        if (targetType == typeof(AuthorizationContext))
-        {
-            var proto = Proto.AuthorizationContext.Parser.ParseFrom(bytes);
-            return (T)(object)AuthorizationContextMapper.FromProto(proto);
-        }
-
-        if (targetType == typeof(Endpoints.Token.Interfaces.AuthorizedGrant))
-        {
-            var proto = AuthorizedGrant.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
-        }
-
-        if (targetType == typeof(Model.AuthorizationRequest))
-        {
-            var proto = AuthorizationRequest.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
-        }
-
-        if (targetType == typeof(BackChannelAuthenticationRequest))
-        {
-            var proto = Proto.BackChannelAuthenticationRequest.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
-        }
-
-        if (targetType == typeof(DeviceAuthorizationRequest))
-        {
-            var proto = Proto.DeviceAuthorizationRequest.Parser.ParseFrom(bytes);
-            return (T)(object)proto.FromProto();
-        }
-
-        throw new InvalidOperationException(
-            $"Type {targetType.FullName} is not supported for protobuf deserialization. " +
-            "Only OIDC storage types with protobuf definitions are supported.");
+        return (T?)codec.FromBytes(bytes);
     }
 }
