@@ -63,23 +63,8 @@ public class AuthorizationRequestProcessor(
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
 		var (authSessions, authenticationLevelUnmet) = await GetAvailableAuthSessionsAsync(request);
 
-		// The request comes back from the login or account-creation page still carrying prompt=login or
-		// prompt=create, and asking again would send the end user round in a loop. A session authenticated
-		// since the server sent the end user there is the one the client asked for, so the request proceeds
-		// with it. A session's authentication time is kept to the second, so the comparison is too.
-		var prompt = model.Prompt;
-		if (prompt is Prompts.Login or Prompts.Create && model.PromptedAt is { } promptedAt)
-		{
-			var openedSince = authSessions
-				.Where(session => promptedAt.ToUnixTimeSeconds() <= session.AuthenticationTime.ToUnixTimeSeconds())
-				.ToList();
-
-			if (openedSince.Count > 0)
-			{
-				authSessions = openedSince;
-				prompt = null;
-			}
-		}
+		var (prompt, sessionsAnswering) = PromptStillAsked(model, authSessions);
+		authSessions = sessionsAnswering;
 
 		AuthSession authSession;
 		switch (authSessions.Count, prompt)
@@ -291,6 +276,29 @@ public class AuthorizationRequestProcessor(
 
 		// Return the final authorization result containing codes and tokens as needed.
 		return result;
+	}
+
+	/// <summary>
+	/// The prompt the request still asks for, and the sessions that may answer it.
+	/// </summary>
+	/// <remarks>
+	/// The request comes back from the login or account-creation page still carrying prompt=login or
+	/// prompt=create, and asking again would send the end user round in a loop. A session authenticated
+	/// since the server sent the end user there is the one the client asked for, so the request proceeds
+	/// with it alone. A session's authentication time is kept to the second, so the comparison is too.
+	/// </remarks>
+	private static (string? Prompt, List<AuthSession> Sessions) PromptStillAsked(
+		Model.AuthorizationRequest model,
+		List<AuthSession> authSessions)
+	{
+		if (model.Prompt is not (Prompts.Login or Prompts.Create) || model.PromptedAt is not { } promptedAt)
+			return (model.Prompt, authSessions);
+
+		var openedSince = authSessions
+			.Where(session => promptedAt.ToUnixTimeSeconds() <= session.AuthenticationTime.ToUnixTimeSeconds())
+			.ToList();
+
+		return openedSince.Count > 0 ? (null, openedSince) : (model.Prompt, authSessions);
 	}
 
 	/// <summary>
