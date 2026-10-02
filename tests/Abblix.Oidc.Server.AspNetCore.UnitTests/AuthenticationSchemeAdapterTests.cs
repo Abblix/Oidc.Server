@@ -486,6 +486,8 @@ public class AuthenticationSchemeAdapterTests
 	[InlineData("42", typeof(int))]
 	[InlineData("9000000000", typeof(long))]
 	[InlineData("1.5", typeof(float))]
+	[InlineData("1.23456789012", typeof(double))]
+	[InlineData("12345678901234567890", typeof(decimal))]
 	public async Task RoundTrip_NumberParsedFromJson_ReadsBackAsFirstKindThatTakesIt(string json, Type expected)
 	{
 		var result = await RoundTripAsync(Session(new JsonObject { ["n"] = JsonNode.Parse(json) }));
@@ -504,6 +506,12 @@ public class AuthenticationSchemeAdapterTests
 	[InlineData("0.1")]
 	[InlineData("1.0000000000000000001")]
 	[InlineData("1E+300")]
+	[InlineData("1.23456789012E+30")]
+	[InlineData("1.2345678901234567890123E+40")]
+	[InlineData("1E-50")]
+	[InlineData("1.23456789012E-25")]
+	[InlineData("123456789012345678901234567890")]
+	[InlineData("1.2345678901234567890123456789012")]
 	public async Task RoundTrip_FractionalNumberParsedFromJson_KeepsEveryDigit(string json)
 	{
 		var result = await RoundTripAsync(Session(new JsonObject { ["n"] = JsonNode.Parse(json) }));
