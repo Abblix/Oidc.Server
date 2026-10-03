@@ -470,6 +470,48 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
+    /// A creation released again while its last release is still remembered, as when the wall clock is set back and
+    /// the tenant is listed and dropped once more, is released again rather than fail every reading after it.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReleasedAgain_AfterTheClockWasSetBack_DoesNotFailTheReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var now = start;
+        var clock = new Moq.Mock<TimeProvider>();
+        clock.Setup(provider => provider.GetUtcNow()).Returns(() => now);
+        var catalog = new StoreTenantCatalog(
+            _logger,
+            _store,
+            [new TenantDefinitionsCheck()],
+            [_opening],
+            Options.Create(_options),
+            clock.Object);
+        var pause = _options.RefreshEvery;
+
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        now = start + pause;
+        await catalog.RefreshAsync(ct);
+
+        // The clock is set back, and the same creation is listed and dropped once more
+        now = start;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        now = start + pause;
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        await catalog.RefreshAsync(ct);
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
     /// Something kept for a released tenant that fails to be let go is logged, and neither fails the reading nor
     /// keeps the other tenants gone with it from being released.
     /// </summary>

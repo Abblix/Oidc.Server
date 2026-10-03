@@ -105,8 +105,13 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
         // canceled with the rest, or one canceled already, and never one that is not canceled at all
         var releasedLately = Volatile.Read(ref _releasedLately)
             .Where(released => now - released.Value < pause)
-            .Concat(due.Keys.Select(space => KeyValuePair.Create(space, now)))
             .ToDictionary(StringComparer.Ordinal);
+
+        // A creation released again while its last release is remembered, as after the clock was set back, takes
+        // the time of this release
+        foreach (var space in due.Keys)
+            releasedLately[space] = now;
+
         Volatile.Write(ref _releasedLately, releasedLately);
         foreach (var (space, creation) in due)
         {
