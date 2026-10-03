@@ -248,10 +248,18 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
     /// <returns>The original result after executing the action if successful; otherwise, the failure result.</returns>
     public Result<TSuccess, TFailure> Bind(Action<TSuccess> action)
     {
-        if (Value is TSuccess success)
-            action(success);
-        else if (Value is not TFailure)
-            throw NeitherCase();
+        switch (Value)
+        {
+            case TSuccess success:
+                action(success);
+                break;
+
+            case TFailure:
+                break;
+
+            default:
+                throw NeitherCase();
+        }
 
         return this;
     }
