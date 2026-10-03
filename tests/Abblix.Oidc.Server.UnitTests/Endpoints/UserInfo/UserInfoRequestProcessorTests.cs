@@ -39,7 +39,10 @@ public class UserInfoRequestProcessorTests
     {
         _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);
-        _processor = new UserInfoRequestProcessor(_issuerProvider.Object, _userClaimsProvider.Object);
+        _processor = new UserInfoRequestProcessor(
+            _issuerProvider.Object,
+            SingleIssuer.Settings,
+            _userClaimsProvider.Object);
     }
 
     private static UserInfoRequest CreateUserInfoRequest() => new()

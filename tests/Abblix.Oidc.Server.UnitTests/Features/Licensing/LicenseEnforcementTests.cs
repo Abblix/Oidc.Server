@@ -8,6 +8,7 @@
 
 using System;
 using System.Linq;
+using System.Threading;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -47,7 +48,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void The_issuer_the_licence_names_is_accepted()
     {
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     {
         // The whitelist is what ties a license to the deployment it was issued for. Without it, a license file
         // works wherever it is copied.
-        Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -66,7 +67,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // to. Asserted separately from the single-call case because a single call cannot tell the two apart.
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
     }
 
@@ -79,13 +80,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         // assembly's license, turned out to exercise the whitelist while claiming to test the count.
         ArrangeLicenceThatCountsIssuers();
 
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
 
         // Every call, not only the first. A limit that stops applying once it has been reported is not a
         // limit: the caller only has to ask again, and a retry policy does that without anyone deciding to.
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
     }
 
@@ -111,12 +112,12 @@ public sealed class LicenseEnforcementTests : IDisposable
         // constant could be deleted outright with the whole suite still green - measured, not assumed.
         ArrangeInstallationWithNoLicence();
 
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
 
         // Every time, not only the first: a limit that stops applying once reported is not a limit.
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
     }
 
@@ -139,8 +140,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         LicenseLogger.Instance.Init(records);
         try
         {
-            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
         finally
         {
@@ -235,6 +236,51 @@ public sealed class LicenseEnforcementTests : IDisposable
         {
             Assert.Null(new ClientInfo("one-client-too-many").CheckClientLicense(SingleIssuer.Settings));
         }
+    }
+
+    [Fact]
+    public void A_tenant_gone_for_good_no_longer_counts_toward_the_issuer_limit()
+    {
+        // The license meters the issuers served, not every issuer the process ever saw: a tenant released from the
+        // store gives its place to the next, so a deployment whose tenants come and go stays within its terms
+        ArrangeInstallationWithNoLicence();
+        using var released = new CancellationTokenSource();
+        var gone = Mock.Of<IIssuerSettings>(settings => settings.Released == released.Token);
+
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, gone));
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        released.Cancel();
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    [Fact]
+    public void The_clients_of_a_tenant_gone_for_good_no_longer_count_toward_the_client_limit()
+    {
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = 2,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        using var released = new CancellationTokenSource();
+        var gone = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme" && settings.Released == released.Token);
+        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+
+        // Past the margin with the clients of a tenant about to go
+        for (var index = 0; index < 3; index++)
+        {
+            var client = new ClientInfo($"client-{index}");
+            Assert.Same(client, client.CheckClientLicense(gone));
+        }
+
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(globex));
+
+        released.Cancel();
+        var newcomer = new ClientInfo("newcomer");
+        Assert.Same(newcomer, newcomer.CheckClientLicense(globex));
     }
 
     [Fact]
@@ -334,7 +380,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         LicenseLogger.Instance.Init(new ThrowingLoggerFactory());
         try
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
         finally
         {

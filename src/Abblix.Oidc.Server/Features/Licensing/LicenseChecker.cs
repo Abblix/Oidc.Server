@@ -76,7 +76,8 @@ public static partial class LicenseChecker
     /// <remarks>
     /// A client is counted once for each issuer it is registered with, since two tenants may each register a client
     /// under one id. The issuer is the one the deployment declares rather than the one a request names, which a
-    /// forged Host header could vary to push the count past the limit.
+    /// forged Host header could vary to push the count past the limit. A client stops counting once its issuer is
+    /// released, so a deployment whose tenants come and go counts the clients of the tenants it serves.
     /// </remarks>
     public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
     {
@@ -106,7 +107,7 @@ public static partial class LicenseChecker
             return null; // Prevents processing of clients exceeding the limit by more than 30%
         }
 
-        _knownClientIds.TryAdd(client, null!);
+        Count(_knownClientIds, client, issuer);
         if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
             LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
         {
@@ -120,6 +121,17 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
+    /// Counts <paramref name="key"/> until <paramref name="issuer"/> is released, so what the license meters is what
+    /// the deployment serves now rather than everything the process has seen.
+    /// </summary>
+    private static void Count<TKey>(ConcurrentDictionary<TKey, object> counted, TKey key, IIssuerSettings issuer)
+        where TKey : notnull
+    {
+        if (counted.TryAdd(key, null!))
+            issuer.Released.Register(() => counted.TryRemove(key, out _));
+    }
+
+    /// <summary>
     /// A counted client as a log names it: its id, after the issuer's when the deployment serves several.
     /// </summary>
     private static string Named((string IssuerId, string ClientId) client)
@@ -129,8 +141,10 @@ public static partial class LicenseChecker
     /// Applies licensing checks to an issuer value.
     /// </summary>
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
+    /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
+    /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
-    public static string CheckIssuer(string issuer)
+    public static string CheckIssuer(string issuer, IIssuerSettings settings)
     {
         var utcNow = TimeProvider.System.GetUtcNow();
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
@@ -152,7 +166,7 @@ public static partial class LicenseChecker
         if (currentLicense.IssuerLimit.HasValue)
         {
             _knownIssuers ??= new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
-            _knownIssuers.TryAdd(issuer, null!);
+            Count(_knownIssuers, issuer, settings);
             if (currentLicense.IssuerLimit.Value < _knownIssuers.Count)
             {
                 // The decision is taken first and stands on its own; only the record of it is throttled. This

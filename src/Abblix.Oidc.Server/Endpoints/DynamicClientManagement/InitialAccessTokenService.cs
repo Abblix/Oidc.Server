@@ -23,13 +23,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 public class InitialAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
     IIssuerProvider issuerProvider,
+    IIssuerSettings issuerSettings,
     IOptions<OidcOptions> options) : IInitialAccessTokenService
 {
     /// <inheritdoc />
     public Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
     {
         var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
-        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
+        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings);
 
         var token = new JsonWebToken
         {
