@@ -1,0 +1,257 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
+using Xunit;
+
+// The feature is marked experimental for its consumers; these tests are where it is built.
+#pragma warning disable ABXMT001
+
+namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
+
+public class TenantManagerTests
+{
+    /// <summary>
+    /// A store of tenants in memory that writes only while the version a change names is the one it holds, and can
+    /// be told to lose the race to another instance once.
+    /// </summary>
+    private sealed class MemoryStore : ITenantStore, ITenantStoreWriter
+    {
+        private readonly Dictionary<string, StoredTenant> _tenants = new(StringComparer.Ordinal);
+        private int _versions;
+
+        /// <summary>Whether the next write finds the store changed by another instance since it was read.</summary>
+        public bool ChangedMeanwhile { get; set; }
+
+        public IReadOnlyCollection<StoredTenant> Tenants => [.._tenants.Values];
+
+        public Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Tenants);
+
+        public Task<string?> AddAsync(TenantDefinition tenant, CancellationToken cancellationToken)
+        {
+            if (TakeChangedMeanwhile() || _tenants.ContainsKey(tenant.Id))
+                return Task.FromResult<string?>(null);
+
+            return Task.FromResult<string?>(Store(tenant));
+        }
+
+        public Task<string?> UpdateAsync(
+            TenantDefinition tenant,
+            string expectedVersion,
+            CancellationToken cancellationToken)
+            => Task.FromResult(TakeChangedMeanwhile() || !Holds(tenant.Id, expectedVersion) ? null : Store(tenant));
+
+        public Task<bool> RemoveAsync(string tenantId, string expectedVersion, CancellationToken cancellationToken)
+            => Task.FromResult(
+                !TakeChangedMeanwhile() && Holds(tenantId, expectedVersion) && _tenants.Remove(tenantId));
+
+        private bool Holds(string tenantId, string version)
+            => _tenants.TryGetValue(tenantId, out var held) && held.Version == version;
+
+        private string Store(TenantDefinition tenant)
+        {
+            var version = (++_versions).ToString(CultureInfo.InvariantCulture);
+            _tenants[tenant.Id] = new StoredTenant(tenant, version);
+            return version;
+        }
+
+        private bool TakeChangedMeanwhile()
+        {
+            var changed = ChangedMeanwhile;
+            ChangedMeanwhile = false;
+            return changed;
+        }
+    }
+
+    private readonly MemoryStore _store = new();
+    private readonly StoreTenantCatalog _catalog;
+    private readonly TenantManager _manager;
+
+    public TenantManagerTests()
+    {
+        var options = Options.Create(new MultiTenancyOptions());
+        _catalog = new StoreTenantCatalog(
+            NullLogger<StoreTenantCatalog>.Instance,
+            _store,
+            [new TenantDefinitionsCheck()],
+            [],
+            options,
+            new FakeTimeProvider());
+        var services = new ServiceCollection().AddSingleton<ITenantStoreWriter>(_store).BuildServiceProvider();
+        _manager = new TenantManager(_store, [new TenantDefinitionsCheck()], _catalog, services);
+    }
+
+    private static TenantDefinition Tenant(string id, string issuer) => new() { Id = id, Issuer = issuer };
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    private static StoredTenant Stored(Result<StoredTenant, TenantChangeRefusal> result)
+        => result.TryGetSuccess(out var stored) ? stored : throw new Xunit.Sdk.XunitException(result.ToString());
+
+    private static TenantChangeRefusalReason Refused(Result<StoredTenant, TenantChangeRefusal> result)
+        => result.TryGetFailure(out var refusal)
+            ? refusal.Reason
+            : throw new Xunit.Sdk.XunitException(result.ToString());
+
+    /// <summary>
+    /// A tenant created through the manager is stored under a generation of its own and served at once, without
+    /// waiting for the next reading of the store.
+    /// </summary>
+    [Fact]
+    public async Task ACreatedTenant_IsStoredUnderAGenerationOfItsOwn_AndServedAtOnce()
+    {
+        await _catalog.RefreshAsync(Ct);
+
+        var created = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+
+        Assert.NotEmpty(created.Tenant.Generation);
+        Assert.Equal(created, Assert.Single(_store.Tenants));
+        Assert.Equal(created.Tenant.Generation, (await _catalog.FindByIdAsync("acme", Ct))?.Generation);
+    }
+
+    /// <summary>
+    /// A tenant created again under the id of one removed is a new creation, under a generation of its own.
+    /// </summary>
+    [Fact]
+    public async Task ATenantCreatedAgain_HasANewGeneration()
+    {
+        var first = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+        Stored(await _manager.RemoveAsync("acme", first.Version, Ct));
+
+        var second = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+
+        Assert.NotEqual(first.Tenant.Generation, second.Tenant.Generation);
+    }
+
+    /// <summary>
+    /// A tenant the startup checks would refuse is refused and not stored.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheChecksRefuse_IsNotStored()
+    {
+        Stored(await _manager.CreateAsync(Tenant("acme", "https://auth.example.com"), Ct));
+
+        var claimingTheSameAddress = await _manager.CreateAsync(Tenant("globex", "https://auth.example.com"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(claimingTheSameAddress));
+        Assert.Single(_store.Tenants);
+    }
+
+    /// <summary>
+    /// A tenant under an id the store holds already is refused as such, whatever else is wrong with it, whether the
+    /// manager finds it or the store does.
+    /// </summary>
+    [Fact]
+    public async Task ATenantUnderAnIdHeldAlready_IsRefused()
+    {
+        Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+        Stored(await _manager.CreateAsync(Tenant("globex", "https://globex.example.com"), Ct));
+
+        // Claiming globex's address too, which the checks would refuse on their own
+        var again = await _manager.CreateAsync(Tenant("acme", "https://globex.example.com"), Ct);
+        _store.ChangedMeanwhile = true;
+        var lost = await _manager.CreateAsync(Tenant("initech", "https://initech.example.com"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.AlreadyExists, Refused(again));
+        Assert.Equal(TenantChangeRefusalReason.AlreadyExists, Refused(lost));
+    }
+
+    /// <summary>
+    /// A changed tenant keeps its generation and is served changed at once; a change naming a version the store no
+    /// longer holds is refused as a conflict, and one of a tenant the store does not hold as not found.
+    /// </summary>
+    [Fact]
+    public async Task AChange_KeepsTheGeneration_AndNamesTheVersionItWasReadAt()
+    {
+        var created = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+
+        var changed = Stored(await _manager.UpdateAsync(
+            Tenant("acme", "https://acme.example.com/changed"), created.Version, Ct));
+        var stale = await _manager.UpdateAsync(Tenant("acme", "https://acme.example.com"), created.Version, Ct);
+        var missing = await _manager.UpdateAsync(Tenant("globex", "https://globex.example.com"), "1", Ct);
+
+        Assert.Equal(created.Tenant.Generation, changed.Tenant.Generation);
+        Assert.Equal("https://acme.example.com/changed", (await _catalog.FindByIdAsync("acme", Ct))?.Issuer);
+        Assert.Equal(TenantChangeRefusalReason.Conflict, Refused(stale));
+        Assert.Equal(TenantChangeRefusalReason.NotFound, Refused(missing));
+    }
+
+    /// <summary>
+    /// A change another instance overtakes between the read and the write is refused as a conflict.
+    /// </summary>
+    [Fact]
+    public async Task AChangeOvertakenByAnotherInstance_IsAConflict()
+    {
+        var created = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+
+        _store.ChangedMeanwhile = true;
+        var overtaken = await _manager.UpdateAsync(
+            Tenant("acme", "https://acme.example.com/changed"), created.Version, Ct);
+        _store.ChangedMeanwhile = true;
+        var removalOvertaken = await _manager.RemoveAsync("acme", created.Version, Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Conflict, Refused(overtaken));
+        Assert.Equal(TenantChangeRefusalReason.Conflict, Refused(removalOvertaken));
+    }
+
+    /// <summary>
+    /// A removed tenant is no longer served at once.
+    /// </summary>
+    [Fact]
+    public async Task ARemovedTenant_IsNoLongerServed()
+    {
+        var created = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+
+        Stored(await _manager.RemoveAsync("acme", created.Version, Ct));
+
+        Assert.Null(await _catalog.FindByIdAsync("acme", Ct));
+        Assert.Empty(_store.Tenants);
+    }
+
+    /// <summary>
+    /// A refusal the checks hold against another tenant the store holds already does not stop an unrelated change.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalOfAnotherTenant_DoesNotStopAChange()
+    {
+        await _store.AddAsync(Tenant("acme", "https://auth.example.com"), Ct);
+        await _store.AddAsync(Tenant("globex", "https://auth.example.com"), Ct);
+
+        var created = Stored(await _manager.CreateAsync(Tenant("initech", "https://initech.example.com"), Ct));
+
+        Assert.Equal("initech", created.Tenant.Id);
+    }
+
+    /// <summary>
+    /// A store without a writer cannot be changed through the manager, and says why.
+    /// </summary>
+    [Fact]
+    public async Task AStoreWithoutAWriter_IsRefused()
+    {
+        var manager = new TenantManager(
+            _store,
+            [new TenantDefinitionsCheck()],
+            _catalog,
+            new ServiceCollection().BuildServiceProvider());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+    }
+}

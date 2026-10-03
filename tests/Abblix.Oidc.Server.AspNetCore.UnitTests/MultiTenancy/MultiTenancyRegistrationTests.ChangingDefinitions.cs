@@ -78,6 +78,22 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// Multi-tenancy registers the manager of the tenants; over a store the host writes to by other means it says
+    /// the store has no writer rather than fail on something else.
+    /// </summary>
+    [Fact]
+    public async Task TheManagerOfTheTenants_IsRegistered_AndNamesAMissingWriter()
+    {
+        using var provider = ServingFrom(new ChangingTenantStore());
+
+        var manager = provider.GetRequiredService<ITenantManager>();
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => manager.CreateAsync(AcmeWithoutClients(), CancellationToken.None));
+        Assert.Contains(nameof(ITenantStoreWriter), refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A store of tenants whose listing changes between readings, as one the host edits while the server runs.
     /// </summary>
     private sealed class ChangingTenantStore : ITenantStore

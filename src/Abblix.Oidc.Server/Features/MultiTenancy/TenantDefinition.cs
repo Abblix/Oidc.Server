@@ -28,16 +28,33 @@ public sealed class TenantDefinition
     public required string Id { get; init; }
 
     /// <summary>
-    /// Which creation of the tenant under <see cref="Id"/> this is, assigned by the store of tenants each time a
-    /// tenant is created and kept for as long as it lives: letters, digits, '-' and '_'. Empty for a tenant the
-    /// settings declare.
+    /// Which creation of the tenant under <see cref="Id"/> this is, assigned each time a tenant is created -
+    /// by <see cref="ITenantManager"/>, or by the store of a host writing it otherwise - and kept for as long as it
+    /// lives: letters, digits, '-' and '_'. Empty for a tenant the settings declare.
     /// </summary>
     /// <remarks>
     /// What the server keeps for a tenant - its stored codes and tokens, its minted keys, what it builds from the
     /// definition - is kept under its id and generation together, so a tenant created again under the id of one
     /// removed starts with none of it.
     /// </remarks>
-    public string Generation { get; init; } = string.Empty;
+#pragma warning disable S2292 // The field is written by WithGeneration on a copy, where an init accessor cannot be
+    public string Generation { get => _generation; init => _generation = value; }
+#pragma warning restore S2292
+
+    private string _generation = string.Empty;
+
+    /// <summary>
+    /// This definition as a creation under <paramref name="generation"/>, everything else shared with it.
+    /// </summary>
+    /// <remarks>
+    /// A copy of every member rather than a list of them, so a member added later is carried over too.
+    /// </remarks>
+    internal TenantDefinition WithGeneration(string generation)
+    {
+        var copy = (TenantDefinition)MemberwiseClone();
+        copy._generation = generation;
+        return copy;
+    }
 
     /// <summary>
     /// The tenant's issuer identifier, as it appears in every token the tenant issues and in its discovery
