@@ -121,7 +121,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         // of the same fallback, and that asymmetry is how this went missing: every other test reaching CheckIssuer
         // either runs under the assembly license, and so is refused on the whitelist before anything is counted, or
         // supplies a license of its own carrying the limit. None of them asks the fallback what it allows, so the
-        // constant could be deleted outright with the whole suite still green - measured, not assumed.
+        // constant could be deleted outright with the whole suite still green - measured, not assumed. A deployment
+        // of one issuer may take its issuer from the address of each request, so there the address is what counts.
         ArrangeInstallationWithNoLicence();
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
@@ -315,10 +316,28 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
+    public void A_tenant_created_again_keeps_its_place_while_requests_of_the_earlier_creation_finish()
+    {
+        // Requests of both creations are served during the pause: whichever counted last, the release of the
+        // earlier creation leaves the place the later one holds
+        ArrangeInstallationWithNoLicence();
+        using var earlier = new CancellationTokenSource();
+        using var later = new CancellationTokenSource();
+
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", earlier.Token));
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", later.Token));
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", earlier.Token));
+        earlier.Cancel();
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    [Fact]
     public void A_late_request_of_a_released_creation_neither_counts_nor_frees_the_place_of_the_live_one()
     {
-        // A request still holding a creation released already carries a canceled token: it counts for nothing,
-        // and the creation serving the tenant now keeps its place
+        // A request still holding a creation released already carries a canceled token while the catalog remembers
+        // the release: it counts for nothing, and the creation serving the tenant now keeps its place
         ArrangeInstallationWithNoLicence();
         using var later = new CancellationTokenSource();
         LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", later.Token));
@@ -327,6 +346,10 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         Assert.Throws<InvalidOperationException>(
             () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        // Nor does it hold the place once the live creation goes
+        later.Cancel();
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -340,19 +363,6 @@ public sealed class LicenseEnforcementTests : IDisposable
         LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
 
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, acme));
-    }
-
-    [Fact]
-    public void A_deployment_of_one_issuer_counts_each_address_it_is_reached_at()
-    {
-        // A deployment of one issuer may take its issuer from the address of each request, so there the address
-        // is what counts, and a second address is refused under a license for one
-        ArrangeInstallationWithNoLicence();
-
-        LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings);
-
-        Assert.Throws<InvalidOperationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
     }
 
     [Fact]

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 
@@ -126,9 +127,10 @@ public static partial class LicenseChecker
     /// the deployment serves now rather than everything the process has seen.
     /// </summary>
     /// <remarks>
-    /// The entry belongs to the creation of the tenant that counted it last, and only that creation's release takes
-    /// it out: a tenant created again under its id while the earlier creation awaits release keeps its place when
-    /// the earlier one goes. A creation released already, as a late request still carries, counts for nothing.
+    /// Each creation of the tenant that counts the entry holds it, and the entry leaves the count once every creation
+    /// holding it is released, so a tenant created again under its id keeps its place while requests of the earlier
+    /// creation finish. A creation released already counts for nothing while the catalog remembers the release, for
+    /// one pause after it; a request outliving that counts the tenant for the rest of the process.
     /// </remarks>
     private static void Count<TKey>(
         ConcurrentDictionary<TKey, Counted> counted,
@@ -137,34 +139,59 @@ public static partial class LicenseChecker
         IIssuerSettings issuer)
         where TKey : notnull
     {
-        var owner = issuer.Released;
-        if (owner.IsCancellationRequested)
-            return;
-
-        var taken = false;
-        while (!taken)
+        var holder = issuer.Released;
+        bool held;
+        bool written;
+        do
         {
-            if (counted.TryGetValue(key, out var held) && held.Owner == owner && held.Name == name)
-                return;
+            if (counted.TryGetValue(key, out var entry))
+            {
+                held = entry.Holders.Contains(holder);
+                if (held && entry.Name == name)
+                    return;
 
-            var entry = new Counted(name, owner);
-            taken = held is null ? counted.TryAdd(key, entry) : counted.TryUpdate(key, entry, held);
-            if (taken)
-                owner.Register(() => counted.TryRemove(new KeyValuePair<TKey, Counted>(key, entry)));
+                written = counted.TryUpdate(key, new Counted(name, entry.Holders.Add(holder)), entry);
+            }
+            else
+            {
+                held = false;
+                written = counted.TryAdd(key, new Counted(name, [holder]));
+            }
+        }
+        while (!written);
+
+        if (!held)
+            holder.Register(() => Release(counted, key, holder));
+    }
+
+    /// <summary>
+    /// Takes <paramref name="holder"/> off the entry under <paramref name="key"/>, and the entry off the count once
+    /// no creation holds it.
+    /// </summary>
+    private static void Release<TKey>(ConcurrentDictionary<TKey, Counted> counted, TKey key, CancellationToken holder)
+        where TKey : notnull
+    {
+        var released = false;
+        while (!released && counted.TryGetValue(key, out var entry) && entry.Holders.Contains(holder))
+        {
+            var rest = entry.Holders.Remove(holder);
+            released = rest.IsEmpty
+                ? counted.TryRemove(new KeyValuePair<TKey, Counted>(key, entry))
+                : counted.TryUpdate(key, new Counted(entry.Name, rest), entry);
         }
     }
 
     /// <summary>
-    /// An entry of a count: the name a log gives it, and the release of the creation that counted it.
+    /// An entry of a count: the name a log gives it, and the releases of the creations holding it.
     /// </summary>
     /// <remarks>
-    /// Compared by reference, so a release takes out the entry it registered for and never one counted after it.
+    /// Compared by reference, so an entry is replaced only by a writer that read it as it stands.
     /// </remarks>
-    private sealed class Counted(string name, CancellationToken owner)
+    private sealed class Counted(string name, ImmutableHashSet<CancellationToken> holders)
     {
         public string Name { get; } = name;
 
-        public CancellationToken Owner { get; } = owner;
+        public ImmutableHashSet<CancellationToken> Holders { get; } = holders;
     }
 
     /// <summary>
@@ -186,7 +213,8 @@ public static partial class LicenseChecker
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
     /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
     /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; with a catalog of
-    /// tenants of the host's own, which tells no release, the count only grows.</param>
+    /// tenants of the host's own, which tells no release, the count only grows, and tenants it serves under one id
+    /// take one place.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer, IIssuerSettings settings)
     {
