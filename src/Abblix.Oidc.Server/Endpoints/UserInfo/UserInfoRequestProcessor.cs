@@ -23,7 +23,10 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// <c>userinfo</c> entry of the OIDC Core section 5.5 <c>claims</c> request. Returns
 /// <see cref="ErrorCodes.InvalidToken"/> if no claims are produced for the subject.
 /// </summary>
-public class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
+public class UserInfoRequestProcessor(
+	IIssuerProvider issuerProvider,
+	IIssuerSettings issuerSettings,
+	IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid user information request and returns a structured response containing
@@ -46,7 +49,7 @@ public class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaim
 		if (userInfo == null)
 			return new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found");
 
-		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
+		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings);
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}
 }

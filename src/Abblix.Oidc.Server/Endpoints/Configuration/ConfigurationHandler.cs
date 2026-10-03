@@ -30,6 +30,7 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 public sealed class ConfigurationHandler(
 	IOptionsSnapshot<OidcOptions> options,
 	IIssuerProvider issuerProvider,
+	IIssuerSettings issuerSettings,
 	ILogoutNotifier logoutNotifier,
 	IClientAuthenticator clientAuthenticator,
 	IAuthorizationMetadataProvider authorizationMetadata,
@@ -51,7 +52,7 @@ public sealed class ConfigurationHandler(
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
 	public Task<ConfigurationResponse> HandleAsync() => Task.FromResult(new ConfigurationResponse
 	{
-		Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+		Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings),
 
 		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,

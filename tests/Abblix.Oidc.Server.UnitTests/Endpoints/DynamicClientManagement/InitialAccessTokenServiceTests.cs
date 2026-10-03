@@ -46,6 +46,7 @@ public class InitialAccessTokenServiceTests
         _service = new InitialAccessTokenService(
             _jwtFormatter.Object,
             _issuerProvider.Object,
+            SingleIssuer.Settings,
             Options.Create(new OidcOptions()));
     }
 

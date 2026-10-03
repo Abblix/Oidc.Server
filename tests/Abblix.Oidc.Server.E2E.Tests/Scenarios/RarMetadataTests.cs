@@ -10,8 +10,10 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
@@ -85,11 +87,12 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         // the host (which is what triggers LicenseLoader.LoadAsync on the embedded JWT).
         var client = CreateClient();
         _ = await FetchDiscoveryAsync(client);
+        var settings = Factory.Services.GetRequiredService<IIssuerSettings>();
 
-        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer));
+        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer, settings));
 
         var ex = Assert.Throws<InvalidOperationException>(
-            () => LicenseChecker.CheckIssuer("https://attacker.example.com"));
+            () => LicenseChecker.CheckIssuer("https://attacker.example.com", settings));
         Assert.Contains("license", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 

@@ -50,6 +50,7 @@ public class AuthServiceJwtValidatorTests
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
             issuerProvider.Object,
+            SingleIssuer.Settings,
             _serviceKeysProvider.Object);
     }
 
