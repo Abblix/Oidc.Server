@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 #pragma warning disable ABXMT001
@@ -137,12 +138,22 @@ public class StoreTenantCatalogTests
 
     private readonly MultiTenancyOptions _options = new();
 
+    private readonly FakeTimeProvider _time = new();
+
+    /// <summary>Reads the store once a refresh period has passed, as the refresh loop does.</summary>
+    private async Task ReadAfterAPeriodAsync(StoreTenantCatalog catalog, CancellationToken ct)
+    {
+        _time.Advance(_options.RefreshEvery);
+        await catalog.RefreshAsync(ct);
+    }
+
     private StoreTenantCatalog Catalog(ITenantStore? store = null) => new(
         _logger,
         store ?? _store,
         [new TenantDefinitionsCheck()],
         [_opening],
-        Options.Create(_options));
+        Options.Create(_options),
+        _time);
 
     private static StoredTenant Stored(string id, string issuer, string version = Version)
         => new(new TenantDefinition { Id = id, Issuer = issuer, Generation = "g1" }, version);
@@ -406,6 +417,197 @@ public class StoreTenantCatalogTests
 
         Assert.Null(await catalog.FindByIdAsync("acme", ct));
         Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant the store no longer holds is released at the first reading one refresh period after a reading found
+    /// it gone, however often the store is read, so a request begun while it was served finishes with what was kept
+    /// for it; the definition last served is forgotten with it.
+    /// </summary>
+    [Fact]
+    public async Task ATenantGoneFromTheStore_IsReleased_OneRefreshPeriodAfterAReadingMissedIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        var released = catalog.Released(acme);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _time.Advance(_options.RefreshEvery - TimeSpan.FromSeconds(1));
+        await catalog.RefreshAsync(ct);
+        Assert.False(released.IsCancellationRequested);
+        Assert.Same(acme, catalog.InForce(acme));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        await catalog.RefreshAsync(ct);
+        Assert.True(released.IsCancellationRequested);
+        Assert.Null(catalog.InForce(acme));
+    }
+
+    /// <summary>
+    /// A request asking for a creation's token while that creation is being released gets one canceled, never one
+    /// that is not, so nothing it keeps then outlives the creation.
+    /// </summary>
+    [Fact]
+    public async Task ACreationAskedForWhileItIsReleased_IsReleasedAlready()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        bool? askedMeanwhile = null;
+        catalog.Released(acme).Register(() => askedMeanwhile = catalog.Released(acme).IsCancellationRequested);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(askedMeanwhile);
+    }
+
+    /// <summary>
+    /// A creation released again while its last release is still remembered, as when the wall clock is set back and
+    /// the tenant is listed and dropped once more, is released again rather than fail every reading after it.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReleasedAgain_AfterTheClockWasSetBack_DoesNotFailTheReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var now = start;
+        var clock = new Moq.Mock<TimeProvider>();
+        clock.Setup(provider => provider.GetUtcNow()).Returns(() => now);
+        var catalog = new StoreTenantCatalog(
+            _logger,
+            _store,
+            [new TenantDefinitionsCheck()],
+            [_opening],
+            Options.Create(_options),
+            clock.Object);
+        var pause = _options.RefreshEvery;
+
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        now = start + pause;
+        await catalog.RefreshAsync(ct);
+
+        // The clock is set back, and the same creation is listed and dropped once more
+        now = start;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        now = start + pause;
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        await catalog.RefreshAsync(ct);
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// Something kept for a released tenant that fails to be let go is logged, and neither fails the reading nor
+    /// keeps the other tenants gone with it from being released.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseThatFails_IsLogged_AndTheOthersAreReleased()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        catalog.Released((await catalog.FindByIdAsync("acme", ct))!)
+            .Register(() => throw new InvalidOperationException("a limiter failed to be disposed"));
+        var globex = catalog.Released((await catalog.FindByIdAsync("globex", ct))!);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(globex.IsCancellationRequested);
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant the store still holds is not released while the checks refuse it, so what was kept for it, the
+    /// clients registered with it included, outlives a mistake in its definition.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheChecksRefuse_IsNotReleased()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var released = catalog.Released((await catalog.FindByIdAsync("acme", ct))!);
+
+        // A second tenant claiming the same address has the checks refuse both
+        _store.Tenants.Add(Stored("globex", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.False(released.IsCancellationRequested);
+    }
+
+    /// <summary>
+    /// A tenant created again under the same id is a new creation, so the former one is released while the new
+    /// one is not.
+    /// </summary>
+    [Fact]
+    public async Task ATenantCreatedAgain_ReleasesItsFormerCreation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var former = catalog.Released((await catalog.FindByIdAsync("acme", ct))!);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com", Generation = "g2" },
+            Version));
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(former.IsCancellationRequested);
+        Assert.False(catalog.Released((await catalog.FindByIdAsync("acme", ct))!).IsCancellationRequested);
+    }
+
+    /// <summary>
+    /// A creation the last reading released, as a late request still carries, is released from the start, so what
+    /// such a request keeps for it is let go at once; a creation the store never listed is never released, since
+    /// the catalog cannot tell it is gone.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReleasedLately_IsReleasedAlready_AndOneNeverListed_IsNeverReleased()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(catalog.Released(acme).IsCancellationRequested);
+        Assert.False(catalog.Released(new TenantDefinition { Id = "globex", Issuer = "https://globex.example.com" })
+            .CanBeCanceled);
+
+        // Released already through every reading of one pause, however often the store is read, and forgotten
+        // after it, so the record does not grow
+        await catalog.RefreshAsync(ct);
+        Assert.True(catalog.Released(acme).IsCancellationRequested);
+        await ReadAfterAPeriodAsync(catalog, ct);
+        Assert.False(catalog.Released(acme).CanBeCanceled);
     }
 
     /// <summary>

@@ -51,7 +51,12 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenant
 
             var fresh = new Built(source, tenant, create());
             if (found ? _values.TryUpdate(space, fresh, built!) : _values.TryAdd(space, fresh))
+            {
+                if (!found)
+                    StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => _values.TryRemove(space, out _));
+
                 return fresh.Value;
+            }
         }
     }
 

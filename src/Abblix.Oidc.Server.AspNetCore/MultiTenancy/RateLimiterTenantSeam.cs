@@ -51,7 +51,8 @@ internal sealed class RateLimiterTenantSeam<TResource>(object key, bool required
             registered.ServiceKey,
             (serviceProvider, _) => new TenantPartitionedRateLimiter<TResource>(
                 () => Build(serviceProvider, registered),
-                serviceProvider.GetRequiredService<ITenantAccessor>()),
+                serviceProvider.GetRequiredService<ITenantAccessor>(),
+                serviceProvider.GetRequiredService<ITenantCatalog>()),
             registered.Lifetime);
     }
 

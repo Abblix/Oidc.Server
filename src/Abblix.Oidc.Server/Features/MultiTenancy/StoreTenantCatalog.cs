@@ -30,14 +30,17 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
 /// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
 /// <param name="openings">What readies each tenant the checks pass before it is first served.</param>
-/// <param name="options">How long the openings of one reading may take.</param>
+/// <param name="options">How long the openings of one reading may take, and how long a tenant gone from the store
+/// is kept.</param>
+/// <param name="timeProvider">Tells how long a tenant has been gone from the store.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class StoreTenantCatalog(
     ILogger<StoreTenantCatalog> logger,
     ITenantStore store,
     IEnumerable<ITenantsCheck> checks,
     IEnumerable<ITenantOpening> openings,
-    IOptions<MultiTenancyOptions> options) : ITenantCatalog
+    IOptions<MultiTenancyOptions> options,
+    TimeProvider timeProvider) : ITenantCatalog
 {
     /// <summary>A tenant and where it is served.</summary>
     private sealed record Served(TenantAddress Address, TenantDefinition Tenant);
@@ -62,10 +65,7 @@ public sealed partial class StoreTenantCatalog(
 
     private Reading? _reading;
 
-    // The last definition served under each id, kept once the tenant is refused or dropped: a request still holding
-    // one of its definitions is judged by the last one in force rather than by none. One entry for each id ever
-    // served, its keys included, kept for the life of the process
-    private readonly ConcurrentDictionary<string, TenantDefinition> _lastServed = new(StringComparer.Ordinal);
+    private readonly TenantCreations _creations = new(timeProvider, logger);
 
     /// <summary>
     /// Reads the store again and serves what the checks let through.
@@ -92,6 +92,8 @@ public sealed partial class StoreTenantCatalog(
     {
         var listed = await store.ListAsync(cancellationToken);
         var previous = Volatile.Read(ref _reading);
+
+        _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshEvery);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
         var refusals = (
@@ -128,7 +130,7 @@ public sealed partial class StoreTenantCatalog(
     private void Publish(StoredTenant[] served, IReadOnlySet<string> refused, IReadOnlySet<string> notOpened)
     {
         foreach (var tenant in served.Select(entry => entry.Tenant))
-            _lastServed[tenant.Id] = tenant;
+            _creations.Served(tenant);
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
@@ -155,17 +157,10 @@ public sealed partial class StoreTenantCatalog(
         if (fresh.Length == 0)
             return ([], new HashSet<string>(StringComparer.Ordinal));
 
-        var startingWithTheSettings = previous is null && store is OptionsTenantStore;
         var failures = await _opening.OpenAsync(
             [..fresh.Select(tenant => tenant.Tenant)],
-            !startingWithTheSettings,
+            previous is null && store is OptionsTenantStore,
             cancellationToken);
-        if (startingWithTheSettings && failures.Count > 0)
-        {
-            var (tenantId, exception) = failures.First();
-            throw new InvalidOperationException(
-                $"The tenant '{tenantId}' the settings declare could not be readied to be served.", exception);
-        }
 
         foreach (var (tenantId, exception) in failures)
         {
@@ -213,13 +208,27 @@ public sealed partial class StoreTenantCatalog(
     }
 
     /// <summary>
+    /// The token canceled once the store no longer holds the creation of <paramref name="tenant"/> and one refresh
+    /// period has passed, for what the server keeps in memory for it to be let go; canceled already for a creation
+    /// the last reading released, and never for one the store has not listed.
+    /// </summary>
+    public CancellationToken Released(TenantDefinition tenant) => _creations.Released(tenant);
+
+    /// <summary>
+    /// The token <see cref="Released"/> gives when <paramref name="catalog"/> is this server's own; none that is ever
+    /// canceled for a catalog of the host's own, which this server cannot tell a tenant is gone from.
+    /// </summary>
+    internal static CancellationToken ReleasedOf(ITenantCatalog catalog, TenantDefinition tenant)
+        => catalog is StoreTenantCatalog own ? own.Released(tenant) : CancellationToken.None;
+
+    /// <summary>
     /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the
-    /// last one served when the tenant is refused or dropped since; null when this catalog never served this
-    /// creation of the tenant, or has served another creation of it since.
+    /// last one served when the tenant is refused or dropped since and not yet released; null when this catalog never
+    /// served this creation of the tenant, has served another creation of it since, or has released it.
     /// </summary>
     internal TenantDefinition? InForce(TenantDefinition held)
         => (Volatile.Read(ref _reading)?.ById.GetValueOrDefault(held.Id)?.Tenant ??
-            _lastServed.GetValueOrDefault(held.Id)) is { } inForce &&
+            _creations.LastServed(held.Id)) is { } inForce &&
            inForce.Generation == held.Generation
             ? inForce
             : null;

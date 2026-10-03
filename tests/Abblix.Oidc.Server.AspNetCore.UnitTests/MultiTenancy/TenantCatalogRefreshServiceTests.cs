@@ -87,7 +87,8 @@ public class TenantCatalogRefreshServiceTests
             _store,
             [],
             [],
-            Options.Create(new MultiTenancyOptions()));
+            Options.Create(new MultiTenancyOptions()),
+            _time);
     }
 
     private TenantCatalogRefreshService Service()

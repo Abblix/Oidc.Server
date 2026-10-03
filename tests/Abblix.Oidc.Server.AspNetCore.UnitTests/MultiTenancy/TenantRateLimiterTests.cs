@@ -166,6 +166,90 @@ public sealed class TenantRateLimiterTests : IDisposable
     }
 
     /// <summary>
+    /// The limiter of a tenant the store no longer holds is disposed once the tenant is released, its timer with it,
+    /// while a request still holding the tenant spends against no limiter rather than build one again.
+    /// </summary>
+    [Fact]
+    public async Task TheLimiterOfAReleasedTenant_IsDisposed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var declared = new MultiTenancyOptions
+        {
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" }],
+        };
+        var catalog = new StoreTenantCatalog(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<StoreTenantCatalog>.Instance,
+            new OptionsTenantStore(Microsoft.Extensions.Options.Options.Create(declared)),
+            [],
+            [],
+            Microsoft.Extensions.Options.Options.Create(declared),
+            time);
+        await catalog.RefreshAsync(ct);
+
+        var built = new System.Collections.Generic.List<PartitionedRateLimiter<string>>();
+        using var budget = new TenantPartitionedRateLimiter<string>(
+            () =>
+            {
+                var limiter = PartitionedRateLimiter.Create<string, string>(RateLimitPartition.GetNoLimiter);
+                built.Add(limiter);
+                return limiter;
+            },
+            new HttpContextTenantAccessor(new HttpContextAccessor { HttpContext = InTenant("acme") }),
+            catalog);
+        budget.AttemptAcquire(Address).Dispose();
+
+        declared.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        built[0].AttemptAcquire(Address).Dispose();
+
+        time.Advance(declared.RefreshEvery);
+        await catalog.RefreshAsync(ct);
+        Assert.Throws<ObjectDisposedException>(() => built[0].AttemptAcquire(Address));
+        budget.AttemptAcquire(Address).Dispose();
+        Assert.Single(built);
+    }
+
+    /// <summary>
+    /// A tenant released while its limiter is being built has that limiter disposed at once, so the request that
+    /// built it spends against no limiter rather than fail on a disposed one.
+    /// </summary>
+    [Fact]
+    public async Task ATenantReleasedWhileItsLimiterIsBuilt_SpendsAgainstNoLimiter()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var declared = new MultiTenancyOptions
+        {
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" }],
+        };
+        var catalog = new StoreTenantCatalog(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<StoreTenantCatalog>.Instance,
+            new OptionsTenantStore(Microsoft.Extensions.Options.Options.Create(declared)),
+            [],
+            [],
+            Microsoft.Extensions.Options.Options.Create(declared),
+            time);
+        await catalog.RefreshAsync(ct);
+        declared.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+
+        using var budget = new TenantPartitionedRateLimiter<string>(
+            () =>
+            {
+                // The reading that releases the tenant lands while the limiter is being built
+                time.Advance(declared.RefreshEvery);
+                catalog.RefreshAsync(ct).GetAwaiter().GetResult();
+                return PartitionedRateLimiter.Create<string, string>(RateLimitPartition.GetNoLimiter);
+            },
+            new HttpContextTenantAccessor(new HttpContextAccessor { HttpContext = InTenant("acme") }),
+            catalog);
+
+        using var lease = budget.AttemptAcquire(Address);
+        Assert.True(lease.IsAcquired);
+    }
+
+    /// <summary>
     /// A budget that has built a limiter for two tenants, and those limiters.
     /// </summary>
     private static (TenantPartitionedRateLimiter<string> Budget, System.Collections.Generic.List<PartitionedRateLimiter<string>> Built)
@@ -180,7 +264,8 @@ public sealed class TenantRateLimiterTests : IDisposable
                 built.Add(limiter);
                 return limiter;
             },
-            new HttpContextTenantAccessor(httpContextAccessor));
+            new HttpContextTenantAccessor(httpContextAccessor),
+            Moq.Mock.Of<ITenantCatalog>());
 
         foreach (var tenantId in new[] { "acme", "globex" })
         {
@@ -288,7 +373,8 @@ public sealed class TenantRateLimiterTests : IDisposable
                 bothBuilding.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
                 return shared;
             },
-            new HttpContextTenantAccessor(httpContextAccessor));
+            new HttpContextTenantAccessor(httpContextAccessor),
+            Moq.Mock.Of<ITenantCatalog>());
 
         var calls = new[] { "acme", "globex" }.Select(tenantId => System.Threading.Tasks.Task.Run(() =>
         {
@@ -353,7 +439,8 @@ public sealed class TenantRateLimiterTests : IDisposable
                 secondArrived.Wait(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken);
                 return PartitionedRateLimiter.Create<string, string>(key => RateLimitPartition.GetNoLimiter(key));
             },
-            new HttpContextTenantAccessor(httpContextAccessor));
+            new HttpContextTenantAccessor(httpContextAccessor),
+            Moq.Mock.Of<ITenantCatalog>());
 
         await System.Threading.Tasks.Task.WhenAll(
             System.Threading.Tasks.Task.Run(() => budget.AttemptAcquire(Address).Dispose(), TestContext.Current.CancellationToken),

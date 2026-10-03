@@ -36,6 +36,13 @@ internal sealed class KeyRings(
     public IKeyRing For(string partition) => Ring(partition);
 
     /// <inheritdoc />
+    public void Close(string partition)
+    {
+        _rings.TryRemove(partition, out _);
+        _openedAt.TryRemove(partition, out _);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken)

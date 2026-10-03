@@ -14,8 +14,10 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
 #pragma warning disable ABXMT001
@@ -49,6 +51,30 @@ public partial class MultiTenancyRegistrationTests
         EnterTenant(provider, Acme("after"));
         Assert.Null(await clients.TryFindClientAsync("before"));
         Assert.NotNull(await clients.TryFindClientAsync("after"));
+    }
+
+    /// <summary>
+    /// What was built for a tenant is kept while the tenant stays in the store, through one reading that no longer
+    /// finds it, and is let go once it is released: a request still holding the tenant builds it again.
+    /// </summary>
+    [Fact]
+    public async Task WhatWasBuiltForATenant_IsLetGo_OnceTheTenantIsReleased()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = ServingFrom(store);
+        var acme = await Served(provider, store, AcmeWithoutClients(), "1");
+        EnterTenant(provider, acme);
+        var local = provider.GetRequiredService<IIssuerLocal<object>>();
+        var built = local.GetOrCreate(null, () => new object());
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(CancellationToken.None);
+        Assert.Same(built, local.GetOrCreate(null, () => new object()));
+
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        await catalog.RefreshAsync(CancellationToken.None);
+        Assert.NotSame(built, local.GetOrCreate(null, () => new object()));
     }
 
     /// <summary>
@@ -88,6 +114,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantStore>(store);
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider());
         if (hostCatalog)
         {
             services.AddSingleton<HostCatalog>();

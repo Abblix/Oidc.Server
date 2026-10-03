@@ -34,4 +34,11 @@ public interface IKeyRings
     Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lets the ring of <paramref name="partition"/> go, its keys with it, once the issuer it served is gone for
+    /// good; a ring not built is left alone. The partition's entries stay in the store.
+    /// </summary>
+    /// <param name="partition">The partition to close.</param>
+    void Close(string partition);
 }

@@ -560,6 +560,35 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A tenant's ring is closed once when the tenant is released, however often the tenant was opened before, so
+    /// opening it again does not pile up what is to be done at its release.
+    /// </summary>
+    [Fact]
+    public async Task ATenantOpenedAgainAndAgain_HasItsRingClosedOnce_WhenReleased()
+    {
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1")] };
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        using var provider = MintingKeys(services =>
+        {
+            services.AddSingleton<ITenantStore>(store);
+            services.AddSingleton<TimeProvider>(time);
+        });
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        var opening = provider.GetServices<ITenantOpening>().OfType<TenantKeyRingOpening>().Single();
+        var acme = (await catalog.FindByIdAsync("acme", TestContext.Current.CancellationToken))!;
+        await opening.OpenAsync([acme], TestContext.Current.CancellationToken);
+        await opening.OpenAsync([acme], TestContext.Current.CancellationToken);
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        time.Advance(new MultiTenancyOptions().RefreshEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Moq.Mock.Get(provider.GetRequiredService<IKeyRings>()).Verify(rings => rings.Close("acme"), Moq.Times.Once);
+    }
+
+    /// <summary>
     /// Tenants whose ids and generations spell one partition would sign with each other's keys, so none of them is
     /// opened, each refused on its own, while the other tenants open as usual.
     /// </summary>
