@@ -140,6 +140,12 @@ public static partial class LicenseChecker
         where TKey : notnull
     {
         var holder = issuer.Released;
+
+        // Added and taken off again at once, a released creation would still raise the count for that instant and
+        // refuse a request of a tenant served at the limit meanwhile
+        if (holder.IsCancellationRequested)
+            return;
+
         bool held;
         bool written;
         do
@@ -161,8 +167,22 @@ public static partial class LicenseChecker
         while (!written);
 
         if (!held)
-            holder.Register(() => Release(counted, key, holder));
+            ReleaseOnCancel(counted, key, holder);
     }
+
+    /// <summary>
+    /// Releases <paramref name="holder"/> from the entry under <paramref name="key"/> once it is canceled.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="Count{TKey}"/>, whose every call would otherwise allocate the closure, while only the
+    /// first count of a creation registers.
+    /// </remarks>
+    private static void ReleaseOnCancel<TKey>(
+        ConcurrentDictionary<TKey, Counted> counted,
+        TKey key,
+        CancellationToken holder)
+        where TKey : notnull
+        => holder.Register(() => Release(counted, key, holder));
 
     /// <summary>
     /// Takes <paramref name="holder"/> off the entry under <paramref name="key"/>, and the entry off the count once
