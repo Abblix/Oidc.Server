@@ -67,7 +67,7 @@ public sealed partial class TenantManager(
     /// </summary>
     /// <remarks>
     /// Only listing, judging and writing are one at a time: the next change lists the store for itself, so it
-    /// need not wait for this one's reading to be served.
+    /// need not wait for this one's reading to be served, though its own reading still follows this one's.
     /// </remarks>
     private async Task<Result<StoredTenant, TenantChangeRefusal>> OneAtATimeAsync(
         Func<IReadOnlyCollection<StoredTenant>, Task<Result<StoredTenant, TenantChangeRefusal>>> change,

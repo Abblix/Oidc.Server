@@ -34,7 +34,8 @@ public interface ITenantManager
     /// carries over to it.
     /// </summary>
     /// <param name="tenant">The tenant to create; its generation is assigned here.</param>
-    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <param name="cancellationToken">Cancels the change until it is written; after that it only stops the wait for
+    /// this instance to serve the change, which is then reported as made.</param>
     /// <returns>The tenant as stored, or why it was refused.</returns>
     /// <exception cref="InvalidOperationException">The store registers no <see cref="ITenantStoreWriter"/>.
     /// </exception>
@@ -49,7 +50,8 @@ public interface ITenantManager
     /// <param name="tenant">The tenant as it is to be; a generation it names is not taken, the stored one is kept.
     /// </param>
     /// <param name="version">The version the tenant was read at.</param>
-    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <param name="cancellationToken">Cancels the change until it is written; after that it only stops the wait for
+    /// this instance to serve the change, which is then reported as made.</param>
     /// <returns>The tenant as stored, or why it was refused.</returns>
     /// <exception cref="InvalidOperationException">The store registers no <see cref="ITenantStoreWriter"/>.
     /// </exception>
@@ -64,7 +66,8 @@ public interface ITenantManager
     /// </summary>
     /// <param name="tenantId">The id of the tenant to remove.</param>
     /// <param name="version">The version the tenant was read at.</param>
-    /// <param name="cancellationToken">Cancels the change.</param>
+    /// <param name="cancellationToken">Cancels the change until it is written; after that it only stops the wait for
+    /// this instance to serve the change, which is then reported as made.</param>
     /// <returns>The tenant as it was stored, or why the removal was refused.</returns>
     /// <exception cref="InvalidOperationException">The store registers no <see cref="ITenantStoreWriter"/>.
     /// </exception>
