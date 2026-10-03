@@ -17,6 +17,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// A store the host writes to by other means needs none. Each change of a stored tenant names the version it was
 /// read at and is applied only while the store still holds that version, as one conditional write, so a change
 /// made meanwhile by another instance is never overwritten unseen.
+/// <para>
+/// Registered as a singleton, as the store is: the manager that takes it lives for the life of the process, so a
+/// writer registered for a request would be held for every request after the first, and a container validating
+/// its scopes refuses it at startup.
+/// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantStoreWriter

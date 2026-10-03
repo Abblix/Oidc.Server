@@ -65,6 +65,10 @@ public sealed partial class TenantManager(
     /// Makes one change at a time over the tenants the store holds then, and has the catalog read the store again
     /// once it is written.
     /// </summary>
+    /// <remarks>
+    /// Only listing, judging and writing are one at a time: the next change lists the store for itself, so it
+    /// need not wait for this one's reading to be served.
+    /// </remarks>
     private async Task<Result<StoredTenant, TenantChangeRefusal>> OneAtATimeAsync(
         Func<IReadOnlyCollection<StoredTenant>, Task<Result<StoredTenant, TenantChangeRefusal>>> change,
         CancellationToken cancellationToken)
@@ -72,30 +76,45 @@ public sealed partial class TenantManager(
         // Asked before anything is read, so a store without a writer is refused the same way whatever it holds
         _ = Writer;
 
+        Result<StoredTenant, TenantChangeRefusal> result;
         await _changingOne.WaitAsync(cancellationToken);
         try
         {
-            var result = await change(await store.ListAsync(cancellationToken));
-            if (result.TryGetSuccess(out _))
-                await ServeAsync();
-
-            return result;
+            result = await change(await store.ListAsync(cancellationToken));
         }
         finally
         {
             _changingOne.Release();
         }
+
+        if (result.TryGetSuccess(out _))
+            await ServeAsync(cancellationToken);
+
+        return result;
     }
 
     /// <summary>
-    /// Has the catalog read the store again, so this instance serves the change written at once.
+    /// Has the catalog read the store again so this instance serves the change written at once, waiting for the
+    /// reading no longer than the caller does.
     /// </summary>
     /// <remarks>
-    /// The change is in the store by now, so neither the caller giving up nor a reading that fails undoes it, and
-    /// reporting it as failed would have the caller retry a change that was made: the reading goes on without the
-    /// caller's token, a failure is logged, and the catalog's next reading serves the change.
+    /// The change is in the store by now, so neither the caller giving up nor a reading that fails or does not end
+    /// undoes it, and reporting it as failed would have the caller retry a change that was made: the reading goes on
+    /// without the caller, a failure is logged, and the catalog's next reading serves the change.
     /// </remarks>
-    private async Task ServeAsync()
+    private async Task ServeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await ReadAgainAsync().WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The caller stopped waiting; the reading goes on, and the change stays made
+        }
+    }
+
+    private async Task ReadAgainAsync()
     {
         try
         {

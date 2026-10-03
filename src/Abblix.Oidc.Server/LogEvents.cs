@@ -956,7 +956,8 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 10700-10799: <c>Features/MultiTenancy</c> - what the server does with the tenants it reads.
+    /// Range 10700-10799: <c>Features/MultiTenancy</c> - what the server does with the tenants it reads and the
+    /// changes of them it writes.
     /// </summary>
     public static class MultiTenancy
     {

@@ -14,6 +14,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -36,6 +37,7 @@ public class TenantManagerTests
         private int _versions;
 
         private int _listings;
+        private TaskCompletionSource? _holdNext;
 
         /// <summary>Whether the next write finds the store changed by another instance since it was read.</summary>
         public bool ChangedMeanwhile { get; set; }
@@ -45,6 +47,9 @@ public class TenantManagerTests
 
         /// <summary>How many of the next listings fail, as a store that does not answer.</summary>
         public int FailingListings { get; set; }
+
+        /// <summary>Has the next listing alone wait for <paramref name="hold"/>.</summary>
+        public void HoldNextListing(TaskCompletionSource hold) => Volatile.Write(ref _holdNext, hold);
 
         /// <summary>Run once a write has landed, as what happens to the caller meanwhile.</summary>
         public Action? AfterWrite { get; set; }
@@ -58,6 +63,9 @@ public class TenantManagerTests
             Interlocked.Increment(ref _listings);
             if (Hold is { } hold)
                 await hold.Task;
+
+            if (Interlocked.Exchange(ref _holdNext, null) is { } holdNext)
+                await holdNext.Task;
 
             if (FailingListings > 0)
             {
@@ -292,12 +300,48 @@ public class TenantManagerTests
     {
         await _catalog.RefreshAsync(Ct);
         _store.AfterWrite = () => _store.FailingListings = 1;
+        var logged = new List<EventId>();
+        var logger = new Moq.Mock<ILogger<TenantManager>>();
+        logger.Setup(l => l.IsEnabled(Moq.It.IsAny<LogLevel>())).Returns(true);
+        logger
+            .Setup(l => l.Log(
+                Moq.It.IsAny<LogLevel>(),
+                Moq.It.IsAny<EventId>(),
+                Moq.It.IsAny<Moq.It.IsAnyType>(),
+                Moq.It.IsAny<Exception?>(),
+                (Func<Moq.It.IsAnyType, Exception?, string>)Moq.It.IsAny<object>()))
+            .Callback((LogLevel _, EventId eventId, object _, Exception? _, Delegate _) => logged.Add(eventId));
+        var manager = new TenantManager(logger.Object, _store, [new TenantDefinitionsCheck()], _catalog, _store);
 
-        Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+        Stored(await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
         Assert.Null(await _catalog.FindByIdAsync("acme", Ct));
+        Assert.Equal(LogEvents.MultiTenancy.TenantManager.ChangeNotServedYet, Assert.Single(logged).Id);
 
         await _catalog.RefreshAsync(Ct);
         Assert.NotNull(await _catalog.FindByIdAsync("acme", Ct));
+    }
+
+    /// <summary>
+    /// A reading after the write that does not end holds neither the caller, who is told the change was made once
+    /// it stops waiting, nor the next change of the instance, which lists the store for itself.
+    /// </summary>
+    [Fact]
+    public async Task AReadingThatDoesNotEnd_HoldsNeitherTheCallerNorTheNextChange()
+    {
+        var hanging = new TaskCompletionSource();
+        _store.AfterWrite = () => _store.HoldNextListing(hanging);
+
+        using var first = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        first.CancelAfter(TimeSpan.FromMilliseconds(100));
+        Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), first.Token));
+
+        _store.AfterWrite = null;
+        using var second = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        second.CancelAfter(TimeSpan.FromMilliseconds(100));
+        Stored(await _manager.CreateAsync(Tenant("globex", "https://globex.example.com"), second.Token));
+
+        hanging.SetResult();
+        Assert.Equal(2, _store.Tenants.Count);
     }
 
     /// <summary>
