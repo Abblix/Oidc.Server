@@ -7,16 +7,25 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+
+// The feature is marked experimental for its consumers; these tests are where it is built.
+#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
@@ -56,7 +65,8 @@ public sealed class LicenseEnforcementTests : IDisposable
     {
         // The whitelist is what ties a license to the deployment it was issued for. Without it, a license file
         // works wherever it is copied.
-        Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -67,7 +77,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         // to. Asserted separately from the single-call case because a single call cannot tell the two apart.
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            Assert.Throws<InvalidOperationException>(
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
     }
 
@@ -86,7 +97,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         // limit: the caller only has to ask again, and a retry policy does that without anyone deciding to.
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            Assert.Throws<InvalidOperationException>(
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
     }
 
@@ -117,7 +129,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         // Every time, not only the first: a limit that stops applying once reported is not a limit.
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            Assert.Throws<InvalidOperationException>(
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
     }
 
@@ -141,7 +154,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         try
         {
             Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            Assert.Throws<InvalidOperationException>(
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
         finally
         {
@@ -245,7 +259,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // store gives its place to the next, so a deployment whose tenants come and go stays within its terms
         ArrangeInstallationWithNoLicence();
         using var released = new CancellationTokenSource();
-        var gone = Mock.Of<IIssuerSettings>(settings => settings.Released == released.Token);
+        var gone = Creation("acme", released.Token);
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, gone));
         Assert.Throws<InvalidOperationException>(
@@ -266,8 +280,8 @@ public sealed class LicenseEnforcementTests : IDisposable
             ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
         });
         using var released = new CancellationTokenSource();
-        var gone = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme" && settings.Released == released.Token);
-        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+        var gone = Creation("acme", released.Token);
+        var globex = Creation("globex", CancellationToken.None);
 
         // Past the margin with the clients of a tenant about to go
         for (var index = 0; index < 3; index++)
@@ -282,6 +296,114 @@ public sealed class LicenseEnforcementTests : IDisposable
         var newcomer = new ClientInfo("newcomer");
         Assert.Same(newcomer, newcomer.CheckClientLicense(globex));
     }
+
+    [Fact]
+    public void A_tenant_created_again_keeps_its_place_when_its_earlier_creation_is_released()
+    {
+        // A tenant removed and created again under its id is served by the new creation while the earlier one
+        // still awaits release; that release must not take the place the new creation holds
+        ArrangeInstallationWithNoLicence();
+        using var earlier = new CancellationTokenSource();
+        using var later = new CancellationTokenSource();
+
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", earlier.Token));
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", later.Token));
+        earlier.Cancel();
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    [Fact]
+    public void A_late_request_of_a_released_creation_neither_counts_nor_frees_the_place_of_the_live_one()
+    {
+        // A request still holding a creation released already carries a canceled token: it counts for nothing,
+        // and the creation serving the tenant now keeps its place
+        ArrangeInstallationWithNoLicence();
+        using var later = new CancellationTokenSource();
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", later.Token));
+
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", new CancellationToken(true)));
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    [Fact]
+    public void A_tenant_moved_to_another_address_keeps_one_place()
+    {
+        // The issuers of a deployment of tenants are counted by tenant, so the address a tenant left does not stay
+        // on the count beside the one it serves now
+        ArrangeInstallationWithNoLicence();
+        var acme = Creation("acme", CancellationToken.None);
+
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
+
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, acme));
+    }
+
+    [Fact]
+    public void A_deployment_of_one_issuer_counts_each_address_it_is_reached_at()
+    {
+        // A deployment of one issuer may take its issuer from the address of each request, so there the address
+        // is what counts, and a second address is refused under a license for one
+        ArrangeInstallationWithNoLicence();
+
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings);
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    [Fact]
+    public async Task A_tenant_dropped_from_the_store_frees_its_place_once_the_catalog_releases_it()
+    {
+        // Through the server's own catalog: the place stays taken through the pause after the store drops the
+        // tenant, as a request may still be serving it, and is freed once the catalog releases it
+        ArrangeInstallationWithNoLicence();
+        var ct = TestContext.Current.CancellationToken;
+        var listed = new List<StoredTenant>
+        {
+            new(new TenantDefinition { Id = "acme", Issuer = TestLicense.Issuer, Generation = "g1" }, "1"),
+        };
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed.ToArray());
+        var opening = new Mock<ITenantOpening>();
+        opening
+            .Setup(o => o.OpenAsync(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Exception>());
+        var options = new MultiTenancyOptions();
+        var time = new FakeTimeProvider();
+        var catalog = new StoreTenantCatalog(
+            NullLogger<StoreTenantCatalog>.Instance,
+            store.Object,
+            [new TenantDefinitionsCheck()],
+            [opening.Object],
+            Options.Create(options),
+            time);
+        await catalog.RefreshAsync(ct);
+        var served = new TenantContext { Tenant = (await catalog.FindByIdAsync("acme", ct))! };
+        var acme = new TenantIssuerSettings(
+            Mock.Of<ITenantAccessor>(accessor => accessor.Current == served),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
+            catalog);
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
+
+        listed.Clear();
+        await catalog.RefreshAsync(ct);
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        time.Advance(options.RefreshEvery);
+        await catalog.RefreshAsync(ct);
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    /// <summary>
+    /// The settings of a tenant's creation, released when <paramref name="released"/> is canceled.
+    /// </summary>
+    private static IIssuerSettings Creation(string tenantId, CancellationToken released)
+        => Mock.Of<IIssuerSettings>(settings => settings.Id == tenantId && settings.Released == released);
 
     [Fact]
     public void A_client_already_known_is_still_served_once_the_margin_is_passed()
@@ -380,7 +502,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         LicenseLogger.Instance.Init(new ThrowingLoggerFactory());
         try
         {
-            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            Assert.Throws<InvalidOperationException>(
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
         }
         finally
         {
