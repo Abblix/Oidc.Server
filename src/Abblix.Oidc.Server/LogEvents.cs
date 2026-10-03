@@ -973,5 +973,16 @@ internal static class LogEvents
             public const int TenantNotOpened = Base + 1;
             public const int TenantNotReleased = Base + 2;
         }
+
+        /// <summary>
+        /// <c>Features/MultiTenancy/TenantManager.cs</c> - a change of the tenants written that this instance does
+        /// not serve yet (sub-range 10720-10739).
+        /// </summary>
+        public static class TenantManager
+        {
+            private const int Base = 10720;
+
+            public const int ChangeNotServedYet = Base;
+        }
     }
 }

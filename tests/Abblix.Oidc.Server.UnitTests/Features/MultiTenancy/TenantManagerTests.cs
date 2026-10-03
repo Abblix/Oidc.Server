@@ -14,7 +14,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -36,13 +35,38 @@ public class TenantManagerTests
         private readonly Dictionary<string, StoredTenant> _tenants = new(StringComparer.Ordinal);
         private int _versions;
 
+        private int _listings;
+
         /// <summary>Whether the next write finds the store changed by another instance since it was read.</summary>
         public bool ChangedMeanwhile { get; set; }
 
+        /// <summary>Held back until released, every listing waits on it while it is set.</summary>
+        public TaskCompletionSource? Hold { get; set; }
+
+        /// <summary>How many of the next listings fail, as a store that does not answer.</summary>
+        public int FailingListings { get; set; }
+
+        /// <summary>Run once a write has landed, as what happens to the caller meanwhile.</summary>
+        public Action? AfterWrite { get; set; }
+
+        public int Listings => Volatile.Read(ref _listings);
+
         public IReadOnlyCollection<StoredTenant> Tenants => [.._tenants.Values];
 
-        public Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
-            => Task.FromResult(Tenants);
+        public async Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _listings);
+            if (Hold is { } hold)
+                await hold.Task;
+
+            if (FailingListings > 0)
+            {
+                FailingListings--;
+                throw new InvalidOperationException("the store of tenants did not answer this once");
+            }
+
+            return Tenants;
+        }
 
         public Task<string?> AddAsync(TenantDefinition tenant, CancellationToken cancellationToken)
         {
@@ -69,6 +93,7 @@ public class TenantManagerTests
         {
             var version = (++_versions).ToString(CultureInfo.InvariantCulture);
             _tenants[tenant.Id] = new StoredTenant(tenant, version);
+            AfterWrite?.Invoke();
             return version;
         }
 
@@ -94,8 +119,12 @@ public class TenantManagerTests
             [],
             options,
             new FakeTimeProvider());
-        var services = new ServiceCollection().AddSingleton<ITenantStoreWriter>(_store).BuildServiceProvider();
-        _manager = new TenantManager(_store, [new TenantDefinitionsCheck()], _catalog, services);
+        _manager = new TenantManager(
+            NullLogger<TenantManager>.Instance,
+            _store,
+            [new TenantDefinitionsCheck()],
+            _catalog,
+            _store);
     }
 
     private static TenantDefinition Tenant(string id, string issuer) => new() { Id = id, Issuer = issuer };
@@ -240,16 +269,100 @@ public class TenantManagerTests
     }
 
     /// <summary>
+    /// A change is in the store once written, so a caller giving up afterwards is told it was made rather than led
+    /// to retry it, and this instance serves it all the same.
+    /// </summary>
+    [Fact]
+    public async Task ACallerGivingUpAfterTheWrite_IsToldTheChangeWasMade()
+    {
+        using var giveUp = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        _store.AfterWrite = giveUp.Cancel;
+
+        var created = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), giveUp.Token));
+
+        Assert.Equal(created.Tenant.Generation, (await _catalog.FindByIdAsync("acme", Ct))?.Generation);
+    }
+
+    /// <summary>
+    /// A reading that fails after the change was written does not undo the change, so the caller is told it was
+    /// made, and the catalog's next reading serves it.
+    /// </summary>
+    [Fact]
+    public async Task AReadingThatFailsAfterTheWrite_IsToldTheChangeWasMade()
+    {
+        await _catalog.RefreshAsync(Ct);
+        _store.AfterWrite = () => _store.FailingListings = 1;
+
+        Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+        Assert.Null(await _catalog.FindByIdAsync("acme", Ct));
+
+        await _catalog.RefreshAsync(Ct);
+        Assert.NotNull(await _catalog.FindByIdAsync("acme", Ct));
+    }
+
+    /// <summary>
+    /// Two changes made on one instance at once are made one after the other, so the second is judged against what
+    /// the first left: a tenant moved to an address and another created there at the same moment do not both land
+    /// and leave the address to neither.
+    /// </summary>
+    [Fact]
+    public async Task TwoChangesAtOnce_AreMadeOneAfterTheOther()
+    {
+        var acme = Stored(await _manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
+        var hold = new TaskCompletionSource();
+        _store.Hold = hold;
+        var listed = _store.Listings;
+
+        var moving = _manager.UpdateAsync(Tenant("acme", "https://shared.example.com"), acme.Version, Ct);
+        var creating = _manager.CreateAsync(Tenant("globex", "https://shared.example.com"), Ct);
+
+        // Each change that may read the store now reads it before either is let go
+        for (var waited = 0; _store.Listings < listed + 2 && waited < 20; waited++)
+            await Task.Delay(TimeSpan.FromMilliseconds(10), Ct);
+
+        _store.Hold = null;
+        hold.SetResult();
+        var results = await Task.WhenAll(moving, creating);
+
+        Assert.Single(results, result => result.TryGetFailure(out var refusal)
+                                         && refusal.Reason == TenantChangeRefusalReason.Invalid);
+    }
+
+    /// <summary>
+    /// The checks a host adds are asked of each change, as the catalog asks them of each reading.
+    /// </summary>
+    [Fact]
+    public async Task AHostsOwnCheck_IsAskedOfAChange()
+    {
+        var refusingAcme = new Moq.Mock<ITenantsCheck>();
+        refusingAcme
+            .Setup(check => check.Check(Moq.It.IsAny<IReadOnlyCollection<TenantDefinition>>()))
+            .Returns((IReadOnlyCollection<TenantDefinition> tenants) =>
+                tenants.Where(tenant => tenant.Id == "acme").Select(tenant => TenantRefusal.Of(tenant, "not acme")));
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance,
+            _store,
+            [new TenantDefinitionsCheck(), refusingAcme.Object],
+            _catalog,
+            _store);
+
+        var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(refused));
+        Assert.Empty(_store.Tenants);
+    }
+
+    /// <summary>
     /// A store without a writer cannot be changed through the manager, and says why.
     /// </summary>
     [Fact]
     public async Task AStoreWithoutAWriter_IsRefused()
     {
         var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance,
             _store,
             [new TenantDefinitionsCheck()],
-            _catalog,
-            new ServiceCollection().BuildServiceProvider());
+            _catalog);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
