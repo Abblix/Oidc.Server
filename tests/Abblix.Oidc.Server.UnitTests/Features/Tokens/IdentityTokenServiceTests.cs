@@ -65,6 +65,7 @@ public class IdentityTokenServiceTests
 
         _service = new IdentityTokenService(
             issuerProvider.Object,
+            SingleIssuer.Settings,
             timeProvider,
             _jwtFormatter.Object,
             _userClaimsProvider.Object,

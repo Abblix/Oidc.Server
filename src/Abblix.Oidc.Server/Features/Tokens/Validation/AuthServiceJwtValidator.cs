@@ -21,11 +21,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="validator">The service used to perform the core JWT validation.</param>
 /// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT, which is also the
 /// only audience these tokens may name.</param>
+/// <param name="issuerSettings">The settings of that issuer, which tell the license when it stops counting.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
 	IIssuerProvider issuerProvider,
+	IIssuerSettings issuerSettings,
 	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
 {
 
@@ -67,7 +69,7 @@ public class AuthServiceJwtValidator(
 		var result = issuer == issuerProvider.GetIssuer();
 		if (result)
 		{
-			LicenseChecker.CheckIssuer(issuer);
+			LicenseChecker.CheckIssuer(issuer, issuerSettings);
 		}
 
 		return Task.FromResult(result);

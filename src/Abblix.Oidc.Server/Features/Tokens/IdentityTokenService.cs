@@ -29,6 +29,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// verification.
 /// </summary>
 /// <param name="issuerProvider">Provides the issuer URL, used in the 'iss' claim of the identity token.</param>
+/// <param name="issuerSettings">The settings of the issuer, which tell the license when it stops counting.</param>
 /// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
 /// token.</param>
 /// <param name="jwtFormatter">Handles the formatting and signing of the JSON Web Token, ensuring it meets
@@ -39,6 +40,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
 internal class IdentityTokenService(
 	IIssuerProvider issuerProvider,
+	IIssuerSettings issuerSettings,
 	TimeProvider clock,
 	IClientJwtFormatter jwtFormatter,
 	IUserClaimsProvider userClaimsProvider,
@@ -131,7 +133,7 @@ internal class IdentityTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
-				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings),
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,

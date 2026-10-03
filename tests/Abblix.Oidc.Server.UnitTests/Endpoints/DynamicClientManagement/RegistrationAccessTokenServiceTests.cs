@@ -47,6 +47,7 @@ public class RegistrationAccessTokenServiceTests
         _service = new RegistrationAccessTokenService(
             _jwtFormatter.Object,
             issuerProvider.Object,
+            SingleIssuer.Settings,
             Options.Create(new OidcOptions()));
     }
 
