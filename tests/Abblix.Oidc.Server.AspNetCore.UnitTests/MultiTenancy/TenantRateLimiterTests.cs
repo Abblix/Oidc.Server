@@ -40,7 +40,7 @@ public sealed class TenantRateLimiterTests : IDisposable
             options.AuthenticationFailureLimit.PermitLimit = 1;
             options.CallerRateLimit.PermitLimit = 1;
         });
-        _provider = services.AddMultiTenancy(_ => { }).BuildServiceProvider();
+        _provider = services.AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
     }
 
     public void Dispose() => _provider.Dispose();
@@ -298,7 +298,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                     return RateLimitPartition.GetNoLimiter(address);
                 });
             });
-        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).BuildServiceProvider();
+        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures);
@@ -324,7 +324,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         var services = new ServiceCollection();
         services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures, (_, _) => shared);
-        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).BuildServiceProvider();
+        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures);
@@ -404,7 +404,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         var log = new HostLimiterLog();
         var services = new ServiceCollection().AddSingleton(log);
         services.AddKeyedSingleton<PartitionedRateLimiter<string>, HostLimiter>(CallerRateLimiters.AuthenticationFailures);
-        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).BuildServiceProvider();
+        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures);

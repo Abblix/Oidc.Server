@@ -36,7 +36,8 @@ public static class MultiTenancyExtensions
     /// reads the tenant of the request from <see cref="ITenantAccessor"/> in its <c>IUserInfoProvider</c> and
     /// <c>IUserConsentsProvider</c>.
     /// </remarks>
-    public static IServiceCollection AddMultiTenancy(
+    /// <returns>The builder a feature made per tenant is turned on by.</returns>
+    public static IMultiTenancyBuilder AddMultiTenancy(
         this IServiceCollection services,
         Action<MultiTenancyOptions> configure)
     {
@@ -54,7 +55,7 @@ public static class MultiTenancyExtensions
         foreach (var seam in TenantSeams.All)
             seam.Wrap(services);
 
-        return services;
+        return new MultiTenancyBuilder(services);
     }
 
     /// <summary>

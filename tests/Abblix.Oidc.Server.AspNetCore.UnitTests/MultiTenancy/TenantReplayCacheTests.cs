@@ -32,6 +32,7 @@ public sealed class TenantReplayCacheTests : IDisposable
     private readonly ServiceProvider _provider = new ServiceCollection()
         .AddServerStorage()
         .AddMultiTenancy(_ => { })
+        .Services
         .BuildServiceProvider();
 
     private IReplayCache Cache => _provider.GetRequiredService<IReplayCache>();
