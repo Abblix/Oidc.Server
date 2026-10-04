@@ -98,7 +98,8 @@ public class IssuerReloadTests
         logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
         new OptionsIssuerSettings(options),
         new SingleIssuerLocal<ConfiguredClients>(),
-        new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
+        new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()),
+        TimeProvider.System);
 
     private static ClientInfoStorage DefaultClientsOf(IOptionsMonitor<OidcOptions> options) => new(
         new OptionsIssuerSettings(options),

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 #pragma warning disable ABXMT001
 
@@ -26,10 +27,13 @@ public partial class MultiTenancyRegistrationTests
 {
     private const string GlobexIssuer = "https://auth.example.com/tenants/globex";
 
-    private static ServiceProvider ServingWithHostRegistrations(HostRegistrations registrations)
+    private static ServiceProvider ServingWithHostRegistrations(
+        HostRegistrations registrations,
+        TimeProvider? clock = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton(clock ?? new FakeTimeProvider());
         services.AddOptions<OidcOptions>();
         services.AddIssuer();
         services.AddClientInformation();
@@ -145,6 +149,83 @@ public partial class MultiTenancyRegistrationTests
             .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.NotNull(found);
+    }
+
+    /// <summary>
+    /// A dropping still under way asks for each id whether the definition in force configures it, so a registration
+    /// made under an id the definition stopped configuring meanwhile is kept.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationUnderAnIdTheDefinitionFreedMeanwhile_IsKeptByADroppingUnderWay()
+    {
+        var store = new ChangingTenantStore();
+        var registrations = new HostRegistrations();
+        using var provider = ServingFrom(store, registrations: registrations);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+        EnterTenant(provider, await Served(provider, store, AcmeWith("slow", "freed"), "1"));
+        var gate = new TaskCompletionSource();
+        registrations.Gate = gate;
+        Assert.NotNull(await clients.TryFindClientAsync("slow"));
+        registrations.Gate = null;
+
+        EnterTenant(provider, await Served(provider, store, AcmeWith("slow"), "2"));
+        Assert.True(await manager.TryAddClientAsync(Registration("freed")));
+        gate.SetResult();
+
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+    }
+
+    /// <summary>
+    /// A dropping that outlasts the request that started it still names that request's tenant to the host's store.
+    /// </summary>
+    [Fact]
+    public async Task ADroppingThatOutlastsItsRequest_StillNamesItsTenant()
+    {
+        var registrations = new HostRegistrations();
+        using var provider = ServingWithHostRegistrations(registrations);
+        EnterTenant(provider, Tenant("acme", "1"));
+        Assert.True(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(Registration("app")));
+        EnterTenant(provider, Tenant("acme", "1", "app"));
+        var gate = new TaskCompletionSource();
+        registrations.Gate = gate;
+        await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync("app");
+        registrations.Gate = null;
+
+        EnterTenant(provider, null);
+        gate.SetResult();
+
+        Assert.Empty(registrations.Held);
+    }
+
+    /// <summary>
+    /// A dropping that hangs counts as failed once its time is up, and the next reading drops the registration.
+    /// </summary>
+    [Fact]
+    public async Task ADroppingThatHangs_IsTriedAgainOnceItsTimeIsUp()
+    {
+        var registrations = new HostRegistrations();
+        var clock = new FakeTimeProvider();
+        using var provider = ServingWithHostRegistrations(registrations, clock);
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        EnterTenant(provider, Tenant("acme", "1"));
+        Assert.True(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(Registration("app")));
+        EnterTenant(provider, Tenant("acme", "1", "app"));
+        registrations.Hanging = true;
+        await clients.TryFindClientAsync("app");
+        registrations.Hanging = false;
+
+        await clients.TryFindClientAsync("app");
+        Assert.NotEmpty(registrations.Held);
+
+        clock.Advance(TimeSpan.FromHours(1));
+        for (var attempt = 0; attempt < 100 && !registrations.Held.IsEmpty; attempt++)
+        {
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+            await clients.TryFindClientAsync("app");
+        }
+
+        Assert.Empty(registrations.Held);
     }
 
     /// <summary>

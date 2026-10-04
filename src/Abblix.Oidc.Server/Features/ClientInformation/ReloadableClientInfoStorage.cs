@@ -37,13 +37,19 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
 /// <param name="configured">The clients each issuer's settings configure.</param>
 /// <param name="registrations">The clients registration added or changed at the issuer serving the request.</param>
+/// <param name="clock">Times the dropping of the registrations under configured ids.</param>
 internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
     IIssuerSettings settings,
     IIssuerLocal<ConfiguredClients> configured,
-    IClientRegistrations registrations)
+    IClientRegistrations registrations,
+    TimeProvider clock)
     : IClientInfoStore
 {
+    // How long a dropping may take before it counts as failed and the next reading tries again: a store of
+    // registrations that never answers would otherwise leave it pending, unreported, for as long as the settings last
+    private static readonly TimeSpan EvictionTimeLimit = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// The clients the settings configure, with the registrations stored under an id they configure being dropped,
     /// where the settings in force still configure it: a build of former settings may end after a registration
@@ -52,8 +58,10 @@ internal partial class ReloadableClientInfoStorage(
     /// <remarks>
     /// Nothing waits for the dropping: a configured client wins over a registration under its id either way, and a
     /// registration found or written under such an id is dropped when it is met, so a store of registrations that is
-    /// slow or down keeps every configured client served. A dropping that failed is logged and tried again by the
-    /// next reading.
+    /// slow or down keeps every configured client served. A dropping that fails, or takes longer than
+    /// <see cref="EvictionTimeLimit"/>, is logged once while it keeps failing and tried again by the next reading. So
+    /// a registration stored under an id before the settings came to configure it can come back once they let the
+    /// id go only if the store never answered while they configured it.
     /// </remarks>
     private Dictionary<string, ClientInfo> Configured()
     {
@@ -61,28 +69,35 @@ internal partial class ReloadableClientInfoStorage(
         var built = configured.GetOrCreate(clients, () => new ConfiguredClients(
             clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
 
-        var current = registrations.OfCurrentIssuer();
-        var issuerId = settings.Id;
-        _ = built.EvictedAsync(() => EvictAsync(current, issuerId, built.Clients.Keys));
+        if (!built.Evicted)
+            StartEviction(built);
+
         return built.Clients;
     }
 
-    private async Task EvictAsync(IClientRegistrations current, string issuerId, IEnumerable<string> clientIds)
+    private void StartEviction(ConfiguredClients built)
     {
-        // Read before the first wait, while the settings are still the request's
-        var inForce = clientIds.Where(ConfiguredInForce).ToArray();
-        try
+        var issuerId = settings.Id;
+
+        // The dropping may outlast the request, so what it reads of the request is read as it starts
+        _ = built.EvictedAsync(
+            () => EvictAsync(registrations.OfCurrentIssuer(), issuerId, InForceNow(), built.Clients.Keys)
+                .WaitAsync(EvictionTimeLimit, clock),
+            exception => LogEvictionFailed(exception, issuerId));
+    }
+
+    private async Task EvictAsync(
+        IClientRegistrations current,
+        string issuerId,
+        Func<IEnumerable<ClientInfo>> inForce,
+        IEnumerable<string> clientIds)
+    {
+        foreach (var clientId in clientIds)
         {
-            foreach (var clientId in inForce)
-            {
-                if (await current.TryFindAsync(clientId) is { } registration)
-                    await EvictAsync(current, issuerId, registration);
-            }
-        }
-        catch (Exception exception)
-        {
-            LogEvictionFailed(exception, issuerId);
-            throw;
+            // Asked for each id just before its registration is read: the settings may stop configuring it meanwhile,
+            // and a registration made under it since is then not dropped
+            if (Configures(inForce(), clientId) && await current.TryFindAsync(clientId) is { } registration)
+                await EvictAsync(current, issuerId, registration);
         }
     }
 
@@ -112,13 +127,21 @@ internal partial class ReloadableClientInfoStorage(
     /// clients built: a request begun before the settings changed holds the former ones, and the clients of the
     /// current ones may not be built yet, or be built from former settings.
     /// </summary>
-    private bool ConfiguredInForce(string clientId)
+    private bool ConfiguredInForce(string clientId) => Configures(InForceNow()(), clientId);
+
+    /// <summary>
+    /// Asks which clients the settings in force configure, of the issuer serving the request now, each time it is
+    /// called, whether or not the request is still alive.
+    /// </summary>
+    private Func<IEnumerable<ClientInfo>> InForceNow()
     {
 #pragma warning disable ABXMT001
-        var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
+        return settings is TenantIssuerSettings tenant ? tenant.ClientsInForceOfCurrent() : () => settings.Clients;
 #pragma warning restore ABXMT001
-        return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool Configures(IEnumerable<ClientInfo> clients, string clientId)
+        => clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.

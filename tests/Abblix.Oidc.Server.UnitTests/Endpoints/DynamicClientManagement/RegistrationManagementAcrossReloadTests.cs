@@ -48,7 +48,8 @@ public class RegistrationManagementAcrossReloadTests
         NullLogger<ReloadableClientInfoStorage>.Instance,
         _settings,
         new SingleIssuerLocal<ConfiguredClients>(),
-        new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
+        new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()),
+        TimeProvider.System);
 
     private ClientInfoStorage DefaultStore() => new(
         _settings,

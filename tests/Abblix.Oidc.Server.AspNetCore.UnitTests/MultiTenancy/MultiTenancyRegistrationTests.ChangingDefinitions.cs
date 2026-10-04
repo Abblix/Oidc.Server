@@ -122,7 +122,10 @@ public partial class MultiTenancyRegistrationTests
             => Own ?? await inner.FindByAddressAsync(host, path, cancellationToken);
     }
 
-    private static ServiceProvider ServingFrom(ChangingTenantStore store, bool hostCatalog = false)
+    private static ServiceProvider ServingFrom(
+        ChangingTenantStore store,
+        bool hostCatalog = false,
+        ITenantClientRegistrationStore? registrations = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -130,6 +133,8 @@ public partial class MultiTenancyRegistrationTests
         services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantStore>(store);
+        if (registrations is not null)
+            services.AddSingleton(registrations);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider());
         if (hostCatalog)
         {

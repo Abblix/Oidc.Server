@@ -48,13 +48,20 @@ public sealed class TenantIssuerSettings(
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
 
     /// <summary>
-    /// The clients the current tenant's definition in force configures (<see cref="StoreTenantCatalog.InForce"/>),
-    /// which a request begun before the definition changed does not hold; those of the definition the request holds
-    /// where the server's own catalog has no definition in force for this creation of the tenant, or is not the
-    /// catalog in use.
+    /// Asks, each time it is called, which clients the current tenant's definition in force configures
+    /// (<see cref="StoreTenantCatalog.InForce"/>), which a request begun before the definition changed does not hold;
+    /// those of the definition the request holds where the server's own catalog has no definition in force for this
+    /// creation of the tenant, or is not the catalog in use. The tenant is read as this is called, so the answer
+    /// outlasts the request.
     /// </summary>
-    internal IEnumerable<ClientInfo> ClientsInForce
-        => (catalog is StoreTenantCatalog own ? own.InForce(Tenant) ?? Tenant : Tenant).Clients;
+    internal Func<IEnumerable<ClientInfo>> ClientsInForceOfCurrent()
+    {
+        var held = Tenant;
+        return () => ClientsInForceOf(held);
+    }
+
+    private IEnumerable<ClientInfo> ClientsInForceOf(TenantDefinition held)
+        => (catalog is StoreTenantCatalog own ? own.InForce(held) ?? held : held).Clients;
 
     /// <inheritdoc />
     public ScopeDefinition[]? Scopes => Tenant.Scopes;

@@ -29,8 +29,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <para>
 /// An addition takes effect only where no registration is held under the client's id; a change or a removal only
 /// while the registration held there carries the token identifier of the one it was decided on. Each answers
-/// whether it took effect. Registered as a singleton, as the server's client store that calls it is, and startup
-/// refuses another lifetime.
+/// whether it took effect. Registered as a singleton, as the server's client store that calls it is: startup builds
+/// the store to tell its lifetime, and refuses another one.
 /// </para>
 /// <para>
 /// The registrations of a creation of a tenant the host removes are the host's to delete: the server only stops
