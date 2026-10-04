@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 
@@ -41,6 +42,10 @@ public static partial class LicenseChecker
 
     private static ConcurrentDictionary<(string IssuerId, string ClientId), Counted>? _knownClientIds;
     private static ConcurrentDictionary<string, Counted>? _knownIssuers;
+
+    // The clients an issuer no longer serves, as the objects a request still holding one carries; weakly, so each is
+    // forgotten with the last request holding it
+    private static readonly ConditionalWeakTable<ClientInfo, object> ReleasedClientsHeld = new();
 
     /// <summary>
     /// Registers a new license with the license management system, allowing for real-time updates
@@ -79,12 +84,14 @@ public static partial class LicenseChecker
     /// under one id. The issuer is the one the deployment declares rather than the one a request names, which a
     /// forged Host header could vary to push the count past the limit. A client stops counting once its issuer is
     /// released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with a
-    /// catalog of tenants of the host's own, which tells no release, the count only grows.
+    /// catalog of tenants of the host's own, which tells no release, only a client removed through registration
+    /// leaves the count. A client its issuer no longer serves is neither counted nor refused for a request that found
+    /// it before.
     /// </remarks>
     public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
     {
         // Guard clauses: nothing is counted for an absent client, or under a license that sets no client limit
-        if (clientInfo == null)
+        if (clientInfo == null || ReleasedClientsHeld.TryGetValue(clientInfo, out _))
             return clientInfo;
 
         var utcNow = TimeProvider.System.GetUtcNow();
@@ -94,22 +101,10 @@ public static partial class LicenseChecker
 
         _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), Counted>();
         var client = (issuer.Id, clientInfo.ClientId);
-        if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
-            !_knownClientIds.ContainsKey(client))
-        {
-            if (LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(1)))
-            {
-                LogClientLimitExceededByMargin(
-                    LicenseLogger.Instance,
-                    currentLicense.ClientLimit,
-                    _knownClientIds.Keys.Select(Named),
-                    Named(client));
-            }
-
+        if (PastTheMargin(_knownClientIds, client, currentLicense.ClientLimit.Value, utcNow))
             return null; // Prevents processing of clients exceeding the limit by more than 30%
-        }
 
-        Count(_knownClientIds, client, clientInfo.ClientId, issuer);
+        CountClient(_knownClientIds, client, clientInfo, issuer);
         if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
             LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
         {
@@ -222,19 +217,59 @@ public static partial class LicenseChecker
         => settings.Id.Length == 0 ? issuer : settings.Id;
 
     /// <summary>
-    /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
-    /// that issuer no longer serves: removed through registration, or dropped from the clients a tenant configures.
+    /// Whether <paramref name="client"/>, not counted yet, would take the count past the margin over
+    /// <paramref name="clientLimit"/>, logged when it would.
+    /// </summary>
+    private static bool PastTheMargin(
+        ConcurrentDictionary<(string IssuerId, string ClientId), Counted> counted,
+        (string IssuerId, string ClientId) client,
+        int clientLimit,
+        DateTimeOffset utcNow)
+    {
+        if (clientLimit * ClientLimitOverExceedingFactor >= counted.Count || counted.ContainsKey(client))
+            return false;
+
+        if (LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(1)))
+            LogClientLimitExceededByMargin(
+                LicenseLogger.Instance,
+                clientLimit,
+                counted.Keys.Select(Named),
+                Named(client));
+
+        return true;
+    }
+
+    /// <summary>
+    /// Counts <paramref name="clientInfo"/> under <paramref name="key"/>, unless it is released meanwhile.
+    /// </summary>
+    private static void CountClient(
+        ConcurrentDictionary<(string IssuerId, string ClientId), Counted> counted,
+        (string IssuerId, string ClientId) key,
+        ClientInfo clientInfo,
+        IIssuerSettings issuer)
+    {
+        Count(counted, key, clientInfo.ClientId, issuer);
+
+        // Released while being counted: the release may have taken the entry off before this count put it back
+        if (ReleasedClientsHeld.TryGetValue(clientInfo, out _))
+            counted.TryRemove(key, out _);
+    }
+
+    /// <summary>
+    /// Takes <paramref name="clients"/> of the issuer <paramref name="issuerId"/> off the count, as ones that issuer
+    /// no longer serves: removed through registration, or dropped from the clients a tenant configures.
     /// </summary>
     /// <remarks>
-    /// A request already holding one of them counts it again, and it then stays counted until its issuer is released.
+    /// Each is remembered as the object a request that found it before still holds, so such a request neither counts
+    /// it again nor is refused for it. A client served again later is served as another object and counts afresh.
     /// </remarks>
-    internal static void ReleaseClients(string issuerId, IEnumerable<string> clientIds)
+    internal static void ReleaseClients(string issuerId, IEnumerable<ClientInfo> clients)
     {
-        if (_knownClientIds is not { } counted)
-            return;
-
-        foreach (var clientId in clientIds)
-            counted.TryRemove((issuerId, clientId), out _);
+        foreach (var client in clients)
+        {
+            ReleasedClientsHeld.AddOrUpdate(client, client);
+            _knownClientIds?.TryRemove((issuerId, client.ClientId), out _);
+        }
     }
 
     /// <summary>

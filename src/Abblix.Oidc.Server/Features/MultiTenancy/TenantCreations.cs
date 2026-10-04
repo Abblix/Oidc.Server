@@ -64,11 +64,8 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
     {
         if (_lastServed.GetValueOrDefault(tenant.Id) is { } former)
         {
-            LicenseChecker.ReleaseClients(
-                tenant.Id,
-                former.Clients
-                    .Select(client => client.ClientId)
-                    .Except(tenant.Clients.Select(client => client.ClientId), StringComparer.Ordinal));
+            var kept = tenant.Clients.Select(client => client.ClientId).ToHashSet(StringComparer.Ordinal);
+            LicenseChecker.ReleaseClients(tenant.Id, former.Clients.Where(client => !kept.Contains(client.ClientId)));
         }
 
         _lastServed[tenant.Id] = tenant;
