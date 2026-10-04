@@ -45,7 +45,7 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// Two tenants served by one running server, each with a client of the same id and the same secret, so nothing
 /// but the tenant tells their requests apart: what one tenant issued must not be honoured by the other.
 /// </summary>
-public sealed class TenantIsolationTests : IAsyncLifetime
+public sealed partial class TenantIsolationTests : IAsyncLifetime
 {
     private const string Host = "https://auth.example.com";
     private const string Acme = "/tenants/acme";
@@ -91,6 +91,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         // Grant features before AddOidcServices, which composes the grant handlers.
         builder.Services.AddDeviceAuthorization();
         builder.Services.AddCheckSession();
+        builder.Services.AddIntrospection();
+        builder.Services.AddRevocation();
         builder.Services.AddOidcServices(options =>
         {
             options.DeviceAuthorization = new DeviceAuthorizationOptions
@@ -102,7 +104,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 DeviceCodeLength = 32,
                 UserCodeLength = 8,
             };
-            options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.CheckSession;
+            options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.CheckSession | OidcEndpoints.Introspection |
+                                       OidcEndpoints.Revocation;
         });
         builder.Services.AddMultiTenancy(options =>
         {
@@ -178,7 +181,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     {
         ClientSecrets = [new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) }],
         TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
-        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization],
+        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken],
+        OfflineAccessAllowed = true,
         RedirectUris = [new Uri(RedirectUri)],
         PkceRequired = true,
     };
@@ -409,9 +413,16 @@ public sealed class TenantIsolationTests : IAsyncLifetime
     /// signs in approves its device.
     /// </summary>
     private async Task<string> AccessTokenOfADeviceFlowAsync(string tenant)
+        => (await TokensOfADeviceFlowAsync(tenant, Scopes.OpenId))[ResponseParameters.AccessToken]!.GetValue<string>();
+
+    /// <summary>
+    /// The token response the pairwise client gets at <paramref name="tenant"/> for <paramref name="scope"/> once the
+    /// user the verification page signs in approves its device.
+    /// </summary>
+    private async Task<JsonNode> TokensOfADeviceFlowAsync(string tenant, string scope)
     {
         var authorization = await ReadJsonAsync(await PostAsync(tenant, "/connect/deviceauthorization", PairwiseClientId,
-            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId }));
+            new Dictionary<string, string> { [DeviceAuthorizationRequest.Parameters.Scope] = scope }));
 
         var approved = await Http.PostAsync(
             authorization[DeviceAuthorizationResponse.Parameters.VerificationUri]!.GetValue<string>(),
@@ -423,14 +434,13 @@ public sealed class TenantIsolationTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
 
-        var tokens = await ReadJsonAsync(await PostAsync(tenant, TokenPath, PairwiseClientId,
+        return await ReadJsonAsync(await PostAsync(tenant, TokenPath, PairwiseClientId,
             new Dictionary<string, string>
             {
                 [TokenRequest.Parameters.GrantType] = GrantTypes.DeviceAuthorization,
                 [TokenRequest.Parameters.DeviceCode] =
                     authorization[DeviceAuthorizationResponse.Parameters.DeviceCode]!.GetValue<string>(),
             }));
-        return tokens[ResponseParameters.AccessToken]!.GetValue<string>();
     }
 
     /// <summary>
