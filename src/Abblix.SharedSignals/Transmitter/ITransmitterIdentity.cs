@@ -35,4 +35,10 @@ public interface ITransmitterIdentity
     /// Where the keys that verify the transmitter's tokens are published, or null when nothing is advertised.
     /// </summary>
     Uri? JwksUri { get; }
+
+    /// <summary>
+    /// The address the transmitter's endpoints are reached under, before the prefix they are mapped with: what the
+    /// stream management and poll addresses it publishes start with.
+    /// </summary>
+    Uri EndpointsBase { get; }
 }

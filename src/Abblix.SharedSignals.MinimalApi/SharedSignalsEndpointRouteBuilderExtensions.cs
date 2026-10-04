@@ -85,7 +85,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         MapSubjectRoutes(group);
         MapVerificationRoute(group);
         MapPollRoute(group);
-        PublishServedAddresses(endpoints, transmitter, endpointOptions);
+        PublishServedAddresses(endpoints, endpointOptions);
 
         return group;
     }
@@ -264,7 +264,6 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     private static void PublishServedAddresses(
         IEndpointRouteBuilder endpoints,
-        SharedSignalsTransmitterOptions transmitter,
         SharedSignalsEndpointOptions endpointOptions)
     {
         // Said out loud because a stream STORES its poll address: the transmitter mints it at create time
@@ -274,18 +273,24 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // advertises, and from the ADVERTISED prefix, because that is the one the outside world uses.
         // How an identifier is carried into that address, and why one that cannot be carried is refused
         // here rather than met by a receiver later, is on PollEndpointAddresses.PollEndpointOf.
-        var pollAuthority = PollEndpointAddresses.AuthorityOf(transmitter);
-        var pollPrefix = PollEndpointAddresses.AdvertisedPrefixOf(endpointOptions);
+        var identity = endpoints.ServiceProvider.GetRequiredService<ITransmitterIdentity>();
+        var advertisedPrefix = PollEndpointAddresses.AdvertisedPrefixOf(endpointOptions);
         var pollLogger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
-        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
-            streamId => PollEndpointAddresses.PollEndpointOf(pollLogger, pollAuthority, pollPrefix, streamId));
+        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(streamId =>
+        {
+            var (authority, prefix) = PollEndpointAddresses.ReachedAt(identity, advertisedPrefix);
+            return PollEndpointAddresses.PollEndpointOf(pollLogger, authority, prefix, streamId);
+        });
 
         // And the same declaration for the management routes just mapped, which is what lets the
         // configuration document name them. Without it the document has no way to tell this
         // deployment from one that maps the document alone and serves no management API.
-        endpoints.ServiceProvider.GetRequiredService<ManagementEndpointLocator>().ServedAt(
-            route => new Uri(pollAuthority, pollPrefix.Add(route).Value!));
+        endpoints.ServiceProvider.GetRequiredService<ManagementEndpointLocator>().ServedAt(route =>
+        {
+            var (authority, prefix) = PollEndpointAddresses.ReachedAt(identity, advertisedPrefix);
+            return new Uri(authority, prefix.Add(route).Value!);
+        });
     }
 
     /// <summary>
