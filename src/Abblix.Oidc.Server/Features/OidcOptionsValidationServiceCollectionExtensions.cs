@@ -49,6 +49,11 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientSecretsOptionsValidator>());
 
+        // Fail loud at startup when the host keeps registrations for tenants on a server without them, where its
+        // store would never be asked and the registrations would stay in memory
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantClientRegistrationStoreValidator>());
+
         // Fail loud at startup when the client or resource registry could not hold what is configured, instead
         // of failing every request that builds it, without naming what it could not hold.
         services.TryAddEnumerable([

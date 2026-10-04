@@ -25,8 +25,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// The server's own registries keep one set for each tenant, built from what the tenant declares. One the host
 /// brings keeps one set for every tenant, since nothing tells it which tenant a request is for: a client registered
-/// at one tenant would authenticate at every other. Until the contract for a registry that answers per tenant
-/// exists, only the server's own are served under multi-tenancy.
+/// at one tenant would authenticate at every other. A host keeping the registrations of dynamic client registration
+/// itself does so through <see cref="ITenantClientRegistrationStore"/>, which is told the tenant of every call.
 /// </remarks>
 /// <param name="serviceProvider">The container the registries are resolved from.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]

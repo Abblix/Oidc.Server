@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<ClientInfoStorage>();
         services.TryAddSingleton<ReloadableClientInfoStorage>();
+        services.TryAddSingleton<IClientRegistrations>(DefaultClientRegistrations.Create);
         services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
 
         services.AddOidcOptionsValidators();
