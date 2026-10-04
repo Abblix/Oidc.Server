@@ -19,12 +19,14 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </summary>
 /// <remarks>
 /// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
-/// what registration did since. The settings own every id they configure, and the store keeps no registration under
-/// one: a registration already stored under an id the settings come to configure is dropped the first time the store
-/// reads them, and one written under such an id, as when the write was decided just before the reload, is dropped
-/// right after the write and answered as not made. So a registrant choosing an id ahead of the administrator is never
-/// served in the configured client's place, and does not come back once the settings let the id go. Every
-/// registration dropped this way is logged, a write answered as not made included.
+/// what registration did since. The settings own every id they configure: a configured client is served over a
+/// registration under its id, and one written under such an id, as when the write was decided just before the
+/// reload, is dropped right after the write and answered as not made. So a registrant choosing an id ahead of the
+/// administrator is never served in the configured client's place. A registration kept in memory under an id the
+/// settings come to configure is dropped the first time the store reads them, so it does not come back once the
+/// settings let the id go; one a host keeps in its own store is dropped when a request meets it, and one no request
+/// meets is served again once the settings let the id go, until the host deletes it. Every registration dropped this
+/// way is logged, a write answered as not made included.
 /// <para>
 /// Whether the settings configure an id is asked of the settings in force rather than of the clients built: by a
 /// lookup, and by a build before it drops a registration. So a request begun before the settings changed, and a
