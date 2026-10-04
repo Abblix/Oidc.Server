@@ -96,17 +96,18 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     private static void ApplyGroupConventions(RouteGroupBuilder group)
     {
-        // First, because every filter and handler after these asks the transmitter's identity for its issuer.
-        group.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
-        group.AddEndpointFilter(TransmitterPresence.RefuseForeignReceiverAsync);
-
         // Every management response travels uncacheable, as the specification's own examples
-        // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents.
+        // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents. First, so the
+        // refusals below carry it too.
         group.AddEndpointFilter(async (context, next) =>
         {
             context.HttpContext.Response.Headers.CacheControl = "no-store";
             return await next(context);
         });
+
+        // Before the scope filter and the handlers, which ask the transmitter's identity for its issuer.
+        group.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
+        group.AddEndpointFilter(TransmitterPresence.RefuseForeignReceiverAsync);
 
         // The scope each route requires (CAEP Interoperability Profile Section 2.7.3). The profile names
         // five of these eleven operations - Read Stream Configuration and Get Stream Status for
@@ -133,9 +134,11 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // stand in this place asserted the bound without its condition.
         group.AddEndpointFilter(ScopeRequirement.EnforceScopeAsync);
 
-        // The two refusals that belong to the GROUP rather than to any handler: 401 where nothing named
-        // the caller, 403 where the caller was named and its token carries neither scope the route
-        // needs. Declared once here, so a route added later inherits them instead of restating them.
+        // The refusals that belong to the GROUP rather than to any handler: 401 where nothing named the
+        // caller or its credentials come from an issuer the transmitter does not take receivers from, 403
+        // where the caller was named and its token carries neither scope the route needs, and 404 where no
+        // transmitter serves the request. Declared once here, so a route added later inherits them instead
+        // of restating them.
         group.Answers(StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden, StatusCodes.Status404NotFound);
     }
 

@@ -67,11 +67,12 @@ internal static class BearerChallenges
     /// on this surface: a caller that IS identified but lacks the scope gets 403 from
     /// <see cref="ScopeRequirement.EnforceScopeAsync"/>, which runs first, and that ordering is deliberate.
     /// <para>
-    /// That section defines three codes and this method answers none of them. <c>invalid_token</c>
-    /// belongs to whoever validates the token, which is the host: this package never sees one, it reads
-    /// whatever identity the host's authentication left behind, through
-    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>. <c>insufficient_scope</c> IS
-    /// emitted by this package, from <see cref="ScopeRequirement.EnforceScopeAsync"/>, once the host
+    /// That section defines three codes and this method answers none of them. Validating the token
+    /// belongs to the host: this package never sees one, it reads whatever identity the host's
+    /// authentication left behind, through <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>.
+    /// It answers <c>invalid_token</c> only where that identity's credentials come from an issuer the
+    /// transmitter does not take receivers from, in <see cref="ForeignIssuer"/>. <c>insufficient_scope</c>
+    /// IS emitted by this package, from <see cref="ScopeRequirement.EnforceScopeAsync"/>, once the host
     /// supplies the granted scopes.
     /// </para>
     /// <para>
@@ -89,6 +90,26 @@ internal static class BearerChallenges
         return new ChallengeResult(
             StatusCodes.Status401Unauthorized, WwwAuthenticate.Challenge(BearerScheme, issuer));
     }
+
+    /// <summary>
+    /// The answer to a receiver whose credentials come from an issuer other than the one this transmitter
+    /// takes its receivers from: 401 with <c>invalid_token</c>.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6750 Section 3.1 gives that code to an access token that is "expired, revoked, malformed, or
+    /// invalid for other reasons", and a token from another issuer is invalid here for such a reason. Unlike
+    /// the bare challenge, it tells the receiver that a fresh token from the same issuer will not help.
+    /// </remarks>
+    /// <param name="issuer">The issuer the transmitter takes its receivers from, which is also its realm.</param>
+    internal static IResult ForeignIssuer(string issuer)
+        => new ChallengeResult(
+            StatusCodes.Status401Unauthorized,
+            WwwAuthenticate.Challenge(
+                BearerScheme,
+                ("realm", issuer),
+                ("error", "invalid_token"),
+                ("error_description",
+                    "The access token comes from an issuer this transmitter does not take receivers from.")));
 
     /// <summary>
     /// The scheme this surface advertises. Not a claim about how the host authenticates - it is what the

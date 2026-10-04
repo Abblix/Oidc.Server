@@ -318,10 +318,11 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
     /// every route rather than sampled.
     /// </summary>
     /// <remarks>
-    /// Not every route here is refused, and the one that is not is the point of driving all of them.
-    /// The configuration document is mapped outside that group and answers 200 to a caller with no
-    /// identity and no scope - which is what discovery is for, and what would break silently if the
-    /// group ever grew to cover it.
+    /// Not every route here is refused by the first two hosts, and the one that is not is the point of
+    /// driving all of them. The configuration document is mapped outside that group and answers 200 to a
+    /// caller with no identity and no scope - which is what discovery is for, and what would break silently
+    /// if the group ever grew to cover it. Only where no transmitter serves the request does it, like every
+    /// route, answer 404.
     /// </remarks>
     private async Task<List<Answer>> DriveEveryRouteAsync(
         Func<HttpContext, string?>? receiverId,

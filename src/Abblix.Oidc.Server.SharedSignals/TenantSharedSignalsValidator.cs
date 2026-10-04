@@ -31,7 +31,8 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
     {
         // Read from their registration and answered alone: the store holding them cannot be built outside a
-        // tenant once a declared stream needs a poll address, and every part checked below is built on that store.
+        // tenant once a declared stream needs a poll address, and the stream store and the delivery pass checked
+        // below are built on it.
         if (serviceProvider.GetService<IReadOnlyList<ConfiguredStream>>() is not null)
         {
             return ValidateOptionsResult.Fail(
@@ -51,6 +52,12 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
             failures.Add(
                 $"The transmitter's issuer '{transmitter.Issuer}' must name the host without a path under "
                 + "multi-tenancy: each tenant's addresses are its paths put under the tenant's own issuer.");
+        }
+        else if (transmitter.JwksUri is { IsAbsoluteUri: false } relativeJwksUri)
+        {
+            failures.Add(
+                $"The transmitter's key set address '{relativeJwksUri}' must be absolute: each tenant's key set is "
+                + "served at its path under the tenant's own issuer.");
         }
         else if (transmitter.JwksUri is { } jwksUri &&
                  Uri.Compare(jwksUri, issuerUri, UriComponents.SchemeAndServer, UriFormat.Unescaped,

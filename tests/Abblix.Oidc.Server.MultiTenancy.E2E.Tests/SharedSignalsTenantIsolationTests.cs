@@ -138,7 +138,7 @@ public sealed class SharedSignalsTenantIsolationTests
 
     /// <summary>
     /// A receiver whose credentials globex issued, with the same identifier as acme's receiver, presents them under
-    /// acme's address and is refused, so it cannot reach acme's streams.
+    /// acme's address and is refused as holding a token that is invalid here, so it cannot reach acme's streams.
     /// </summary>
     [Fact]
     public async Task AReceiverOfAnotherTenant_IsRefused()
@@ -149,6 +149,23 @@ public sealed class SharedSignalsTenantIsolationTests
         using var response = await ClientOf(app, Host + Globex).GetAsync(Acme + StreamPath, ct);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains("error=\"invalid_token\"", Assert.Single(response.Headers.WwwAuthenticate).Parameter);
+    }
+
+    /// <summary>
+    /// The refusals before any stream is reached travel uncacheable, as every other management answer does.
+    /// </summary>
+    [Theory]
+    [InlineData(StreamPath, Host + Acme)]
+    [InlineData(Acme + StreamPath, Host + Globex)]
+    public async Task ARefusalOfTheManagementSurface_IsNotCached(string path, string issuer)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+
+        using var response = await ClientOf(app, issuer).GetAsync(path, ct);
+
+        Assert.True(response.Headers.CacheControl?.NoStore);
     }
 
     /// <summary>
@@ -207,8 +224,10 @@ public sealed class SharedSignalsTenantIsolationTests
     [Theory]
     [InlineData(Host + "/ssf-issuer", Host + "/ssf-issuer" + JwksPath)]
     [InlineData(Host, "https://keys.example.net" + JwksPath)]
+    [InlineData(Host, JwksPath)]
     public async Task AnAddressNoTenantCanServe_StopsTheServer(string issuer, string jwksUri)
-        => await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(issuer, new Uri(jwksUri)));
+        => await Assert.ThrowsAsync<OptionsValidationException>(
+            () => StartAsync(issuer, new Uri(jwksUri, UriKind.RelativeOrAbsolute)));
 
     /// <summary>
     /// Streams declared in configuration belong to no tenant, so the server does not start with them, whether

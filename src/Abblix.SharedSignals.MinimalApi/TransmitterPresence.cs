@@ -53,6 +53,6 @@ internal static class TransmitterPresence
             return await next(context);
         }
 
-        return BearerChallenges.Unauthenticated(http);
+        return BearerChallenges.ForeignIssuer(required);
     }
 }
