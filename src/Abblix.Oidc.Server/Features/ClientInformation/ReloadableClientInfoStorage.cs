@@ -45,33 +45,51 @@ internal partial class ReloadableClientInfoStorage(
     : IClientInfoStore
 {
     /// <summary>
-    /// The clients the settings configure, once every registration stored under an id they configure is dropped,
+    /// The clients the settings configure, with the registrations stored under an id they configure being dropped,
     /// where the settings in force still configure it: a build of former settings may end after a registration
     /// the current ones allow.
     /// </summary>
-    private async Task<Dictionary<string, ClientInfo>> ConfiguredAsync()
+    /// <remarks>
+    /// Nothing waits for the dropping: a configured client wins over a registration under its id either way, and a
+    /// registration found or written under such an id is dropped when it is met, so a store of registrations that is
+    /// slow or down keeps every configured client served. A dropping that failed is logged and tried again by the
+    /// next reading.
+    /// </remarks>
+    private Dictionary<string, ClientInfo> Configured()
     {
         var clients = settings.Clients;
         var built = configured.GetOrCreate(clients, () => new ConfiguredClients(
             clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
 
-        await built.EvictedAsync(() => EvictAsync(built.Clients.Keys));
+        var current = registrations.OfCurrentIssuer();
+        var issuerId = settings.Id;
+        _ = built.EvictedAsync(() => EvictAsync(current, issuerId, built.Clients.Keys));
         return built.Clients;
     }
 
-    private async Task EvictAsync(IEnumerable<string> clientIds)
+    private async Task EvictAsync(IClientRegistrations current, string issuerId, IEnumerable<string> clientIds)
     {
-        foreach (var clientId in clientIds.Where(ConfiguredInForce))
+        // Read before the first wait, while the settings are still the request's
+        var inForce = clientIds.Where(ConfiguredInForce).ToArray();
+        try
         {
-            if (await registrations.TryFindAsync(clientId) is { } registration)
-                await EvictAsync(registration);
+            foreach (var clientId in inForce)
+            {
+                if (await current.TryFindAsync(clientId) is { } registration)
+                    await EvictAsync(current, issuerId, registration);
+            }
+        }
+        catch (Exception exception)
+        {
+            LogEvictionFailed(exception, issuerId);
+            throw;
         }
     }
 
-    private async Task EvictAsync(RegisteredClient registration)
+    private async Task EvictAsync(IClientRegistrations current, string issuerId, RegisteredClient registration)
     {
-        if (await registrations.TryRemoveAsync(registration))
-            LogRegistrationEvicted(registration.ClientInfo.ClientId, settings.Id);
+        if (await current.TryRemoveAsync(registration))
+            LogRegistrationEvicted(registration.ClientInfo.ClientId, issuerId);
     }
 
     /// <summary>
@@ -85,7 +103,7 @@ internal partial class ReloadableClientInfoStorage(
         if (!ConfiguredInForce(client.ClientInfo.ClientId))
             return false;
 
-        await EvictAsync(client);
+        await EvictAsync(registrations, settings.Id, client);
         return true;
     }
 
@@ -112,7 +130,7 @@ internal partial class ReloadableClientInfoStorage(
     public async Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        if ((await ConfiguredAsync()).TryGetValue(clientId, out var configuredClient))
+        if (Configured().TryGetValue(clientId, out var configuredClient))
             return configuredClient;
 
         var registration = await registrations.TryFindAsync(clientId);

@@ -8,6 +8,7 @@
 
 using System;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,10 +26,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 /// </summary>
 public class TenantClientRegistrationStoreValidatorTests
 {
-    private static ValidateOptionsResult Validate(bool store, bool multiTenancy)
+    private static ValidateOptionsResult Validate(bool store, bool multiTenancy, bool scoped = false)
     {
         var services = new ServiceCollection();
-        if (store)
+        if (store && scoped)
+            services.AddScoped(_ => Mock.Of<ITenantClientRegistrationStore>());
+        else if (store)
             services.AddSingleton(Mock.Of<ITenantClientRegistrationStore>());
         if (multiTenancy)
             services.AddSingleton(Mock.Of<IValidateOptions<MultiTenancyOptions>>());
@@ -44,6 +47,27 @@ public class TenantClientRegistrationStoreValidatorTests
 
         Assert.True(result.Failed);
         Assert.Contains(nameof(ITenantClientRegistrationStore), result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStoreRegisteredForEachRequest_IsRefused_NamingIt()
+    {
+        var result = Validate(store: true, multiTenancy: true, scoped: true);
+
+        Assert.True(result.Failed);
+        Assert.Contains(nameof(ITenantClientRegistrationStore), result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCheck_IsAmongTheServersStartupChecks()
+    {
+        var services = new ServiceCollection();
+
+        services.AddClientInformation();
+
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IValidateOptions<OidcOptions>) &&
+            descriptor.ImplementationType == typeof(TenantClientRegistrationStoreValidator));
     }
 
     [Theory]

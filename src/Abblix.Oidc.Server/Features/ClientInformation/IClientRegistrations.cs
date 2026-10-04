@@ -33,4 +33,9 @@ internal interface IClientRegistrations
     /// Removes the registration under the client's id while it carries <paramref name="current"/>'s token identifier.
     /// </summary>
     Task<bool> TryRemoveAsync(RegisteredClient current);
+
+    /// <summary>
+    /// The registrations of the issuer serving the request now, for work that may outlast the request.
+    /// </summary>
+    IClientRegistrations OfCurrentIssuer();
 }

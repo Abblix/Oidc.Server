@@ -15,13 +15,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The registrations kept in the host's store, each call naming the tenant of the request.
 /// </summary>
 /// <param name="store">The host's store of registrations.</param>
-/// <param name="tenantAccessor">The tenant of the request.</param>
+/// <param name="currentTenant">The tenant each call names.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class TenantStoreClientRegistrations(
     ITenantClientRegistrationStore store,
-    ITenantAccessor tenantAccessor) : IClientRegistrations
+    Func<TenantDefinition> currentTenant) : IClientRegistrations
 {
-    private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
+    private TenantDefinition Tenant => currentTenant();
 
     public Task<RegisteredClient?> TryFindAsync(string clientId) => store.TryFindAsync(Tenant, clientId);
 
@@ -31,4 +31,10 @@ internal sealed class TenantStoreClientRegistrations(
         => store.TryReplaceAsync(Tenant, current, updated);
 
     public Task<bool> TryRemoveAsync(RegisteredClient current) => store.TryRemoveAsync(Tenant, current);
+
+    public IClientRegistrations OfCurrentIssuer()
+    {
+        var tenant = Tenant;
+        return new TenantStoreClientRegistrations(store, () => tenant);
+    }
 }

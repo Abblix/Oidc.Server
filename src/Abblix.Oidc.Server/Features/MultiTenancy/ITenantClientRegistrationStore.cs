@@ -21,14 +21,21 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// one tenant is never found at another, and a tenant created again under an id finds none of the registrations made
 /// at the creation before it. Client ids are compared without regard to case, as the server compares them.
 /// <para>
-/// The clients a tenant's definition configures stay in the definition. The server keeps them apart from what this
-/// store holds: it adds, changes and removes nothing here under an id the definition configures, and removes a
-/// registration it finds under such an id.
+/// The clients a tenant's definition configures stay in the definition, and the server keeps them apart from what
+/// this store holds: it removes a registration it finds under an id the definition configures, and an addition or a
+/// change under such an id - one decided just before the definition came to configure it - is removed right after it
+/// reaches the store and answered as not made.
 /// </para>
 /// <para>
 /// An addition takes effect only where no registration is held under the client's id; a change or a removal only
 /// while the registration held there carries the token identifier of the one it was decided on. Each answers
-/// whether it took effect. Registered as a singleton, as the server's client store that calls it is.
+/// whether it took effect. Registered as a singleton, as the server's client store that calls it is, and startup
+/// refuses another lifetime.
+/// </para>
+/// <para>
+/// The registrations of a creation of a tenant the host removes are the host's to delete: the server only stops
+/// asking for them. A host learning of the release from the server registers on
+/// <see cref="StoreTenantCatalog.Released"/> for each tenant an <see cref="ITenantOpening"/> of its own readies.
 /// </para>
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]

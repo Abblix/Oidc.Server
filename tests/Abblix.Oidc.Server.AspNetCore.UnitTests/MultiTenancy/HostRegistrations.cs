@@ -27,13 +27,24 @@ internal sealed class HostRegistrations : ITenantClientRegistrationStore
     /// </summary>
     public bool Unreachable { get; set; }
 
+    /// <summary>
+    /// While set, every lookup waits forever, as a call over a dropped connection does.
+    /// </summary>
+    public bool Hanging { get; set; }
+
     private static (string, string, string) Key(TenantDefinition tenant, string clientId)
         => (tenant.Id, tenant.Generation, clientId.ToUpperInvariant());
 
     public Task<RegisteredClient?> TryFindAsync(TenantDefinition tenant, string clientId)
-        => Unreachable
-            ? Task.FromException<RegisteredClient?>(new TimeoutException("The store of registrations is unreachable."))
-            : Task.FromResult(Held.GetValueOrDefault(Key(tenant, clientId)));
+    {
+        if (Hanging)
+            return new TaskCompletionSource<RegisteredClient?>().Task;
+
+        if (Unreachable)
+            return Task.FromException<RegisteredClient?>(new TimeoutException("The store is unreachable."));
+
+        return Task.FromResult(Held.GetValueOrDefault(Key(tenant, clientId)));
+    }
 
     public Task<bool> TryAddAsync(TenantDefinition tenant, RegisteredClient client)
         => Task.FromResult(Held.TryAdd(Key(tenant, client.ClientInfo.ClientId), client));

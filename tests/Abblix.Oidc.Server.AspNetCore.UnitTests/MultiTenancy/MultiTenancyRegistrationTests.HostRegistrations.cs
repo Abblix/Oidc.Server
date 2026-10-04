@@ -108,11 +108,11 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A reading that could not reach the host's store is followed by one that asks it again, so the registration
-    /// under a configured id is still removed once the store answers.
+    /// A configured client is served while the host's store is down, a registration is not, and the registration
+    /// under a configured id is removed by a reading once the store answers again.
     /// </summary>
     [Fact]
-    public async Task ARemovalTheHostsStoreFailed_IsTriedAgainByTheNextReading()
+    public async Task WhileTheHostsStoreIsDown_ConfiguredClientsAreServed_AndTheRemovalIsTriedAgain()
     {
         var registrations = new HostRegistrations();
         using var provider = ServingWithHostRegistrations(registrations);
@@ -122,10 +122,68 @@ public partial class MultiTenancyRegistrationTests
         EnterTenant(provider, Tenant("acme", "1", "app"));
 
         registrations.Unreachable = true;
-        await Assert.ThrowsAsync<TimeoutException>(() => clients.TryFindClientAsync("app"));
+        Assert.NotNull(await clients.TryFindClientAsync("app"));
+        await Assert.ThrowsAsync<TimeoutException>(() => clients.TryFindClientAsync("registered-elsewhere"));
 
         registrations.Unreachable = false;
         Assert.NotNull(await clients.TryFindClientAsync("app"));
+        Assert.Empty(registrations.Held);
+    }
+
+    /// <summary>
+    /// A call to the host's store that never returns holds up no configured client.
+    /// </summary>
+    [Fact]
+    public async Task AHostsStoreThatHangs_HoldsUpNoConfiguredClient()
+    {
+        var registrations = new HostRegistrations { Hanging = true };
+        using var provider = ServingWithHostRegistrations(registrations);
+        EnterTenant(provider, Tenant("acme", "1", "app"));
+
+        var found = await provider.GetRequiredService<IClientInfoProvider>()
+            .TryFindClientAsync("app")
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(found);
+    }
+
+    /// <summary>
+    /// A registration is changed and removed in the host's store, under its tenant.
+    /// </summary>
+    [Fact]
+    public async Task ARegistration_IsChangedAndRemovedInTheHostsStore()
+    {
+        var registrations = new HostRegistrations();
+        using var provider = ServingWithHostRegistrations(registrations);
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+        EnterTenant(provider, Tenant("acme", "1"));
+        var registered = Registration("app");
+        Assert.True(await manager.TryAddClientAsync(registered));
+
+        var updated = new RegisteredClient(new ClientInfo("app") { ClientName = "renamed" }, "jti-2");
+        Assert.True(await manager.TryUpdateClientAsync(registered, updated));
+        Assert.Equal("renamed", Assert.Single(registrations.Held.Values).ClientInfo.ClientName);
+
+        Assert.True(await manager.TryRemoveClientAsync(updated));
+        Assert.Empty(registrations.Held);
+    }
+
+    /// <summary>
+    /// Looking a registration up under an id the tenant's definition came to configure removes it from the host's
+    /// store and finds nothing.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationLookedUpUnderAConfiguredId_IsRemovedFromTheHostsStore()
+    {
+        var registrations = new HostRegistrations();
+        using var provider = ServingWithHostRegistrations(registrations);
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+        EnterTenant(provider, Tenant("acme", "1"));
+        Assert.True(await manager.TryAddClientAsync(Registration("app")));
+
+        EnterTenant(provider, Tenant("acme", "1", "app"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync("app"));
+
         Assert.Empty(registrations.Held);
     }
 

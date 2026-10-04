@@ -23,16 +23,36 @@ internal sealed class ConfiguredClients(Dictionary<string, ClientInfo> clients)
     public Dictionary<string, ClientInfo> Clients { get; } = clients;
 
     /// <summary>
-    /// Runs <paramref name="evict"/> once for these clients, and again after a run that failed, so a store that could
-    /// not be reached once is asked again by the next reading rather than never.
+    /// Runs <paramref name="evict"/> once for these clients however many readers ask at once, and again after a run
+    /// that failed, so a store that could not be reached once is asked again by the next reading rather than never.
     /// </summary>
     public Task EvictedAsync(Func<Task> evict)
     {
-        var held = Volatile.Read(ref _evicted);
-        if (held is { IsFaulted: false, IsCanceled: false })
-            return held;
+        while (true)
+        {
+            var held = Volatile.Read(ref _evicted);
+            if (held is { IsFaulted: false, IsCanceled: false })
+                return held;
 
-        var started = evict();
-        return Interlocked.CompareExchange(ref _evicted, started, held) == held ? started : _evicted!;
+            var run = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (Interlocked.CompareExchange(ref _evicted, run.Task, held) != held)
+                continue;
+
+            _ = RunAsync(evict, run);
+            return run.Task;
+        }
+    }
+
+    private static async Task RunAsync(Func<Task> evict, TaskCompletionSource run)
+    {
+        try
+        {
+            await evict();
+            run.SetResult();
+        }
+        catch (Exception exception)
+        {
+            run.SetException(exception);
+        }
     }
 }
