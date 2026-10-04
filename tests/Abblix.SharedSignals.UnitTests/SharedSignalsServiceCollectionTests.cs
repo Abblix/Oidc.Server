@@ -183,16 +183,19 @@ public class SharedSignalsServiceCollectionTests
     }
 
     /// <summary>
-    /// A transmitter with no issuer is refused when it is registered. Found later, the refusal would come after a
-    /// status change or a verification throttle had already been written, with the receiver never told.
+    /// A transmitter with no issuer is refused before the stream management service exists, so before it writes a
+    /// status change or a verification throttle the receiver would never be told about. The options the host
+    /// registered first are the ones refused, since they are the ones every reader sees.
     /// </summary>
     [Fact]
-    public void AnEmptyIssuer_IsRefusedAtRegistration()
+    public void AnEmptyIssuer_IsRefusedBeforeAnythingIsWritten()
     {
-        var options = new SharedSignalsTransmitterOptions { Issuer = string.Empty };
+        var services = SecurityEventsBase();
+        services.AddSingleton(TransmitterOptions with { Issuer = string.Empty });
+        services.AddSharedSignalsTransmitter(TransmitterOptions);
+        using var provider = services.BuildServiceProvider();
 
-        var exception = Assert.Throws<ArgumentException>(
-            () => SecurityEventsBase().AddSharedSignalsTransmitter(options));
+        var exception = Assert.Throws<ArgumentException>(() => provider.GetRequiredService<StreamManagementService>());
 
         Assert.Equal("options", exception.ParamName);
     }

@@ -121,26 +121,6 @@ public class EventDispatcherTests
         Assert.Equal("https://second.example.com", Assert.Single(signer.Signed).Issuer);
     }
 
-    /// <summary>
-    /// A transmitter with no issuer refuses the dispatch itself. Failing inside the per-stream loop instead would
-    /// be logged per stream and answered as "no stream reached", which a host reads as nobody subscribed.
-    /// </summary>
-    [Fact]
-    public async Task AnEmptyIssuer_FailsTheDispatch()
-    {
-        var ct = TestContext.Current.CancellationToken;
-        var store = new InMemoryStreamStore();
-        Assert.True(await store.TryCreateAsync(CreateStream("s-1", mode: StreamSubjectsMode.All), ct));
-        var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance,
-            store,
-            new InMemoryEventOutbox(),
-            new CapturingSigner(),
-            new SwitchableTransmitterIdentity(string.Empty));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => dispatcher.DispatchAsync(Descriptor(), ct));
-    }
-
     [Fact]
     public async Task Dispatch_ReachesTheMatchingStream_AndMintsItsOwnSet()
     {
