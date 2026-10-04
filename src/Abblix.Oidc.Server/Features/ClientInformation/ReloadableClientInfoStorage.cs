@@ -80,7 +80,8 @@ internal partial class ReloadableClientInfoStorage(
 
     /// <summary>
     /// Takes the clients the former settings configured and <paramref name="clients"/> do not off the license's
-    /// count, as the reloaded settings are first served.
+    /// count, as the reloaded settings are first served, unless the settings in force still configure them: a build
+    /// of former settings ending after the change would otherwise release a client still served.
     /// </summary>
     private void ReleaseDropped(IReadOnlyCollection<ClientInfo> clients)
     {
@@ -93,6 +94,7 @@ internal partial class ReloadableClientInfoStorage(
             former
                 .Select(client => client.ClientId)
                 .Except(clients.Select(client => client.ClientId), StringComparer.Ordinal)
+                .Where(clientId => !ConfiguredInForce(clientId))
                 .ToArray());
     }
 
