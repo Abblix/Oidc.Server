@@ -42,6 +42,10 @@ public static partial class LicenseChecker
     private static ConcurrentDictionary<(string IssuerId, string ClientId), Counted>? _knownClientIds;
     private static ConcurrentDictionary<string, Counted>? _knownIssuers;
 
+    // The creations each count watches for their release, one watch per creation however many entries it holds, so
+    // the watches stay as many as the creations served while clients come and go
+    private static readonly ConcurrentDictionary<(object Count, CancellationToken Holder), byte> Watched = new();
+
     /// <summary>
     /// Registers a new license with the license management system, allowing for real-time updates
     /// to the application's licensing constraints.
@@ -167,23 +171,26 @@ public static partial class LicenseChecker
         }
         while (!written);
 
-        if (!held)
-            ReleaseOnCancel(counted, key, holder);
+        if (!held && Watched.TryAdd((counted, holder), 0))
+            ReleaseOnCancel(counted, holder);
     }
 
     /// <summary>
-    /// Releases <paramref name="holder"/> from the entry under <paramref name="key"/> once it is canceled.
+    /// Takes <paramref name="holder"/> off every entry of <paramref name="counted"/> once it is canceled.
     /// </summary>
     /// <remarks>
     /// Apart from <see cref="Count{TKey}"/>, whose every call would otherwise allocate the closure, while only the
-    /// first count of a creation registers.
+    /// first count of a creation registers. The watch ends before the entries are read, so a count adding the
+    /// creation after the reading registers again and is taken off at once.
     /// </remarks>
-    private static void ReleaseOnCancel<TKey>(
-        ConcurrentDictionary<TKey, Counted> counted,
-        TKey key,
-        CancellationToken holder)
+    private static void ReleaseOnCancel<TKey>(ConcurrentDictionary<TKey, Counted> counted, CancellationToken holder)
         where TKey : notnull
-        => holder.Register(() => Release(counted, key, holder));
+        => holder.Register(() =>
+        {
+            Watched.TryRemove((counted, holder), out _);
+            foreach (var key in counted.Keys)
+                Release(counted, key, holder);
+        });
 
     /// <summary>
     /// Takes <paramref name="holder"/> off the entry under <paramref name="key"/>, and the entry off the count once

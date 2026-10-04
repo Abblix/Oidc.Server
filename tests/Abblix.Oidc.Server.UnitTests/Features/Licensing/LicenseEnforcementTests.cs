@@ -429,6 +429,24 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
+    public async Task A_client_removed_at_one_tenant_keeps_its_place_at_another()
+    {
+        // Two tenants count a client under one id, each its own: deleting it at one leaves the other's counted
+        ArrangeClientLimitOfTwo();
+        var acme = Creation("acme", CancellationToken.None);
+        var globex = Creation("globex", CancellationToken.None);
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        removed.ClientInfo.CheckClientLicense(acme);
+        new ClientInfo("client-0").CheckClientLicense(globex);
+        new ClientInfo("client-1").CheckClientLicense(globex);
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(globex));
+
+        await RemoveThroughRegistrationAsync(removed, acme);
+
+        AssertOnePlaceFree(globex);
+    }
+
+    [Fact]
     public async Task A_client_a_tenant_no_longer_configures_frees_its_place_once_the_change_is_served()
     {
         // A change of the tenant dropping one of its configured clients takes that client off the count when the
