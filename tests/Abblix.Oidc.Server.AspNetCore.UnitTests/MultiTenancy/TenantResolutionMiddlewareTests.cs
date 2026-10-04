@@ -80,6 +80,7 @@ public class TenantResolutionMiddlewareTests
                 new OptionsTenantStore(Options.Create(Declared)),
                 [],
                 [],
+                [],
                 Options.Create(Declared),
                 TimeProvider.System));
 

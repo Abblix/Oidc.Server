@@ -560,6 +560,7 @@ public sealed class LicenseEnforcementTests : IDisposable
             store,
             [new TenantDefinitionsCheck()],
             [opening.Object],
+            [],
             Options.Create(new MultiTenancyOptions()),
             time ?? new FakeTimeProvider());
     }

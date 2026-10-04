@@ -183,6 +183,7 @@ public sealed class TenantRateLimiterTests : IDisposable
             new OptionsTenantStore(Microsoft.Extensions.Options.Options.Create(declared)),
             [],
             [],
+            [],
             Microsoft.Extensions.Options.Options.Create(declared),
             time);
         await catalog.RefreshAsync(ct);
@@ -226,6 +227,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         var catalog = new StoreTenantCatalog(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<StoreTenantCatalog>.Instance,
             new OptionsTenantStore(Microsoft.Extensions.Options.Options.Create(declared)),
+            [],
             [],
             [],
             Microsoft.Extensions.Options.Options.Create(declared),

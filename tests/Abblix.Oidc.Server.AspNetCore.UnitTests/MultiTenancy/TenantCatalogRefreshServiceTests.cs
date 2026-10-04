@@ -87,6 +87,7 @@ public class TenantCatalogRefreshServiceTests
             _store,
             [],
             [],
+            [],
             Options.Create(new MultiTenancyOptions()),
             _time);
     }

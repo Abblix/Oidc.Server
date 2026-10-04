@@ -125,6 +125,7 @@ public class TenantManagerTests
             _store,
             [new TenantDefinitionsCheck()],
             [],
+            [],
             options,
             new FakeTimeProvider());
         _manager = new TenantManager(

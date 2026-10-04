@@ -19,10 +19,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </summary>
 /// <param name="openings">The openings, in the order they run.</param>
 /// <param name="options">The refresh period the openings share.</param>
+/// <param name="store">The store the tenants are read from, which tells whether they are the tenants the settings
+/// declare.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class CompositeTenantOpening(
     IEnumerable<ITenantOpening> openings,
-    IOptions<MultiTenancyOptions> options) : ITenantOpening
+    IOptions<MultiTenancyOptions> options,
+    ITenantStore store) : ITenantOpening
 {
     /// <inheritdoc />
     public Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
@@ -35,17 +38,18 @@ internal sealed class CompositeTenantOpening(
     /// declare and the server is starting with them.
     /// </summary>
     /// <param name="tenants">The tenants about to be served for the first time.</param>
-    /// <param name="startingWithTheSettings">Whether these are the tenants the settings declare, on the reading the
-    /// server starts with: the start waits for all of them, so they are opened without a limit, and one that cannot
+    /// <param name="firstReading">Whether this is the reading the server starts with. Where the tenants are the ones
+    /// the settings declare, the start waits for all of them, so they are opened without a limit, and one that cannot
     /// be readied refuses the start as the settings themselves would.</param>
     /// <param name="cancellationToken">Cancels the openings.</param>
     /// <exception cref="InvalidOperationException">A tenant the settings declare could not be readied at start.
     /// </exception>
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
-        bool startingWithTheSettings,
+        bool firstReading,
         CancellationToken cancellationToken)
     {
+        var startingWithTheSettings = firstReading && store is OptionsTenantStore;
         var failures = await FailuresAsync(tenants, startingWithTheSettings, cancellationToken);
         if (startingWithTheSettings && failures.Count > 0)
         {

@@ -135,6 +135,8 @@ public class StoreTenantCatalogTests
     private readonly FakeStore _store = new();
     private readonly RecordingLogger _logger = new();
     private readonly FakeOpening _opening = new();
+    private readonly FakeClosing _failingClosing = new() { Failing = { "acme" } };
+    private readonly FakeClosing _closing = new();
 
     private readonly MultiTenancyOptions _options = new();
 
@@ -147,11 +149,12 @@ public class StoreTenantCatalogTests
         await catalog.RefreshAsync(ct);
     }
 
-    private StoreTenantCatalog Catalog(ITenantStore? store = null) => new(
+    private StoreTenantCatalog Catalog(ITenantStore? store = null, ITenantClosing[]? closings = null) => new(
         _logger,
         store ?? _store,
         [new TenantDefinitionsCheck()],
         [_opening],
+        closings ?? [_closing],
         Options.Create(_options),
         _time);
 
@@ -486,6 +489,7 @@ public class StoreTenantCatalogTests
             _store,
             [new TenantDefinitionsCheck()],
             [_opening],
+            [],
             Options.Create(_options),
             clock.Object);
         var pause = _options.RefreshEvery;
@@ -532,6 +536,31 @@ public class StoreTenantCatalogTests
         await ReadAfterAPeriodAsync(catalog, ct);
 
         Assert.True(globex.IsCancellationRequested);
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant released is handed to every closing within the reading that releases it, in the creation that was
+    /// served; one closing that fails for it is logged and keeps neither the other closings nor the other tenants from
+    /// running, nor fails the reading.
+    /// </summary>
+    [Fact]
+    public async Task AReleasedTenant_IsClosed_AndAClosingThatFailsIsLogged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [_failingClosing, _closing]);
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        Assert.Empty(_closing.Closed);
+
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["acme/g1", "globex/g1"], _closing.Closed.Order());
+        Assert.Equal(["globex/g1"], _failingClosing.Closed);
         Assert.Single(_logger.Errors);
     }
 
@@ -743,5 +772,24 @@ public class StoreTenantCatalogTests
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
 
         Assert.NotNull(await Catalog().FindByIdAsync("acme", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A closing that records each tenant it closed, by id and generation, and fails for the tenants named.
+    /// </summary>
+    private sealed class FakeClosing : ITenantClosing
+    {
+        public HashSet<string> Failing { get; } = new(StringComparer.Ordinal);
+
+        public List<string> Closed { get; } = [];
+
+        public Task CloseAsync(TenantDefinition tenant, CancellationToken cancellationToken)
+        {
+            if (Failing.Contains(tenant.Id))
+                throw new InvalidOperationException("the tenant's streams could not be deleted");
+
+            Closed.Add($"{tenant.Id}/{tenant.Generation}");
+            return Task.CompletedTask;
+        }
     }
 }

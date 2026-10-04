@@ -17,4 +17,10 @@ internal sealed partial class TenantCreations
         Level = LogLevel.Error,
         Message = "Something kept for the tenant {TenantId}, gone from the store, failed to be let go")]
     private partial void LogTenantNotReleased(Exception exception, string tenantId);
+
+    [LoggerMessage(
+        EventId = LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed,
+        Level = LogLevel.Error,
+        Message = "What the released tenant {TenantId} kept outside the server failed to be let go")]
+    private partial void LogTenantNotClosed(Exception exception, string tenantId);
 }

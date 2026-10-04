@@ -24,9 +24,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// definition costs nothing kept for it.
 /// </remarks>
 /// <param name="timeProvider">Tells how long a creation has been gone.</param>
-/// <param name="logger">Records a release that failed.</param>
+/// <param name="logger">Records a release or a closing that failed.</param>
+/// <param name="closings">What lets go of each creation released.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger logger)
+internal sealed partial class TenantCreations(
+    TimeProvider timeProvider,
+    ILogger logger,
+    IEnumerable<ITenantClosing> closings)
 {
     /// <summary>A creation, and when a reading first found it gone.</summary>
     private sealed class Creation(TenantDefinition tenant)
@@ -102,7 +106,8 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
     /// </summary>
     /// <param name="listed">The tenants the store lists now.</param>
     /// <param name="pause">How long a creation stays gone before it is released.</param>
-    public void Track(IEnumerable<TenantDefinition> listed, TimeSpan pause)
+    /// <returns>The creations released by this call.</returns>
+    public IReadOnlyCollection<TenantDefinition> Track(IEnumerable<TenantDefinition> listed, TimeSpan pause)
     {
         var spaces = new HashSet<string>(StringComparer.Ordinal);
         foreach (var tenant in listed.Where(tenant => !string.IsNullOrEmpty(tenant.Id)))
@@ -138,6 +143,30 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
             _creations.TryRemove(space, out _);
             Forget(creation.Tenant);
             Cancel(creation);
+        }
+
+        return [..due.Values.Select(creation => creation.Tenant)];
+    }
+
+    /// <summary>
+    /// Hands each creation <see cref="Track"/> released to every closing; one that fails is logged, and the rest
+    /// still run.
+    /// </summary>
+    public async Task CloseAsync(IReadOnlyCollection<TenantDefinition> released, CancellationToken cancellationToken)
+    {
+        foreach (var tenant in released)
+        {
+            foreach (var closing in closings)
+            {
+                try
+                {
+                    await closing.CloseAsync(tenant, cancellationToken);
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    LogTenantNotClosed(exception, tenant.Id);
+                }
+            }
         }
     }
 
