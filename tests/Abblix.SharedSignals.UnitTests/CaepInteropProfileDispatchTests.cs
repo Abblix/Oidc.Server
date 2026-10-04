@@ -479,7 +479,7 @@ public sealed class CaepInteropProfileDispatchTests
                 store,
                 outbox,
                 new StubSigner(),
-                Issuer,
+                new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
                 payloadPolicy: payloadPolicy),
             outbox,
             stream);

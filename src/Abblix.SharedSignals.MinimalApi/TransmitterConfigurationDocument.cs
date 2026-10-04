@@ -26,6 +26,7 @@ internal static class TransmitterConfigurationDocument
     /// </summary>
     internal static TransmitterConfiguration ConfigurationDocumentOf(
         SharedSignalsTransmitterOptions options,
+        ITransmitterIdentity identity,
         PollEndpointLocator pollEndpoints,
         ManagementEndpointLocator managementEndpoints)
     {
@@ -38,8 +39,8 @@ internal static class TransmitterConfigurationDocument
         return new TransmitterConfiguration
         {
             SpecVersion = TransmitterConfiguration.SpecVersions.Final,
-            Issuer = options.Issuer,
-            JwksUri = options.JwksUri,
+            Issuer = identity.Issuer,
+            JwksUri = identity.JwksUri,
             DeliveryMethodsSupported = deliveryMethods,
             ConfigurationEndpoint = managementEndpoints.Of(ManagementRoutes.Stream),
             StatusEndpoint = managementEndpoints.Of(ManagementRoutes.Status),

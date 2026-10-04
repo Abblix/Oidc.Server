@@ -37,7 +37,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
     private static readonly RedisKey HashKey =
         $"Abblix.SharedSignals:RedisStreamStore:{Uri.EscapeDataString(Options.Issuer)}";
 
-    private RedisStreamStore NewStore() => new(garnet.Connection, Options);
+    private RedisStreamStore NewStore() => new(garnet.Connection, new OptionsTransmitterIdentity(Options));
 
     /// <summary>A receiver unique per test, so the shared hash never couples test runs.</summary>
     private readonly string _receiver = $"receiver-{Guid.NewGuid():N}";
@@ -260,7 +260,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         Assert.True(await store.TryCreateAsync(NewState(streamId), ct));
 
         await using var noisy = await ConnectionMultiplexer.ConnectAsync(garnet.Connection.Configuration);
-        var neighbour = new RedisStreamStore(noisy, Options);
+        var neighbour = new RedisStreamStore(noisy, new OptionsTransmitterIdentity(Options));
         var neighbourReceiver = $"{_receiver}-neighbour";
         var neighbourStream = Guid.NewGuid().ToString("N");
         Assert.True(await neighbour.TryCreateAsync(
@@ -406,6 +406,36 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
     /// would share a hash, and each would read the other's streams out of the dispatcher's view and
     /// deliver its own signed events to the other's receivers.
     /// </summary>
+    /// <summary>
+    /// The key is built from the issuer at each call, so one store behind an identity that answers per request
+    /// keeps each issuer's streams apart. The lookup under the first issuer again is the control: it shows the
+    /// stream is there, so the miss under the second is the key's doing.
+    /// </summary>
+    [Fact]
+    public async Task TheKey_FollowsTheIssuerAtEachCall()
+    {
+        const string first = "https://first-transmitter.example.com";
+        var ct = TestContext.Current.CancellationToken;
+        var identity = new SwitchableTransmitterIdentity(first);
+        var store = new RedisStreamStore(garnet.Connection, identity);
+        var streamId = Guid.NewGuid().ToString("N");
+        Assert.True(await store.TryCreateAsync(NewState(streamId), ct));
+
+        try
+        {
+            identity.Issuer = "https://second-transmitter.example.com";
+            Assert.Null(await store.FindAsync(_receiver, streamId, ct));
+
+            identity.Issuer = first;
+            Assert.NotNull(await store.FindAsync(_receiver, streamId, ct));
+        }
+        finally
+        {
+            identity.Issuer = first;
+            await store.DeleteAsync(_receiver, streamId, ct);
+        }
+    }
+
     [Fact]
     public async Task AnotherTransmittersRegistry_IsNotVisible()
     {
@@ -413,7 +443,8 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var store = NewStore();
         var other = new RedisStreamStore(
             garnet.Connection,
-            new SharedSignalsTransmitterOptions { Issuer = "https://other-transmitter.example.com" });
+            new OptionsTransmitterIdentity(
+                new SharedSignalsTransmitterOptions { Issuer = "https://other-transmitter.example.com" }));
 
         var mine = Guid.NewGuid().ToString("N");
         var theirs = Guid.NewGuid().ToString("N");

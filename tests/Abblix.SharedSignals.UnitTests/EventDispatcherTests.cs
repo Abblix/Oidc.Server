@@ -91,7 +91,34 @@ public class EventDispatcherTests
 
         var outbox = new InMemoryEventOutbox();
         var signer = new CapturingSigner();
-        return (new EventDispatcher(NullLogger<EventDispatcher>.Instance, store, outbox, signer, Issuer, policy), outbox, signer);
+        return (new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            signer,
+            new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
+            policy), outbox, signer);
+    }
+
+    /// <summary>
+    /// The issuer is asked when a SET is minted rather than once at construction, so a host whose identity
+    /// answers per request - one issuer per tenant - signs each SET with the issuer serving it.
+    /// </summary>
+    [Fact]
+    public async Task TheIssuer_IsReadWhenTheSetIsMinted()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new InMemoryStreamStore();
+        Assert.True(await store.TryCreateAsync(CreateStream("s-1", mode: StreamSubjectsMode.All), ct));
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var signer = new CapturingSigner();
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, new InMemoryEventOutbox(), signer, identity);
+
+        identity.Issuer = "https://second.example.com";
+        Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));
+
+        Assert.Equal("https://second.example.com", Assert.Single(signer.Signed).Issuer);
     }
 
     [Fact]

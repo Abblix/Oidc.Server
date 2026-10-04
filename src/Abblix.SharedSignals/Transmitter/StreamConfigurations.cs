@@ -27,12 +27,14 @@ internal static class StreamConfigurations
     /// The configuration of a stream being created (SSF 1.0 Section 8.1.1.1).
     /// </summary>
     /// <param name="options">The deployment's one-time decisions.</param>
+    /// <param name="issuer">The transmitter's issuer, as its identity names it now.</param>
     /// <param name="receiverId">The authenticated receiver identity.</param>
     /// <param name="streamId">The identifier the new stream gets.</param>
     /// <param name="request">The receiver-supplied half of the configuration.</param>
     /// <param name="delivery">The delivery already accepted for the stream.</param>
     public static StreamConfiguration New(
         SharedSignalsTransmitterOptions options,
+        string issuer,
         string receiverId,
         string streamId,
         CreateStreamRequest request,
@@ -40,7 +42,7 @@ internal static class StreamConfigurations
         => new()
         {
             StreamId = streamId,
-            Issuer = options.Issuer,
+            Issuer = issuer,
             Audiences = [.. options.AudiencesFactory?.Invoke(receiverId) ?? [receiverId]],
             EventsSupported = options.EventsSupported is { Count: > 0 } supported ? supported : null,
             EventsRequested = request.EventsRequested,

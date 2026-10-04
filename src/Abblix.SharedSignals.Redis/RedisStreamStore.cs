@@ -38,8 +38,9 @@ namespace Abblix.SharedSignals.Redis;
 /// TLS, authentication, and a database of its own.</para>
 /// </remarks>
 /// <param name="connection">The Redis connection; opening and configuring it is the host's.</param>
-/// <param name="options">The transmitter's options, read for the issuer the key is scoped by.</param>
-public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSignalsTransmitterOptions options)
+/// <param name="identity">The transmitter's identity, read for the issuer the key is scoped by each time it is
+/// used.</param>
+public sealed class RedisStreamStore(IConnectionMultiplexer connection, ITransmitterIdentity identity)
     : IStreamStore
 {
     /// <summary>
@@ -53,9 +54,9 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private readonly RedisKey _hashKey =
-        $"{nameof(Abblix)}.{nameof(SharedSignals)}:{nameof(RedisStreamStore)}:"
-        + Uri.EscapeDataString(options.Issuer);
+    private RedisKey HashKey
+        => $"{nameof(Abblix)}.{nameof(SharedSignals)}:{nameof(RedisStreamStore)}:"
+           + Uri.EscapeDataString(identity.Issuer);
 
     private readonly IDatabase _database = connection.GetDatabase();
 
@@ -103,7 +104,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
         // HSETNX: only the field's first writer wins, and Redis itself is the arbiter - a prior
         // existence check would lose the race a concurrent create of the same stream opens.
         return await _database.HashSetAsync(
-            _hashKey,
+            HashKey,
             FieldOf(stream.ReceiverId, stream.StreamId),
             JsonSerializer.SerializeToUtf8Bytes(
                 stream with { Version = Guid.NewGuid().ToString("N") }, SerializerOptions),
@@ -117,7 +118,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
         cancellationToken.ThrowIfCancellationRequested();
 
         var field = FieldOf(receiverId, streamId);
-        var stored = await _database.HashGetAsync(_hashKey, field);
+        var stored = await _database.HashGetAsync(HashKey, field);
 
         // Unreadable is an error HERE, unlike in the listings below: the caller named this one stream,
         // so answering null would report it as absent and invite a create that then collides.
@@ -136,7 +137,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var entries = await _database.HashGetAllAsync(_hashKey);
+        var entries = await _database.HashGetAllAsync(HashKey);
 
         // An unreadable entry is skipped rather than thrown, and the asymmetry with FindAsync is the
         // point. This list is the dispatcher's view of who to deliver to, read on EVERY event: one
@@ -195,7 +196,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
             redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
             return 1
             """,
-            [_hashKey],
+            [HashKey],
             [FieldOf(stream.ReceiverId, stream.StreamId),
              (RedisValue)JsonSerializer.SerializeToUtf8Bytes(
                  stream with { Version = Guid.NewGuid().ToString("N") }, SerializerOptions),
@@ -210,7 +211,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
         string receiverId, string streamId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return await _database.HashDeleteAsync(_hashKey, FieldOf(receiverId, streamId));
+        return await _database.HashDeleteAsync(HashKey, FieldOf(receiverId, streamId));
     }
 
     private static StreamState Deserialize(RedisValue stored, RedisValue field)

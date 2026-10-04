@@ -81,7 +81,8 @@ public sealed class StreamManagementService(
             return StreamDeliveryFactory.RefusalOf(accepted);
         }
 
-        var configuration = StreamConfigurations.New(options, receiverId, streamId, request, delivery);
+        var configuration = StreamConfigurations.New(
+            options, dispatcher.Issuer, receiverId, streamId, request, delivery);
 
         var created = new StreamState
         {

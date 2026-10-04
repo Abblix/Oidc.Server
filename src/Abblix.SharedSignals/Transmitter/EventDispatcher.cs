@@ -26,9 +26,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="streams">The transmitter's streams.</param>
 /// <param name="outbox">Where minted SETs wait for delivery.</param>
 /// <param name="signer">Signs each minted SET.</param>
-/// <param name="issuer">
-/// The transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
-/// configuration metadata asserts (SSF 1.0 Section 7.1).</param>
+/// <param name="identity">
+/// Names the transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
+/// configuration metadata asserts (SSF 1.0 Section 7.1) - each time a SET is minted.</param>
 /// <param name="sharingPolicy">
 /// The host's Section 9.2 verdict; null shares every otherwise-matching event, which is the
 /// honest default only for a transmitter whose events carry nothing the receiver may not see.
@@ -45,15 +45,11 @@ public sealed partial class EventDispatcher(
     IStreamStore streams,
     IEventOutbox outbox,
     ISecurityEventTokenSigner signer,
-    string issuer,
+    ITransmitterIdentity identity,
     IEventSharingPolicy? sharingPolicy = null,
     IEventPayloadPolicy? payloadPolicy = null,
     TimeProvider? clock = null)
 {
-    private readonly string _issuer = !string.IsNullOrEmpty(issuer)
-        ? issuer
-        : throw new ArgumentException("A transmitter without an issuer identifier can sign nothing.", nameof(issuer));
-
     /// <summary>
     /// Dispatches one event to every stream it matches.
     /// </summary>
@@ -205,7 +201,7 @@ public sealed partial class EventDispatcher(
         // as the unreachable arm in StreamManagementService.AddressRefusalOf, and said out loud for the
         // same reason: an unreachable guard nobody explained reads as one nobody finished.
         var builder = new SecurityEventTokenBuilder(clock) { SingleEventStatement = true }
-            .WithIssuer(_issuer)
+            .WithIssuer(IssuerOf(identity))
             .WithJwtId(jwtId)
             .WithAudience([.. stream.Configuration.Audiences])
             .WithSubjectId(descriptor.Subject);
@@ -236,4 +232,16 @@ public sealed partial class EventDispatcher(
             new OutboxItem(jwtId, compactToken, asStatusAnnouncement),
             cancellationToken);
     }
+
+    /// <summary>
+    /// The issuer the SETs minted now name, which a stream configuration names too (SSF 1.0 Section 7.2.2).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The identity names no issuer.</exception>
+    internal string Issuer => IssuerOf(identity);
+
+    /// <exception cref="InvalidOperationException">The identity names no issuer.</exception>
+    private static string IssuerOf(ITransmitterIdentity identity)
+        => !string.IsNullOrEmpty(identity.Issuer)
+            ? identity.Issuer
+            : throw new InvalidOperationException("A transmitter without an issuer identifier can sign nothing.");
 }

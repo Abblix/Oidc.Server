@@ -268,7 +268,12 @@ public class StreamAddressAtRegistrationTests
         var outbox = new InMemoryEventOutbox();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, new NeverSigner(), options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new NeverSigner(),
+            new OptionsTransmitterIdentity(options),
+            clock: clock);
 
         // A resolver of the test's own, so the one branch of the policy that is not a string comparison
         // stays out of this file: a live DNS lookup would make these tests depend on a name nobody owns.
