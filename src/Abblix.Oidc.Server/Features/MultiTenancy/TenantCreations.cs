@@ -56,20 +56,26 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
     /// <summary>
     /// Takes <paramref name="tenant"/> as the definition last served under its id.
     /// </summary>
-    /// <remarks>
-    /// The clients the definition last served under the id configured and this one does not leave the license's
-    /// count, since the tenant no longer serves them.
-    /// </remarks>
-    public void Served(TenantDefinition tenant)
+    /// <returns>The ids of the clients the definition last served under the id configured and this one does not.
+    /// </returns>
+    public IReadOnlyCollection<string> Served(TenantDefinition tenant)
     {
-        if (_lastServed.GetValueOrDefault(tenant.Id) is { } former)
-        {
-            var kept = tenant.Clients.Select(client => client.ClientId).ToHashSet(StringComparer.Ordinal);
-            LicenseChecker.ReleaseClients(tenant.Id, former.Clients.Where(client => !kept.Contains(client.ClientId)));
-        }
-
+        var former = _lastServed.GetValueOrDefault(tenant.Id);
         _lastServed[tenant.Id] = tenant;
+        return former is null
+            ? []
+            : former.Clients
+                .Select(client => client.ClientId)
+                .Except(tenant.Clients.Select(client => client.ClientId), StringComparer.Ordinal)
+                .ToArray();
     }
+
+    /// <summary>
+    /// Takes the clients <paramref name="clientIds"/> of the tenant <paramref name="tenantId"/> off the license's
+    /// count, as ones its definition served now no longer configures.
+    /// </summary>
+    public static void ReleaseClients(string tenantId, IReadOnlyCollection<string> clientIds)
+        => LicenseChecker.ReleaseClients(tenantId, clientIds);
 
     /// <summary>
     /// The definition last served under <paramref name="tenantId"/>, unless its creation is released.
