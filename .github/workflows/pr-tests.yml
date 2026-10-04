@@ -15,10 +15,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    # Decides whether this pull request needs the build and the tests, so a change to documentation runs neither.
+    # On a pull request the checkout is GitHub's merge commit, whose first parent is the base branch, so the diff
+    # against it is exactly what the pull request changes. An empty list fails here rather than skipping every
+    # job, which would read as a green run that checked nothing. The workflow lints are not gated here: they run
+    # on every pull request from their own workflow.
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Classify the changed files
+        id: classify
+        run: |
+          set -euo pipefail
+          # Both sides of a rename, and every name as it is rather than quoted, so neither a file moved into
+          # docs/ nor a name outside ASCII is read as documentation
+          git -c core.quotePath=false diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+          if [ ! -s "$RUNNER_TEMP/changed" ]; then
+            echo "::error::The pull request changes no file, so there is nothing to decide which checks it needs."
+            exit 1
+          fi
+          code=false
+          while IFS= read -r -d '' file; do
+            # Written as what does NOT need the build and the tests, so a folder added later runs them. Markdown
+            # elsewhere is not on it: the tests compile the READMEs and the analyzers read their release notes.
+            case "$file" in
+              docs/* | .github/ISSUE_TEMPLATE/*) ;;
+              *) code=true ;;
+            esac
+          done < "$RUNNER_TEMP/changed"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3
+
   shards:
     # The shards themselves live in a called workflow, shared with the dev-build publish, so the
     # suite is defined once. The project list inside it is derived from the projects, not written
     # by hand, so a new test project cannot be left out.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/test-shards.yml
 
   build:
@@ -32,6 +76,8 @@ jobs:
     # packages shipped for three, so anything refused by an older compiler passed every shard and
     # surfaced after the merge. That reason went with the other two frameworks.
     name: Build the solution
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -95,17 +141,23 @@ jobs:
     # requires and leave every pull request waiting for a check that no longer appears. The name is
     # narrower than what it now covers, and stays that way for the same reason: renaming it silently
     # detaches branch protection from the only gate a pull request has.
+    #
+    # A pull request that needs no tests passes it with the shards and the build skipped, and one that needs them
+    # passes only when both succeeded.
     name: Unit tests
-    needs: [shards, build]
+    needs: [changes, shards, build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     # The gate only inspects the other jobs' results; it never touches the repo or the GITHUB_TOKEN.
     permissions: {}
     steps:
+      - name: Fail if the changed files could not be classified
+        if: needs.changes.result != 'success'
+        run: exit 1
       - name: Fail if any shard failed
-        if: needs.shards.result != 'success'
+        if: needs.changes.outputs.code == 'true' && needs.shards.result != 'success'
         run: exit 1
       - name: Fail if the multi-framework build failed
-        if: needs.build.result != 'success'
+        if: needs.changes.outputs.code == 'true' && needs.build.result != 'success'
         run: exit 1
