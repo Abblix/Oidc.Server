@@ -162,7 +162,9 @@ public partial class MultiTenancyRegistrationTests
         async Task<string?> KeyIdAtAsync(TenantDefinition tenant)
         {
             EnterTenant(provider, tenant);
-            var signed = await signer.SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+            var signed = await signer.SignAsync(
+                new SecurityEventToken(new JsonWebToken()),
+                TestContext.Current.CancellationToken);
             var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
             return header[JwtClaimTypes.KeyId]?.GetValue<string>();
         }
