@@ -135,7 +135,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         group.AddEndpointFilter(ScopeRequirement.EnforceScopeAsync);
 
         // The refusals that belong to the GROUP rather than to any handler: 401 where nothing named the
-        // caller or its credentials come from an issuer the transmitter does not take receivers from, 403
+        // caller or its credentials do not come from the issuer the transmitter takes its receivers from, 403
         // where the caller was named and its token carries neither scope the route needs, and 404 where no
         // transmitter serves the request. Declared once here, so a route added later inherits them instead
         // of restating them.

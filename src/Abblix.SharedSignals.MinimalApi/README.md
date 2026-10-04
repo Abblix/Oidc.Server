@@ -60,7 +60,7 @@ A gateway-fronted deployment adjusts this in the same options object, without mo
 
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SharedSignalsEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
-Where the transmitter names the issuer its receivers come from, as each tenant's transmitter does on a multi-tenant Abblix OIDC Server, a receiver's credentials must come from that issuer. The endpoints read it from the `iss` claim, and `SharedSignalsEndpointOptions.ReceiverIssuerSelector` replaces that when the host keeps it elsewhere; credentials from another issuer are answered with 401 and `invalid_token`.
+Where the transmitter names the issuer its receivers come from, as each tenant's transmitter does on a multi-tenant Abblix OIDC Server, a receiver's credentials must come from that issuer. The endpoints read it from the `iss` claim, and `SharedSignalsEndpointOptions.ReceiverIssuerSelector` replaces that when the host keeps it elsewhere; credentials that do not come from that issuer are answered with 401 and `invalid_token`.
 
 Scopes are the other half, and they are off until you switch them on. The CAEP Interoperability Profile defines `ssf.read` and `ssf.manage` and requires a transmitter to check that a token is sufficient for what was asked. It assigns five operations: reading a stream's configuration and getting its status to `ssf.read`, creating a stream, deleting one and verification to `ssf.manage`. The other six routes it does not assign, and this library places them - everything that changes a stream needs `ssf.manage`, and poll needs `ssf.read`.
 

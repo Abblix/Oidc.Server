@@ -32,7 +32,7 @@ internal static class TransmitterPresence
 
     /// <summary>
     /// Answers 401 where the transmitter names the issuer its receivers come from and the receiver's credentials
-    /// come from another, as one tenant's receiver presenting its credentials under another tenant's address.
+    /// do not come from it, as one tenant's receiver presenting its credentials under another tenant's address.
     /// </summary>
     /// <remarks>
     /// A request that named no receiver is passed through, so the handler answers it with the bare challenge it
@@ -53,6 +53,6 @@ internal static class TransmitterPresence
             return await next(context);
         }
 
-        return BearerChallenges.ForeignIssuer(required);
+        return BearerChallenges.ForeignIssuer(http);
     }
 }

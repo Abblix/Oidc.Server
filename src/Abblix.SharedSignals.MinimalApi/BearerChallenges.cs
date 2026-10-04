@@ -70,8 +70,8 @@ internal static class BearerChallenges
     /// That section defines three codes and this method answers none of them. Validating the token
     /// belongs to the host: this package never sees one, it reads whatever identity the host's
     /// authentication left behind, through <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>.
-    /// It answers <c>invalid_token</c> only where that identity's credentials come from an issuer the
-    /// transmitter does not take receivers from, in <see cref="ForeignIssuer"/>. <c>insufficient_scope</c>
+    /// It answers <c>invalid_token</c> only where that identity's credentials do not come from the issuer
+    /// the transmitter takes its receivers from, in <see cref="ForeignIssuer"/>. <c>insufficient_scope</c>
     /// IS emitted by this package, from <see cref="ScopeRequirement.EnforceScopeAsync"/>, once the host
     /// supplies the granted scopes.
     /// </para>
@@ -92,24 +92,27 @@ internal static class BearerChallenges
     }
 
     /// <summary>
-    /// The answer to a receiver whose credentials come from an issuer other than the one this transmitter
-    /// takes its receivers from: 401 with <c>invalid_token</c>.
+    /// The answer to a receiver whose credentials do not come from the issuer this transmitter takes its
+    /// receivers from: 401 with <c>invalid_token</c>.
     /// </summary>
     /// <remarks>
     /// RFC 6750 Section 3.1 gives that code to an access token that is "expired, revoked, malformed, or
-    /// invalid for other reasons", and a token from another issuer is invalid here for such a reason. Unlike
-    /// the bare challenge, it tells the receiver that a fresh token from the same issuer will not help.
+    /// invalid for other reasons", and a token from another issuer, or naming none, is invalid here for such a
+    /// reason. The code lets the receiver ask for a new token and retry; the description, which that section
+    /// meant for developers, is what says a token from the same issuer will be refused again.
     /// </remarks>
-    /// <param name="issuer">The issuer the transmitter takes its receivers from, which is also its realm.</param>
-    internal static IResult ForeignIssuer(string issuer)
-        => new ChallengeResult(
+    internal static IResult ForeignIssuer(HttpContext http)
+    {
+        var issuer = http.RequestServices.GetService<ITransmitterIdentity>()?.Issuer;
+        return new ChallengeResult(
             StatusCodes.Status401Unauthorized,
             WwwAuthenticate.Challenge(
                 BearerScheme,
                 ("realm", issuer),
                 ("error", "invalid_token"),
                 ("error_description",
-                    "The access token comes from an issuer this transmitter does not take receivers from.")));
+                    "The access token does not come from the issuer this transmitter takes its receivers from.")));
+    }
 
     /// <summary>
     /// The scheme this surface advertises. Not a claim about how the host authenticates - it is what the
