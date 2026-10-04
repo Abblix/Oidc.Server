@@ -101,6 +101,34 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// A stream acme's receiver created is not found by globex's receiver under the same identifier: reading,
+    /// updating and deleting it there answer 404, and it is still acme's afterwards.
+    /// </summary>
+    [Fact]
+    public async Task AStreamOfOneTenant_IsNotFoundAtAnother()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var acme = ClientOf(app, Host + Acme);
+        var globex = ClientOf(app, Host + Globex);
+
+        using var created = await acme.PostAsJsonAsync(
+            Acme + StreamPath, new CreateStreamRequest { EventsRequested = [MembershipChanged] }, ct);
+        var streamId = (await created.Content.ReadFromJsonAsync<StreamConfiguration>(ct))!.StreamId;
+        var addressed = $"{Globex}{StreamPath}?stream_id={streamId}";
+
+        using var read = await globex.GetAsync(addressed, ct);
+        using var updated = await globex.PatchAsJsonAsync(
+            Globex + StreamPath, new UpdateStreamRequest { StreamId = streamId, Description = "taken" }, ct);
+        using var deleted = await globex.DeleteAsync(addressed, ct);
+
+        Assert.Equal(
+            [HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound],
+            [read.StatusCode, updated.StatusCode, deleted.StatusCode]);
+        Assert.Single((await acme.GetFromJsonAsync<StreamConfiguration[]>(Acme + StreamPath, ct))!);
+    }
+
+    /// <summary>
     /// Each tenant's configuration document is reached where SSF 1.0 Section 7.2 puts it for that tenant's issuer,
     /// and names that issuer, its key set and its own management address.
     /// </summary>

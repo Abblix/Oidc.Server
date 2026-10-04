@@ -42,6 +42,7 @@
 		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.SharedSignals\Abblix.Oidc.Server.SharedSignals.csproj" />
+		<ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
 	</ItemGroup>
 
