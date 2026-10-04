@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 
@@ -46,6 +47,10 @@ internal partial class ReloadableClientInfoStorage(
     IClientRegistrations registrations)
     : IClientInfoStore
 {
+    // The clients the former settings of a server without tenants configured; under tenants the catalog compares
+    // each tenant's definitions, since this store is shared by all of them
+    private IEnumerable<ClientInfo>? _formerlyConfigured;
+
     private Dictionary<string, ClientInfo> Configured
     {
         get
@@ -67,7 +72,30 @@ internal partial class ReloadableClientInfoStorage(
         foreach (var clientId in registrations.DropHeld(id => clients.ContainsKey(id) && ConfiguredInForce(id)))
             LogRegistrationEvicted(clientId, settings.Id);
 
+        if (settings is OptionsIssuerSettings)
+            ReleaseDropped(clients.Values);
+
         return clients;
+    }
+
+    /// <summary>
+    /// Takes the clients the former settings configured and <paramref name="clients"/> do not off the license's
+    /// count, as the reloaded settings are first served, unless the settings in force still configure them: a build
+    /// of former settings ending after the change would otherwise release a client still served.
+    /// </summary>
+    private void ReleaseDropped(IReadOnlyCollection<ClientInfo> clients)
+    {
+        var former = Interlocked.Exchange(ref _formerlyConfigured, clients);
+        if (former is null)
+            return;
+
+        LicenseChecker.ReleaseClients(
+            settings.Id,
+            former
+                .Select(client => client.ClientId)
+                .Except(clients.Select(client => client.ClientId), StringComparer.Ordinal)
+                .Where(clientId => !ConfiguredInForce(clientId))
+                .ToArray());
     }
 
     private async Task EvictAsync(RegisteredClient registration)

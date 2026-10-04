@@ -84,7 +84,8 @@ public static partial class LicenseChecker
     /// forged Host header could vary to push the count past the limit. A client stops counting once its issuer is
     /// released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with a
     /// catalog of tenants of the host's own, which tells no release, only a client removed through registration
-    /// leaves the count.
+    /// leaves the count. On a server without tenants, a client removed through registration or dropped by a reload of
+    /// the settings, served by the reloadable client store, leaves the count.
     /// </remarks>
     public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
     {

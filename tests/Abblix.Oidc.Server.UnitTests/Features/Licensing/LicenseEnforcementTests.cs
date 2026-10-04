@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -467,6 +468,31 @@ public sealed class LicenseEnforcementTests : IDisposable
         await catalog.RefreshAsync(ct);
 
         AssertOnePlaceFree(acme);
+    }
+
+    [Fact]
+    public async Task A_client_a_reload_of_the_settings_drops_frees_its_place_once_the_reloaded_settings_are_served()
+    {
+        // A server without tenants serving its clients from the reloadable store takes a client the reloaded
+        // settings no longer configure off the count when it first serves them
+        ArrangeClientLimitOfTwo();
+        var current = new OidcOptions { Clients = [new("client-0"), new("client-1"), new("client-2")] };
+        var monitor = new Mock<IOptionsMonitor<OidcOptions>>();
+        monitor.SetupGet(options => options.CurrentValue).Returns(() => current);
+        var settings = new OptionsIssuerSettings(monitor.Object);
+        var clients = new ReloadableClientInfoStorage(
+            NullLogger<ReloadableClientInfoStorage>.Instance,
+            settings,
+            new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
+            new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
+        foreach (var client in current.Clients)
+            (await clients.TryFindClientAsync(client.ClientId)).CheckClientLicense(settings);
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(settings));
+
+        current = new OidcOptions { Clients = [new("client-1"), new("client-2")] };
+        await clients.TryFindClientAsync("client-1");
+
+        AssertOnePlaceFree(settings);
     }
 
     /// <summary>
