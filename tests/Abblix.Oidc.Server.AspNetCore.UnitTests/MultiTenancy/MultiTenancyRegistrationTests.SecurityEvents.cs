@@ -41,8 +41,10 @@ public partial class MultiTenancyRegistrationTests
 
     private static ServiceProvider SigningEvents(
         Action<SecurityEventsOptions>? configure,
-        Action<IServiceCollection>? arrange = null)
+        Action<IServiceCollection>? arrange = null,
+        Func<string, TenantDefinition>? tenant = null)
     {
+        tenant ??= TenantSigning;
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
         services.AddIssuer();
@@ -51,10 +53,10 @@ public partial class MultiTenancyRegistrationTests
         arrange?.Invoke(services);
         services.AddServerStorage().AddMultiTenancy(options =>
         {
-            options.Tenants.Add(TenantSigning("acme"));
-            options.Tenants.Add(TenantSigning("globex"));
+            options.Tenants.Add(tenant("acme"));
+            options.Tenants.Add(tenant("globex"));
         });
-        return services.BuildServiceProvider();
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
     private static void UseTenantSigner(IServiceCollection services)
@@ -93,6 +95,47 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A host's own signer registered for each request is judged as one, rather than passing for failing to resolve
+    /// from the root where scopes are validated.
+    /// </summary>
+    [Fact]
+    public void AHostsOwnSignerForEachRequest_IsRefusedAtStartup()
+    {
+        using var provider = SigningEvents(null, services =>
+            services.Replace(ServiceDescriptor.Scoped(_ => Mock.Of<ISecurityEventTokenSigner>())));
+
+        Assert.Contains(nameof(TenantSecurityEventTokenSigner), StartupRefusal(provider), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant whose first signing key is of an algorithm the deployment does not allow signs with its first key
+    /// that is.
+    /// </summary>
+    [Fact]
+    public async Task TheTenantsSigner_SkipsAKeyOfAnAlgorithmNotAllowed()
+    {
+        using var provider = SigningEvents(null, UseTenantSigner, id => new TenantDefinition
+        {
+            Id = id,
+            Issuer = "https://auth.example.com/tenants/" + id,
+            SigningKeys =
+            [
+                JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+                JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256),
+            ],
+        });
+        var acme = provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants
+            .Single(tenant => tenant.Id == "acme");
+        EnterTenant(provider, acme);
+
+        var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
+        Assert.Equal(acme.SigningKeys!.Last().KeyId, header[JwtClaimTypes.KeyId]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// A receiver signs nothing, and the tenants' signer signs per tenant: either starts.
     /// </summary>
     [Theory]
@@ -119,7 +162,7 @@ public partial class MultiTenancyRegistrationTests
         async Task<string?> KeyIdAtAsync(TenantDefinition tenant)
         {
             EnterTenant(provider, tenant);
-            var signed = await signer.SignAsync(new SecurityEventToken(new JsonWebToken()));
+            var signed = await signer.SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
             var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
             return header[JwtClaimTypes.KeyId]?.GetValue<string>();
         }

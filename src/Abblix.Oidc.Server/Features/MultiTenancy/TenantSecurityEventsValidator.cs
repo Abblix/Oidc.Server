@@ -54,13 +54,15 @@ public sealed class TenantSecurityEventsValidator(IServiceProvider serviceProvid
 
     /// <summary>
     /// The registered signer, or null where none can be built - as the one <c>AddSecurityEvents</c> registers
-    /// refuses to be without a signing key, which is a receiver's case.
+    /// refuses to be without a signing key, which is a receiver's case. Resolved as a request would, so a signer
+    /// registered for a request is judged too, rather than failing to resolve from the root and passing.
     /// </summary>
     private static ISecurityEventTokenSigner? SignerOf(IServiceProvider serviceProvider)
     {
+        using var scope = serviceProvider.CreateScope();
         try
         {
-            return serviceProvider.GetService<ISecurityEventTokenSigner>();
+            return scope.ServiceProvider.GetService<ISecurityEventTokenSigner>();
         }
         catch (InvalidOperationException)
         {

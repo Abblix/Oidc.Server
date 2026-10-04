@@ -21,9 +21,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// tenant transmits with that tenant's published keys alone.
 /// </summary>
 /// <remarks>
-/// The key is the tenant's first signing key, as for the other tokens the server signs, and the signing itself is
-/// the default signer's, which refuses a key whose algorithm the deployment does not allow
-/// (<see cref="SecurityEventsOptions.AllowedSigningAlgorithms"/>). A host transmitting security events under
+/// The key is the tenant's first signing key of an algorithm the deployment allows
+/// (<see cref="SecurityEventsOptions.AllowedSigningAlgorithms"/>), and the signing itself is the default signer's,
+/// which judges it against the same allowlist. A host transmitting security events under
 /// multi-tenancy registers this signer in place of the one <c>AddSecurityEvents</c> registers; startup refuses any
 /// other.
 /// </remarks>
@@ -38,15 +38,18 @@ public sealed class TenantSecurityEventTokenSigner(
 {
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-        => new DefaultSecurityEventTokenSigner(
-                creator,
-                SigningKeyAsync,
-                options.Value.AllowedSigningAlgorithms ?? [.. SecurityEventsOptions.DefaultSigningAlgorithms])
+    {
+        var allowed = options.Value.AllowedSigningAlgorithms ?? [.. SecurityEventsOptions.DefaultSigningAlgorithms];
+        return new DefaultSecurityEventTokenSigner(creator, ct => SigningKeyAsync(allowed, ct), allowed)
             .SignAsync(token, cancellationToken);
+    }
 
-    /// <exception cref="InvalidOperationException">The tenant has no signing key.</exception>
-    private async Task<JsonWebKey> SigningKeyAsync(CancellationToken cancellationToken)
-        => await keys.GetSigningKeys(true).FirstOrDefaultAsync(cancellationToken)
+    /// <exception cref="InvalidOperationException">The tenant has no signing key of an allowed algorithm.</exception>
+    private async Task<JsonWebKey> SigningKeyAsync(string[] allowed, CancellationToken cancellationToken)
+        => await keys.GetSigningKeys(true).FirstOrDefaultAsync(
+               key => key.Algorithm is { } algorithm && allowed.Contains(algorithm, StringComparer.Ordinal),
+               cancellationToken)
            ?? throw new InvalidOperationException(
-               "A security event token cannot be signed: the tenant serving the request has no signing key.");
+               "A security event token cannot be signed: the tenant serving the request has no signing key of " +
+               $"an allowed algorithm ({string.Join(", ", allowed)}).");
 }
