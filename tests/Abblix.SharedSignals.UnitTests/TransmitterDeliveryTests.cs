@@ -411,7 +411,7 @@ public class TransmitterDeliveryTests
         var signer = new FakeSigner();
         var options = new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" };
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer);
+            NullLogger<EventDispatcher>.Instance, store, outbox, signer, new OptionsTransmitterIdentity(options));
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options));
 

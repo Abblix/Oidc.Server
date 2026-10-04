@@ -88,14 +88,21 @@ public class StreamManagementServiceTests
 
     private static Harness CreateHarness() => CreateHarness(DefaultOptions());
 
-    private static Harness CreateHarness(SharedSignalsTransmitterOptions options)
+    private static Harness CreateHarness(
+        SharedSignalsTransmitterOptions options,
+        ITransmitterIdentity? identity = null)
     {
         var store = new InMemoryStreamStore();
         var outbox = new InMemoryEventOutbox();
         var signer = new StubSigner();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            signer,
+            identity ?? new OptionsTransmitterIdentity(options),
+            clock: clock);
 
         return new Harness(
             new StreamManagementService(
@@ -114,6 +121,22 @@ public class StreamManagementServiceTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         return created.Body!;
+    }
+
+    /// <summary>
+    /// A stream created after the identity changed names the issuer serving the request - the one its SETs carry,
+    /// which a receiver compares against the stream's (SSF 1.0 Section 7.2.2).
+    /// </summary>
+    [Fact]
+    public async Task Create_NamesTheIssuerServingTheRequest()
+    {
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var harness = CreateHarness(DefaultOptions(), identity);
+
+        identity.Issuer = "https://second.example.com";
+        var configuration = await CreatedStreamAsync(harness);
+
+        Assert.Equal("https://second.example.com", configuration.Issuer);
     }
 
     [Fact]
@@ -189,7 +212,12 @@ public class StreamManagementServiceTests
         var outbox = new InMemoryEventOutbox();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new StubSigner(),
+            new OptionsTransmitterIdentity(options),
+            clock: clock);
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
 
@@ -235,7 +263,12 @@ public class StreamManagementServiceTests
         var outbox = new InMemoryEventOutbox();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new StubSigner(),
+            new OptionsTransmitterIdentity(options),
+            clock: clock);
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
 

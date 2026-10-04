@@ -49,6 +49,9 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddSharedSignalsRedisStreamStore(this IServiceCollection services)
     {
+        // The key the store writes under is scoped by the issuer, so the store reads the same identity the
+        // transmitter signs with - registered here too, for a host that wires the store before the role.
+        services.TryAddSingleton<ITransmitterIdentity, OptionsTransmitterIdentity>();
         services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
         return services;
     }
@@ -87,6 +90,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSharedSignalsRedisConfiguredStreams(
         this IServiceCollection services,
         IReadOnlyList<ConfiguredStream> streams)
-        => services.AddSharedSignalsConfiguredStreams(
+    {
+        services.TryAddSingleton<ITransmitterIdentity, OptionsTransmitterIdentity>();
+        return services.AddSharedSignalsConfiguredStreams(
             streams, provider => provider.CreateService<RedisStreamStore>());
+    }
 }

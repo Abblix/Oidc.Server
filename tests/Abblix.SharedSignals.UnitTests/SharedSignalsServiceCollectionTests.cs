@@ -182,6 +182,24 @@ public class SharedSignalsServiceCollectionTests
         Assert.Same(hostLease, provider.GetRequiredService<IDeliveryLease>());
     }
 
+    /// <summary>
+    /// A transmitter with no issuer is refused before the stream management service exists, so before it writes a
+    /// status change or a verification throttle the receiver would never be told about. The options the host
+    /// registered first are the ones refused, since they are the ones every reader sees.
+    /// </summary>
+    [Fact]
+    public void AnEmptyIssuer_IsRefusedBeforeAnythingIsWritten()
+    {
+        var services = SecurityEventsBase();
+        services.AddSingleton(TransmitterOptions with { Issuer = string.Empty });
+        services.AddSharedSignalsTransmitter(TransmitterOptions);
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<ArgumentException>(() => provider.GetRequiredService<StreamManagementService>());
+
+        Assert.Equal("options", exception.ParamName);
+    }
+
     [Fact]
     public void WithoutTheSecurityEventsCore_TheRoleRefuses_NamingThePrerequisite()
     {

@@ -78,7 +78,7 @@ internal static class ScopeRequirement
             return await next(context);
         }
 
-        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        var issuer = http.RequestServices.GetService<ITransmitterIdentity>()?.Issuer;
         return new ChallengeResult(
             StatusCodes.Status403Forbidden,
             WwwAuthenticate.Challenge(

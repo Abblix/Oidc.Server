@@ -42,7 +42,7 @@ internal static class BearerChallenges
     /// </remarks>
     internal static IResult MissingRequiredParameter(HttpContext http, string parameterName)
     {
-        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        var issuer = http.RequestServices.GetService<ITransmitterIdentity>()?.Issuer;
         return new ChallengeResult(
             StatusCodes.Status400BadRequest,
             WwwAuthenticate.Challenge(
@@ -85,7 +85,7 @@ internal static class BearerChallenges
     /// </remarks>
     internal static IResult Unauthenticated(HttpContext http)
     {
-        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        var issuer = http.RequestServices.GetService<ITransmitterIdentity>()?.Issuer;
         return new ChallengeResult(
             StatusCodes.Status401Unauthorized, WwwAuthenticate.Challenge(BearerScheme, issuer));
     }

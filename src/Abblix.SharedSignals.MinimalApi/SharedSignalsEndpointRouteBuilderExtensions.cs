@@ -325,10 +325,11 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SharedSignalsTransmitterOptions current,
+             ITransmitterIdentity identity,
              PollEndpointLocator pollEndpoints,
              ManagementEndpointLocator managementEndpoints) =>
                 Results.Json(TransmitterConfigurationDocument.ConfigurationDocumentOf(
-                    current, pollEndpoints, managementEndpoints)));
+                    current, identity, pollEndpoints, managementEndpoints)));
 
         document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
         return document;
