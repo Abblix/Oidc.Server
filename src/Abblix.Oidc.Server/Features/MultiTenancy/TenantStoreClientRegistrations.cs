@@ -15,13 +15,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The registrations kept in the host's store, each call naming the tenant of the request.
 /// </summary>
 /// <param name="store">The host's store of registrations.</param>
-/// <param name="currentTenant">The tenant each call names.</param>
+/// <param name="tenantAccessor">The tenant of the request.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class TenantStoreClientRegistrations(
     ITenantClientRegistrationStore store,
-    Func<TenantDefinition> currentTenant) : IClientRegistrations
+    ITenantAccessor tenantAccessor) : IClientRegistrations
 {
-    private TenantDefinition Tenant => currentTenant();
+    private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 
     public Task<RegisteredClient?> TryFindAsync(string clientId) => store.TryFindAsync(Tenant, clientId);
 
@@ -32,9 +32,9 @@ internal sealed class TenantStoreClientRegistrations(
 
     public Task<bool> TryRemoveAsync(RegisteredClient current) => store.TryRemoveAsync(Tenant, current);
 
-    public IClientRegistrations OfCurrentIssuer()
-    {
-        var tenant = Tenant;
-        return new TenantStoreClientRegistrations(store, () => tenant);
-    }
+    /// <remarks>
+    /// The server holds none of the host's registrations, so it drops none here: the host sees its store, and a
+    /// registration met under a configured id is dropped when it is met.
+    /// </remarks>
+    public IReadOnlyCollection<string> DropHeld(Func<string, bool> configured) => [];
 }

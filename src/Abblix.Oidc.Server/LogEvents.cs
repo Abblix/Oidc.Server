@@ -952,7 +952,6 @@ internal static class LogEvents
             private const int Base = 10600;
 
             public const int RegistrationEvicted = Base;
-            public const int EvictionFailed = Base + 1;
         }
     }
 

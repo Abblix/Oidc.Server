@@ -34,9 +34,9 @@ internal sealed class IssuerClientRegistrations(
     public Task<bool> TryRemoveAsync(RegisteredClient current)
         => Task.FromResult(Registered.TryRemove(current));
 
-    /// <remarks>
-    /// Every call here completes before it returns, so work started within a request ends within it, while the
-    /// issuer is still the request's.
-    /// </remarks>
-    public IClientRegistrations OfCurrentIssuer() => this;
+    public IReadOnlyCollection<string> DropHeld(Func<string, bool> configured)
+        => Registered
+            .Where(registration => configured(registration.Key) && Registered.TryRemove(registration))
+            .Select(registration => registration.Key)
+            .ToArray();
 }

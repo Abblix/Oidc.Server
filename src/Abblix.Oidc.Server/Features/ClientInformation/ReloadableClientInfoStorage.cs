@@ -37,74 +37,41 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
 /// <param name="configured">The clients each issuer's settings configure.</param>
 /// <param name="registrations">The clients registration added or changed at the issuer serving the request.</param>
-/// <param name="clock">Times the dropping of the registrations under configured ids.</param>
 internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
     IIssuerSettings settings,
-    IIssuerLocal<ConfiguredClients> configured,
-    IClientRegistrations registrations,
-    TimeProvider clock)
+    IIssuerLocal<Dictionary<string, ClientInfo>> configured,
+    IClientRegistrations registrations)
     : IClientInfoStore
 {
-    // How long a dropping may take before it counts as failed and the next reading tries again: a store of
-    // registrations that never answers would otherwise leave it pending, unreported, for as long as the settings last
-    private static readonly TimeSpan EvictionTimeLimit = TimeSpan.FromSeconds(30);
-
-    /// <summary>
-    /// The clients the settings configure, with the registrations stored under an id they configure being dropped,
-    /// where the settings in force still configure it: a build of former settings may end after a registration
-    /// the current ones allow.
-    /// </summary>
-    /// <remarks>
-    /// Nothing waits for the dropping: a configured client wins over a registration under its id either way, and a
-    /// registration found or written under such an id is dropped when it is met, so a store of registrations that is
-    /// slow or down keeps every configured client served. A dropping that fails, or takes longer than
-    /// <see cref="EvictionTimeLimit"/>, is logged once while it keeps failing and tried again by the next reading. So
-    /// a registration stored under an id before the settings came to configure it can come back once they let the
-    /// id go only if the store never answered while they configured it.
-    /// </remarks>
-    private Dictionary<string, ClientInfo> Configured()
+    private Dictionary<string, ClientInfo> Configured
     {
-        var clients = settings.Clients;
-        var built = configured.GetOrCreate(clients, () => new ConfiguredClients(
-            clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
-
-        if (!built.Evicted)
-            StartEviction(built);
-
-        return built.Clients;
-    }
-
-    private void StartEviction(ConfiguredClients built)
-    {
-        var issuerId = settings.Id;
-
-        // The dropping may outlast the request, so what it reads of the request is read as it starts
-        _ = built.EvictedAsync(
-            () => EvictAsync(registrations.OfCurrentIssuer(), issuerId, InForceNow(), built.Clients.Keys)
-                .WaitAsync(EvictionTimeLimit, clock),
-            exception => LogEvictionFailed(exception, issuerId));
-    }
-
-    private async Task EvictAsync(
-        IClientRegistrations current,
-        string issuerId,
-        Func<IEnumerable<ClientInfo>> inForce,
-        IEnumerable<string> clientIds)
-    {
-        foreach (var clientId in clientIds)
+        get
         {
-            // Asked for each id just before its registration is read: the settings may stop configuring it meanwhile,
-            // and a registration made under it since is then not dropped
-            if (Configures(inForce(), clientId) && await current.TryFindAsync(clientId) is { } registration)
-                await EvictAsync(current, issuerId, registration);
+            var clients = settings.Clients;
+            return configured.GetOrCreate(clients, () => Evicting(
+                clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
         }
     }
 
-    private async Task EvictAsync(IClientRegistrations current, string issuerId, RegisteredClient registration)
+    /// <summary>
+    /// Drops every registration held under an id <paramref name="clients"/> configure, as the store first reads
+    /// them, where the settings in force still configure it: a build of former settings may end after a registration
+    /// the current ones allow. Only registrations kept in memory are dropped here; a host keeping them in a store of
+    /// its own sees them there, and a registration met under such an id is dropped when it is met.
+    /// </summary>
+    private Dictionary<string, ClientInfo> Evicting(Dictionary<string, ClientInfo> clients)
     {
-        if (await current.TryRemoveAsync(registration))
-            LogRegistrationEvicted(registration.ClientInfo.ClientId, issuerId);
+        foreach (var clientId in registrations.DropHeld(id => clients.ContainsKey(id) && ConfiguredInForce(id)))
+            LogRegistrationEvicted(clientId, settings.Id);
+
+        return clients;
+    }
+
+    private async Task EvictAsync(RegisteredClient registration)
+    {
+        if (await registrations.TryRemoveAsync(registration))
+            LogRegistrationEvicted(registration.ClientInfo.ClientId, settings.Id);
     }
 
     /// <summary>
@@ -118,7 +85,7 @@ internal partial class ReloadableClientInfoStorage(
         if (!ConfiguredInForce(client.ClientInfo.ClientId))
             return false;
 
-        await EvictAsync(registrations, settings.Id, client);
+        await EvictAsync(client);
         return true;
     }
 
@@ -127,21 +94,13 @@ internal partial class ReloadableClientInfoStorage(
     /// clients built: a request begun before the settings changed holds the former ones, and the clients of the
     /// current ones may not be built yet, or be built from former settings.
     /// </summary>
-    private bool ConfiguredInForce(string clientId) => Configures(InForceNow()(), clientId);
-
-    /// <summary>
-    /// Asks which clients the settings in force configure, of the issuer serving the request now, each time it is
-    /// called, whether or not the request is still alive.
-    /// </summary>
-    private Func<IEnumerable<ClientInfo>> InForceNow()
+    private bool ConfiguredInForce(string clientId)
     {
 #pragma warning disable ABXMT001
-        return settings is TenantIssuerSettings tenant ? tenant.ClientsInForceOfCurrent() : () => settings.Clients;
+        var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
 #pragma warning restore ABXMT001
+        return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static bool Configures(IEnumerable<ClientInfo> clients, string clientId)
-        => clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
@@ -153,7 +112,7 @@ internal partial class ReloadableClientInfoStorage(
     public async Task<ClientInfo?> TryFindClientAsync(string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        if (Configured().TryGetValue(clientId, out var configuredClient))
+        if (Configured.TryGetValue(clientId, out var configuredClient))
             return configuredClient;
 
         var registration = await registrations.TryFindAsync(clientId);

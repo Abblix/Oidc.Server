@@ -35,7 +35,8 @@ internal interface IClientRegistrations
     Task<bool> TryRemoveAsync(RegisteredClient current);
 
     /// <summary>
-    /// The registrations of the issuer serving the request now, for work that may outlast the request.
+    /// Drops the registrations this server holds itself under an id <paramref name="configured"/> accepts.
     /// </summary>
-    IClientRegistrations OfCurrentIssuer();
+    /// <returns>The ids dropped.</returns>
+    IReadOnlyCollection<string> DropHeld(Func<string, bool> configured);
 }

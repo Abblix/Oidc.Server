@@ -23,19 +23,9 @@ internal sealed class HostRegistrations : ITenantClientRegistrationStore
         = new();
 
     /// <summary>
-    /// While set, every lookup fails, as a store that cannot be reached does.
-    /// </summary>
-    public bool Unreachable { get; set; }
-
-    /// <summary>
     /// While set, every lookup waits forever, as a call over a dropped connection does.
     /// </summary>
     public bool Hanging { get; set; }
-
-    /// <summary>
-    /// While set, every lookup waits for it to be completed, then answers.
-    /// </summary>
-    public TaskCompletionSource? Gate { get; set; }
 
     private static (string, string, string) Key(TenantDefinition tenant, string clientId)
         => (tenant.Id, tenant.Generation, clientId.ToUpperInvariant());
@@ -45,19 +35,7 @@ internal sealed class HostRegistrations : ITenantClientRegistrationStore
         if (Hanging)
             return new TaskCompletionSource<RegisteredClient?>().Task;
 
-        if (Unreachable)
-            return Task.FromException<RegisteredClient?>(new TimeoutException("The store is unreachable."));
-
-        if (Gate is { } gate)
-            return AfterAsync(gate.Task, tenant, clientId);
-
         return Task.FromResult(Held.GetValueOrDefault(Key(tenant, clientId)));
-    }
-
-    private async Task<RegisteredClient?> AfterAsync(Task gate, TenantDefinition tenant, string clientId)
-    {
-        await gate;
-        return Held.GetValueOrDefault(Key(tenant, clientId));
     }
 
     public Task<bool> TryAddAsync(TenantDefinition tenant, RegisteredClient client)

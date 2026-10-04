@@ -29,15 +29,8 @@ internal static class DefaultClientRegistrations
 #pragma warning disable ABXMT001
         return MultiTenancyDetection.IsActive(serviceProvider) &&
                serviceProvider.GetService<ITenantClientRegistrationStore>() is { } store
-            ? new TenantStoreClientRegistrations(
-                store,
-                CurrentTenantOf(serviceProvider.GetRequiredService<ITenantAccessor>()))
+            ? new TenantStoreClientRegistrations(store, serviceProvider.GetRequiredService<ITenantAccessor>())
             : ActivatorUtilities.CreateInstance<IssuerClientRegistrations>(serviceProvider);
 #pragma warning restore ABXMT001
     }
-
-#pragma warning disable ABXMT001
-    private static Func<TenantDefinition> CurrentTenantOf(ITenantAccessor accessor)
-        => () => TenantKey.CurrentTenant(accessor);
-#pragma warning restore ABXMT001
 }

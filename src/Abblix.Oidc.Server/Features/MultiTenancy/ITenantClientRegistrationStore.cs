@@ -22,15 +22,16 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// at the creation before it. Client ids are compared without regard to case, as the server compares them.
 /// <para>
 /// The clients a tenant's definition configures stay in the definition, and the server keeps them apart from what
-/// this store holds: it removes a registration it finds under an id the definition configures, and an addition or a
-/// change under such an id - one decided just before the definition came to configure it - is removed right after it
-/// reaches the store and answered as not made.
+/// this store holds: a configured client is served over a registration under its id, a registration the server meets
+/// under such an id - found, added or changed - is removed and answered as not found or not made, and one no request
+/// meets stays in this store until the host deletes it.
 /// </para>
 /// <para>
 /// An addition takes effect only where no registration is held under the client's id; a change or a removal only
 /// while the registration held there carries the token identifier of the one it was decided on. Each answers
-/// whether it took effect. Registered as a singleton, as the server's client store that calls it is: startup builds
-/// the store to tell its lifetime, and refuses another one.
+/// whether it took effect. Registered as a singleton, as the server's client store that calls it is: that store
+/// would hold one registered for a request for every request after the first, and a container validating its scopes
+/// refuses it at startup.
 /// </para>
 /// <para>
 /// The registrations of a creation of a tenant the host removes are the host's to delete: the server only stops

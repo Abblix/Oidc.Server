@@ -26,12 +26,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 /// </summary>
 public class TenantClientRegistrationStoreValidatorTests
 {
-    private static ValidateOptionsResult Validate(bool store, bool multiTenancy, bool scoped = false)
+    private static ValidateOptionsResult Validate(bool store, bool multiTenancy)
     {
         var services = new ServiceCollection();
-        if (store && scoped)
-            services.AddScoped(_ => Mock.Of<ITenantClientRegistrationStore>());
-        else if (store)
+        if (store)
             services.AddSingleton(Mock.Of<ITenantClientRegistrationStore>());
         if (multiTenancy)
             services.AddSingleton(Mock.Of<IValidateOptions<MultiTenancyOptions>>());
@@ -44,15 +42,6 @@ public class TenantClientRegistrationStoreValidatorTests
     public void AStoreOnAServerWithoutTenants_IsRefused_NamingIt()
     {
         var result = Validate(store: true, multiTenancy: false);
-
-        Assert.True(result.Failed);
-        Assert.Contains(nameof(ITenantClientRegistrationStore), result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AStoreRegisteredForEachRequest_IsRefused_NamingIt()
-    {
-        var result = Validate(store: true, multiTenancy: true, scoped: true);
 
         Assert.True(result.Failed);
         Assert.Contains(nameof(ITenantClientRegistrationStore), result.FailureMessage, StringComparison.Ordinal);
