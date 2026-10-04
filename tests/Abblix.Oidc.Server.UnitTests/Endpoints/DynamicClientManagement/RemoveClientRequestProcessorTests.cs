@@ -30,7 +30,7 @@ public class RemoveClientRequestProcessorTests
     {
         var clients = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clients.Setup(c => c.TryRemoveClientAsync(Client)).ReturnsAsync(registrationHeld);
-        return new RemoveClientRequestProcessor(clients.Object, TimeProvider.System);
+        return new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, SingleIssuer.Settings);
     }
 
     [Fact]

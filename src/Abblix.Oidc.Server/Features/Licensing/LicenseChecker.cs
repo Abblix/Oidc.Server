@@ -222,6 +222,22 @@ public static partial class LicenseChecker
         => settings.Id.Length == 0 ? issuer : settings.Id;
 
     /// <summary>
+    /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
+    /// that issuer no longer serves: removed through registration, or dropped from the clients a tenant configures.
+    /// </summary>
+    /// <remarks>
+    /// A request already holding one of them counts it again, and it then stays counted until its issuer is released.
+    /// </remarks>
+    internal static void ReleaseClients(string issuerId, IEnumerable<string> clientIds)
+    {
+        if (_knownClientIds is not { } counted)
+            return;
+
+        foreach (var clientId in clientIds)
+            counted.TryRemove((issuerId, clientId), out _);
+    }
+
+    /// <summary>
     /// A counted client as a log names it: its id, after the issuer's when the deployment serves several.
     /// </summary>
     private static string Named((string IssuerId, string ClientId) client)
