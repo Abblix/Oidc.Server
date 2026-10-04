@@ -92,6 +92,7 @@ public static class TransmitterServiceCollectionExtensions
         // sources for one fact. Deciding here would judge by the argument while every other reader saw
         // the host's, and the disagreement is silent in both directions: no sweeper where the host
         // configured one, or a sweeper the host opted out of.
+        services.TryAddSingleton<IPushDeliverySweep, PushDeliverySweep>();
         services.AddHostedService<PushDeliveryScheduler>();
 
         return services;
