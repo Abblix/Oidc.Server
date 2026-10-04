@@ -85,7 +85,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         MapSubjectRoutes(group);
         MapVerificationRoute(group);
         MapPollRoute(group);
-        PublishServedAddresses(endpoints, transmitter, endpointOptions);
+        PublishServedAddresses(endpoints, endpointOptions);
 
         return group;
     }
@@ -97,12 +97,17 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
     private static void ApplyGroupConventions(RouteGroupBuilder group)
     {
         // Every management response travels uncacheable, as the specification's own examples
-        // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents.
+        // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents. First, so the
+        // refusals below carry it too.
         group.AddEndpointFilter(async (context, next) =>
         {
             context.HttpContext.Response.Headers.CacheControl = "no-store";
             return await next(context);
         });
+
+        // Before the scope filter and the handlers, which ask the transmitter's identity for its issuer.
+        group.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
+        group.AddEndpointFilter(TransmitterPresence.RefuseForeignReceiverAsync);
 
         // The scope each route requires (CAEP Interoperability Profile Section 2.7.3). The profile names
         // five of these eleven operations - Read Stream Configuration and Get Stream Status for
@@ -129,10 +134,12 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // stand in this place asserted the bound without its condition.
         group.AddEndpointFilter(ScopeRequirement.EnforceScopeAsync);
 
-        // The two refusals that belong to the GROUP rather than to any handler: 401 where nothing named
-        // the caller, 403 where the caller was named and its token carries neither scope the route
-        // needs. Declared once here, so a route added later inherits them instead of restating them.
-        group.Answers(StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+        // The refusals that belong to the GROUP rather than to any handler: 401 where nothing named the
+        // caller or its credentials do not come from the issuer the transmitter takes its receivers from, 403
+        // where the caller was named and its token carries neither scope the route needs, and 404 where no
+        // transmitter serves the request. Declared once here, so a route added later inherits them instead
+        // of restating them.
+        group.Answers(StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden, StatusCodes.Status404NotFound);
     }
 
     /// <summary>
@@ -264,7 +271,6 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     private static void PublishServedAddresses(
         IEndpointRouteBuilder endpoints,
-        SharedSignalsTransmitterOptions transmitter,
         SharedSignalsEndpointOptions endpointOptions)
     {
         // Said out loud because a stream STORES its poll address: the transmitter mints it at create time
@@ -274,18 +280,24 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // advertises, and from the ADVERTISED prefix, because that is the one the outside world uses.
         // How an identifier is carried into that address, and why one that cannot be carried is refused
         // here rather than met by a receiver later, is on PollEndpointAddresses.PollEndpointOf.
-        var pollAuthority = PollEndpointAddresses.AuthorityOf(transmitter);
-        var pollPrefix = PollEndpointAddresses.AdvertisedPrefixOf(endpointOptions);
+        var identity = endpoints.ServiceProvider.GetRequiredService<ITransmitterIdentity>();
+        var advertisedPrefix = PollEndpointAddresses.AdvertisedPrefixOf(endpointOptions);
         var pollLogger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
-        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
-            streamId => PollEndpointAddresses.PollEndpointOf(pollLogger, pollAuthority, pollPrefix, streamId));
+        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(streamId =>
+        {
+            var (authority, prefix) = PollEndpointAddresses.ReachedAt(identity, advertisedPrefix);
+            return PollEndpointAddresses.PollEndpointOf(pollLogger, authority, prefix, streamId);
+        });
 
         // And the same declaration for the management routes just mapped, which is what lets the
         // configuration document name them. Without it the document has no way to tell this
         // deployment from one that maps the document alone and serves no management API.
-        endpoints.ServiceProvider.GetRequiredService<ManagementEndpointLocator>().ServedAt(
-            route => new Uri(pollAuthority, pollPrefix.Add(route).Value!));
+        endpoints.ServiceProvider.GetRequiredService<ManagementEndpointLocator>().ServedAt(route =>
+        {
+            var (authority, prefix) = PollEndpointAddresses.ReachedAt(identity, advertisedPrefix);
+            return new Uri(authority, prefix.Add(route).Value!);
+        });
     }
 
     /// <summary>
@@ -316,10 +328,10 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
 
         CaepProfileWarnings.WarnIfTheDocumentIsOutsideTheCaepProfile(endpoints.ServiceProvider, options);
 
-        // Answers 200 and only 200: it takes no parameter to get wrong and no credentials to lack -
-        // discovery has to work before a receiver has any. Declared all the same, because an
-        // undeclared status is INFERRED into the document rather than left out, and an inference that
-        // happens to be right is indistinguishable from one that is not.
+        // Answers 200: it takes no parameter to get wrong and no credentials to lack - discovery has to
+        // work before a receiver has any - and 404 only where no transmitter serves the request. Declared,
+        // because an undeclared status is INFERRED into the document rather than left out, and an
+        // inference that happens to be right is indistinguishable from one that is not.
         var document = endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
@@ -331,7 +343,9 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
                 Results.Json(TransmitterConfigurationDocument.ConfigurationDocumentOf(
                     current, identity, pollEndpoints, managementEndpoints)));
 
+        document.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
         document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
+        document.Answers(StatusCodes.Status404NotFound);
         return document;
     }
 

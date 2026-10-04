@@ -27,11 +27,19 @@ internal static class PollEndpointAddresses
             : endpointOptions.ManagementPrefix;
 
     /// <summary>
-    /// The authority every endpoint this deployment publishes lives on - the issuer's, which is what a
-    /// receiver holding nothing else already has.
+    /// The authority the endpoints are reached on and the whole prefix before their routes: the path of the
+    /// identity's base followed by the advertised prefix. Asked at each address, since an identity answering per
+    /// request - one issuer per tenant - names a different base for each.
     /// </summary>
-    internal static Uri AuthorityOf(SharedSignalsTransmitterOptions options)
-        => new(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
+    internal static (Uri Authority, PathString Prefix) ReachedAt(
+        ITransmitterIdentity identity,
+        PathString advertisedPrefix)
+    {
+        var endpointsBase = identity.EndpointsBase;
+        return (
+            new Uri(endpointsBase.GetLeftPart(UriPartial.Authority)),
+            PathString.FromUriComponent(endpointsBase.AbsolutePath.TrimEnd('/')).Add(advertisedPrefix));
+    }
 
     /// <summary>
     /// Where the poll endpoint of a stream is served, refused when that address would not lead back to

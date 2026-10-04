@@ -35,4 +35,25 @@ public interface ITransmitterIdentity
     /// Where the keys that verify the transmitter's tokens are published, or null when nothing is advertised.
     /// </summary>
     Uri? JwksUri { get; }
+
+    /// <summary>
+    /// The address the transmitter's endpoints are reached under, before the prefix they are mapped with: what the
+    /// stream management and poll addresses it publishes start with.
+    /// </summary>
+    Uri EndpointsBase { get; }
+
+    /// <summary>
+    /// Whether a transmitter answers the current request at all. A deployment answering as one issuer per tenant
+    /// has none for a request no tenant was resolved for, and its endpoints answer that request 404.
+    /// </summary>
+    bool Serves { get; }
+
+    /// <summary>
+    /// The issuer a receiver's credentials must come from, or null where receivers may come from any.
+    /// </summary>
+    /// <remarks>
+    /// A deployment answering as one issuer per tenant names the tenant's issuer, so the receiver of one tenant
+    /// cannot reach another tenant's streams by presenting its own credentials under that tenant's address.
+    /// </remarks>
+    string? ReceiverIssuer { get; }
 }

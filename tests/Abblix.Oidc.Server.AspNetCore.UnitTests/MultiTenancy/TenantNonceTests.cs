@@ -28,6 +28,7 @@ public sealed class TenantNonceTests : IDisposable
     private readonly ServiceProvider _provider = new ServiceCollection()
         .AddServerStorage()
         .AddMultiTenancy(_ => { })
+        .Services
         .BuildServiceProvider();
 
     public void Dispose() => _provider.Dispose();

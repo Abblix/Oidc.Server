@@ -63,6 +63,7 @@
     <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SecurityEvents.RISC\Abblix.SecurityEvents.RISC.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SharedSignals\Abblix.Oidc.Server.SharedSignals.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" ReferenceOutputAssembly="false" Private="false" />

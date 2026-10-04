@@ -38,6 +38,7 @@ public sealed class TenantScopeTests : IDisposable
         .AddServerStorage()
         .AddTokenRevocation()
         .AddMultiTenancy(_ => { })
+        .Services
         .BuildServiceProvider();
 
     public void Dispose() => _provider.Dispose();

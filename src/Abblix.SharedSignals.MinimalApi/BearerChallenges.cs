@@ -67,11 +67,12 @@ internal static class BearerChallenges
     /// on this surface: a caller that IS identified but lacks the scope gets 403 from
     /// <see cref="ScopeRequirement.EnforceScopeAsync"/>, which runs first, and that ordering is deliberate.
     /// <para>
-    /// That section defines three codes and this method answers none of them. <c>invalid_token</c>
-    /// belongs to whoever validates the token, which is the host: this package never sees one, it reads
-    /// whatever identity the host's authentication left behind, through
-    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>. <c>insufficient_scope</c> IS
-    /// emitted by this package, from <see cref="ScopeRequirement.EnforceScopeAsync"/>, once the host
+    /// That section defines three codes and this method answers none of them. Validating the token
+    /// belongs to the host: this package never sees one, it reads whatever identity the host's
+    /// authentication left behind, through <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>.
+    /// It answers <c>invalid_token</c> only where that identity's credentials do not come from the issuer
+    /// the transmitter takes its receivers from, in <see cref="ForeignIssuer"/>. <c>insufficient_scope</c>
+    /// IS emitted by this package, from <see cref="ScopeRequirement.EnforceScopeAsync"/>, once the host
     /// supplies the granted scopes.
     /// </para>
     /// <para>
@@ -88,6 +89,29 @@ internal static class BearerChallenges
         var issuer = http.RequestServices.GetService<ITransmitterIdentity>()?.Issuer;
         return new ChallengeResult(
             StatusCodes.Status401Unauthorized, WwwAuthenticate.Challenge(BearerScheme, issuer));
+    }
+
+    /// <summary>
+    /// The answer to a receiver whose credentials do not come from the issuer this transmitter takes its
+    /// receivers from: 401 with <c>invalid_token</c>.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6750 Section 3.1 gives that code to an access token that is "expired, revoked, malformed, or
+    /// invalid for other reasons", and a token from another issuer, or naming none, is invalid here for such a
+    /// reason. The code lets the receiver ask for a new token and retry; the description, which that section
+    /// meant for developers, is what says a token from the same issuer will be refused again.
+    /// </remarks>
+    internal static IResult ForeignIssuer(HttpContext http)
+    {
+        var issuer = http.RequestServices.GetService<ITransmitterIdentity>()?.Issuer;
+        return new ChallengeResult(
+            StatusCodes.Status401Unauthorized,
+            WwwAuthenticate.Challenge(
+                BearerScheme,
+                ("realm", issuer),
+                ("error", "invalid_token"),
+                ("error_description",
+                    "The access token does not come from the issuer this transmitter takes its receivers from.")));
     }
 
     /// <summary>

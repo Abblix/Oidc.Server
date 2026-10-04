@@ -35,6 +35,7 @@
     <Project Path="src/Abblix.SharedSignals/Abblix.SharedSignals.csproj" />
     <Project Path="src/Abblix.SharedSignals.MinimalApi/Abblix.SharedSignals.MinimalApi.csproj" />
     <Project Path="src/Abblix.SharedSignals.Redis/Abblix.SharedSignals.Redis.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.SharedSignals/Abblix.Oidc.Server.SharedSignals.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Abblix.Analyzers.UnitTests/Abblix.Analyzers.UnitTests.csproj" />

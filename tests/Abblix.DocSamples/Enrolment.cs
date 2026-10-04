@@ -79,7 +79,7 @@ public static class Enrolment
     /// as coverage.
     /// </para>
     /// </remarks>
-    public const int Libraries = 16;
+    public const int Libraries = 17;
 
     /// <summary>
     /// How many projects under <c>src/</c> this one names in its own project file.
@@ -99,7 +99,7 @@ public static class Enrolment
     /// design with a better failure.
     /// </para>
     /// </remarks>
-    public const int References = 16;
+    public const int References = 17;
 
     /// <summary>
     /// How many distinct code samples the compiler recorded that nothing here compiles.
@@ -129,6 +129,7 @@ public static class Enrolment
     public static IReadOnlyList<ReadmeSample> ReadmeCompiled { get; } =
     [
         new("README.md", 0, "ReadmeQuickstart.cs"),
+        new("src/Abblix.Oidc.Server.SharedSignals/README.md", 0, "SharedSignalsMultiTenancy.cs"),
     ];
 
     /// <summary>

@@ -43,9 +43,10 @@ internal static class ScopeRequirement
     /// opted in should not pay for a check that cannot fire.
     /// <para>
     /// With it set, <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/> is asked here and again
-    /// in the handler. Twice rather than once, because the two answers are wanted at two different
-    /// moments and threading the first through would put this package's state into the request. The
-    /// handler's call happens on every request either way; only the extra one here is gated.
+    /// in the handler, and once more before both where the transmitter names the issuer its receivers come
+    /// from. Each time rather than once, because the answers are wanted at different moments and threading
+    /// the first through would put this package's state into the request. The handler's call happens on
+    /// every request either way; only the extra one here is gated.
     /// </para>
     /// <para>
     /// RFC 6750 Section 3.1 names the answer: <c>insufficient_scope</c>, "The request requires higher

@@ -42,15 +42,24 @@ public sealed class TenantSecurityEventsValidator(IServiceProvider serviceProvid
                 $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.SigningKeySource)} gives one key " +
                 "for every tenant, so each tenant's security events would be signed alike. Under multi-tenancy " +
                 $"leave it unset and register {nameof(TenantSecurityEventTokenSigner)} as the " +
-                $"{nameof(ISecurityEventTokenSigner)}.");
+                $"{nameof(ISecurityEventTokenSigner)}; " + SharedSignalsTransmitter);
         }
 
         return SignerOf(serviceProvider) is null or TenantSecurityEventTokenSigner
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(
                 $"{nameof(ISecurityEventTokenSigner)} is the host's own, which signs every tenant's security events " +
-                $"alike. Under multi-tenancy register {nameof(TenantSecurityEventTokenSigner)} instead.");
+                $"alike. Under multi-tenancy register {nameof(TenantSecurityEventTokenSigner)} instead; " +
+                SharedSignalsTransmitter);
     }
+
+    /// <summary>
+    /// What a host running a Shared Signals transmitter does instead, since signing per tenant is only one of the
+    /// parts that transmitter has to keep apart.
+    /// </summary>
+    private const string SharedSignalsTransmitter =
+        "a Shared Signals transmitter is made per tenant, its signer included, by AddSharedSignals() of " +
+        "Abblix.Oidc.Server.SharedSignals on what AddMultiTenancy() returns.";
 
     /// <summary>
     /// The registered signer, or null where none can be built - as the one <c>AddSecurityEvents</c> registers

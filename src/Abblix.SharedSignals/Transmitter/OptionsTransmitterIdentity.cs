@@ -27,4 +27,17 @@ public sealed class OptionsTransmitterIdentity(SharedSignalsTransmitterOptions o
 
     /// <inheritdoc />
     public Uri? JwksUri => options.JwksUri;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The issuer's authority without its path: a deployment with one issuer maps its endpoints at the root of the
+    /// application, whatever path the issuer names.
+    /// </remarks>
+    public Uri EndpointsBase => new(new Uri(_issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
+
+    /// <inheritdoc />
+    public bool Serves => true;
+
+    /// <inheritdoc />
+    public string? ReceiverIssuer => null;
 }

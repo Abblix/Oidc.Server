@@ -116,7 +116,7 @@ The framework carries events; their vocabularies ship as separate dictionary pac
 
 ## Part of the Abblix product family
 
-Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). On a multi-tenant Abblix OIDC Server, [Abblix.Oidc.Server.SharedSignals](https://www.nuget.org/packages/Abblix.Oidc.Server.SharedSignals) makes the transmitter one per tenant. The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 ## License
 
