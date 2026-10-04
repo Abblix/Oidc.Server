@@ -77,6 +77,7 @@ dotnet add package Abblix.OIDC.Server
 | **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 | **[Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI)** | SSF endpoints as ASP.NET Core Minimal API route handlers |
 | **[Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis)** | Redis-native event outbox for multi-replica transmitters |
+| **[Abblix.Oidc.Server.SharedSignals](https://www.nuget.org/packages/Abblix.Oidc.Server.SharedSignals)** | A Shared Signals transmitter per tenant on a multi-tenant server |
 
 ## Getting Started
 

@@ -76,6 +76,7 @@
 
     <ItemGroup>
       <InternalsVisibleTo Include="Abblix.Oidc.Server.UnitTests" />
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.SharedSignals" />
     </ItemGroup>
 
 </Project>
