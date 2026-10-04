@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -55,7 +56,26 @@ internal sealed partial class TenantCreations(TimeProvider timeProvider, ILogger
     /// <summary>
     /// Takes <paramref name="tenant"/> as the definition last served under its id.
     /// </summary>
-    public void Served(TenantDefinition tenant) => _lastServed[tenant.Id] = tenant;
+    /// <returns>The ids of the clients the definition last served under the id configured and this one does not.
+    /// </returns>
+    public IReadOnlyCollection<string> Served(TenantDefinition tenant)
+    {
+        var former = _lastServed.GetValueOrDefault(tenant.Id);
+        _lastServed[tenant.Id] = tenant;
+        return former is null
+            ? []
+            : former.Clients
+                .Select(client => client.ClientId)
+                .Except(tenant.Clients.Select(client => client.ClientId), StringComparer.Ordinal)
+                .ToArray();
+    }
+
+    /// <summary>
+    /// Takes the clients <paramref name="clientIds"/> of the tenant <paramref name="tenantId"/> off the license's
+    /// count, as ones its definition served now no longer configures.
+    /// </summary>
+    public static void ReleaseClients(string tenantId, IReadOnlyCollection<string> clientIds)
+        => LicenseChecker.ReleaseClients(tenantId, clientIds);
 
     /// <summary>
     /// The definition last served under <paramref name="tenantId"/>, unless its creation is released.

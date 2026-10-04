@@ -10,6 +10,8 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
@@ -20,9 +22,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 /// <param name="clientInfoManager">Store used to remove the client record.</param>
 /// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
+/// <param name="issuerSettings">The settings of the issuer the client is removed from, whose license count it leaves.
+/// </param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
-    TimeProvider clock) : IRemoveClientRequestProcessor
+    TimeProvider clock,
+    IIssuerSettings issuerSettings) : IRemoveClientRequestProcessor
 {
     /// <summary>
     /// Deletes the addressed client and returns the recorded removal timestamp.
@@ -36,6 +41,8 @@ public class RemoveClientRequestProcessor(
         // to whoever holds the rotated token.
         if (!await clientInfoManager.TryRemoveClientAsync(request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
+
+        LicenseChecker.ReleaseClients(issuerSettings.Id, [clientId]);
 
         return new RemoveClientSuccessfulResponse(
             ClientId: clientId,

@@ -129,8 +129,9 @@ public sealed partial class StoreTenantCatalog(
 
     private void Publish(StoredTenant[] served, IReadOnlySet<string> refused, IReadOnlySet<string> notOpened)
     {
-        foreach (var tenant in served.Select(entry => entry.Tenant))
-            _creations.Served(tenant);
+        var dropped = served
+            .Select(entry => (entry.Tenant.Id, Clients: _creations.Served(entry.Tenant)))
+            .ToArray();
 
         Volatile.Write(ref _reading, new Reading(
             served.ToDictionary(tenant => tenant.Tenant.Id, StringComparer.Ordinal),
@@ -141,6 +142,10 @@ public sealed partial class StoreTenantCatalog(
                 .ToLookup(entry => entry.Address.Host, StringComparer.Ordinal),
             refused,
             notOpened));
+
+        // Only once the change is served, so a request resolved meanwhile finds the clients it configures
+        foreach (var (tenantId, clients) in dropped)
+            TenantCreations.ReleaseClients(tenantId, clients);
     }
 
     /// <summary>

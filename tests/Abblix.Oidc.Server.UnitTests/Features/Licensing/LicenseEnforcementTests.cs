@@ -12,10 +12,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -378,25 +381,10 @@ public sealed class LicenseEnforcementTests : IDisposable
         };
         var store = new Mock<ITenantStore>();
         store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed.ToArray());
-        var opening = new Mock<ITenantOpening>();
-        opening
-            .Setup(o => o.OpenAsync(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, Exception>());
-        var options = new MultiTenancyOptions();
         var time = new FakeTimeProvider();
-        var catalog = new StoreTenantCatalog(
-            NullLogger<StoreTenantCatalog>.Instance,
-            store.Object,
-            [new TenantDefinitionsCheck()],
-            [opening.Object],
-            Options.Create(options),
-            time);
+        var catalog = Catalog(store.Object, time);
         await catalog.RefreshAsync(ct);
-        var served = new TenantContext { Tenant = (await catalog.FindByIdAsync("acme", ct))! };
-        var acme = new TenantIssuerSettings(
-            Mock.Of<ITenantAccessor>(accessor => accessor.Current == served),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
-            catalog);
+        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
         LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
 
         listed.Clear();
@@ -404,9 +392,159 @@ public sealed class LicenseEnforcementTests : IDisposable
         Assert.Throws<InvalidOperationException>(
             () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
 
-        time.Advance(options.RefreshEvery);
+        time.Advance(new MultiTenancyOptions().RefreshEvery);
         await catalog.RefreshAsync(ct);
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    [Fact]
+    public async Task A_client_removed_through_registration_frees_its_place()
+    {
+        // A client its registrant deleted is no longer served, so the next client takes its place
+        ArrangeClientLimitOfTwo();
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        CountPastTheMargin(SingleIssuer.Settings, removed.ClientInfo);
+
+        await RemoveThroughRegistrationAsync(removed, SingleIssuer.Settings);
+
+        AssertOnePlaceFree(SingleIssuer.Settings);
+    }
+
+    [Fact]
+    public async Task A_client_removed_through_registration_frees_the_place_it_held_at_its_tenant()
+    {
+        ArrangeClientLimitOfTwo();
+        var ct = TestContext.Current.CancellationToken;
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync([Acme("1")]);
+        var catalog = Catalog(store.Object);
+        await catalog.RefreshAsync(ct);
+        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        CountPastTheMargin(acme, removed.ClientInfo);
+
+        await RemoveThroughRegistrationAsync(removed, acme);
+
+        AssertOnePlaceFree(acme);
+    }
+
+    [Fact]
+    public async Task A_client_removed_at_one_tenant_keeps_its_place_at_another()
+    {
+        // Two tenants count a client under one id, each its own: deleting it at one leaves the other's counted
+        ArrangeClientLimitOfTwo();
+        var acme = Creation("acme", CancellationToken.None);
+        var globex = Creation("globex", CancellationToken.None);
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        removed.ClientInfo.CheckClientLicense(acme);
+        new ClientInfo("client-0").CheckClientLicense(globex);
+        new ClientInfo("client-1").CheckClientLicense(globex);
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(globex));
+
+        await RemoveThroughRegistrationAsync(removed, acme);
+
+        AssertOnePlaceFree(globex);
+    }
+
+    [Fact]
+    public async Task A_client_a_tenant_no_longer_configures_frees_its_place_once_the_change_is_served()
+    {
+        // A change of the tenant dropping one of its configured clients takes that client off the count when the
+        // catalog serves the change
+        ArrangeClientLimitOfTwo();
+        var ct = TestContext.Current.CancellationToken;
+        var listed = new[] { Acme("1", "client-0", "client-1", "client-2") };
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed);
+        var catalog = Catalog(store.Object);
+        await catalog.RefreshAsync(ct);
+        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        foreach (var client in listed[0].Tenant.Clients)
+            client.CheckClientLicense(acme);
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(acme));
+
+        listed = [Acme("2", "client-1", "client-2")];
+        await catalog.RefreshAsync(ct);
+
+        AssertOnePlaceFree(acme);
+    }
+
+    /// <summary>
+    /// Counts <paramref name="first"/> and two more clients of <paramref name="issuer"/>, past the margin over a
+    /// limit of two, so a newcomer is refused.
+    /// </summary>
+    private static void CountPastTheMargin(IIssuerSettings issuer, ClientInfo first)
+    {
+        first.CheckClientLicense(issuer);
+        for (var index = 1; index < 3; index++)
+            new ClientInfo($"client-{index}").CheckClientLicense(issuer);
+
+        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(issuer));
+    }
+
+    /// <summary>
+    /// Exactly one place is free: a newcomer is served, and the one after it is refused, so the clients still served
+    /// kept theirs.
+    /// </summary>
+    private static void AssertOnePlaceFree(IIssuerSettings issuer)
+    {
+        var newcomer = new ClientInfo("newcomer");
+        Assert.Same(newcomer, newcomer.CheckClientLicense(issuer));
+        Assert.Null(new ClientInfo("newcomer-2").CheckClientLicense(issuer));
+    }
+
+    private static async Task RemoveThroughRegistrationAsync(RegisteredClient removed, IIssuerSettings issuer)
+    {
+        var clients = new Mock<IClientInfoManager>();
+        clients.Setup(manager => manager.TryRemoveClientAsync(removed)).ReturnsAsync(true);
+        var result = await new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, issuer)
+            .ProcessAsync(new ValidClientRequest(new ClientRequest(), removed));
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    private static void ArrangeClientLimitOfTwo()
+    {
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = 2,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
+    private static StoredTenant Acme(string version, params string[] clientIds) => new(
+        new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = TestLicense.Issuer,
+            Generation = "g1",
+            Clients = clientIds.Select(clientId => new ClientInfo(clientId)).ToArray(),
+        },
+        version);
+
+    private static StoreTenantCatalog Catalog(ITenantStore store, TimeProvider? time = null)
+    {
+        var opening = new Mock<ITenantOpening>();
+        opening
+            .Setup(o => o.OpenAsync(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Exception>());
+        return new StoreTenantCatalog(
+            NullLogger<StoreTenantCatalog>.Instance,
+            store,
+            [new TenantDefinitionsCheck()],
+            [opening.Object],
+            Options.Create(new MultiTenancyOptions()),
+            time ?? new FakeTimeProvider());
+    }
+
+    private static TenantIssuerSettings Settings(StoreTenantCatalog catalog, TenantDefinition tenant)
+    {
+        var served = new TenantContext { Tenant = tenant };
+        return new TenantIssuerSettings(
+            Mock.Of<ITenantAccessor>(accessor => accessor.Current == served),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
+            catalog);
     }
 
     /// <summary>

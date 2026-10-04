@@ -42,6 +42,10 @@ public static partial class LicenseChecker
     private static ConcurrentDictionary<(string IssuerId, string ClientId), Counted>? _knownClientIds;
     private static ConcurrentDictionary<string, Counted>? _knownIssuers;
 
+    // The creations each count watches for their release, one watch per creation however many entries it holds, so
+    // the watches stay as many as the creations served while clients come and go
+    private static readonly ConcurrentDictionary<(object Count, CancellationToken Holder), byte> Watched = new();
+
     /// <summary>
     /// Registers a new license with the license management system, allowing for real-time updates
     /// to the application's licensing constraints.
@@ -79,7 +83,8 @@ public static partial class LicenseChecker
     /// under one id. The issuer is the one the deployment declares rather than the one a request names, which a
     /// forged Host header could vary to push the count past the limit. A client stops counting once its issuer is
     /// released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with a
-    /// catalog of tenants of the host's own, which tells no release, the count only grows.
+    /// catalog of tenants of the host's own, which tells no release, only a client removed through registration
+    /// leaves the count.
     /// </remarks>
     public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
     {
@@ -166,23 +171,26 @@ public static partial class LicenseChecker
         }
         while (!written);
 
-        if (!held)
-            ReleaseOnCancel(counted, key, holder);
+        if (!held && Watched.TryAdd((counted, holder), 0))
+            ReleaseOnCancel(counted, holder);
     }
 
     /// <summary>
-    /// Releases <paramref name="holder"/> from the entry under <paramref name="key"/> once it is canceled.
+    /// Takes <paramref name="holder"/> off every entry of <paramref name="counted"/> once it is canceled.
     /// </summary>
     /// <remarks>
     /// Apart from <see cref="Count{TKey}"/>, whose every call would otherwise allocate the closure, while only the
-    /// first count of a creation registers.
+    /// first count of a creation registers. The watch ends before the entries are read, so a count adding the
+    /// creation after the reading registers again and is taken off at once.
     /// </remarks>
-    private static void ReleaseOnCancel<TKey>(
-        ConcurrentDictionary<TKey, Counted> counted,
-        TKey key,
-        CancellationToken holder)
+    private static void ReleaseOnCancel<TKey>(ConcurrentDictionary<TKey, Counted> counted, CancellationToken holder)
         where TKey : notnull
-        => holder.Register(() => Release(counted, key, holder));
+        => holder.Register(() =>
+        {
+            Watched.TryRemove((counted, holder), out _);
+            foreach (var key in counted.Keys)
+                Release(counted, key, holder);
+        });
 
     /// <summary>
     /// Takes <paramref name="holder"/> off the entry under <paramref name="key"/>, and the entry off the count once
@@ -220,6 +228,24 @@ public static partial class LicenseChecker
     /// </summary>
     private static string IssuerKey(string issuer, IIssuerSettings settings)
         => settings.Id.Length == 0 ? issuer : settings.Id;
+
+    /// <summary>
+    /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
+    /// that issuer no longer serves: removed through registration, or dropped from the clients a tenant configures.
+    /// </summary>
+    /// <remarks>
+    /// A request that found one of them before the release counts it again, and it then stays counted until its
+    /// issuer is released, for the life of the process when the deployment serves one issuer; with the count past the
+    /// margin, such a request is refused instead.
+    /// </remarks>
+    internal static void ReleaseClients(string issuerId, IEnumerable<string> clientIds)
+    {
+        if (_knownClientIds is not { } counted)
+            return;
+
+        foreach (var clientId in clientIds)
+            counted.TryRemove((issuerId, clientId), out _);
+    }
 
     /// <summary>
     /// A counted client as a log names it: its id, after the issuer's when the deployment serves several.
