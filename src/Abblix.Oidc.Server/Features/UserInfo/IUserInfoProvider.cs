@@ -18,6 +18,12 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// variety
 /// of claim types including those that require complex, structured data beyond traditional scalar values.
 /// </summary>
+/// <remarks>
+/// Under multi-tenancy the users stay the host's: the server keeps no users of its own and does not partition this
+/// provider by tenant, so every tenant asks the same one. A host whose tenants keep users apart reads the tenant of
+/// the request from <c>ITenantAccessor</c> and answers from that tenant's users; a host whose tenants share their
+/// users answers as it would for one issuer.
+/// </remarks>
 public interface IUserInfoProvider
 {
     /// <summary>
