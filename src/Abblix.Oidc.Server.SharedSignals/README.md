@@ -48,4 +48,6 @@ Multi-tenancy is experimental, so the compiler reports `ABXMT001` on these calls
 
 The transmitter's issuer names the host without a path. Each tenant's addresses take their paths from the options and put them under the tenant's issuer: for a tenant whose issuer is `https://idp.example.com/acme`, the configuration document is served at `https://idp.example.com/.well-known/ssf-configuration/acme` and its key set address is `https://idp.example.com/acme/.well-known/jwks`.
 
-The server does not start when a store, the transmitter's identity or its delivery pass has been replaced after `AddSharedSignals()`, when the transmitter's issuer names a path, or when streams are declared in configuration, since declared streams belong to no tenant.
+A request that reaches no tenant is answered 404. A receiver is accepted only with credentials the tenant's own issuer issued: the issuer is read from the `iss` claim the host's authentication leaves behind, or through `ReceiverIssuerSelector` of `SharedSignalsEndpointOptions` where the host keeps it elsewhere. So a receiver of one tenant cannot reach another tenant's streams by presenting its credentials under that tenant's address, even with the same identifier.
+
+The server does not start when the stream store, the transmitter's identity or its delivery pass has been replaced after `AddSharedSignals()`, when the transmitter's issuer names a path or its key set address is on another host, or when streams are declared in configuration, since declared streams belong to no tenant.

@@ -26,11 +26,6 @@ namespace Abblix.Oidc.Server.SharedSignals;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantStreamStore(IStreamStore inner, ITenantAccessor tenantAccessor) : IStreamStore
 {
-    /// <summary>
-    /// The store this one keeps tenants apart in.
-    /// </summary>
-    internal IStreamStore Inner => inner;
-
     /// <inheritdoc />
     public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
         => inner.TryCreateAsync(Owned(stream), cancellationToken);

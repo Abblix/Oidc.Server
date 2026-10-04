@@ -79,6 +79,7 @@ public static class TransmitterServiceCollectionExtensions
         services
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();
+        services.TryAddSingleton<IPushDeliverySweep, PushDeliverySweep>();
 
         // Something has to drain the queues, and nothing else does: a host that wires the transmitter
         // and maps its endpoints watches events pile up with no error anywhere. A deployment driving
@@ -92,7 +93,6 @@ public static class TransmitterServiceCollectionExtensions
         // sources for one fact. Deciding here would judge by the argument while every other reader saw
         // the host's, and the disagreement is silent in both directions: no sweeper where the host
         // configured one, or a sweeper the host opted out of.
-        services.TryAddSingleton<IPushDeliverySweep, PushDeliverySweep>();
         services.AddHostedService<PushDeliveryScheduler>();
 
         return services;

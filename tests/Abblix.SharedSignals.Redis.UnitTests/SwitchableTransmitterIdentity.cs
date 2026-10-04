@@ -22,4 +22,8 @@ internal sealed class SwitchableTransmitterIdentity(string issuer) : ITransmitte
     public Uri? JwksUri => null;
 
     public Uri EndpointsBase => new(new Uri(Issuer).GetLeftPart(UriPartial.Authority));
+
+    public bool Serves => true;
+
+    public string? ReceiverIssuer => null;
 }

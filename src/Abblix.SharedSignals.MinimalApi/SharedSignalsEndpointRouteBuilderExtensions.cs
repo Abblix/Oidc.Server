@@ -96,6 +96,10 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     private static void ApplyGroupConventions(RouteGroupBuilder group)
     {
+        // First, because every filter and handler after these asks the transmitter's identity for its issuer.
+        group.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
+        group.AddEndpointFilter(TransmitterPresence.RefuseForeignReceiverAsync);
+
         // Every management response travels uncacheable, as the specification's own examples
         // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents.
         group.AddEndpointFilter(async (context, next) =>
@@ -132,7 +136,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // The two refusals that belong to the GROUP rather than to any handler: 401 where nothing named
         // the caller, 403 where the caller was named and its token carries neither scope the route
         // needs. Declared once here, so a route added later inherits them instead of restating them.
-        group.Answers(StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+        group.Answers(StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden, StatusCodes.Status404NotFound);
     }
 
     /// <summary>
@@ -321,10 +325,10 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
 
         CaepProfileWarnings.WarnIfTheDocumentIsOutsideTheCaepProfile(endpoints.ServiceProvider, options);
 
-        // Answers 200 and only 200: it takes no parameter to get wrong and no credentials to lack -
-        // discovery has to work before a receiver has any. Declared all the same, because an
-        // undeclared status is INFERRED into the document rather than left out, and an inference that
-        // happens to be right is indistinguishable from one that is not.
+        // Answers 200: it takes no parameter to get wrong and no credentials to lack - discovery has to
+        // work before a receiver has any - and 404 only where no transmitter serves the request. Declared,
+        // because an undeclared status is INFERRED into the document rather than left out, and an
+        // inference that happens to be right is indistinguishable from one that is not.
         var document = endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
@@ -336,7 +340,9 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
                 Results.Json(TransmitterConfigurationDocument.ConfigurationDocumentOf(
                     current, identity, pollEndpoints, managementEndpoints)));
 
+        document.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
         document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
+        document.Answers(StatusCodes.Status404NotFound);
         return document;
     }
 

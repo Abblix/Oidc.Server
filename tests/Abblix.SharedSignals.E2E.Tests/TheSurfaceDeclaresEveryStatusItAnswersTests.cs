@@ -307,14 +307,15 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         answers.AddRange(await DriveEveryRouteAsync(receiverId: null));
         answers.AddRange(await DriveEveryRouteAsync(receiverId: _ => Receiver, grantedScopes: _ => []));
+        answers.AddRange(await DriveEveryRouteAsync(receiverId: _ => Receiver, identity: new NoTransmitter()));
 
         return answers;
     }
 
     /// <summary>
-    /// One request per route against a host that names nobody, or grants no scope. Both refusals
-    /// belong to the GROUP rather than to any handler, so they are driven over every route rather than
-    /// sampled.
+    /// One request per route against a host that names nobody, grants no scope, or has no transmitter for
+    /// the request. Those refusals belong to the GROUP rather than to any handler, so they are driven over
+    /// every route rather than sampled.
     /// </summary>
     /// <remarks>
     /// Not every route here is refused, and the one that is not is the point of driving all of them.
@@ -324,10 +325,11 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
     /// </remarks>
     private async Task<List<Answer>> DriveEveryRouteAsync(
         Func<HttpContext, string?>? receiverId,
-        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null)
+        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null,
+        ITransmitterIdentity? identity = null)
     {
         var ct = TestContext.Current.CancellationToken;
-        await using var host = await StartAsync(receiverId, grantedScopes);
+        await using var host = await StartAsync(receiverId, grantedScopes, identity);
         var client = host.GetTestClient();
         var answers = new List<Answer>();
 
@@ -456,7 +458,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
     private async Task<WebApplication> StartAsync(
         Func<HttpContext, string?>? receiverId = null,
-        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null)
+        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null,
+        ITransmitterIdentity? identity = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -480,6 +483,9 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         builder.Services.Replace(ServiceDescriptor.Singleton<IStreamStore>(
             _ => new RefusingUpdates(new InMemoryStreamStore())));
+
+        if (identity is not null)
+            builder.Services.Replace(ServiceDescriptor.Singleton(identity));
 
         builder.Services.AddSingleton(new SharedSignalsEndpointOptions
         {

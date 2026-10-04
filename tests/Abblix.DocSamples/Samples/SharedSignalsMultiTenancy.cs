@@ -29,6 +29,8 @@ namespace Abblix.DocSamples.Samples;
 /// </summary>
 internal static class SharedSignalsMultiTenancySample
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "The README shows the addresses a reader replaces with their own.")]
     internal static void Configure(string[] args)
     {
         // <sample>

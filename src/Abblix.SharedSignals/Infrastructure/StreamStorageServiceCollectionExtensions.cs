@@ -65,10 +65,9 @@ public static class StreamStorageServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(streams);
         ArgumentNullException.ThrowIfNull(backingStore);
 
+        services.Replace(ServiceDescriptor.Singleton(streams));
         services.Replace(ServiceDescriptor.Singleton<IStreamStore>(provider =>
-            provider.CreateService<ConfigurationStreamStore>(
-                Dependency.Override(streams),
-                Dependency.Override(backingStore(provider)))));
+            provider.CreateService<ConfigurationStreamStore>(Dependency.Override(backingStore(provider)))));
 
         return services;
     }

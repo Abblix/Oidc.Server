@@ -34,4 +34,10 @@ public sealed class OptionsTransmitterIdentity(SharedSignalsTransmitterOptions o
     /// application, whatever path the issuer names.
     /// </remarks>
     public Uri EndpointsBase => new(new Uri(_issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
+
+    /// <inheritdoc />
+    public bool Serves => true;
+
+    /// <inheritdoc />
+    public string? ReceiverIssuer => null;
 }

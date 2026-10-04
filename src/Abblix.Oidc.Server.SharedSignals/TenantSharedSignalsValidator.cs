@@ -30,29 +30,35 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
     {
-        var failures = new List<string>();
-
-        var store = serviceProvider.GetRequiredService<IStreamStore>();
-        if (store is not TenantStreamStore tenantStore)
+        // Read from their registration and answered alone: the store holding them cannot be built outside a
+        // tenant once a declared stream needs a poll address, and every part checked below is built on that store.
+        if (serviceProvider.GetService<IReadOnlyList<ConfiguredStream>>() is not null)
         {
-            failures.Add(Shared<IStreamStore, TenantStreamStore>(store));
-        }
-        else if (tenantStore.Inner is ConfigurationStreamStore)
-        {
-            failures.Add(
+            return ValidateOptionsResult.Fail(
                 "Streams declared in configuration belong to no tenant, so a multi-tenant server cannot serve them; "
                 + "let each tenant's receivers create their streams through the stream management API.");
         }
 
+        var failures = new List<string>();
+        Require<IStreamStore, TenantStreamStore>(failures);
+
         Require<ITransmitterIdentity, TenantTransmitterIdentity>(failures);
         Require<IPushDeliverySweep, TenantPushDeliverySweep>(failures);
 
-        var issuer = serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>().Issuer;
-        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri) || issuerUri.AbsolutePath != "/")
+        var transmitter = serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
+        if (!Uri.TryCreate(transmitter.Issuer, UriKind.Absolute, out var issuerUri) || issuerUri.AbsolutePath != "/")
         {
             failures.Add(
-                $"The transmitter's issuer '{issuer}' must name the host without a path under multi-tenancy: each "
-                + "tenant's addresses are its paths put under the tenant's own issuer.");
+                $"The transmitter's issuer '{transmitter.Issuer}' must name the host without a path under "
+                + "multi-tenancy: each tenant's addresses are its paths put under the tenant's own issuer.");
+        }
+        else if (transmitter.JwksUri is { } jwksUri &&
+                 Uri.Compare(jwksUri, issuerUri, UriComponents.SchemeAndServer, UriFormat.Unescaped,
+                     StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            failures.Add(
+                $"The transmitter's key set address '{jwksUri}' must be on the issuer's host under multi-tenancy: "
+                + "each tenant's key set is served at that path under the tenant's own issuer.");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);

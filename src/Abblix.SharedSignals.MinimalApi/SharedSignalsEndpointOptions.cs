@@ -26,6 +26,13 @@ public sealed record SharedSignalsEndpointOptions
     public Func<HttpContext, string?> ReceiverIdSelector { get; init; } = DefaultReceiverId;
 
     /// <summary>
+    /// Extracts the issuer of the receiver's credentials from the authenticated request, compared with
+    /// <see cref="Abblix.SharedSignals.Transmitter.ITransmitterIdentity.ReceiverIssuer"/> wherever the transmitter
+    /// names one. The default reads the "iss" claim, where the common bearer handlers leave the token's issuer.
+    /// </summary>
+    public Func<HttpContext, string?> ReceiverIssuerSelector { get; init; } = DefaultReceiverIssuer;
+
+    /// <summary>
     /// Reads the scopes the caller's access token was granted. Null - the default - checks no scope at
     /// all, which is what this surface did before the option existed.
     /// </summary>
@@ -81,6 +88,9 @@ public sealed record SharedSignalsEndpointOptions
     /// the issuer.
     /// </summary>
     public PathString ConfigurationDocumentRoute { get; init; }
+
+    private static string? DefaultReceiverIssuer(HttpContext context)
+        => context.User.FindFirst(IanaClaimTypes.Iss)?.Value;
 
     private static string? DefaultReceiverId(HttpContext context)
         => context.User.FindFirst(IanaClaimTypes.Sub)?.Value

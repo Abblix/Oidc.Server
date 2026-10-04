@@ -35,6 +35,15 @@ public sealed class TenantTransmitterIdentity(
     /// <inheritdoc />
     public Uri EndpointsBase => new(Tenant.Issuer, UriKind.Absolute);
 
+    /// <inheritdoc />
+    public bool Serves => tenantAccessor.Current is not null;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The tenant's issuer: its receivers are clients of that tenant, and their credentials come from it.
+    /// </remarks>
+    public string? ReceiverIssuer => Tenant.Issuer;
+
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 
     private Uri Under(string pathAndQuery) => new(Tenant.Issuer.TrimEnd('/') + pathAndQuery, UriKind.Absolute);
