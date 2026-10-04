@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<ClientInfoStorage>();
         services.TryAddSingleton<ReloadableClientInfoStorage>();
+        services.TryAddSingleton<IClientRegistrations>(DefaultClientRegistrations.Create);
         services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
 
         services.AddOidcOptionsValidators();
@@ -70,7 +71,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// It replaces the client store, whichever was registered, so it may be called before or after
     /// <c>AddOidcServices</c>. The settings own every id they configure: the store changes nothing under one, and
-    /// a client registered under an id they come to configure is dropped.
+    /// a client registered in memory under an id they come to configure is dropped.
     /// </remarks>
     public static IServiceCollection AddReloadableClientInformation(this IServiceCollection services)
     {
