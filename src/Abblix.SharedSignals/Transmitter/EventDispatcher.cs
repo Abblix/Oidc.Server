@@ -28,7 +28,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="signer">Signs each minted SET.</param>
 /// <param name="identity">
 /// Names the transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
-/// configuration metadata asserts (SSF 1.0 Section 7.1) - each time a SET is minted.</param>
+/// configuration metadata asserts (SSF 1.0 Section 7.1) - once per dispatched event.</param>
 /// <param name="sharingPolicy">
 /// The host's Section 9.2 verdict; null shares every otherwise-matching event, which is the
 /// honest default only for a transmitter whose events carry nothing the receiver may not see.

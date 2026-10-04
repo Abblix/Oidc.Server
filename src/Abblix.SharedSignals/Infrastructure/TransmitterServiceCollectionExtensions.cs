@@ -34,6 +34,15 @@ public static class TransmitterServiceCollectionExtensions
         SharedSignalsTransmitterOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        // Refused here rather than when the first SET is minted: by then a status change or a verification
+        // throttle has already been written, and the receiver never hears of it.
+        if (string.IsNullOrEmpty(options.Issuer))
+        {
+            throw new ArgumentException(
+                "A transmitter without an issuer identifier can sign nothing.", nameof(options));
+        }
+
         SharedSignalsRegistration.RequireSecurityEvents(services, nameof(AddSharedSignalsTransmitter));
 
         services.TryAddSingleton(TimeProvider.System);

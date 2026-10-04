@@ -182,6 +182,21 @@ public class SharedSignalsServiceCollectionTests
         Assert.Same(hostLease, provider.GetRequiredService<IDeliveryLease>());
     }
 
+    /// <summary>
+    /// A transmitter with no issuer is refused when it is registered. Found later, the refusal would come after a
+    /// status change or a verification throttle had already been written, with the receiver never told.
+    /// </summary>
+    [Fact]
+    public void AnEmptyIssuer_IsRefusedAtRegistration()
+    {
+        var options = new SharedSignalsTransmitterOptions { Issuer = string.Empty };
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => SecurityEventsBase().AddSharedSignalsTransmitter(options));
+
+        Assert.Equal("options", exception.ParamName);
+    }
+
     [Fact]
     public void WithoutTheSecurityEventsCore_TheRoleRefuses_NamingThePrerequisite()
     {
