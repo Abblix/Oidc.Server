@@ -402,11 +402,6 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
     }
 
     /// <summary>
-    /// Two transmitters sharing one Redis keep separate registries. Without the issuer in the key they
-    /// would share a hash, and each would read the other's streams out of the dispatcher's view and
-    /// deliver its own signed events to the other's receivers.
-    /// </summary>
-    /// <summary>
     /// The key is built from the issuer at each call, so one store behind an identity that answers per request
     /// keeps each issuer's streams apart. The lookup under the first issuer again is the control: it shows the
     /// stream is there, so the miss under the second is the key's doing.
@@ -436,6 +431,11 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         }
     }
 
+    /// <summary>
+    /// Two transmitters sharing one Redis keep separate registries. Without the issuer in the key they
+    /// would share a hash, and each would read the other's streams out of the dispatcher's view and
+    /// deliver its own signed events to the other's receivers.
+    /// </summary>
     [Fact]
     public async Task AnotherTransmittersRegistry_IsNotVisible()
     {

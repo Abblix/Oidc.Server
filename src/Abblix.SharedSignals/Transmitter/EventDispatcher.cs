@@ -64,6 +64,10 @@ public sealed partial class EventDispatcher(
         ArgumentNullException.ThrowIfNull(descriptor);
         RefuseIfOutsidePolicy(descriptor);
 
+        // Read once, before the per-stream loop: a missing issuer then fails the dispatch instead of being
+        // logged per stream and answered as "no stream reached", and every SET of one event names one issuer.
+        var issuer = Issuer;
+
         var reached = 0;
         foreach (var stream in await streams.ListAllAsync(cancellationToken))
         {
@@ -98,7 +102,7 @@ public sealed partial class EventDispatcher(
             // would learn neither who received the event nor that anybody had.
             try
             {
-                await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
+                await MintAndEnqueueAsync(issuer, stream, descriptor, asStatusAnnouncement: false, cancellationToken);
                 reached++;
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
@@ -139,7 +143,7 @@ public sealed partial class EventDispatcher(
         // written, turning a receiver's verification request into a fault mid-operation and breaking the
         // very profile a policy was registered to claim. A policy is about what the HOST asks this
         // transmitter to emit, and that is DispatchAsync.
-        return MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement, cancellationToken);
+        return MintAndEnqueueAsync(Issuer, stream, descriptor, asStatusAnnouncement, cancellationToken);
     }
 
     /// <summary>
@@ -184,6 +188,7 @@ public sealed partial class EventDispatcher(
         };
 
     private async Task MintAndEnqueueAsync(
+        string issuer,
         StreamState stream,
         SecurityEventDescriptor descriptor,
         bool asStatusAnnouncement,
@@ -201,7 +206,7 @@ public sealed partial class EventDispatcher(
         // as the unreachable arm in StreamManagementService.AddressRefusalOf, and said out loud for the
         // same reason: an unreachable guard nobody explained reads as one nobody finished.
         var builder = new SecurityEventTokenBuilder(clock) { SingleEventStatement = true }
-            .WithIssuer(IssuerOf(identity))
+            .WithIssuer(issuer)
             .WithJwtId(jwtId)
             .WithAudience([.. stream.Configuration.Audiences])
             .WithSubjectId(descriptor.Subject);
@@ -237,10 +242,7 @@ public sealed partial class EventDispatcher(
     /// The issuer the SETs minted now name, which a stream configuration names too (SSF 1.0 Section 7.2.2).
     /// </summary>
     /// <exception cref="InvalidOperationException">The identity names no issuer.</exception>
-    internal string Issuer => IssuerOf(identity);
-
-    /// <exception cref="InvalidOperationException">The identity names no issuer.</exception>
-    private static string IssuerOf(ITransmitterIdentity identity)
+    internal string Issuer
         => !string.IsNullOrEmpty(identity.Issuer)
             ? identity.Issuer
             : throw new InvalidOperationException("A transmitter without an issuer identifier can sign nothing.");

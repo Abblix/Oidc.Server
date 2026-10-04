@@ -13,9 +13,21 @@ namespace Abblix.SharedSignals.Transmitter;
 /// keys that verify them are published.
 /// </summary>
 /// <remarks>
-/// Read each time it is needed rather than once at startup, so a deployment answering as more than one issuer - one
-/// per tenant of a multi-tenant server - names the issuer serving the request. The default reads
-/// <see cref="SharedSignalsTransmitterOptions"/>.
+/// <para>
+/// Read each time a SET is minted, a stream is created through the management API, the configuration document is
+/// served, a bearer challenge is written and the Redis stream store is used, so a deployment answering as more than
+/// one issuer - one per tenant of a multi-tenant server - names the issuer serving the request there. The default
+/// reads <see cref="SharedSignalsTransmitterOptions"/>.
+/// </para>
+/// <para>
+/// What is fixed at startup still comes from <see cref="SharedSignalsTransmitterOptions"/>: the issuer of streams
+/// declared in configuration, the path the configuration document is mapped at, the authority of poll endpoint
+/// addresses and the startup warning about a missing key set address.
+/// </para>
+/// <para>
+/// Singletons hold the implementation, so it is registered as a singleton and finds the current request itself,
+/// for example through <c>IHttpContextAccessor</c>.
+/// </para>
 /// </remarks>
 public interface ITransmitterIdentity
 {
