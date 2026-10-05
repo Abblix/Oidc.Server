@@ -42,8 +42,7 @@ public class TlsClientAuthenticatorTests
         _authenticator = new TlsClientAuthenticator(
             _loggerMock.Object,
             _clientInfoProviderMock.Object,
-            _clientKeysProviderMock.Object,
-            SingleIssuer.Settings);
+            _clientKeysProviderMock.Object);
     }
 
     /// <summary>

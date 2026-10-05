@@ -40,8 +40,7 @@ public class AuthorizationRequestProcessor(
 	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
-	IConsentConstraintEnforcer consentConstraintEnforcer,
-	IIssuerSettings issuerSettings) : IAuthorizationRequestProcessor
+	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
 {
 	// Extracted collaborator: which session answers the request is one question with its own dependencies,
 	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
@@ -60,8 +59,6 @@ public class AuthorizationRequestProcessor(
 	/// </returns>
 	public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
 	{
-		// Ensures the client is permitted to make requests by the current license.
-		request.ClientInfo.CheckClientLicense(issuerSettings);
 
 		var selected = await _sessionSelector.SelectAsync(request);
 		return await selected.MatchAsync(

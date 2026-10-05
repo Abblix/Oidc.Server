@@ -23,11 +23,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 /// <param name="clientInfoManager">Store of the registrations and the token each is managed by.</param>
 /// <param name="registrationAccessTokenValidator">Validator for the bearer registration access token.</param>
-/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class ClientRequestValidator(
     IClientInfoManager clientInfoManager,
-    IRegistrationAccessTokenValidator registrationAccessTokenValidator,
-    IIssuerSettings issuerSettings) : IClientRequestValidator
+    IRegistrationAccessTokenValidator registrationAccessTokenValidator) : IClientRequestValidator
 {
     /// <inheritdoc />
     public async Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request)
@@ -52,7 +50,6 @@ public class ClientRequestValidator(
         if (client == null || client.RegistrationAccessTokenId != tokenValidation.GetSuccess())
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
-        client.ClientInfo.CheckClientLicense(issuerSettings);
         return new ValidClientRequest(request, client);
     }
 }

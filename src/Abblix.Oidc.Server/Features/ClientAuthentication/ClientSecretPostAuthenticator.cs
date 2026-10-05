@@ -25,12 +25,11 @@ public class ClientSecretPostAuthenticator(
 	ILogger<ClientSecretPostAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService,
-	IIssuerSettings issuerSettings)
+	IHashService hashService)
 	: ClientSecretAuthenticator(
 		logger,
 		clientInfoProvider,
-		clock, hashService, issuerSettings), IClientAuthenticator
+		clock, hashService), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_post'.

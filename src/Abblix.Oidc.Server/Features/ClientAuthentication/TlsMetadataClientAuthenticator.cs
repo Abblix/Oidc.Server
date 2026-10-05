@@ -27,8 +27,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider,
-    IIssuerSettings issuerSettings) : IClientAuthenticator
+    IClientInfoProvider clientInfoProvider) : IClientAuthenticator
 {
     /// <summary>
     /// OID for Subject Alternative Name extension (RFC 5280 section 4.2.1.6).
@@ -74,7 +73,7 @@ public partial class TlsMetadataClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
+        var client = await clientInfoProvider.TryFindClientAsync(clientId);
         if (client == null)
             return null;
 

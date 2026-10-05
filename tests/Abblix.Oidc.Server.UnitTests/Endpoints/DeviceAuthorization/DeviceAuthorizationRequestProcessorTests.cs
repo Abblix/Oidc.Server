@@ -137,8 +137,7 @@ public class DeviceAuthorizationRequestProcessorTests
             userCodes.Object,
             options.Object,
             new FakeTimeProvider(Now),
-            issuerProvider.Object,
-            SingleIssuer.Settings);
+            issuerProvider.Object);
 
         var result = await processor.ProcessAsync(new ValidDeviceAuthorizationRequest(
             new DeviceAuthorizationValidationContext(

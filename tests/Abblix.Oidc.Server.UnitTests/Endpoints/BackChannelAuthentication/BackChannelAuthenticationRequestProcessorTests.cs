@@ -71,8 +71,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             options.Object,
             _handler.Object,
             TimeProvider.System,
-            _subjectTypeConverter.Object,
-            SingleIssuer.Settings);
+            _subjectTypeConverter.Object);
     }
 
     private ValidBackChannelAuthenticationRequest Request(

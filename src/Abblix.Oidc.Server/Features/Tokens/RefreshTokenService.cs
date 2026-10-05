@@ -139,7 +139,7 @@ public class RefreshTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = now,
 				ExpiresAt = expiresAt,
-				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings),
+				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer(), issuerSettings, authContext.ClientId),
 				GrantId = grantId,
 			},
 		};

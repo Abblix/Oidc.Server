@@ -48,8 +48,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .ReturnsAsync(new ClientInfo(OriginalClientId));
 
         _resolver = new RefreshTokenSubjectTokenResolver(
-            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object,
-            SingleIssuer.Settings);
+            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);
     }
 
     [Fact]

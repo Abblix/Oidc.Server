@@ -61,45 +61,40 @@ public static partial class LicenseChecker
         => LicenseManager.ReportLoadedLicenses(utcNow);
 
     /// <summary>
-    /// Asynchronously applies licensing checks to a task that returns client information.
+    /// Applies the license's terms to the issuer a token is issued under and to the client it is issued to.
     /// </summary>
-    /// <param name="clientInfo">The task returning client information to be checked against licensing constraints.
-    /// </param>
-    /// <param name="issuer">The settings of the issuer the client is registered with.</param>
-    /// <returns>A task that, upon completion, returns the client information if it complies with the licensing
-    /// constraints; otherwise, logs an error.</returns>
-    public static async Task<ClientInfo?> WithLicenseCheck(this Task<ClientInfo?> clientInfo, IIssuerSettings issuer)
-        => (await clientInfo).CheckClientLicense(issuer);
+    /// <param name="issuer">The issuer the token names, checked as <see cref="CheckIssuer"/> checks it.</param>
+    /// <param name="settings">The settings of that issuer.</param>
+    /// <param name="clientId">The client the token names as issued to.</param>
+    /// <returns>The issuer, when the terms allow both.</returns>
+    /// <remarks>
+    /// A client is counted where a token is issued to it, by the client and the issuer the token names, so every
+    /// client a token is issued to is counted and two tenants registering a client under one id take two places. A
+    /// client of a tenant the server's own catalog serves stops counting once the tenant is released, once the tenant's
+    /// definition stops configuring it, or once it is removed through registration; on a server without tenants, once it is removed through registration or dropped by
+    /// a reload of the settings, served by the reloadable client store. A client counted under any other settings stays
+    /// counted for the life of the process.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The issuer is beyond the license's terms, or the client is beyond
+    /// its client limit by more than the margin.</exception>
+    public static string CheckLicense(string issuer, IIssuerSettings settings, string clientId)
+    {
+        CheckIssuer(issuer, settings);
+        CheckClient((VouchedId(settings) ?? issuer, clientId), ReleasedOf(settings));
+        return issuer;
+    }
 
     /// <summary>
-    /// Applies licensing checks to client information.
+    /// Counts <paramref name="client"/>, and refuses it past the client limit by more than the margin.
     /// </summary>
-    /// <param name="clientInfo">The client information to check against licensing constraints.</param>
-    /// <param name="issuer">The settings of the issuer the client is registered with.</param>
-    /// <returns>The client information if it complies with the licensing constraints; otherwise, logs an error.
-    /// </returns>
-    /// <remarks>
-    /// A client is counted once for each issuer it is registered with, since two tenants may each register a client
-    /// under one id. The issuer is the one the deployment declares rather than the one a request names, which a
-    /// forged Host header could vary to push the count past the limit. A client stops counting once its issuer is
-    /// released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with a
-    /// catalog of tenants of the host's own, which tells no release, only a client removed through registration
-    /// leaves the count. On a server without tenants, a client removed through registration or dropped by a reload of
-    /// the settings, served by the reloadable client store, leaves the count.
-    /// </remarks>
-    public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
+    private static void CheckClient((string IssuerId, string ClientId) client, CancellationToken released)
     {
-        // Guard clauses: nothing is counted for an absent client, or under a license that sets no client limit
-        if (clientInfo == null)
-            return clientInfo;
-
         var utcNow = TimeProvider.System.GetUtcNow();
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
         if (!currentLicense.ClientLimit.HasValue)
-            return clientInfo;
+            return;
 
         _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), Counted>();
-        var client = (issuer.Id, clientInfo.ClientId);
         if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
             !_knownClientIds.ContainsKey(client))
         {
@@ -112,10 +107,10 @@ public static partial class LicenseChecker
                     Named(client));
             }
 
-            return null; // Prevents processing of clients exceeding the limit by more than 30%
+            throw new InvalidOperationException("The license terms violation detected");
         }
 
-        Count(_knownClientIds, client, clientInfo.ClientId, issuer);
+        Count(_knownClientIds, client, client.ClientId, released);
         if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
             LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
         {
@@ -124,12 +119,10 @@ public static partial class LicenseChecker
                 currentLicense.ClientLimit.Value,
                 _knownClientIds.Keys.Select(Named));
         }
-
-        return clientInfo;
     }
 
     /// <summary>
-    /// Counts <paramref name="key"/> until <paramref name="issuer"/> is released, so what the license meters is what
+    /// Counts <paramref name="key"/> until <paramref name="holder"/> is canceled, so what the license meters is what
     /// the deployment serves now rather than everything the process has seen.
     /// </summary>
     /// <remarks>
@@ -142,11 +135,9 @@ public static partial class LicenseChecker
         ConcurrentDictionary<TKey, Counted> counted,
         TKey key,
         string name,
-        IIssuerSettings issuer)
+        CancellationToken holder)
         where TKey : notnull
     {
-        var holder = issuer.Released;
-
         // Added and taken off again at once, a released creation would still raise the count for that instant and
         // refuse a request of a tenant served at the limit meanwhile
         if (holder.IsCancellationRequested)
@@ -224,11 +215,28 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// What an issuer is counted under: its tenant, so a tenant moved to another address keeps one place, or for a
-    /// deployment serving one issuer, the address itself, which a host may take from each request.
+    /// The tenant the server's own settings vouch for: empty on a server without tenants, and null for settings a
+    /// host registers or a tenant a catalog of the host's own resolved, which are counted by the issuer they serve.
     /// </summary>
-    private static string IssuerKey(string issuer, IIssuerSettings settings)
-        => settings.Id.Length == 0 ? issuer : settings.Id;
+    /// <remarks>
+    /// Settings a host registers answer for themselves, and taking their word would let one answer count every
+    /// issuer, or every client of an id, as one.
+    /// </remarks>
+    private static string? VouchedId(IIssuerSettings settings) => (settings as ILicensedIssuer)?.VouchedId;
+
+    /// <summary>
+    /// What lets an issuer and its clients go: the release the server's own settings tell, and none for any other,
+    /// whose issuers count for the life of the process.
+    /// </summary>
+    private static CancellationToken ReleasedOf(IIssuerSettings settings)
+        => settings is ILicensedIssuer own ? own.Released : CancellationToken.None;
+
+    /// <summary>
+    /// The issuer the clients of <paramref name="settings"/> are counted with, when the server can tell it without a
+    /// token: the tenant its own settings vouch for, or none on a server without tenants. Null for any other
+    /// settings, whose clients are counted with the issuer each token names and are not taken off the count.
+    /// </summary>
+    internal static string? ClientIssuerOf(IIssuerSettings settings) => VouchedId(settings);
 
     /// <summary>
     /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
@@ -265,9 +273,9 @@ public static partial class LicenseChecker
     /// </summary>
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
     /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
-    /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; with a catalog of
-    /// tenants of the host's own, which tells no release, the count only grows, and tenants it serves under one id
-    /// take one place.</param>
+    /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; settings other than
+    /// those of a tenant the server's own catalog serves, a server's without tenants included, are counted by the
+    /// issuer string and never released.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer, IIssuerSettings settings)
     {
@@ -291,7 +299,8 @@ public static partial class LicenseChecker
         if (currentLicense.IssuerLimit.HasValue)
         {
             _knownIssuers ??= new ConcurrentDictionary<string, Counted>(StringComparer.Ordinal);
-            Count(_knownIssuers, IssuerKey(issuer, settings), issuer, settings);
+            var key = VouchedId(settings) is { Length: > 0 } tenantId ? tenantId : issuer;
+            Count(_knownIssuers, key, issuer, ReleasedOf(settings));
             if (currentLicense.IssuerLimit.Value < _knownIssuers.Count)
             {
                 // The decision is taken first and stands on its own; only the record of it is throttled. This

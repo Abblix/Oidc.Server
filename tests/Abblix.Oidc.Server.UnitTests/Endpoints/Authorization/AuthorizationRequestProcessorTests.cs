@@ -92,8 +92,7 @@ public partial class AuthorizationRequestProcessorTests
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ],
-            new ConsentConstraintEnforcer(_authorizationDetailsPolicy.Object),
-            SingleIssuer.Settings);
+            new ConsentConstraintEnforcer(_authorizationDetailsPolicy.Object));
     }
 
     private static ValidAuthorizationRequest CreateRequest(

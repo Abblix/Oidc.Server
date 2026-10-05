@@ -236,8 +236,7 @@ public class NoneClientAuthenticatorTests
 
         var authenticator = new NoneClientAuthenticator(
             logger.Object,
-            clientInfoProvider.Object,
-            SingleIssuer.Settings);
+            clientInfoProvider.Object);
 
         var mocks = new Mocks
         {

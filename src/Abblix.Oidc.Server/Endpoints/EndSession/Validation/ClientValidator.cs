@@ -25,8 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// </summary>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider,
-    IIssuerSettings issuerSettings) : IEndSessionContextValidator
+    IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
@@ -34,7 +33,7 @@ public partial class ClientValidator(
         if (!context.ClientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck(issuerSettings);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId);
         if (clientInfo == null)
         {
             LogClientNotFound(context.ClientId);

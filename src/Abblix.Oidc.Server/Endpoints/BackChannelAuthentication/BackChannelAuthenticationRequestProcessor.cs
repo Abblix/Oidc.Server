@@ -43,14 +43,12 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// Seals a session's subject the way the requesting client sees it, so the session the host authenticated can
 /// be compared against the end user an <c>id_token_hint</c> named.
 /// </param>
-/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class BackChannelAuthenticationRequestProcessor(
 	IBackChannelRequestStorage storage,
 	IOptionsSnapshot<OidcOptions> options,
 	IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
 	TimeProvider timeProvider,
-	ISubjectTypeConverter subjectTypeConverter,
-	IIssuerSettings issuerSettings) : IBackChannelAuthenticationRequestProcessor
+	ISubjectTypeConverter subjectTypeConverter) : IBackChannelAuthenticationRequestProcessor
 {
 	/// <inheritdoc />
 	/// <summary>
@@ -65,7 +63,6 @@ public class BackChannelAuthenticationRequestProcessor(
 	/// a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/>.</returns>
 	public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(ValidBackChannelAuthenticationRequest request)
 	{
-		request.ClientInfo.CheckClientLicense(issuerSettings);
 
 		// Read before the handler sees the request. The handler is a host seam holding this very request,
 		// and both answers below are what the REQUEST said: whom it named, and what it asked for. A handler

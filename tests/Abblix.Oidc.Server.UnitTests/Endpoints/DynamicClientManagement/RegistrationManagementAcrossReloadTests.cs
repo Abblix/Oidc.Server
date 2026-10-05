@@ -61,7 +61,7 @@ public class RegistrationManagementAcrossReloadTests
 
     private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {
-        var result = await new ClientRequestValidator(clients, new TokenIsItsJti(), _settings).ValidateAsync(
+        var result = await new ClientRequestValidator(clients, new TokenIsItsJti()).ValidateAsync(
             new ClientRequest
             {
                 ClientId = ClientId,

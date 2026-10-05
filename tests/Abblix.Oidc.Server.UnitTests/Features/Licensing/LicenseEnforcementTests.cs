@@ -114,7 +114,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // anything except a change of license terms.
         var client = new ClientInfo("some-client");
 
-        Assert.Same(client, client.CheckClientLicense(SingleIssuer.Settings));
+        Assert.True(Issues(client, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 20; index++)
         {
             var client = new ClientInfo($"unlicensed-client-{index}");
-            Assert.Same(client, client.CheckClientLicense(SingleIssuer.Settings));
+            Assert.True(Issues(client, SingleIssuer.Settings));
         }
     }
 
@@ -257,13 +257,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 3; index++)
         {
             var tolerated = new ClientInfo($"client-{index}");
-            Assert.Same(tolerated, tolerated.CheckClientLicense(SingleIssuer.Settings));
+            Assert.True(Issues(tolerated, SingleIssuer.Settings));
         }
 
         // Past it: a client never seen before is refused, every time it asks.
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            Assert.Null(new ClientInfo("one-client-too-many").CheckClientLicense(SingleIssuer.Settings));
+            Assert.False(Issues(new ClientInfo("one-client-too-many"), SingleIssuer.Settings));
         }
     }
 
@@ -302,14 +302,14 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 3; index++)
         {
             var client = new ClientInfo($"client-{index}");
-            Assert.Same(client, client.CheckClientLicense(gone));
+            Assert.True(Issues(client, gone));
         }
 
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(globex));
+        Assert.False(Issues(new ClientInfo("newcomer"), globex));
 
         released.Cancel();
         var newcomer = new ClientInfo("newcomer");
-        Assert.Same(newcomer, newcomer.CheckClientLicense(globex));
+        Assert.True(Issues(newcomer, globex));
     }
 
     [Fact]
@@ -447,10 +447,10 @@ public sealed class LicenseEnforcementTests : IDisposable
         var acme = Creation("acme", CancellationToken.None);
         var globex = Creation("globex", CancellationToken.None);
         var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
-        removed.ClientInfo.CheckClientLicense(acme);
-        new ClientInfo("client-0").CheckClientLicense(globex);
-        new ClientInfo("client-1").CheckClientLicense(globex);
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(globex));
+        _ = Issues(removed.ClientInfo, acme);
+        _ = Issues(new ClientInfo("client-0"), globex);
+        _ = Issues(new ClientInfo("client-1"), globex);
+        Assert.False(Issues(new ClientInfo("newcomer"), globex));
 
         await RemoveThroughRegistrationAsync(removed, acme);
 
@@ -471,8 +471,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         await catalog.RefreshAsync(ct);
         var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
         foreach (var client in listed[0].Tenant.Clients)
-            client.CheckClientLicense(acme);
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(acme));
+            _ = Issues(client, acme);
+        Assert.False(Issues(new ClientInfo("newcomer"), acme));
 
         listed = [Acme("2", "client-1", "client-2")];
         await catalog.RefreshAsync(ct);
@@ -496,8 +496,8 @@ public sealed class LicenseEnforcementTests : IDisposable
             new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
             new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
         foreach (var client in current.Clients)
-            (await clients.TryFindClientAsync(client.ClientId)).CheckClientLicense(settings);
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(settings));
+            _ = Issues((await clients.TryFindClientAsync(client.ClientId))!, settings);
+        Assert.False(Issues(new ClientInfo("newcomer"), settings));
 
         current = new OidcOptions { Clients = [new("client-1"), new("client-2")] };
         await clients.TryFindClientAsync("client-1");
@@ -511,11 +511,11 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// </summary>
     private static void CountPastTheMargin(IIssuerSettings issuer, ClientInfo first)
     {
-        first.CheckClientLicense(issuer);
+        _ = Issues(first, issuer);
         for (var index = 1; index < 3; index++)
-            new ClientInfo($"client-{index}").CheckClientLicense(issuer);
+            _ = Issues(new ClientInfo($"client-{index}"), issuer);
 
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(issuer));
+        Assert.False(Issues(new ClientInfo("newcomer"), issuer));
     }
 
     /// <summary>
@@ -525,8 +525,25 @@ public sealed class LicenseEnforcementTests : IDisposable
     private static void AssertOnePlaceFree(IIssuerSettings issuer)
     {
         var newcomer = new ClientInfo("newcomer");
-        Assert.Same(newcomer, newcomer.CheckClientLicense(issuer));
-        Assert.Null(new ClientInfo("newcomer-2").CheckClientLicense(issuer));
+        Assert.True(Issues(newcomer, issuer));
+        Assert.False(Issues(new ClientInfo("newcomer-2"), issuer));
+    }
+
+    /// <summary>
+    /// Whether a token can be issued to <paramref name="client"/> under <paramref name="issuer"/>: the check that counts
+    /// the client, run where a token names its issuer.
+    /// </summary>
+    private static bool Issues(ClientInfo client, IIssuerSettings settings, string issuer = TestLicense.Issuer)
+    {
+        try
+        {
+            LicenseChecker.CheckLicense(issuer, settings, client.ClientId);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static async Task RemoveThroughRegistrationAsync(RegisteredClient removed, IIssuerSettings issuer)
@@ -588,7 +605,107 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// The settings of a tenant's creation, released when <paramref name="released"/> is canceled.
     /// </summary>
     private static IIssuerSettings Creation(string tenantId, CancellationToken released)
-        => Mock.Of<IIssuerSettings>(settings => settings.Id == tenantId && settings.Released == released);
+        => new LicensedTenantSettings(tenantId, released);
+
+    /// <summary>
+    /// Settings a host registers do not tell the license an issuer is gone: one answering it is released still
+    /// takes its place, so the second issuer past a limit of one is refused.
+    /// </summary>
+    [Fact]
+    public void Settings_of_the_hosts_own_saying_released_still_count()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        var released = Mock.Of<IIssuerSettings>(settings =>
+            settings.Id == string.Empty && settings.Released == new CancellationToken(true));
+
+        LicenseChecker.CheckIssuer("https://acme.example.com", released);
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://globex.example.com", released));
+    }
+
+    /// <summary>
+    /// Settings a host registers do not tell the license which tenant an issuer is: two issuers answering one id
+    /// take two places.
+    /// </summary>
+    [Fact]
+    public void Settings_of_the_hosts_own_naming_one_id_count_each_issuer()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        var sameId = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
+
+        LicenseChecker.CheckIssuer("https://acme.example.com", sameId);
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://globex.example.com", sameId));
+    }
+
+    /// <summary>
+    /// Settings a host registers do not tell the license which tenant a client belongs to: a client id two issuers
+    /// serve takes a place under each issuer the tokens name.
+    /// </summary>
+    [Fact]
+    public void Clients_of_settings_of_the_hosts_own_are_counted_with_the_issuer_of_the_token()
+    {
+        ArrangeClientLimitOfTwo();
+        var sameId = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
+
+        _ = Issues(new ClientInfo("web"), sameId, "https://acme.example.com");
+        _ = Issues(new ClientInfo("web"), sameId, "https://globex.example.com");
+        _ = Issues(new ClientInfo("mobile"), sameId, "https://acme.example.com");
+
+        Assert.False(Issues(new ClientInfo("mobile"), sameId, "https://globex.example.com"));
+    }
+
+    /// <summary>
+    /// Settings of the host's own saying they are released do not take their clients off the count.
+    /// </summary>
+    [Fact]
+    public void Clients_of_settings_of_the_hosts_own_saying_released_still_count()
+    {
+        ArrangeClientLimitOfTwo();
+        var released = Mock.Of<IIssuerSettings>(settings =>
+            settings.Id == string.Empty && settings.Released == new CancellationToken(true));
+
+        CountPastTheMargin(released, new ClientInfo("client-0"));
+    }
+
+    /// <summary>
+    /// A client removed through registration under settings of the host's own stays counted: the license cannot tell
+    /// which of the issuers those settings serve it was counted with, even when their id spells the issuer itself.
+    /// </summary>
+    [Fact]
+    public async Task A_client_removed_under_settings_of_the_hosts_own_keeps_its_place()
+    {
+        ArrangeClientLimitOfTwo();
+        var hosts = Mock.Of<IIssuerSettings>(settings => settings.Id == TestLicense.Issuer);
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        CountPastTheMargin(hosts, removed.ClientInfo);
+
+        await RemoveThroughRegistrationAsync(removed, hosts);
+
+        Assert.False(Issues(new ClientInfo("newcomer"), hosts));
+    }
+
+    /// <summary>
+    /// The server's own settings vouch for a tenant only as its own catalog serves it: one a catalog of the host's own
+    /// resolved is counted by the issuer its tokens name, so two issuers answered under one tenant id take two places.
+    /// </summary>
+    [Fact]
+    public void A_tenant_a_catalog_of_the_hosts_own_resolved_is_counted_by_its_issuer()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
+        var settings = new TenantIssuerSettings(
+            Mock.Of<ITenantAccessor>(accessor => accessor.Current == served),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
+            Mock.Of<ITenantCatalog>());
+
+        LicenseChecker.CheckIssuer("https://acme.example.com", settings);
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://globex.example.com", settings));
+    }
 
     [Fact]
     public void A_client_already_known_is_still_served_once_the_margin_is_passed()
@@ -606,13 +723,13 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         for (var index = 0; index < 3; index++)
         {
-            _ = new ClientInfo($"established-{index}").CheckClientLicense(SingleIssuer.Settings);
+            _ = Issues(new ClientInfo($"established-{index}"), SingleIssuer.Settings);
         }
 
-        Assert.Null(new ClientInfo("newcomer").CheckClientLicense(SingleIssuer.Settings));
+        Assert.False(Issues(new ClientInfo("newcomer"), SingleIssuer.Settings));
 
         var established = new ClientInfo("established-0");
-        Assert.Same(established, established.CheckClientLicense(SingleIssuer.Settings));
+        Assert.True(Issues(established, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -627,14 +744,14 @@ public sealed class LicenseEnforcementTests : IDisposable
             NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
             ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
         });
-        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
-        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+        var acme = Creation("acme", CancellationToken.None);
+        var globex = Creation("globex", CancellationToken.None);
 
-        _ = new ClientInfo("web").CheckClientLicense(acme);
-        _ = new ClientInfo("web").CheckClientLicense(globex);
-        _ = new ClientInfo("mobile").CheckClientLicense(acme);
+        _ = Issues(new ClientInfo("web"), acme);
+        _ = Issues(new ClientInfo("web"), globex);
+        _ = Issues(new ClientInfo("mobile"), acme);
 
-        Assert.Null(new ClientInfo("mobile").CheckClientLicense(globex));
+        Assert.False(Issues(new ClientInfo("mobile"), globex));
     }
 
     [Fact]
@@ -650,17 +767,17 @@ public sealed class LicenseEnforcementTests : IDisposable
             NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
             ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
         });
-        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
-        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
-        _ = new ClientInfo("first").CheckClientLicense(acme);
-        _ = new ClientInfo("second").CheckClientLicense(acme);
+        var acme = Creation("acme", CancellationToken.None);
+        var globex = Creation("globex", CancellationToken.None);
+        _ = Issues(new ClientInfo("first"), acme);
+        _ = Issues(new ClientInfo("second"), acme);
 
         var records = new RecordingLoggerFactory();
         LicenseLogger.Instance.Init(records);
         try
         {
-            Assert.Null(new ClientInfo("web").CheckClientLicense(acme));
-            Assert.Null(new ClientInfo("web").CheckClientLicense(globex));
+            Assert.False(Issues(new ClientInfo("web"), acme));
+            Assert.False(Issues(new ClientInfo("web"), globex));
         }
         finally
         {

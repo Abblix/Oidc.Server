@@ -73,7 +73,7 @@ public partial class ClientJwtValidator(
         string jwt,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, issuerSettings, clientJwksProvider);
+        var context = new ValidationContext(clientInfoProvider, clientJwksProvider);
 
         var result = await tokenValidator.ValidateAsync(
             jwt,
@@ -107,7 +107,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt).WithLicenseCheck(issuerSettings);
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -192,7 +192,6 @@ public partial class ClientJwtValidator(
     /// </summary>
     private sealed class ValidationContext(
         IClientInfoProvider clientInfoProvider,
-        IIssuerSettings issuerSettings,
         IClientKeysProvider clientJwksProvider)
     {
         /// <summary>
@@ -228,7 +227,7 @@ public partial class ClientJwtValidator(
             if (!_clientLookupPerformed)
             {
                 // Attempt to find the client by issuer
-                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck(issuerSettings);
+                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer);
                 _clientLookupPerformed = true;
             }
 

@@ -39,8 +39,7 @@ public class IntrospectionRequestProcessorTests
 
         _processor = new IntrospectionRequestProcessor(
             _clientInfoProvider.Object,
-            _subjectTypeConverter.Object,
-            SingleIssuer.Settings);
+            _subjectTypeConverter.Object);
     }
 
     private static IntrospectionRequest CreateIntrospectionRequest() => new()
