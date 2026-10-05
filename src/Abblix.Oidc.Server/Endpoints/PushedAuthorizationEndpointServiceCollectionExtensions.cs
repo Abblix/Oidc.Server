@@ -7,18 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
-using Abblix.Oidc.Server.Common.Implementation;
-using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.PushedAuthorization;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
-using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -37,8 +32,8 @@ public static class PushedAuthorizationEndpointServiceCollectionExtensions
     public static IServiceCollection AddPushedAuthorizationEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IPushedAuthorizationHandler>(sp => sp.CreateService<PushedAuthorizationHandler>(
-            Dependency.Override<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>()));
-        services.Decorate<IPushedAuthorizationHandler, TracedPushedAuthorizationHandler>();
+            Dependency.Override<IAuthorizationRequestFetcher, RequestObjectFetchAdapter>()));
+        services.AddEndpointSpan<IPushedAuthorizationHandler, TracedPushedAuthorizationHandler>();
         services.TryAddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>();
         services.TryAddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
         return services;

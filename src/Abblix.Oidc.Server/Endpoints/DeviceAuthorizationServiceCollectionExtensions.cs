@@ -8,13 +8,13 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.Telemetry;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -35,7 +35,7 @@ public static class DeviceAuthorizationServiceCollectionExtensions
     {
         services.AddDeviceAuthorizationContextValidators();
         services.TryAddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
-        services.Decorate<IDeviceAuthorizationHandler, TracedDeviceAuthorizationHandler>();
+        services.AddEndpointSpan<IDeviceAuthorizationHandler, TracedDeviceAuthorizationHandler>();
         services.TryAddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>();
         services.TryAddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
 

@@ -36,9 +36,16 @@ public static class TelemetryTags
     public const string ResponseType = "oauth.response_type";
 
     /// <summary>
-    /// The error code a refused request is answered with, as the protocol names it.
+    /// The error code a refused request is answered with, when it is one of the library's error codes, and
+    /// <see cref="UnknownError"/> otherwise.
     /// </summary>
     public const string Error = "oauth.error";
+
+    /// <summary>
+    /// The value of <see cref="Error"/> for an error code the library does not define, as a host's own handler may
+    /// answer with.
+    /// </summary>
+    public const string UnknownError = "other";
 
     /// <summary>
     /// The type of the exception a request failed with, as OpenTelemetry's general conventions name it.

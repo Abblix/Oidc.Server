@@ -36,5 +36,5 @@ internal sealed class TracedTokenHandler(
             tenants,
             () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
             EndpointSpan.ErrorOf,
-            (TelemetryTags.GrantType, grants.GrantTypesSupported.Contains(tokenRequest.GrantType, StringComparer.Ordinal) ? tokenRequest.GrantType : null));
+            () => (TelemetryTags.GrantType, grants.GrantTypesSupported.Contains(tokenRequest.GrantType, StringComparer.Ordinal) ? tokenRequest.GrantType : null));
 }

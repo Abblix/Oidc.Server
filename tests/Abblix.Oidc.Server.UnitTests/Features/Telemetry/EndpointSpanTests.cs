@@ -106,6 +106,15 @@ public sealed class EndpointSpanTests : IDisposable
     }
 
     [Fact]
+    public async Task AnErrorCodeTheLibraryDoesNotDefine_IsNamedOther()
+    {
+        var span = await SpanOf(() => Token(new OidcError("a_code_of_the_host", "Refused")));
+
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        Assert.Equal(TelemetryTags.UnknownError, span.GetTagItem(TelemetryTags.Error));
+    }
+
+    [Fact]
     public async Task AnAuthorizationError_ClosesTheSpanWithItsErrorCode()
     {
         var request = new AuthorizationRequest();
@@ -173,6 +182,7 @@ public sealed class EndpointSpanTests : IDisposable
 
     [Theory]
     [InlineData(new[] { ResponseTypes.IdToken, ResponseTypes.Code }, "code id_token")]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Code }, "code")]
     [InlineData(new[] { ResponseTypes.Code, "a-value-of-the-client" }, null)]
     [InlineData(new string[0], null)]
     public void AResponseTypeIsNamedOnlyWhenTheProtocolDefinesEachValue(string[] responseType, string? named)

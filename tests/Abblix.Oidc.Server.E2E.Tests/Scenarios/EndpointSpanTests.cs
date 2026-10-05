@@ -90,6 +90,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
     {
         var endpoints = ConstantsOf(typeof(TelemetryEndpoints));
         var errors = ConstantsOf(typeof(ErrorCodes));
+        errors.Add(TelemetryTags.UnknownError);
         var responseTypes = ConstantsOf(typeof(ResponseTypes));
         using var scope = Factory.Services.CreateScope();
         var grantTypes = scope.ServiceProvider.GetRequiredService<IAuthorizationGrantHandler>().GrantTypesSupported.ToHashSet();
@@ -101,7 +102,9 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             {
                 TelemetryTags.Endpoint => endpoints.Contains(value),
                 TelemetryTags.GrantType => grantTypes.Contains(value),
-                TelemetryTags.ResponseType => value.Split(' ').All(responseTypes.Contains),
+                TelemetryTags.ResponseType => value.Split(' ') is var parts &&
+                                              parts.All(responseTypes.Contains) &&
+                                              value == string.Join(' ', parts.Distinct().Order(StringComparer.Ordinal)),
                 TelemetryTags.Error => errors.Contains(value),
                 _ => false,
             };

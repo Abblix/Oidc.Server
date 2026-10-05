@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics;
+using System.Reflection;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
@@ -26,9 +27,10 @@ public static class OidcTelemetry
     public const string SourceName = "Abblix.Oidc.Server";
 
     /// <summary>
-    /// The source the server starts its spans from, versioned with the assembly.
+    /// The source the server starts its spans from, versioned with the package, its build metadata left out.
     /// </summary>
     internal static readonly ActivitySource Source = new(
         SourceName,
-        typeof(OidcTelemetry).Assembly.GetName().Version?.ToString());
+        typeof(OidcTelemetry).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]);
 }

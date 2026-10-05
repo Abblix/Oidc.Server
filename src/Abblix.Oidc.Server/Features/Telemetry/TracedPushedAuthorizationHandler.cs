@@ -33,5 +33,5 @@ internal sealed class TracedPushedAuthorizationHandler(
             tenants,
             () => inner.HandleAsync(authorizationRequest, clientRequest),
             EndpointSpan.ErrorOf,
-            (TelemetryTags.ResponseType, EndpointSpan.ResponseTypeOf(authorizationRequest.ResponseType)));
+            () => (TelemetryTags.ResponseType, EndpointSpan.ResponseTypeOf(authorizationRequest.ResponseType)));
 }

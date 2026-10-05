@@ -7,12 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
-using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Features.Telemetry;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -48,7 +48,7 @@ public static class TokenEndpointServiceCollectionExtensions
          services.TryAddScoped<ITokenAuthorizationContextEvaluator, TokenAuthorizationContextEvaluator>();
 
          services.TryAddScoped<ITokenHandler, TokenHandler>();
-         services.Decorate<ITokenHandler, TracedTokenHandler>();
+         services.AddEndpointSpan<ITokenHandler, TracedTokenHandler>();
          services.TryAddScoped<ITokenRequestValidator, TokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
          services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();

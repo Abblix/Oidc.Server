@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics;
+using System.Reflection;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -29,13 +30,14 @@ internal static class EndpointSpan
     /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
     /// <param name="handle">The endpoint's handling.</param>
     /// <param name="errorOf">The error code the outcome refuses the request with, or null when it does not.</param>
-    /// <param name="tags">Attributes of the request, each from the closed set its tag documents.</param>
+    /// <param name="tags">Attributes of the request, each from the closed set its tag documents; asked only when a
+    /// span is recorded, so a source nobody listens to costs their reading too.</param>
     public static async Task<TResult> RunAsync<TResult>(
         string endpoint,
         ITenantAccessor? tenants,
         Func<Task<TResult>> handle,
         Func<TResult, string?> errorOf,
-        params (string Key, string? Value)[] tags)
+        Func<(string Key, string? Value)>? tags = null)
     {
         using var span = OidcTelemetry.Source.StartActivity(endpoint);
         if (span is null)
@@ -45,18 +47,15 @@ internal static class EndpointSpan
         if (tenants?.Current is { } current)
             span.SetTag(TelemetryTags.Tenant, current.Tenant.Id);
 
-        foreach (var (key, value) in tags)
-        {
-            if (value is not null)
-                span.SetTag(key, value);
-        }
+        if (tags?.Invoke() is (var key, { } value))
+            span.SetTag(key, value);
 
         try
         {
             var result = await handle();
             if (errorOf(result) is { } error)
             {
-                span.SetTag(TelemetryTags.Error, error);
+                span.SetTag(TelemetryTags.Error, KnownErrors.Contains(error) ? error : TelemetryTags.UnknownError);
                 span.SetStatus(ActivityStatusCode.Error);
             }
             else
@@ -104,8 +103,17 @@ internal static class EndpointSpan
             return null;
         }
 
-        return string.Join(' ', responseType.Order(StringComparer.Ordinal));
+        return string.Join(' ', responseType.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
     }
+
+    /// <summary>
+    /// The error codes of <see cref="Common.Constants.ErrorCodes"/>, the only ones a span names as they are.
+    /// </summary>
+    private static readonly HashSet<string> KnownErrors = typeof(Common.Constants.ErrorCodes)
+        .GetFields(BindingFlags.Public | BindingFlags.Static)
+        .Where(field => field is { IsLiteral: true } && field.FieldType == typeof(string))
+        .Select(field => (string)field.GetRawConstantValue()!)
+        .ToHashSet(StringComparer.Ordinal);
 
     private static readonly string[] KnownResponseTypes =
     [
