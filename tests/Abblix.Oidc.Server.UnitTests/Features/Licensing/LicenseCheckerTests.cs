@@ -59,9 +59,9 @@ public class LicenseCheckerTests
         var uniquePrefix = Guid.NewGuid().ToString("N")[..8];
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
-            TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo($"{uniquePrefix}-test-client-1")));
+            TestLicense.Issuer, SingleIssuer.Settings, $"{uniquePrefix}-test-client-1"));
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
-            TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo($"{uniquePrefix}-test-client-2")));
+            TestLicense.Issuer, SingleIssuer.Settings, $"{uniquePrefix}-test-client-2"));
     }
 
     /// <summary>
@@ -73,10 +73,10 @@ public class LicenseCheckerTests
         AddTestLicense();
         var clientId = $"test-client-repeated-{Guid.NewGuid()}";
 
-        LicenseChecker.CheckLicense(TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo(clientId));
+        LicenseChecker.CheckLicense(TestLicense.Issuer, SingleIssuer.Settings, clientId);
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
-            TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo(clientId)));
+            TestLicense.Issuer, SingleIssuer.Settings, clientId));
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public class LicenseCheckerTests
         for (var i = 1; i <= 10; i++)
         {
             Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
-                TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo($"{uniquePrefix}-unlimited-{i}")));
+                TestLicense.Issuer, SingleIssuer.Settings, $"{uniquePrefix}-unlimited-{i}"));
         }
     }
 

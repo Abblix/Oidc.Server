@@ -65,22 +65,22 @@ public static partial class LicenseChecker
     /// </summary>
     /// <param name="issuer">The issuer the token names, checked as <see cref="CheckIssuer"/> checks it.</param>
     /// <param name="settings">The settings of that issuer.</param>
-    /// <param name="clientInfo">The client the token is issued to.</param>
+    /// <param name="clientId">The client the token names as issued to.</param>
     /// <returns>The issuer, when the terms allow both.</returns>
     /// <remarks>
-    /// A client is counted where a token is issued to it, with the issuer the token names, so every client in use is
-    /// counted and two tenants registering a client under one id take two places. A client stops counting once its
-    /// issuer is released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with
-    /// a catalog of tenants of the host's own, which tells no release, only a client removed through registration
-    /// leaves the count. On a server without tenants, a client removed through registration or dropped by a reload of
-    /// the settings, served by the reloadable client store, leaves the count.
+    /// A client is counted where a token is issued to it, by the client and the issuer the token names, so every
+    /// client a token is issued to is counted and two tenants registering a client under one id take two places. A
+    /// client of a tenant the server's own catalog serves stops counting once the tenant is released, or once it is
+    /// removed through registration; on a server without tenants, once it is removed through registration or dropped by
+    /// a reload of the settings, served by the reloadable client store. A client counted under any other settings stays
+    /// counted for the life of the process.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The issuer is beyond the license's terms, or the client is beyond
     /// its client limit by more than the margin.</exception>
-    public static string CheckLicense(string issuer, IIssuerSettings settings, ClientInfo clientInfo)
+    public static string CheckLicense(string issuer, IIssuerSettings settings, string clientId)
     {
         CheckIssuer(issuer, settings);
-        CheckClient((VouchedId(settings) ?? issuer, clientInfo.ClientId), ReleasedOf(settings));
+        CheckClient((VouchedId(settings) ?? issuer, clientId), ReleasedOf(settings));
         return issuer;
     }
 
@@ -273,9 +273,9 @@ public static partial class LicenseChecker
     /// </summary>
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
     /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
-    /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; with a catalog of
-    /// tenants of the host's own, which tells no release, the count only grows, and tenants it serves under one id
-    /// take one place.</param>
+    /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; settings other than
+    /// the server's own, a tenant a catalog of the host's own resolved included, are counted by the issuer string and
+    /// never released.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer, IIssuerSettings settings)
     {

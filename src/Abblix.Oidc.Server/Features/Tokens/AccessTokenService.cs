@@ -120,7 +120,7 @@ internal class AccessTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,
-				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer(), issuerSettings, clientInfo),
+				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer(), issuerSettings, authContext.ClientId),
 				GrantId = grantId,
 			},
 		};

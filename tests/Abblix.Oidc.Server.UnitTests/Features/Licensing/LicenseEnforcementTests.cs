@@ -537,7 +537,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     {
         try
         {
-            LicenseChecker.CheckLicense(issuer, settings, client);
+            LicenseChecker.CheckLicense(issuer, settings, client.ClientId);
             return true;
         }
         catch (InvalidOperationException)

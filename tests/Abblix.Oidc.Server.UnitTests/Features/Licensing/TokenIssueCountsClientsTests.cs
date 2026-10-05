@@ -34,8 +34,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
 /// <summary>
-/// A client is counted where a token is issued to it, by each kind of token: past the client limit by more than the
-/// margin, the next client is refused its token.
+/// A client is counted where a token is issued to it, by each kind of token and by the client id the token names: past
+/// the client limit by more than the margin, the next client is refused its token, whatever client settings the
+/// service is handed.
 /// </summary>
 [Collection(nameof(LicenseEnforcementTests))]
 public sealed class TokenIssueCountsClientsTests : IDisposable
@@ -65,16 +66,18 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
     {
         var issue = Issuer(kind);
         for (var index = 0; index < 3; index++)
-            await issue(new ClientInfo($"client-{index}"));
+            await issue($"client-{index}");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => issue(new ClientInfo("newcomer")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => issue("newcomer"));
     }
 
     /// <summary>
-    /// Issues a token of <paramref name="kind"/> to a client, through the service that issues it.
+    /// Issues a token of <paramref name="kind"/> naming a client, through the service that issues it, handed the same
+    /// client settings each time.
     /// </summary>
-    private static Func<ClientInfo, Task> Issuer(string kind)
+    private static Func<string, Task> Issuer(string kind)
     {
+        var client = new ClientInfo("settings");
         var issuerProvider = Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == TestLicense.Issuer);
         var options = Options.Create(new OidcOptions());
         var settings = SingleIssuer.SettingsOf(options);
@@ -85,7 +88,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
             .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("token");
         var session = new AuthSession("subject", "session", clock.GetUtcNow(), "local");
-        AuthorizationContext Context(ClientInfo client) => new(client.ClientId, ["openid"], null);
+        AuthorizationContext Context(string clientId) => new(clientId, ["openid"], null);
 
         switch (kind)
         {
@@ -99,7 +102,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     options,
                     settings,
                     new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()));
-                return client => access.CreateAccessTokenAsync(session, Context(client), client, grantId: null);
+                return clientId => access.CreateAccessTokenAsync(session, Context(clientId), client, grantId: null);
 
             case IdentityToken:
                 var clientFormatter = new Mock<IClientJwtFormatter>();
@@ -116,8 +119,8 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     .ReturnsAsync(new JsonObject());
                 var identity = new IdentityTokenService(
                     issuerProvider, settings, clock, clientFormatter.Object, claims.Object, options);
-                return client => identity.CreateIdentityTokenAsync(
-                    session, Context(client), client, includeUserClaims: false, authorizationCode: null, accessToken: null);
+                return clientId => identity.CreateIdentityTokenAsync(
+                    session, Context(clientId), client, includeUserClaims: false, authorizationCode: null, accessToken: null);
 
             case RefreshToken:
                 var refresh = new RefreshTokenService(
@@ -129,7 +132,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     new SubjectTypeConverter(),
                     options,
                     settings);
-                return client => refresh.CreateRefreshTokenAsync(session, Context(client), client, null, "grant");
+                return clientId => refresh.CreateRefreshTokenAsync(session, Context(clientId), client, null, "grant");
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "No such token in this test.");
