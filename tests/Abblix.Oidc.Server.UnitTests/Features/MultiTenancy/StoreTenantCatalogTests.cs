@@ -569,21 +569,24 @@ public class StoreTenantCatalogTests
 
         Assert.Equal(["acme/g1", "globex/g1"], _closing.Closed.Order());
         Assert.Equal(["globex/g1"], _failingClosing.Closed);
-        Assert.Equal([(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")], _logger.ErrorEvents);
+        Assert.Equal(
+            [(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")],
+            _logger.ErrorEvents);
     }
 
     /// <summary>
-    /// A closing that does not answer is cut off one refresh period into the reading and logged with its tenant, and
-    /// the reading goes on to hand the other tenants over.
+    /// A closing that does not answer is cut off one refresh period into its call and logged with its tenant, and the
+    /// calls after it get a period of their own, so a closing that heeds its token still closes every tenant.
     /// </summary>
     [Fact]
-    public async Task AClosingThatDoesNotAnswer_IsCutOffAtTheRefreshPeriod()
+    public async Task AClosingThatDoesNotAnswer_IsCutOffAndCostsNoOtherTenant()
     {
         var ct = TestContext.Current.CancellationToken;
         var hanging = new FakeClosing { Hanging = { "acme" } };
+        var heeding = new FakeClosing { HeedsItsToken = true };
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
         _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
-        var catalog = Catalog(closings: [hanging, _closing]);
+        var catalog = Catalog(closings: [hanging, heeding]);
         await catalog.RefreshAsync(ct);
         _store.Tenants.Clear();
         await catalog.RefreshAsync(ct);
@@ -592,9 +595,11 @@ public class StoreTenantCatalogTests
         var reading = catalog.RefreshAsync(ct);
         Assert.False(reading.IsCompleted);
         _time.Advance(_options.RefreshEvery);
-        await reading;
 
-        Assert.Equal(["acme/g1", "globex/g1"], _closing.Closed.Order());
+        // Bounded in real time too, so a closing never cut off turns the test red rather than hang it
+        await reading.WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+        Assert.Equal(["acme/g1", "globex/g1"], heeding.Closed.Order());
         Assert.Equal(
             [(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")],
             _logger.ErrorEvents.Distinct());
@@ -628,6 +633,31 @@ public class StoreTenantCatalogTests
                 .Where(entry => entry.EventId == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
                 .Select(entry => (string)entry.TenantId!)
                 .Order());
+    }
+
+    /// <summary>
+    /// A creation released after its tenant was created again under the same id is closed in the definition last
+    /// served for that creation, not the one the new creation serves nor the one it was first listed in.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReplacedByANewOne_IsClosedInItsOwnLastDefinition()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("acme", "https://acme.example.net", "2"));
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.org", Generation = "g2" }, "3"));
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["acme/g1"], _closing.Closed);
+        Assert.Equal(["https://acme.example.net"], _closing.Issuers);
     }
 
     /// <summary>
@@ -871,6 +901,8 @@ public class StoreTenantCatalogTests
 
         public HashSet<string> Hanging { get; } = new(StringComparer.Ordinal);
 
+        public bool HeedsItsToken { get; init; }
+
         public List<string> Closed { get; } = [];
 
         public List<string> Issuers { get; } = [];
@@ -882,6 +914,9 @@ public class StoreTenantCatalogTests
 
             if (Hanging.Contains(tenant.Id))
                 await Task.Delay(Timeout.Infinite, cancellationToken);
+
+            if (HeedsItsToken)
+                cancellationToken.ThrowIfCancellationRequested();
 
             Closed.Add($"{tenant.Id}/{tenant.Generation}");
             Issuers.Add(tenant.Issuer);

@@ -16,8 +16,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </summary>
 /// <remarks>
 /// The catalog of this instance hands over each tenant it releases, one refresh period after a reading first found it
-/// gone from the store, in the definition last served for that creation, and waits for the closing within that
-/// reading for up to one refresh period. A closing that fails, runs out of time or is stopped is logged with the
+/// gone from the store, in the definition last served for that creation, and waits within that reading for up to
+/// one refresh period for each call. A closing that fails, runs out of time or is stopped is logged with the
 /// tenant's id and is not handed over again; the other tenants and closings still run. A tenant gone from the store
 /// while no instance served it, as during a restart, is never listed by the new instance and so is never released or
 /// closed. A tenant created again under the same id is a different creation, so closing the one released leaves what

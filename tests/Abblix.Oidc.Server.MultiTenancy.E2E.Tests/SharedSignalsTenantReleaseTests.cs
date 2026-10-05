@@ -27,6 +27,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -44,6 +45,9 @@ public sealed class SharedSignalsTenantReleaseTests
     private const string StreamPath = "/ssf/stream";
     private const string ReceiverId = "https://receiver.example.com";
     private const string MembershipChanged = "https://tenant.example.com/events/membership-changed";
+
+    // The event a stream of a released tenant that could not be deleted is logged under, as the package numbers it
+    private const int StreamNotDeleted = 10801;
 
     [Fact]
     public async Task AReleasedTenantsStreamsAndQueues_AreDeleted()
@@ -92,7 +96,8 @@ public sealed class SharedSignalsTenantReleaseTests
         var time = new FakeTimeProvider();
         await store.AddAsync(TenantAt("acme"), ct);
         var streams = new FirstDeleteFails(new InMemoryStreamStore());
-        await using var app = await StartAsync(store, time, streams);
+        var logs = new RecordingLoggerProvider();
+        await using var app = await StartAsync(store, time, streams, logs);
 
         // Two receivers, since one receiver holds one stream
         foreach (var receiverId in (string[])[ReceiverId, ReceiverId + "/second"])
@@ -114,6 +119,7 @@ public sealed class SharedSignalsTenantReleaseTests
 
         Assert.Equal(2, streams.Deletions);
         Assert.Single(await StreamsOfAsync(app, acme, ct));
+        Assert.Single(logs.EventIds, StreamNotDeleted);
     }
 
     private static async Task<IReadOnlyList<StreamState>> StreamsOfAsync(
@@ -159,12 +165,16 @@ public sealed class SharedSignalsTenantReleaseTests
     private static async Task<WebApplication> StartAsync(
         MemoryTenantStore store,
         FakeTimeProvider time,
-        IStreamStore? streams = null)
+        IStreamStore? streams = null,
+        ILoggerProvider? logs = null)
     {
         await TestLicense.Loaded;
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        if (logs is not null)
+            builder.Logging.AddProvider(logs);
+
         builder.Services.AddSingleton<TimeProvider>(time);
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
@@ -245,5 +255,32 @@ public sealed class SharedSignalsTenantReleaseTests
             => ++Deletions == 1
                 ? throw new InvalidOperationException("the store lost its connection")
                 : inner.DeleteAsync(receiverId, streamId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Keeps the event id of every entry logged, so a test can tell which records were written.
+    /// </summary>
+    private sealed class RecordingLoggerProvider : ILoggerProvider
+    {
+        public System.Collections.Concurrent.ConcurrentBag<int> EventIds { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => new Recording(EventIds);
+
+        public void Dispose()
+        {
+            // Nothing is held
+        }
+
+        private sealed class Recording(System.Collections.Concurrent.ConcurrentBag<int> eventIds) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+                => eventIds.Add(eventId.Id);
+        }
     }
 }

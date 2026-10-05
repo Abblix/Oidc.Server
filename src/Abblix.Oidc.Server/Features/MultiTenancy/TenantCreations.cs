@@ -32,10 +32,10 @@ internal sealed partial class TenantCreations(
     ILogger logger,
     IEnumerable<ITenantClosing> closings)
 {
-    /// <summary>A creation, and when a reading first found it gone.</summary>
+    /// <summary>A creation, the definition last served for it, and when a reading first found it gone.</summary>
     private sealed class Creation(TenantDefinition tenant)
     {
-        public TenantDefinition Tenant { get; } = tenant;
+        public TenantDefinition Tenant { get; set; } = tenant;
 
         // Never disposed: a request may still ask for its token after the release, and a source without a timer
         // holds nothing a collection does not free
@@ -64,6 +64,10 @@ internal sealed partial class TenantCreations(
     /// </returns>
     public IReadOnlyCollection<string> Served(TenantDefinition tenant)
     {
+        // A change within the creation, as to another issuer, is what its closing will be handed
+        if (_creations.TryGetValue(TenantKey.SpaceOf(tenant), out var creation))
+            creation.Tenant = tenant;
+
         var former = _lastServed.GetValueOrDefault(tenant.Id);
         _lastServed[tenant.Id] = tenant;
         return former is null
@@ -138,43 +142,33 @@ internal sealed partial class TenantCreations(
             releasedLately[space] = now;
 
         Volatile.Write(ref _releasedLately, releasedLately);
-        var released = new List<TenantDefinition>(due.Count);
         foreach (var (space, creation) in due)
         {
-            // The definition a change kept in the same creation, as one with another issuer, is what was served
-            // last; it is read before the creation is forgotten
-            released.Add(
-                _lastServed.GetValueOrDefault(creation.Tenant.Id) is { } last &&
-                last.Generation == creation.Tenant.Generation
-                    ? last
-                    : creation.Tenant);
-
             _creations.TryRemove(space, out _);
             Forget(creation.Tenant);
             Cancel(creation);
         }
 
-        return released;
+        return [..due.Values.Select(creation => creation.Tenant)];
     }
 
     /// <summary>
-    /// Hands each creation <see cref="Track"/> released to every closing within <paramref name="limit"/>, so a
-    /// closing that does not answer holds the reading back by no more than that. A closing that fails, runs out of
-    /// time or is stopped is logged with the tenant's id, and every tenant after it is still handed over and logged
-    /// the same way, since a released creation is not handed over again.
+    /// Hands each creation <see cref="Track"/> released to every closing, each call within <paramref name="limit"/>
+    /// of its own, so a closing that does not answer costs its own tenant and no other. A closing that fails, runs
+    /// out of time or is stopped is logged with the tenant's id, and every tenant after it is still handed over,
+    /// since a released creation is not handed over again.
     /// </summary>
     public async Task CloseAsync(
         IReadOnlyCollection<TenantDefinition> released,
         TimeSpan limit,
         CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(limit, timeProvider);
-        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
-
         foreach (var tenant in released)
         {
             foreach (var closing in closings)
             {
+                using var deadline = new CancellationTokenSource(limit, timeProvider);
+                using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
                 try
                 {
                     await closing.CloseAsync(tenant, bounded.Token);
