@@ -17,7 +17,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// recognized and appropriately scoped according to OAuth 2.0 and OpenID Connect standards.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
-public class ResourceValidator(IResourceManager resourceManager): SyncTokenContextValidatorBase
+/// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
+public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference)
+    : SyncTokenContextValidatorBase
 {
     /// <summary>
     /// Validates the resources specified in a token request against known resource definitions.
@@ -31,24 +33,29 @@ public class ResourceValidator(IResourceManager resourceManager): SyncTokenConte
     protected override OidcError? Validate(TokenValidationContext context)
     {
         var request = context.Request;
+        var requested = request.Resources;
 
-        // Proceed with validation only if there are resources specified in the request.
-        if (request.Resources is { Length: > 0 })
+        if (requested is not { Length: > 0 })
         {
-            // Validate the requested resources using the resource manager.
-            if (!resourceManager.Validate(
-                    request.Resources,
-                    request.Scope,
-                    out var resources,
-                    out var errorDescription))
-            {
-                return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
-            }
+            if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
+                return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
-            context.Resources = resources;
+            if (inferred is null)
+                return null;
+
+            requested = [inferred];
         }
 
-        // Return null indicating successful validation if there are no errors.
+        if (!resourceManager.Validate(
+                requested,
+                request.Scope,
+                out var resources,
+                out var errorDescription))
+        {
+            return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
+        }
+
+        context.Resources = resources;
         return null;
     }
 }

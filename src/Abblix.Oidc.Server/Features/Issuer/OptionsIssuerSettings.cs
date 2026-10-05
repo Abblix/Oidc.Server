@@ -52,6 +52,9 @@ internal sealed class OptionsIssuerSettings(
     public Uri? DefaultResourceIndicator => options.CurrentValue.DefaultResourceIndicator;
 
     /// <inheritdoc />
+    public bool InferResourceFromScope => options.CurrentValue.InferResourceFromScope;
+
+    /// <inheritdoc />
     public Uri? AccountSelectionUri => options.CurrentValue.AccountSelectionUri;
 
     /// <inheritdoc />

@@ -20,7 +20,9 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// integration with the authorization context.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for retrieving and validating resource information.</param>
-public class ResourceValidator(IResourceManager resourceManager) : IBackChannelAuthenticationContextValidator
+/// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
+public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference)
+    : IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Performs the validation of resource identifiers specified in the authorization request against the allowed
@@ -39,21 +41,29 @@ public class ResourceValidator(IResourceManager resourceManager) : IBackChannelA
     private OidcError? Validate(BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
+        var requested = request.Resources;
 
-        if (request.Resources is { Length: > 0 })
+        if (requested is not { Length: > 0 })
         {
-            if (!resourceManager.Validate(
-                    request.Resources,
-                    request.Scope,
-                    out var resources,
-                    out var errorDescription))
-            {
-                return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
-            }
+            if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
+                return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
-            context.Resources = resources;
+            if (inferred is null)
+                return null;
+
+            requested = [inferred];
         }
 
+        if (!resourceManager.Validate(
+                requested,
+                request.Scope,
+                out var resources,
+                out var errorDescription))
+        {
+            return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
+        }
+
+        context.Resources = resources;
         return null;
     }
 }

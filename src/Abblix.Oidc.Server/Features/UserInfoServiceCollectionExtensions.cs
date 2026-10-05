@@ -38,6 +38,7 @@ public static class UserInfoServiceCollectionExtensions
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();
         services.TryAddSingleton<IResourceManager, ResourceManager>();
+        services.TryAddSingleton<ResourceInference>();
         services.TryAddSingleton<IResourceKeysProvider, ResourceKeysProvider>();
         services.TryAddSingleton<IAudienceKeyResolver, AudienceKeyResolver>();
         return services;
