@@ -99,7 +99,7 @@ public static partial class LicenseChecker
             return clientInfo;
 
         _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), Counted>();
-        var client = (issuer.Id, clientInfo.ClientId);
+        var client = (ClientIssuerOf(issuer), clientInfo.ClientId);
         if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
             !_knownClientIds.ContainsKey(client))
         {
@@ -115,7 +115,7 @@ public static partial class LicenseChecker
             return null; // Prevents processing of clients exceeding the limit by more than 30%
         }
 
-        Count(_knownClientIds, client, clientInfo.ClientId, issuer);
+        Count(_knownClientIds, client, clientInfo.ClientId, CountedAs(string.Empty, issuer).Released);
         if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
             LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
         {
@@ -129,7 +129,7 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// Counts <paramref name="key"/> until <paramref name="issuer"/> is released, so what the license meters is what
+    /// Counts <paramref name="key"/> until <paramref name="holder"/> is canceled, so what the license meters is what
     /// the deployment serves now rather than everything the process has seen.
     /// </summary>
     /// <remarks>
@@ -142,11 +142,9 @@ public static partial class LicenseChecker
         ConcurrentDictionary<TKey, Counted> counted,
         TKey key,
         string name,
-        IIssuerSettings issuer)
+        CancellationToken holder)
         where TKey : notnull
     {
-        var holder = issuer.Released;
-
         // Added and taken off again at once, a released creation would still raise the count for that instant and
         // refuse a request of a tenant served at the limit meanwhile
         if (holder.IsCancellationRequested)
@@ -224,11 +222,23 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// What an issuer is counted under: its tenant, so a tenant moved to another address keeps one place, or for a
-    /// deployment serving one issuer, the address itself, which a host may take from each request.
+    /// What an issuer is counted under and what lets it go: its tenant and the tenant's release when the settings are
+    /// the server's own, so a tenant moved to another address keeps one place; otherwise the address itself, counted
+    /// for the life of the process.
     /// </summary>
-    private static string IssuerKey(string issuer, IIssuerSettings settings)
-        => settings.Id.Length == 0 ? issuer : settings.Id;
+    /// <remarks>
+    /// Neither is taken from settings a host registers: their answer would otherwise take every issuer off the count,
+    /// or count every issuer as one.
+    /// </remarks>
+    private static (string Key, CancellationToken Released) CountedAs(string issuer, IIssuerSettings settings)
+        => settings is ILicensedIssuer { Id.Length: > 0 } own ? (own.Id, own.Released) : (issuer, CancellationToken.None);
+
+    /// <summary>
+    /// The issuer a client is counted with: its tenant when the settings are the server's own, so a client id two
+    /// tenants share takes two places; otherwise none, as on a server serving one issuer.
+    /// </summary>
+    internal static string ClientIssuerOf(IIssuerSettings settings)
+        => settings is ILicensedIssuer own ? own.Id : string.Empty;
 
     /// <summary>
     /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
@@ -291,7 +301,8 @@ public static partial class LicenseChecker
         if (currentLicense.IssuerLimit.HasValue)
         {
             _knownIssuers ??= new ConcurrentDictionary<string, Counted>(StringComparer.Ordinal);
-            Count(_knownIssuers, IssuerKey(issuer, settings), issuer, settings);
+            var (key, released) = CountedAs(issuer, settings);
+            Count(_knownIssuers, key, issuer, released);
             if (currentLicense.IssuerLimit.Value < _knownIssuers.Count)
             {
                 // The decision is taken first and stands on its own; only the record of it is throttled. This

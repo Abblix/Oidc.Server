@@ -90,7 +90,7 @@ internal partial class ReloadableClientInfoStorage(
             return;
 
         LicenseChecker.ReleaseClients(
-            settings.Id,
+            LicenseChecker.ClientIssuerOf(settings),
             former
                 .Select(client => client.ClientId)
                 .Except(clients.Select(client => client.ClientId), StringComparer.Ordinal)

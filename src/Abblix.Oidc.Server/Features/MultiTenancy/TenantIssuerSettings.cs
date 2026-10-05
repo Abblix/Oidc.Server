@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
@@ -33,7 +34,7 @@ public sealed class TenantIssuerSettings(
     ITenantAccessor tenantAccessor,
     IOptionsMonitor<OidcOptions> options,
     ITenantCatalog catalog)
-    : IIssuerSettings
+    : IIssuerSettings, ILicensedIssuer
 {
     /// <inheritdoc />
     public string Id => Tenant.Id;

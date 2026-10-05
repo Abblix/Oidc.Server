@@ -588,7 +588,40 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// The settings of a tenant's creation, released when <paramref name="released"/> is canceled.
     /// </summary>
     private static IIssuerSettings Creation(string tenantId, CancellationToken released)
-        => Mock.Of<IIssuerSettings>(settings => settings.Id == tenantId && settings.Released == released);
+        => new LicensedTenantSettings(tenantId, released);
+
+    /// <summary>
+    /// Settings a host registers do not tell the license an issuer is gone: one answering it is released still
+    /// takes its place, so the second issuer past a limit of one is refused.
+    /// </summary>
+    [Fact]
+    public void Settings_of_the_hosts_own_saying_released_still_count()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        var released = Mock.Of<IIssuerSettings>(settings =>
+            settings.Id == string.Empty && settings.Released == new CancellationToken(true));
+
+        LicenseChecker.CheckIssuer("https://acme.example.com", released);
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://globex.example.com", released));
+    }
+
+    /// <summary>
+    /// Settings a host registers do not tell the license which tenant an issuer is: two issuers answering one id
+    /// take two places.
+    /// </summary>
+    [Fact]
+    public void Settings_of_the_hosts_own_naming_one_id_count_each_issuer()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        var sameId = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
+
+        LicenseChecker.CheckIssuer("https://acme.example.com", sameId);
+
+        Assert.Throws<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://globex.example.com", sameId));
+    }
 
     [Fact]
     public void A_client_already_known_is_still_served_once_the_margin_is_passed()
@@ -627,8 +660,8 @@ public sealed class LicenseEnforcementTests : IDisposable
             NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
             ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
         });
-        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
-        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+        var acme = Creation("acme", CancellationToken.None);
+        var globex = Creation("globex", CancellationToken.None);
 
         _ = new ClientInfo("web").CheckClientLicense(acme);
         _ = new ClientInfo("web").CheckClientLicense(globex);
@@ -650,8 +683,8 @@ public sealed class LicenseEnforcementTests : IDisposable
             NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
             ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
         });
-        var acme = Mock.Of<IIssuerSettings>(settings => settings.Id == "acme");
-        var globex = Mock.Of<IIssuerSettings>(settings => settings.Id == "globex");
+        var acme = Creation("acme", CancellationToken.None);
+        var globex = Creation("globex", CancellationToken.None);
         _ = new ClientInfo("first").CheckClientLicense(acme);
         _ = new ClientInfo("second").CheckClientLicense(acme);
 
