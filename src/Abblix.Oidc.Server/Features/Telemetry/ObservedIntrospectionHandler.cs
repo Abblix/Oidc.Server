@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the back-channel authentication endpoint in a span of <see cref="TelemetryEndpoints.BackChannelAuthentication"/>.
+/// Handles a request of the introspection endpoint in a span of
+/// <see cref="TelemetryEndpoints.Introspection"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedBackChannelAuthenticationHandler(
-    IBackChannelAuthenticationHandler inner,
+internal sealed class ObservedIntrospectionHandler(
+    IIntrospectionHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IBackChannelAuthenticationHandler
+    ITenantAccessor? tenants = null) : IIntrospectionHandler
 {
     /// <inheritdoc />
-    public Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(BackChannelAuthenticationRequest request, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.BackChannelAuthentication,
+    public Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(IntrospectionRequest introspectionRequest, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Introspection,
             instruments,
             tenants,
-            () => inner.HandleAsync(request, clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(introspectionRequest, clientRequest),
+            EndpointObservation.ErrorOf);
 }

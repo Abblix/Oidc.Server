@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,23 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the pushed authorization request endpoint in a span of <see cref="TelemetryEndpoints.PushedAuthorization"/>.
+/// Handles a request of the end session endpoint in a span of
+/// <see cref="TelemetryEndpoints.EndSession"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedPushedAuthorizationHandler(
-    IPushedAuthorizationHandler inner,
+internal sealed class ObservedEndSessionHandler(
+    IEndSessionHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IPushedAuthorizationHandler
+    ITenantAccessor? tenants = null) : IEndSessionHandler
 {
     /// <inheritdoc />
-    public Task<Endpoints.Authorization.Interfaces.AuthorizationResponse> HandleAsync(Model.AuthorizationRequest authorizationRequest, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.PushedAuthorization,
+    public Task<Result<Endpoints.EndSession.Interfaces.IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.EndSession,
             instruments,
             tenants,
-            () => inner.HandleAsync(authorizationRequest, clientRequest),
-            EndpointSpan.ErrorOf,
-            () => (TelemetryTags.ResponseType, EndpointSpan.ResponseTypeOf(authorizationRequest.ResponseType)));
+            () => inner.HandleAsync(endSessionRequest),
+            EndpointObservation.ErrorOf);
 }

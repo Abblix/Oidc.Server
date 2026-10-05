@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the device authorization endpoint in a span of <see cref="TelemetryEndpoints.DeviceAuthorization"/>.
+/// Handles a request of removing a registered client in a span of
+/// <see cref="TelemetryEndpoints.RemoveClient"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedDeviceAuthorizationHandler(
-    IDeviceAuthorizationHandler inner,
+internal sealed class ObservedRemoveClientHandler(
+    IRemoveClientHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IDeviceAuthorizationHandler
+    ITenantAccessor? tenants = null) : IRemoveClientHandler
 {
     /// <inheritdoc />
-    public Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(DeviceAuthorizationRequest request, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.DeviceAuthorization,
+    public Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.RemoveClient,
             instruments,
             tenants,
-            () => inner.HandleAsync(request, clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(clientRequest),
+            EndpointObservation.ErrorOf);
 }

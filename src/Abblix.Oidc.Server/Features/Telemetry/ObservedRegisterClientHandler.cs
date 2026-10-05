@@ -18,13 +18,13 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the client registration endpoint in a span of <see cref="TelemetryEndpoints.RegisterClient"/>,
-/// and counts it by how it ended.
+/// Handles a request of the client registration endpoint in a span of
+/// <see cref="TelemetryEndpoints.RegisterClient"/> and measures it, counting it by how it ended.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedRegisterClientHandler(
+internal sealed class ObservedRegisterClientHandler(
     IRegisterClientHandler inner,
     OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IRegisterClientHandler
@@ -35,12 +35,12 @@ internal sealed class TracedRegisterClientHandler(
         var outcome = TelemetryOutcomes.Failed;
         try
         {
-            var result = await EndpointSpan.RunAsync(
+            var result = await EndpointObservation.RunAsync(
                 TelemetryEndpoints.RegisterClient,
                 instruments,
                 tenants,
                 () => inner.HandleAsync(clientRegistrationRequest),
-                EndpointSpan.ErrorOf);
+                EndpointObservation.ErrorOf);
 
             outcome = result.TryGetSuccess(out _) ? TelemetryOutcomes.Success : TelemetryOutcomes.Refused;
             return result;

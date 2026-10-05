@@ -39,7 +39,7 @@ public static class SessionServiceCollectionExtensions
     internal static IServiceCollection AddCheckSessionEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<ICheckSessionHandler, CheckSessionHandler>();
-        services.AddTelemetryDecorator<ICheckSessionHandler, TracedCheckSessionHandler>();
+        services.AddTelemetryDecorator<ICheckSessionHandler, ObservedCheckSessionHandler>();
         return services;
     }
 
@@ -54,7 +54,7 @@ public static class SessionServiceCollectionExtensions
     {
         services.AddEndSessionContextValidators();
         services.TryAddScoped<IEndSessionHandler, EndSessionHandler>();
-        services.AddTelemetryDecorator<IEndSessionHandler, TracedEndSessionHandler>();
+        services.AddTelemetryDecorator<IEndSessionHandler, ObservedEndSessionHandler>();
         services.TryAddScoped<IEndSessionRequestValidator, EndSessionRequestValidator>();
         services.TryAddScoped<IEndSessionRequestProcessor, EndSessionRequestProcessor>();
         return services;

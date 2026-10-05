@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Runs an endpoint's handling in a span named after the endpoint, closed with the status its outcome tells, and
 /// records the request into the server's metrics.
 /// </summary>
-internal static class EndpointSpan
+internal static class EndpointObservation
 {
     /// <summary>
     /// Runs <paramref name="handle"/> in a span of <paramref name="endpoint"/> and records how long it took, how it

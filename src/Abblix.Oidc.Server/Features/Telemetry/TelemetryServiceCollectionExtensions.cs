@@ -18,8 +18,8 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 internal static class TelemetryServiceCollectionExtensions
 {
     /// <summary>
-    /// Wraps the registered <typeparamref name="THandler"/> in <typeparamref name="TDecorator"/>, once however often the
-    /// registration method of the service runs.
+    /// Wraps the registered <typeparamref name="THandler"/> in <typeparamref name="TDecorator"/>, once however often
+    /// the registration method of the service runs.
     /// </summary>
     public static IServiceCollection AddTelemetryDecorator<THandler, TDecorator>(this IServiceCollection services)
         where THandler : class

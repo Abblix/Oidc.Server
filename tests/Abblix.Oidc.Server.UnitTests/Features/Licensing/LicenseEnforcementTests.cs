@@ -87,12 +87,12 @@ public sealed class LicenseEnforcementTests : IDisposable
         var meters = services.GetRequiredService<IMeterFactory>();
         using var measured = new MeasurementRecorder(meters);
 
-        await Assert.ThrowsAsync<LicenseViolationException>(() => EndpointSpan.RunAsync(
+        await Assert.ThrowsAsync<LicenseViolationException>(() => EndpointObservation.RunAsync(
             TelemetryEndpoints.UserInfo,
             new OidcInstruments(meters),
             null,
             () => Task.FromResult(LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings)),
-            EndpointSpan.NoError));
+            EndpointObservation.NoError));
 
         var refusal = Assert.Single(measured.Of(OidcMetrics.LicenseRefusals));
         Assert.Equal(LicenseRefusalReasons.IssuerNotAllowed, refusal[TelemetryTags.LicenseRefusalReason]);

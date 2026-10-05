@@ -35,7 +35,7 @@ public static class DeviceAuthorizationServiceCollectionExtensions
     {
         services.AddDeviceAuthorizationContextValidators();
         services.TryAddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
-        services.AddTelemetryDecorator<IDeviceAuthorizationHandler, TracedDeviceAuthorizationHandler>();
+        services.AddTelemetryDecorator<IDeviceAuthorizationHandler, ObservedDeviceAuthorizationHandler>();
         services.TryAddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>();
         services.TryAddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
 

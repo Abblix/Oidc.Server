@@ -45,7 +45,7 @@ public sealed class EndpointSpanRegistrationTests
         var decorators = typeof(TelemetryDecoratorsRegistered).Assembly
             .GetTypes()
             .Where(type => type.Namespace == typeof(TelemetryDecoratorsRegistered).Namespace &&
-                           type.Name.StartsWith("Traced", System.StringComparison.Ordinal))
+                           type.Name.StartsWith("Observed", System.StringComparison.Ordinal))
             .ToArray();
         Assert.Equal(15, decorators.Length);
 

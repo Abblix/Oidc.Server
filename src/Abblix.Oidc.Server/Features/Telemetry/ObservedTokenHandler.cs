@@ -7,7 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +19,28 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of removing a registered client in a span of <see cref="TelemetryEndpoints.RemoveClient"/>.
+/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="grants">Tells the grant types the server supports, the only ones a span names.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedRemoveClientHandler(
-    IRemoveClientHandler inner,
+internal sealed class ObservedTokenHandler(
+    ITokenHandler inner,
+    IAuthorizationGrantHandler grants,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IRemoveClientHandler
+    ITenantAccessor? tenants = null) : ITokenHandler
 {
     /// <inheritdoc />
-    public Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.RemoveClient,
+    public Task<Result<TokenIssued, OidcError>> HandleAsync(
+        TokenRequest tokenRequest,
+        ClientRequest clientRequest,
+        CancellationToken cancellationToken)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Token,
             instruments,
             tenants,
-            () => inner.HandleAsync(clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
+            EndpointObservation.ErrorOf,
+            () => (TelemetryTags.GrantType, EndpointObservation.GrantTypeOf(tokenRequest.GrantType, grants.GrantTypesSupported)));
 }

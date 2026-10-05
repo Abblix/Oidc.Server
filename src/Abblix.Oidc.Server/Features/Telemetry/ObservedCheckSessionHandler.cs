@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the userinfo endpoint in a span of <see cref="TelemetryEndpoints.UserInfo"/>.
+/// Handles a request of the check session iframe in a span of
+/// <see cref="TelemetryEndpoints.CheckSession"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedUserInfoHandler(
-    IUserInfoHandler inner,
+internal sealed class ObservedCheckSessionHandler(
+    ICheckSessionHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IUserInfoHandler
+    ITenantAccessor? tenants = null) : ICheckSessionHandler
 {
     /// <inheritdoc />
-    public Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.UserInfo,
+    public Task<CheckSessionResponse> HandleAsync()
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.CheckSession,
             instruments,
             tenants,
-            () => inner.HandleAsync(userInfoRequest, clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(),
+            EndpointObservation.NoError);
 }

@@ -84,8 +84,8 @@ public sealed class EndpointSpanTests : IDisposable
     }
 
     private Task<Result<TokenIssued, OidcError>> Token(Result<TokenIssued, OidcError> result)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(result), EndpointSpan.ErrorOf);
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(result), EndpointObservation.ErrorOf);
 
     private static TokenIssued Issued => new(
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
@@ -130,8 +130,8 @@ public sealed class EndpointSpanTests : IDisposable
         Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse error = new AuthorizationError(
             request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null);
 
-        var span = await SpanOf(() => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Authorize, _instruments, null, () => Task.FromResult(error), EndpointSpan.ErrorOf));
+        var span = await SpanOf(() => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Authorize, _instruments, null, () => Task.FromResult(error), EndpointObservation.ErrorOf));
 
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         Assert.Equal(ErrorCodes.AccessDenied, span.GetTagItem(TelemetryTags.Error));
@@ -141,12 +141,12 @@ public sealed class EndpointSpanTests : IDisposable
     public async Task AnException_ClosesTheSpanWithItsTypeAndPassesOn()
     {
         var span = await SpanOf(async () => await Assert.ThrowsAsync<InvalidOperationException>(
-            () => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
+            () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
                 null,
                 () => throw new InvalidOperationException("The license terms violation detected"),
-                EndpointSpan.ErrorOf)));
+                EndpointObservation.ErrorOf)));
 
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         Assert.Equal(typeof(InvalidOperationException).FullName, span.GetTagItem(TelemetryTags.ErrorType));
@@ -158,8 +158,8 @@ public sealed class EndpointSpanTests : IDisposable
         var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
         var tenants = Mock.Of<ITenantAccessor>(accessor => accessor.Current == served);
 
-        var span = await SpanOf(() => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Configuration, _instruments, tenants, () => Task.FromResult(0), EndpointSpan.NoError));
+        var span = await SpanOf(() => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Configuration, _instruments, tenants, () => Task.FromResult(0), EndpointObservation.NoError));
 
         Assert.Equal("acme", span.GetTagItem(TelemetryTags.Tenant));
     }
@@ -175,6 +175,7 @@ public sealed class EndpointSpanTests : IDisposable
     [Theory]
     [InlineData(GrantTypes.AuthorizationCode, GrantTypes.AuthorizationCode)]
     [InlineData("urn:example:grant-of-the-client", null)]
+    [InlineData("Authorization_Code", null)]
     public async Task ATokenSpanNamesOnlyAGrantTypeTheServerSupports(string requested, string? named)
     {
         var inner = new Mock<ITokenHandler>();
@@ -182,7 +183,7 @@ public sealed class EndpointSpanTests : IDisposable
             .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Issued);
         var grants = Mock.Of<IAuthorizationGrantHandler>(g => g.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode });
-        var traced = new TracedTokenHandler(inner.Object, grants, _instruments);
+        var traced = new ObservedTokenHandler(inner.Object, grants, _instruments);
 
         var span = await SpanOf(() => traced.HandleAsync(
             new TokenRequest { GrantType = requested }, new ClientRequest(), CancellationToken.None));
@@ -203,5 +204,5 @@ public sealed class EndpointSpanTests : IDisposable
     [InlineData(new[] { ResponseTypes.Code, "a-value-of-the-client" }, null)]
     [InlineData(new string[0], null)]
     public void AResponseTypeIsNamedOnlyWhenTheProtocolDefinesEachValue(string[] responseType, string? named)
-        => Assert.Equal(named, EndpointSpan.ResponseTypeOf(responseType));
+        => Assert.Equal(named, EndpointObservation.ResponseTypeOf(responseType));
 }

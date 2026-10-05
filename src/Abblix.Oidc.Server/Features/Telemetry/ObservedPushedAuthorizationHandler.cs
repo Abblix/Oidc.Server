@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,24 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the check session iframe in a span of <see cref="TelemetryEndpoints.CheckSession"/>.
+/// Handles a request of the pushed authorization request endpoint in a span of
+/// <see cref="TelemetryEndpoints.PushedAuthorization"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedCheckSessionHandler(
-    ICheckSessionHandler inner,
+internal sealed class ObservedPushedAuthorizationHandler(
+    IPushedAuthorizationHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : ICheckSessionHandler
+    ITenantAccessor? tenants = null) : IPushedAuthorizationHandler
 {
     /// <inheritdoc />
-    public Task<CheckSessionResponse> HandleAsync()
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.CheckSession,
+    public Task<Endpoints.Authorization.Interfaces.AuthorizationResponse> HandleAsync(Model.AuthorizationRequest authorizationRequest, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.PushedAuthorization,
             instruments,
             tenants,
-            () => inner.HandleAsync(),
-            EndpointSpan.NoError);
+            () => inner.HandleAsync(authorizationRequest, clientRequest),
+            EndpointObservation.ErrorOf,
+            () => (TelemetryTags.ResponseType, EndpointObservation.ResponseTypeOf(authorizationRequest.ResponseType)));
 }

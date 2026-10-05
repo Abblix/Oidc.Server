@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.EndSession;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the end session endpoint in a span of <see cref="TelemetryEndpoints.EndSession"/>.
+/// Handles a request of the device authorization endpoint in a span of
+/// <see cref="TelemetryEndpoints.DeviceAuthorization"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedEndSessionHandler(
-    IEndSessionHandler inner,
+internal sealed class ObservedDeviceAuthorizationHandler(
+    IDeviceAuthorizationHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IEndSessionHandler
+    ITenantAccessor? tenants = null) : IDeviceAuthorizationHandler
 {
     /// <inheritdoc />
-    public Task<Result<Endpoints.EndSession.Interfaces.IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.EndSession,
+    public Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(DeviceAuthorizationRequest request, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.DeviceAuthorization,
             instruments,
             tenants,
-            () => inner.HandleAsync(endSessionRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(request, clientRequest),
+            EndpointObservation.ErrorOf);
 }

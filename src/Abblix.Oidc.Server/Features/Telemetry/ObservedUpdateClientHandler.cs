@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the revocation endpoint in a span of <see cref="TelemetryEndpoints.Revocation"/>.
+/// Handles a request of updating a registered client's configuration in a span of
+/// <see cref="TelemetryEndpoints.UpdateClient"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedRevocationHandler(
-    IRevocationHandler inner,
+internal sealed class ObservedUpdateClientHandler(
+    IUpdateClientHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IRevocationHandler
+    ITenantAccessor? tenants = null) : IUpdateClientHandler
 {
     /// <inheritdoc />
-    public Task<Result<TokenRevoked, OidcError>> HandleAsync(RevocationRequest revocationRequest, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Revocation,
+    public Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(UpdateClientRequest request)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.UpdateClient,
             instruments,
             tenants,
-            () => inner.HandleAsync(revocationRequest, clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(request),
+            EndpointObservation.ErrorOf);
 }

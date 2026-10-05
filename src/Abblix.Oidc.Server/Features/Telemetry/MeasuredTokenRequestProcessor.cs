@@ -40,8 +40,8 @@ internal sealed class MeasuredTokenRequestProcessor(
         var result = await inner.ProcessAsync(request);
         if (result.TryGetSuccess(out var issued))
         {
-            var grantType = EndpointSpan.GrantTypeOf(request.Model.GrantType, grants.GrantTypesSupported);
-            var tenant = EndpointSpan.TenantOf(tenants);
+            var grantType = EndpointObservation.GrantTypeOf(request.Model.GrantType, grants.GrantTypesSupported);
+            var tenant = EndpointObservation.TenantOf(tenants);
             instruments.TokenIssued(TelemetryTokenTypes.AccessToken, grantType, tenant);
             if (issued.IdToken is not null)
                 instruments.TokenIssued(TelemetryTokenTypes.IdToken, grantType, tenant);

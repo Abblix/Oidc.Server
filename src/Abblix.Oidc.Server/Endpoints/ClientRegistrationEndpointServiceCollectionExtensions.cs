@@ -32,7 +32,7 @@ internal static class ClientRegistrationEndpointServiceCollectionExtensions
         services.TryAddScoped<IInitialAccessTokenService, InitialAccessTokenService>();
 
         services.TryAddScoped<IRegisterClientHandler, RegisterClientHandler>();
-        services.AddTelemetryDecorator<IRegisterClientHandler, TracedRegisterClientHandler>();
+        services.AddTelemetryDecorator<IRegisterClientHandler, ObservedRegisterClientHandler>();
         services.TryAddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>();
         services.TryAddKeyedScoped<IRegisterClientRequestValidator, UpdateClientRegistrationValidator>(UpdateClientRequestValidator.RegistrationKey);
         services.TryAddScoped<IRegisterClientRequestProcessor, RegisterClientRequestProcessor>();

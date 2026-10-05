@@ -63,8 +63,8 @@ public sealed class EndpointMetricsTests : IDisposable
     private Task<Result<TokenIssued, OidcError>> Token(
         Result<TokenIssued, OidcError> result,
         ITenantAccessor? tenants = null)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Token, _instruments, tenants, () => Task.FromResult(result), EndpointSpan.ErrorOf);
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Token, _instruments, tenants, () => Task.FromResult(result), EndpointObservation.ErrorOf);
 
     private static TokenIssued Issued => new(
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
@@ -101,8 +101,8 @@ public sealed class EndpointMetricsTests : IDisposable
     [Fact]
     public async Task AFailedRequest_IsMeasuredAsFailedAndPassesOn()
     {
-        await Assert.ThrowsAsync<TimeoutException>(() => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
-            TelemetryEndpoints.Token, _instruments, null, () => throw new TimeoutException(), EndpointSpan.ErrorOf));
+        await Assert.ThrowsAsync<TimeoutException>(() => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
+            TelemetryEndpoints.Token, _instruments, null, () => throw new TimeoutException(), EndpointObservation.ErrorOf));
 
         var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
         Assert.Equal(TelemetryOutcomes.Failed, request[TelemetryTags.Outcome]);
@@ -138,12 +138,12 @@ public sealed class EndpointMetricsTests : IDisposable
         var spent = new TooManyRequestsError("Too many", RetryAfter: null, CallerRateLimiters.AuthenticationFailures);
 
         await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
-            () => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
+            () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
                 null,
                 () => throw new TooManyAuthenticationFailuresException(spent),
-                EndpointSpan.ErrorOf));
+                EndpointObservation.ErrorOf));
 
         var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
         Assert.Equal(TelemetryOutcomes.Refused, request[TelemetryTags.Outcome]);
@@ -159,12 +159,12 @@ public sealed class EndpointMetricsTests : IDisposable
     public async Task ALicenseRefusal_IsCountedByItsReasonAndPassesOn(string reason)
     {
         await Assert.ThrowsAnyAsync<InvalidOperationException>(
-            () => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
+            () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
                 null,
                 () => throw new LicenseViolationException(reason),
-                EndpointSpan.ErrorOf));
+                EndpointObservation.ErrorOf));
 
         var refusal = Assert.Single(_measured.Of(OidcMetrics.LicenseRefusals));
         Assert.Equal(reason, refusal[TelemetryTags.LicenseRefusalReason]);
@@ -257,7 +257,7 @@ public sealed class EndpointMetricsTests : IDisposable
                 AccessToken = AToken,
                 IdToken = AToken,
             });
-        var traced = new TracedAuthorizationHandler(inner.Object, _instruments);
+        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments);
 
         await traced.HandleAsync(request);
 
@@ -276,7 +276,7 @@ public sealed class EndpointMetricsTests : IDisposable
             .SetupSequence(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
             .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token"))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRedirectUri, "Refused"));
-        var traced = new TracedRegisterClientHandler(inner.Object, _instruments);
+        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
 
         await traced.HandleAsync(new ClientRegistrationRequest());
         await traced.HandleAsync(new ClientRegistrationRequest());
@@ -293,7 +293,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TimeoutException());
-        var traced = new TracedRegisterClientHandler(inner.Object, _instruments);
+        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
 
         await Assert.ThrowsAsync<TimeoutException>(() => traced.HandleAsync(new ClientRegistrationRequest()));
 

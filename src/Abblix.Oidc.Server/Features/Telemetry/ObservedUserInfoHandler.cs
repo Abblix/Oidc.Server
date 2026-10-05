@@ -7,8 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Token.Grants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -19,28 +18,22 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/>.
+/// Handles a request of the userinfo endpoint in a span of <see cref="TelemetryEndpoints.UserInfo"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
-/// <param name="grants">Tells the grant types the server supports, the only ones a span names.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedTokenHandler(
-    ITokenHandler inner,
-    IAuthorizationGrantHandler grants,
+internal sealed class ObservedUserInfoHandler(
+    IUserInfoHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : ITokenHandler
+    ITenantAccessor? tenants = null) : IUserInfoHandler
 {
     /// <inheritdoc />
-    public Task<Result<TokenIssued, OidcError>> HandleAsync(
-        TokenRequest tokenRequest,
-        ClientRequest clientRequest,
-        CancellationToken cancellationToken)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Token,
+    public Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.UserInfo,
             instruments,
             tenants,
-            () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
-            EndpointSpan.ErrorOf,
-            () => (TelemetryTags.GrantType, EndpointSpan.GrantTypeOf(tokenRequest.GrantType, grants.GrantTypesSupported)));
+            () => inner.HandleAsync(userInfoRequest, clientRequest),
+            EndpointObservation.ErrorOf);
 }

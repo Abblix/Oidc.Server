@@ -48,7 +48,7 @@ public static class TokenEndpointServiceCollectionExtensions
          services.TryAddScoped<ITokenAuthorizationContextEvaluator, TokenAuthorizationContextEvaluator>();
 
          services.TryAddScoped<ITokenHandler, TokenHandler>();
-         services.AddTelemetryDecorator<ITokenHandler, TracedTokenHandler>();
+         services.AddTelemetryDecorator<ITokenHandler, ObservedTokenHandler>();
          services.TryAddScoped<ITokenRequestValidator, TokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
          services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();

@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,22 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of updating a registered client's configuration in a span of <see cref="TelemetryEndpoints.UpdateClient"/>.
+/// Handles a request of the back-channel authentication endpoint in a span of
+/// <see cref="TelemetryEndpoints.BackChannelAuthentication"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedUpdateClientHandler(
-    IUpdateClientHandler inner,
+internal sealed class ObservedBackChannelAuthenticationHandler(
+    IBackChannelAuthenticationHandler inner,
     OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : IUpdateClientHandler
+    ITenantAccessor? tenants = null) : IBackChannelAuthenticationHandler
 {
     /// <inheritdoc />
-    public Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(UpdateClientRequest request)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.UpdateClient,
+    public Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(BackChannelAuthenticationRequest request, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.BackChannelAuthentication,
             instruments,
             tenants,
-            () => inner.HandleAsync(request),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(request, clientRequest),
+            EndpointObservation.ErrorOf);
 }
