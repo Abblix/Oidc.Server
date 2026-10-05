@@ -31,7 +31,7 @@ internal static class BackChannelAuthenticationRequestMapper
         // Ping/push delivery fields - absent for poll mode, kept null-distinct via the
         // proto3 optional accessors so the round-trip never coerces null into "".
         if (source.ClientNotificationEndpoint is not null)
-            proto.ClientNotificationEndpoint = source.ClientNotificationEndpoint.ToString();
+            proto.ClientNotificationEndpoint = source.ClientNotificationEndpoint.OriginalString;
 
         if (source.ClientNotificationToken is not null)
             proto.ClientNotificationToken = source.ClientNotificationToken;
