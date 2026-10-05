@@ -40,7 +40,7 @@ public partial class SessionLogoutNotifier(
         var tasks = new List<Task>();
         foreach (var clientId in await sessionClients.GetClientsAsync(sessionId))
         {
-            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
+            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
             if (clientInfo == null)
                 continue;
 

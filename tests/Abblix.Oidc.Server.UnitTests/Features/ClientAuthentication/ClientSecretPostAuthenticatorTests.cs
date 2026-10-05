@@ -37,8 +37,7 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
             logger.Object,
             clientInfoProvider.Object,
             timeProvider ?? TimeProvider.System,
-            hashService,
-            SingleIssuer.Settings);
+            hashService);
     }
 
     protected override ClientRequest PrepareValidRequest(string clientId, string clientSecret)

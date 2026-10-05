@@ -61,45 +61,40 @@ public static partial class LicenseChecker
         => LicenseManager.ReportLoadedLicenses(utcNow);
 
     /// <summary>
-    /// Asynchronously applies licensing checks to a task that returns client information.
+    /// Applies the license's terms to the issuer a token is issued under and to the client it is issued to.
     /// </summary>
-    /// <param name="clientInfo">The task returning client information to be checked against licensing constraints.
-    /// </param>
-    /// <param name="issuer">The settings of the issuer the client is registered with.</param>
-    /// <returns>A task that, upon completion, returns the client information if it complies with the licensing
-    /// constraints; otherwise, logs an error.</returns>
-    public static async Task<ClientInfo?> WithLicenseCheck(this Task<ClientInfo?> clientInfo, IIssuerSettings issuer)
-        => (await clientInfo).CheckClientLicense(issuer);
-
-    /// <summary>
-    /// Applies licensing checks to client information.
-    /// </summary>
-    /// <param name="clientInfo">The client information to check against licensing constraints.</param>
-    /// <param name="issuer">The settings of the issuer the client is registered with.</param>
-    /// <returns>The client information if it complies with the licensing constraints; otherwise, logs an error.
-    /// </returns>
+    /// <param name="issuer">The issuer the token names, checked as <see cref="CheckIssuer"/> checks it.</param>
+    /// <param name="settings">The settings of that issuer.</param>
+    /// <param name="clientInfo">The client the token is issued to.</param>
+    /// <returns>The issuer, when the terms allow both.</returns>
     /// <remarks>
-    /// A client is counted once for each issuer it is registered with, since two tenants may each register a client
-    /// under one id. The issuer is the one the deployment declares rather than the one a request names, which a
-    /// forged Host header could vary to push the count past the limit. A client stops counting once its issuer is
-    /// released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with a
-    /// catalog of tenants of the host's own, which tells no release, only a client removed through registration
+    /// A client is counted where a token is issued to it, with the issuer the token names, so every client in use is
+    /// counted and two tenants registering a client under one id take two places. A client stops counting once its
+    /// issuer is released, so a deployment whose tenants come and go counts the clients of the tenants it serves; with
+    /// a catalog of tenants of the host's own, which tells no release, only a client removed through registration
     /// leaves the count. On a server without tenants, a client removed through registration or dropped by a reload of
     /// the settings, served by the reloadable client store, leaves the count.
     /// </remarks>
-    public static ClientInfo? CheckClientLicense(this ClientInfo? clientInfo, IIssuerSettings issuer)
+    /// <exception cref="InvalidOperationException">The issuer is beyond the license's terms, or the client is beyond
+    /// its client limit by more than the margin.</exception>
+    public static string CheckLicense(string issuer, IIssuerSettings settings, ClientInfo clientInfo)
     {
-        // Guard clauses: nothing is counted for an absent client, or under a license that sets no client limit
-        if (clientInfo == null)
-            return clientInfo;
+        CheckIssuer(issuer, settings);
+        CheckClient((VouchedId(settings) ?? issuer, clientInfo.ClientId), ReleasedOf(settings));
+        return issuer;
+    }
 
+    /// <summary>
+    /// Counts <paramref name="client"/>, and refuses it past the client limit by more than the margin.
+    /// </summary>
+    private static void CheckClient((string IssuerId, string ClientId) client, CancellationToken released)
+    {
         var utcNow = TimeProvider.System.GetUtcNow();
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
         if (!currentLicense.ClientLimit.HasValue)
-            return clientInfo;
+            return;
 
         _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), Counted>();
-        var client = (ClientIssuerOf(issuer), clientInfo.ClientId);
         if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
             !_knownClientIds.ContainsKey(client))
         {
@@ -112,10 +107,10 @@ public static partial class LicenseChecker
                     Named(client));
             }
 
-            return null; // Prevents processing of clients exceeding the limit by more than 30%
+            throw new InvalidOperationException("The license terms violation detected");
         }
 
-        Count(_knownClientIds, client, clientInfo.ClientId, CountedAs(string.Empty, issuer).Released);
+        Count(_knownClientIds, client, client.ClientId, released);
         if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
             LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
         {
@@ -124,8 +119,6 @@ public static partial class LicenseChecker
                 currentLicense.ClientLimit.Value,
                 _knownClientIds.Keys.Select(Named));
         }
-
-        return clientInfo;
     }
 
     /// <summary>
@@ -222,23 +215,28 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// What an issuer is counted under and what lets it go: its tenant and the tenant's release when the settings are
-    /// the server's own, so a tenant moved to another address keeps one place; otherwise the address itself, counted
-    /// for the life of the process.
+    /// The tenant the server's own settings vouch for: empty on a server without tenants, and null for settings a
+    /// host registers or a tenant a catalog of the host's own resolved, which are counted by the issuer they serve.
     /// </summary>
     /// <remarks>
-    /// Neither is taken from settings a host registers: their answer would otherwise take every issuer off the count,
-    /// or count every issuer as one.
+    /// Settings a host registers answer for themselves, and taking their word would let one answer count every
+    /// issuer, or every client of an id, as one.
     /// </remarks>
-    private static (string Key, CancellationToken Released) CountedAs(string issuer, IIssuerSettings settings)
-        => settings is ILicensedIssuer { Id.Length: > 0 } own ? (own.Id, own.Released) : (issuer, CancellationToken.None);
+    private static string? VouchedId(IIssuerSettings settings) => (settings as ILicensedIssuer)?.VouchedId;
 
     /// <summary>
-    /// The issuer a client is counted with: its tenant when the settings are the server's own, so a client id two
-    /// tenants share takes two places; otherwise none, as on a server serving one issuer.
+    /// What lets an issuer and its clients go: the release the server's own settings tell, and none for any other,
+    /// whose issuers count for the life of the process.
     /// </summary>
-    internal static string ClientIssuerOf(IIssuerSettings settings)
-        => settings is ILicensedIssuer own ? own.Id : string.Empty;
+    private static CancellationToken ReleasedOf(IIssuerSettings settings)
+        => settings is ILicensedIssuer own ? own.Released : CancellationToken.None;
+
+    /// <summary>
+    /// The issuer the clients of <paramref name="settings"/> are counted with, when the server can tell it without a
+    /// token: the tenant its own settings vouch for, or none on a server without tenants. Null for any other
+    /// settings, whose clients are counted with the issuer each token names and are not taken off the count.
+    /// </summary>
+    internal static string? ClientIssuerOf(IIssuerSettings settings) => VouchedId(settings);
 
     /// <summary>
     /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
@@ -301,8 +299,8 @@ public static partial class LicenseChecker
         if (currentLicense.IssuerLimit.HasValue)
         {
             _knownIssuers ??= new ConcurrentDictionary<string, Counted>(StringComparer.Ordinal);
-            var (key, released) = CountedAs(issuer, settings);
-            Count(_knownIssuers, key, issuer, released);
+            var key = VouchedId(settings) is { Length: > 0 } tenantId ? tenantId : issuer;
+            Count(_knownIssuers, key, issuer, ReleasedOf(settings));
             if (currentLicense.IssuerLimit.Value < _knownIssuers.Count)
             {
                 // The decision is taken first and stands on its own; only the record of it is throttled. This

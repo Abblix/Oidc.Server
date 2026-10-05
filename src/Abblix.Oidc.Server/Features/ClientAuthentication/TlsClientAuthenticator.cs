@@ -26,8 +26,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 public partial class TlsClientAuthenticator(
     ILogger<TlsClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider,
-    IClientKeysProvider clientKeysProvider,
-    IIssuerSettings issuerSettings) : IClientAuthenticator
+    IClientKeysProvider clientKeysProvider) : IClientAuthenticator
 {
     /// <summary>
     /// Gets the collection of client authentication methods supported by this authenticator.
@@ -74,7 +73,7 @@ public partial class TlsClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
+        var client = await clientInfoProvider.TryFindClientAsync(clientId);
         if (client == null)
         {
             LogClientNotFound(clientId);

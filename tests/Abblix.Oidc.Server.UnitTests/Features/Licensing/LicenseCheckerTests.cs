@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
@@ -46,135 +47,57 @@ public class LicenseCheckerTests
 
 
     /// <summary>
-    /// Verifies that CheckClientLicense returns null when clientInfo parameter is null.
+    /// Verifies that a token is issued to distinct clients under a license that sets no client limit.
     /// </summary>
     [Fact]
-    public void CheckClientLicense_NullClientInfo_ReturnsNull()
+    public void CheckLicense_WithoutClientLimit_AllowsClients()
     {
-        // Arrange
-        ClientInfo? clientInfo = null;
-
-        // Act
-        var result = clientInfo.CheckClientLicense(SingleIssuer.Settings);
-
-        // Assert
-        Assert.Null(result);
-    }
-
-    /// <summary>
-    /// Verifies that CheckClientLicense serves distinct clients under a license that sets no client limit.
-    /// </summary>
-    [Fact]
-    public void CheckClientLicense_WithoutClientLimit_AllowsClients()
-    {
-        // Static state in LicenseChecker accumulates across tests; under default capacity
-        // pressure, prior pollution can make new clients return null. Register a permissive
-        // test fixture so this positive-path assertion is meaningful regardless of state.
+        // Static state in LicenseChecker accumulates across tests; register a permissive test fixture so this
+        // positive-path assertion is meaningful regardless of state.
         AddTestLicense();
 
-        // Arrange - use unique IDs to avoid colliding with prior tests' known IDs
         var uniquePrefix = Guid.NewGuid().ToString("N")[..8];
-        var client1 = new ClientInfo($"{uniquePrefix}-test-client-1");
-        var client2 = new ClientInfo($"{uniquePrefix}-test-client-2");
 
-        // Act
-        var result1 = client1.CheckClientLicense(SingleIssuer.Settings);
-        var result2 = client2.CheckClientLicense(SingleIssuer.Settings);
-
-        // Assert
-        Assert.NotNull(result1);
-        Assert.Equal(client1.ClientId, result1.ClientId);
-        Assert.NotNull(result2);
-        Assert.Equal(client2.ClientId, result2.ClientId);
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
+            TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo($"{uniquePrefix}-test-client-1")));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
+            TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo($"{uniquePrefix}-test-client-2")));
     }
 
     /// <summary>
-    /// Verifies that CheckClientLicense allows the same client multiple times (idempotent).
+    /// Verifies that tokens are issued to the same client again and again.
     /// </summary>
     [Fact]
-    public void CheckClientLicense_SameClientMultipleTimes_AllowsRepeatedAccess()
+    public void CheckLicense_SameClientMultipleTimes_AllowsRepeatedAccess()
     {
         AddTestLicense();
-
-        // Arrange
         var clientId = $"test-client-repeated-{Guid.NewGuid()}";
-        var client1 = new ClientInfo(clientId);
-        var client2 = new ClientInfo(clientId);
 
-        // Act
-        var result1 = client1.CheckClientLicense(SingleIssuer.Settings);
-        var result2 = client2.CheckClientLicense(SingleIssuer.Settings);
+        LicenseChecker.CheckLicense(TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo(clientId));
 
-        // Assert
-        Assert.NotNull(result1);
-        Assert.Equal(clientId, result1.ClientId);
-        Assert.NotNull(result2);
-        Assert.Equal(clientId, result2.ClientId);
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
+            TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo(clientId)));
     }
 
     /// <summary>
-    /// Verifies that CheckClientLicense allows unlimited clients when ClientLimit is null.
+    /// Verifies that tokens are issued to every client when the license sets no client limit.
     /// </summary>
     [Fact]
-    public void CheckClientLicense_UnlimitedLicense_AllowsAllClients()
+    public void CheckLicense_UnlimitedLicense_AllowsAllClients()
     {
-        // Arrange - Add unlimited license
-        var unlimitedLicense = new License
+        LicenseChecker.AddLicense(new License
         {
-            ClientLimit = null, // No limit
+            ClientLimit = null,
             NotBefore = TimeProvider.System.GetUtcNow().AddMinutes(-10),
             ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(10)
-        };
-        LicenseChecker.AddLicense(unlimitedLicense);
-
+        });
         var uniquePrefix = Guid.NewGuid().ToString("N")[..8];
-        var clients = new List<ClientInfo>();
+
         for (var i = 1; i <= 10; i++)
         {
-            clients.Add(new ClientInfo($"{uniquePrefix}-unlimited-{i}"));
+            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckLicense(
+                TestLicense.Issuer, SingleIssuer.Settings, new ClientInfo($"{uniquePrefix}-unlimited-{i}")));
         }
-
-        // Act
-        var results = clients.Select(c => c.CheckClientLicense(SingleIssuer.Settings)).ToList();
-
-        // Assert - All clients should be allowed
-        Assert.All(results, result => Assert.NotNull(result));
-    }
-
-    /// <summary>
-    /// Verifies that WithLicenseCheck extension method works correctly.
-    /// </summary>
-    [Fact]
-    public async Task WithLicenseCheck_ValidClient_ReturnsClient()
-    {
-        AddTestLicense();
-
-        // Arrange
-        var clientId = $"async-client-{Guid.NewGuid()}";
-        var clientTask = Task.FromResult<ClientInfo?>(new ClientInfo(clientId));
-
-        // Act
-        var result = await clientTask.WithLicenseCheck(SingleIssuer.Settings);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(clientId, result.ClientId);
-    }
-
-    /// <summary>
-    /// Verifies that WithLicenseCheck extension method returns null for null client.
-    /// </summary>
-    [Fact]
-    public async Task WithLicenseCheck_NullClient_ReturnsNull()
-    {
-        // Arrange
-        var clientTask = Task.FromResult<ClientInfo?>(null);
-
-        // Act
-        var result = await clientTask.WithLicenseCheck(SingleIssuer.Settings);
-
-        // Assert
-        Assert.Null(result);
     }
 
     // CheckIssuer is exercised in LicenseEnforcementTests, which runs alone and starts from a known point -

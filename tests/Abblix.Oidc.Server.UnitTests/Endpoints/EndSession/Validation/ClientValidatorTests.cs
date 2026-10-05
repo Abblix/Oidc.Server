@@ -32,7 +32,7 @@ public class ClientValidatorTests
     {
         _logger = new Mock<ILogger<ClientValidator>>();
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        _validator = new ClientValidator(_logger.Object, _clientInfoProvider.Object, SingleIssuer.Settings);
+        _validator = new ClientValidator(_logger.Object, _clientInfoProvider.Object);
     }
 
     private static EndSessionValidationContext CreateContext(string? clientId = TestConstants.DefaultClientId)

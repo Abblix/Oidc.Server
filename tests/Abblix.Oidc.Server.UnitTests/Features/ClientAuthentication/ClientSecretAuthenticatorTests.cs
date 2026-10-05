@@ -55,7 +55,7 @@ public class ClientSecretAuthenticatorTests
         IClientInfoProvider clientInfoProvider,
         TimeProvider clock,
         IHashService hashService)
-        : ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService, SingleIssuer.Settings)
+        : ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService)
     {
         public Task<ClientInfo?> TestTryAuthenticateAsync(string? clientId, string? secret, string authMethod)
             => TryAuthenticateAsync(clientId, secret, authMethod);

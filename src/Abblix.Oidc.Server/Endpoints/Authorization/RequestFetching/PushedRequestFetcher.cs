@@ -140,7 +140,7 @@ public class PushedRequestFetcher(
         if (clientId is null)
             return false;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo is null)
             return false;
 

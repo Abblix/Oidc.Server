@@ -46,6 +46,9 @@ public sealed class TenantIssuerSettings(
     public CancellationToken Released => StoreTenantCatalog.ReleasedOf(catalog, Tenant);
 
     /// <inheritdoc />
+    string? ILicensedIssuer.VouchedId => catalog is StoreTenantCatalog ? Tenant.Id : null;
+
+    /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => Tenant.Clients;
 
     /// <summary>

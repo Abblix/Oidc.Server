@@ -86,11 +86,11 @@ internal partial class ReloadableClientInfoStorage(
     private void ReleaseDropped(IReadOnlyCollection<ClientInfo> clients)
     {
         var former = Interlocked.Exchange(ref _formerlyConfigured, clients);
-        if (former is null)
+        if (former is null || LicenseChecker.ClientIssuerOf(settings) is not { } issuerId)
             return;
 
         LicenseChecker.ReleaseClients(
-            LicenseChecker.ClientIssuerOf(settings),
+            issuerId,
             former
                 .Select(client => client.ClientId)
                 .Except(clients.Select(client => client.ClientId), StringComparer.Ordinal)

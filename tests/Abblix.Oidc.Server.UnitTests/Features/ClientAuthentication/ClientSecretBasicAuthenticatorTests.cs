@@ -42,8 +42,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
             logger.Object,
             clientInfoProvider.Object,
             timeProvider ?? TimeProvider.System,
-            hashService,
-            SingleIssuer.Settings);
+            hashService);
     }
 
     protected override ClientRequest PrepareValidRequest(string clientId, string clientSecret)

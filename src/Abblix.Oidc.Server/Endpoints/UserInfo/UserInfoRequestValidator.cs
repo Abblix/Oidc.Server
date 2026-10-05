@@ -37,14 +37,12 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
 /// <param name="mtlsValidator">RFC 8705 section 3 mutual-TLS resource-server-side validator that enforces
 /// the certificate binding when the access token carries a <c>cnf.x5t#S256</c> confirmation.</param>
-/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,
 	IClientInfoProvider clientInfoProvider,
 	IDPoPUserInfoValidator dpopValidator,
-	IMtlsUserInfoValidator mtlsValidator,
-	IIssuerSettings issuerSettings) : IUserInfoRequestValidator
+	IMtlsUserInfoValidator mtlsValidator) : IUserInfoRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
@@ -116,7 +114,7 @@ public class UserInfoRequestValidator(
 		// the real subject with the client's sector, so AuthenticateByAccessTokenAsync needs the ClientInfo.
 		var clientId = token.Payload.ClientId;
 		var clientInfo = clientId is not null
-			? await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings)
+			? await clientInfoProvider.TryFindClientAsync(clientId)
 			: null;
 
 		if (clientInfo == null)

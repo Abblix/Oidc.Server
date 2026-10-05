@@ -9,16 +9,17 @@
 namespace Abblix.Oidc.Server.Features.Licensing;
 
 /// <summary>
-/// The settings of an issuer whose tenant and release the license takes as they say. Only the server's own settings
-/// implement it, and settings a host registers cannot, so what a host's implementation answers never takes an issuer
+/// The settings of an issuer that the license takes at their word about the tenant they serve and its release. Only
+/// the server's own settings implement it; settings a host registers do not, so what they answer never takes an issuer
 /// or its clients off the count.
 /// </summary>
 internal interface ILicensedIssuer
 {
     /// <summary>
-    /// The tenant the issuer serves, counted as one place wherever its address moves.
+    /// The tenant the issuer serves, counted as one place wherever its address moves; empty on a server without
+    /// tenants, and null when the server cannot vouch for the tenant because a catalog of the host's own resolved it.
     /// </summary>
-    string Id { get; }
+    string? VouchedId { get; }
 
     /// <summary>
     /// Canceled once the server lets the tenant go, when the issuer and its clients stop counting.

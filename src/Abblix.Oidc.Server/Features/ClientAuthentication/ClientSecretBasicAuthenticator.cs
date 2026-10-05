@@ -24,9 +24,8 @@ public class ClientSecretBasicAuthenticator(
 	ILogger<ClientSecretBasicAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService,
-	IIssuerSettings issuerSettings)
-	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService, issuerSettings), IClientAuthenticator
+	IHashService hashService)
+	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_basic'.

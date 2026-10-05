@@ -38,7 +38,7 @@ public class ClientRequestValidatorTests
 
     public ClientRequestValidatorTests()
     {
-        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object, SingleIssuer.Settings);
+        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object);
     }
 
     private static ClientRequest Request() => new()

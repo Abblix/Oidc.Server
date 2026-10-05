@@ -50,8 +50,7 @@ public class JwtSubjectTokenResolverTests
             .ReturnsAsync((ClientInfo?)null);
 
         _resolver = new JwtSubjectTokenResolver(
-            _jwtValidator.Object, new SubjectTypeConverter(), _clientInfoProvider.Object,
-            SingleIssuer.Settings);
+            _jwtValidator.Object, new SubjectTypeConverter(), _clientInfoProvider.Object);
     }
 
     [Fact]

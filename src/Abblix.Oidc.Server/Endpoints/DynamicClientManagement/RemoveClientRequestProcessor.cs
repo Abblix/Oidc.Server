@@ -42,7 +42,8 @@ public class RemoveClientRequestProcessor(
         if (!await clientInfoManager.TryRemoveClientAsync(request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
-        LicenseChecker.ReleaseClients(LicenseChecker.ClientIssuerOf(issuerSettings), [clientId]);
+        if (LicenseChecker.ClientIssuerOf(issuerSettings) is { } issuerId)
+            LicenseChecker.ReleaseClients(issuerId, [clientId]);
 
         return new RemoveClientSuccessfulResponse(
             ClientId: clientId,

@@ -30,11 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="clientInfoProvider">Resolves the client a token was issued to, so its subject can be opened
 /// before being re-sealed for a different caller.</param>
 /// <param name="subjectTypeConverter">Opens and re-seals the end-user identifier per client sector.</param>
-/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public class IntrospectionRequestProcessor(
 	IClientInfoProvider clientInfoProvider,
-	ISubjectTypeConverter subjectTypeConverter,
-	IIssuerSettings issuerSettings) : IIntrospectionRequestProcessor
+	ISubjectTypeConverter subjectTypeConverter) : IIntrospectionRequestProcessor
 {
 	/// <summary>
 	/// Processes an introspection request and returns the corresponding introspection response.
@@ -114,7 +112,7 @@ public class IntrospectionRequestProcessor(
 
 		// The subject in the token is what its own client sees, so it has to be opened against that client
 		// before it can be re-sealed for anybody else.
-		var owner = await clientInfoProvider.TryFindClientAsync(ownerId).WithLicenseCheck(issuerSettings);
+		var owner = await clientInfoProvider.TryFindClientAsync(ownerId);
 		if (owner == null)
 			return null;
 

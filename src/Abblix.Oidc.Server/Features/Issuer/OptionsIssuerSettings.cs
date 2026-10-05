@@ -11,6 +11,7 @@ using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
@@ -28,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 internal sealed class OptionsIssuerSettings(
     IOptionsMonitor<OidcOptions> options,
     PairwiseSubjectSettings? pairwiseSubject = null,
-    CustodianHeldKeys? custodianKeys = null) : IIssuerSettings
+    CustodianHeldKeys? custodianKeys = null) : IIssuerSettings, ILicensedIssuer
 {
     /// <inheritdoc />
     public string Id => string.Empty;
@@ -38,6 +39,9 @@ internal sealed class OptionsIssuerSettings(
 
     /// <inheritdoc />
     public CancellationToken Released => CancellationToken.None;
+
+    /// <inheritdoc />
+    string ILicensedIssuer.VouchedId => string.Empty;
 
     /// <inheritdoc />
     public IEnumerable<ClientInfo> Clients => options.CurrentValue.Clients;

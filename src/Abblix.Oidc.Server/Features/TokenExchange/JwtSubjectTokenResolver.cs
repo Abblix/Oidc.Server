@@ -36,12 +36,10 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="subjectTypeConverter">Opens a pairwise subject_token's <c>sub</c> back to the real subject.</param>
 /// <param name="clientInfoProvider">Resolves the client the subject_token was issued to, whose sector opens its
 /// pairwise subject.</param>
-/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
 public sealed class JwtSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
     ISubjectTypeConverter subjectTypeConverter,
-    IClientInfoProvider clientInfoProvider,
-    IIssuerSettings issuerSettings) : ISubjectTokenResolver
+    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
 {
     /// <summary>
     /// An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server
@@ -79,7 +77,7 @@ public sealed class JwtSubjectTokenResolver(
         // it against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject
         // and pass through unchanged.
         var originalClient = originalClientId is not null
-            ? await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck(issuerSettings)
+            ? await clientInfoProvider.TryFindClientAsync(originalClientId)
             : null;
 
         if (originalClient is not null)

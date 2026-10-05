@@ -26,8 +26,7 @@ public abstract partial class ClientSecretAuthenticator(
 	ILogger<ClientSecretAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService,
-	IIssuerSettings issuerSettings)
+	IHashService hashService)
 {
 	/// <summary>
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
@@ -46,7 +45,7 @@ public abstract partial class ClientSecretAuthenticator(
 			return null;
 		}
 
-		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck(issuerSettings);
+		var client = await clientInfoProvider.TryFindClientAsync(clientId);
 		if (client == null)
 		{
 			LogClientNotFound(clientId);
