@@ -202,6 +202,43 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
     /// itself and cannot be driven from here, so the license is simply made wide enough to cover any run.
     /// </remarks>
+    /// <summary>
+    /// A tenant that would take the server past the license's issuer limit is refused when the manager of the
+    /// tenants is asked to create it, so the tenants already served keep working instead of all being refused on
+    /// their next request; under a limit with room for it, the same tenant is created.
+    /// </summary>
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public async Task A_tenant_beyond_the_issuer_limit_is_refused_when_created(int issuerLimit, bool created)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = issuerLimit,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var store = new WritableTenantStore();
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }, ct);
+        var catalog = Catalog(store);
+        await catalog.RefreshAsync(ct);
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], catalog, store);
+
+        var result = await manager.CreateAsync(
+            new TenantDefinition { Id = "globex", Issuer = "https://globex.example.com" }, ct);
+
+        Assert.Equal(created, result.TryGetSuccess(out _));
+        Assert.Equal(created ? 2 : 1, store.Tenants.Count);
+        if (!created)
+        {
+            Assert.True(result.TryGetFailure(out var refusal));
+            Assert.Equal(TenantChangeRefusalReason.BeyondLicense, refusal.Reason);
+        }
+    }
+
     private static void ArrangeLicenceThatCountsIssuers()
     {
         TestLicense.ClearChecker();

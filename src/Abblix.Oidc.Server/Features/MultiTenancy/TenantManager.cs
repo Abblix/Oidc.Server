@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -133,6 +134,14 @@ public sealed partial class TenantManager(
     {
         if (Find(listed, tenant.Id) is not null)
             return AlreadyExists(tenant.Id);
+
+        // Refused here rather than served: past the limit the license refuses the issuer of every tenant
+        if (LicenseChecker.IssuerLimit is { } limit && catalog.ServedTenants.Count() >= limit)
+        {
+            return new TenantChangeRefusal(
+                TenantChangeRefusalReason.BeyondLicense,
+                $"The license in force allows {limit} issuer(s), and as many tenants are served already.");
+        }
 
         // A generation of its own, so the store cannot hand a new creation the generation of one removed
         var created = tenant.WithGeneration(Guid.NewGuid().ToString("N"));

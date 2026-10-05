@@ -35,4 +35,9 @@ public enum TenantChangeRefusalReason
     /// The tenant was changed since it was read: read it again and decide on the change once more.
     /// </summary>
     Conflict,
+
+    /// <summary>
+    /// The license in force allows no more issuers than the tenants already served, and each tenant is one.
+    /// </summary>
+    BeyondLicense,
 }
