@@ -83,14 +83,14 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
 
     /// <summary>
     /// Every attribute is one of the server's, and every value one of its key's set: the endpoints, the grant types
-    /// the host serves, the response types and error codes the protocol defines. No span of a server without tenants
+    /// the host serves, the response types and the library's error codes, so no span of this flow, which runs no handler
+    /// of the host's, names an error code as unknown. No span of a server without tenants
     /// names one, and none of this flow fails with an exception.
     /// </summary>
     private void AssertOnlyAdmittedAttributes(Activity[] spans)
     {
         var endpoints = ConstantsOf(typeof(TelemetryEndpoints));
         var errors = ConstantsOf(typeof(ErrorCodes));
-        errors.Add(TelemetryTags.UnknownError);
         var responseTypes = ConstantsOf(typeof(ResponseTypes));
         using var scope = Factory.Services.CreateScope();
         var grantTypes = scope.ServiceProvider.GetRequiredService<IAuthorizationGrantHandler>().GrantTypesSupported.ToHashSet();

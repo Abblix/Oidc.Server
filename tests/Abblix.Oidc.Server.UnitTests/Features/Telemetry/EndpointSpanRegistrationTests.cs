@@ -13,11 +13,13 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using Xunit;
 
@@ -33,31 +35,48 @@ public sealed class EndpointSpanRegistrationTests
 
     private static readonly ActivitySource TestSource = new(TestSourceName);
 
+    /// <summary>
+    /// Each endpoint handler the container hands out is its decorator: a stub of the host's stands for every handler,
+    /// so resolving reaches no further than the decorator and the stub it wraps.
+    /// </summary>
     [Fact]
     public void EveryEndpointHandler_IsWrappedInItsSpan()
     {
-        var services = new ServiceCollection();
-        services.AddDeviceAuthorization();
-        services.AddBackChannelAuthentication();
-        services.AddRevocation();
-        services.AddIntrospection();
-        services.AddCheckSession();
-        services.AddDynamicClientRegistration();
-        services.AddOidcCore(_ => { });
-
-        var registered = services
-            .Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<EndpointSpansRegistered>()
-            .Single();
-
         var decorators = typeof(EndpointSpansRegistered).Assembly
             .GetTypes()
             .Where(type => type.Namespace == typeof(EndpointSpansRegistered).Namespace &&
                            type.Name.StartsWith("Traced", System.StringComparison.Ordinal))
-            .ToHashSet();
+            .ToArray();
+        Assert.Equal(15, decorators.Length);
 
-        Assert.Equal(15, decorators.Count);
-        Assert.Equal(decorators.OrderBy(type => type.Name), registered.Decorators.OrderBy(type => type.Name));
+        var services = new ServiceCollection();
+        foreach (var handler in decorators.Select(decorator => decorator.GetInterfaces().Single()))
+        {
+            var stub = (Mock)System.Activator.CreateInstance(typeof(Mock<>).MakeGenericType(handler))!;
+            services.AddSingleton(handler, stub.Object);
+        }
+
+        services.AddAuthorizationEndpoint();
+        services.AddPushedAuthorizationEndpoint();
+        services.AddTokenEndpoint();
+        services.AddUserInfoEndpoint();
+        services.AddEndSessionEndpoint();
+        services.AddConfigurationEndpoint();
+        services.AddCheckSession();
+        services.AddRevocation();
+        services.AddIntrospection();
+        services.AddBackChannelAuthentication();
+        services.AddDeviceAuthorization();
+        services.AddDynamicClientRegistration();
+
+        // The token span reads only the grant types supported, so the grants composed above are not built
+        services.Replace(ServiceDescriptor.Singleton(Mock.Of<IAuthorizationGrantHandler>()));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.All(decorators, decorator => Assert.IsType(
+            decorator,
+            scope.ServiceProvider.GetRequiredService(decorator.GetInterfaces().Single())));
     }
 
     [Fact]

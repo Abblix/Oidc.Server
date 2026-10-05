@@ -30,8 +30,8 @@ internal static class EndpointSpan
     /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
     /// <param name="handle">The endpoint's handling.</param>
     /// <param name="errorOf">The error code the outcome refuses the request with, or null when it does not.</param>
-    /// <param name="tags">Attributes of the request, each from the closed set its tag documents; asked only when a
-    /// span is recorded, so a source nobody listens to costs their reading too.</param>
+    /// <param name="tags">The request's attribute, from the closed set its tag documents; asked only when a span is
+    /// started, so a source nobody listens to does not pay for reading it.</param>
     public static async Task<TResult> RunAsync<TResult>(
         string endpoint,
         ITenantAccessor? tenants,

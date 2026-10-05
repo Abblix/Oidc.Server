@@ -180,6 +180,13 @@ public sealed class EndpointSpanTests : IDisposable
         Assert.Equal(named, span.GetTagItem(TelemetryTags.GrantType));
     }
 
+    [Fact]
+    public void TheSourceIsVersionedWithoutBuildMetadata()
+    {
+        Assert.False(string.IsNullOrEmpty(OidcTelemetry.Source.Version));
+        Assert.DoesNotContain('+', OidcTelemetry.Source.Version);
+    }
+
     [Theory]
     [InlineData(new[] { ResponseTypes.IdToken, ResponseTypes.Code }, "code id_token")]
     [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Code }, "code")]
