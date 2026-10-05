@@ -112,9 +112,13 @@ public class TokenStatusValidatorDecorator(
 		if (token.Payload is not { JwtId: not null, GrantId: { } grantId })
 			return null;
 
-		return await tokenRegistry.GetStatusAsync(grantId) == JsonWebTokenStatus.Revoked
-			? new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked")
-			: null;
+		var status = await tokenRegistry.GetStatusAsync(grantId);
+		return status switch
+		{
+			JsonWebTokenStatus.Revoked => new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked"),
+			JsonWebTokenStatus.Unknown or JsonWebTokenStatus.Used => null,
+			_ => throw new ArgumentOutOfRangeException(nameof(token), status, "A token status without a family verdict."),
+		};
 	}
 
 	/// <summary>

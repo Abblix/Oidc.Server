@@ -94,8 +94,6 @@ public sealed class DefaultSecurityEventTokenVerifier(
             // InvalidToken at every one of their refusal sites and InvalidHeader at none.
             JwtError.InvalidHeader => SecurityEventTokenErrorCode.MalformedToken,
 
-            _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
-
             // An algorithm this receiver does not accept lands here with everything else the core
             // refuses a signature over, and that is not a loss of meaning: RFC 8935 Section 2.4 renders
             // it as invalid_key, "unacceptable to the SET Recipient", which is what it is. Reading it
@@ -103,9 +101,20 @@ public sealed class DefaultSecurityEventTokenVerifier(
             // missing alg, an unregistered one and an unsigned token, and this seam cannot tell them
             // apart. The description says which happened, and the core writes it where the branch is
             // known.
-            _ => SecurityEventTokenErrorCode.SignatureInvalid,
+            JwtError.InvalidToken => Refused(noKeysResolved),
+            JwtError.TokenAlreadyUsed => Refused(noKeysResolved),
+            JwtError.TokenRevoked => Refused(noKeysResolved),
+            JwtError.InvalidAlgorithm => Refused(noKeysResolved),
+            JwtError.InvalidTokenType => Refused(noKeysResolved),
+            JwtError.InvalidSignature => Refused(noKeysResolved),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(error), error.Error, "A JWT error without a SET error code."),
         };
 
         return new SecurityEventTokenValidationError(code, error.ErrorDescription);
     }
+
+    // A refused signature with no key resolved at all is a missing key, not a bad signature.
+    private static SecurityEventTokenErrorCode Refused(bool noKeysResolved) =>
+        noKeysResolved ? SecurityEventTokenErrorCode.KeyNotFound : SecurityEventTokenErrorCode.SignatureInvalid;
 }

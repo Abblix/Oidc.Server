@@ -66,4 +66,37 @@ internal static class AnalyzerRun
             .WithAnalyzers([analyzer])
             .GetAnalyzerDiagnosticsAsync(TestContext.Current.CancellationToken);
     }
+
+    /// <summary>
+    /// The diagnostics over a consumer that references a library as a built assembly, the way a build references a
+    /// neighbour project.
+    /// </summary>
+    public static async Task<ImmutableArray<Diagnostic>> DiagnosticsAcross(
+        DiagnosticAnalyzer analyzer,
+        (string Assembly, string Source) library,
+        (string Assembly, string Source) consumer)
+    {
+        var parse = new CSharpParseOptions(LanguageVersion.Latest);
+        var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
+        var built = CSharpCompilation.Create(
+            library.Assembly, [CSharpSyntaxTree.ParseText(library.Source, parse)], Framework, options);
+        using var image = new MemoryStream();
+        var emitted = built.Emit(image, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+
+        var compilation = CSharpCompilation.Create(
+            consumer.Assembly,
+            [CSharpSyntaxTree.ParseText(consumer.Source, parse, "Consumer.cs")],
+            [.. Framework, MetadataReference.CreateFromImage(image.ToArray())],
+            options);
+
+        var errors = compilation.GetDiagnostics(TestContext.Current.CancellationToken)
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.True(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+
+        return await compilation
+            .WithAnalyzers([analyzer])
+            .GetAnalyzerDiagnosticsAsync(TestContext.Current.CancellationToken);
+    }
 }

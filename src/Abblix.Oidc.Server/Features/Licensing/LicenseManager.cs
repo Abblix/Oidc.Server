@@ -620,6 +620,11 @@ public partial class LicenseManager
                     expiresAt,
                     (int)(utcNow - expiresAt).TotalDays);
                 break;
+
+            // A license whose term has not started reports nothing yet; the arms above stay silent the same way when
+            // their condition does not hold.
+            case LicenseStatus.NotActiveYet:
+                break;
         }
     }
 
