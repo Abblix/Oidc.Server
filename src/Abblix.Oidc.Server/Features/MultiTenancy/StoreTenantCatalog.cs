@@ -97,6 +97,7 @@ public sealed partial class StoreTenantCatalog(
 
         await _creations.CloseAsync(
             _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshEvery),
+            options.Value.RefreshEvery,
             cancellationToken);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();

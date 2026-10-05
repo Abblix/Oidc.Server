@@ -106,7 +106,7 @@ internal sealed partial class TenantCreations(
     /// </summary>
     /// <param name="listed">The tenants the store lists now.</param>
     /// <param name="pause">How long a creation stays gone before it is released.</param>
-    /// <returns>The creations released by this call.</returns>
+    /// <returns>The creations released by this call, each in the definition last served for it.</returns>
     public IReadOnlyCollection<TenantDefinition> Track(IEnumerable<TenantDefinition> listed, TimeSpan pause)
     {
         var spaces = new HashSet<string>(StringComparer.Ordinal);
@@ -138,31 +138,48 @@ internal sealed partial class TenantCreations(
             releasedLately[space] = now;
 
         Volatile.Write(ref _releasedLately, releasedLately);
+        var released = new List<TenantDefinition>(due.Count);
         foreach (var (space, creation) in due)
         {
+            // The definition a change kept in the same creation, as one with another issuer, is what was served
+            // last; it is read before the creation is forgotten
+            released.Add(
+                _lastServed.GetValueOrDefault(creation.Tenant.Id) is { } last &&
+                last.Generation == creation.Tenant.Generation
+                    ? last
+                    : creation.Tenant);
+
             _creations.TryRemove(space, out _);
             Forget(creation.Tenant);
             Cancel(creation);
         }
 
-        return [..due.Values.Select(creation => creation.Tenant)];
+        return released;
     }
 
     /// <summary>
-    /// Hands each creation <see cref="Track"/> released to every closing; one that fails is logged, and the rest
-    /// still run.
+    /// Hands each creation <see cref="Track"/> released to every closing within <paramref name="limit"/>, so a
+    /// closing that does not answer holds the reading back by no more than that. A closing that fails, runs out of
+    /// time or is stopped is logged with the tenant's id, and every tenant after it is still handed over and logged
+    /// the same way, since a released creation is not handed over again.
     /// </summary>
-    public async Task CloseAsync(IReadOnlyCollection<TenantDefinition> released, CancellationToken cancellationToken)
+    public async Task CloseAsync(
+        IReadOnlyCollection<TenantDefinition> released,
+        TimeSpan limit,
+        CancellationToken cancellationToken)
     {
+        using var deadline = new CancellationTokenSource(limit, timeProvider);
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
         foreach (var tenant in released)
         {
             foreach (var closing in closings)
             {
                 try
                 {
-                    await closing.CloseAsync(tenant, cancellationToken);
+                    await closing.CloseAsync(tenant, bounded.Token);
                 }
-                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+                catch (Exception exception)
                 {
                     LogTenantNotClosed(exception, tenant.Id);
                 }

@@ -8,7 +8,7 @@ Under multi-tenancy each tenant of the server is an issuer of its own, and a tra
 - the issuer, the key set address and the endpoint addresses a tenant's receivers see are that tenant's;
 - every security event token is signed with the keys of the tenant serving the request;
 - push delivery runs for each tenant the server serves, in turn;
-- once a tenant is released, its streams and the events queued on them are deleted.
+- once a running instance releases a tenant, one refresh period after the tenant left the store of tenants, its streams and the events queued on them are deleted, and a stream that cannot be deleted is logged. A tenant that left the store while no instance served it, as during a restart, is not released by the instances that start afterwards, so its streams stay.
 
 ## Turning it on
 

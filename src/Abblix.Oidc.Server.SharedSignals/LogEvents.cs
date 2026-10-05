@@ -26,5 +26,8 @@ internal static class LogEvents
 
         /// <summary>One tenant's push delivery pass failed; the others' ran.</summary>
         public const int TenantSweepFailed = Base;
+
+        /// <summary>One stream of a released tenant could not be deleted; its other streams were.</summary>
+        public const int StreamNotDeleted = Base + 1;
     }
 }

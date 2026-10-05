@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.SharedSignals;
 
@@ -17,13 +18,19 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// Deletes the streams a released tenant's receivers created, and the events queued on them.
 /// </summary>
 /// <remarks>
-/// Runs inside the released tenant, in the creation that was served, so it reaches that creation's streams and no
-/// other's: a tenant created again under the same id keeps its own. The stores are resolved when a tenant is closed
-/// rather than when the catalog of tenants is built, since signing a tenant's events depends on that catalog.
+/// Runs inside the released tenant, in the definition last served for that creation, so it reaches that creation's
+/// streams in the store they were kept in and no other's: a tenant created again under the same id keeps its own.
+/// Each stream is deleted on its own, so one that fails is logged and the others are still deleted. The store and the
+/// management of streams are resolved when a tenant is closed rather than when the catalog of tenants is built: signing
+/// a tenant's events depends on that catalog, and a store of declared streams cannot be built outside a tenant, which
+/// would hide the startup check that refuses it.
 /// </remarks>
+/// <param name="logger">Records a stream that could not be deleted.</param>
 /// <param name="serviceProvider">Resolves the stream store and the management of streams.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantStreamsClosing(IServiceProvider serviceProvider) : ITenantClosing
+public sealed partial class TenantStreamsClosing(
+    ILogger<TenantStreamsClosing> logger,
+    IServiceProvider serviceProvider) : ITenantClosing
 {
     /// <inheritdoc />
     public async Task CloseAsync(TenantDefinition tenant, CancellationToken cancellationToken)
@@ -33,6 +40,15 @@ public sealed class TenantStreamsClosing(IServiceProvider serviceProvider) : ITe
 
         using var scope = TenantScope.Enter(tenant);
         foreach (var stream in await streams.ListAllAsync(cancellationToken))
-            await management.DeleteStreamAsync(stream.ReceiverId, stream.StreamId, cancellationToken);
+        {
+            try
+            {
+                await management.DeleteStreamAsync(stream.ReceiverId, stream.StreamId, cancellationToken);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                LogStreamNotDeleted(exception, stream.StreamId, tenant.Id);
+            }
+        }
     }
 }

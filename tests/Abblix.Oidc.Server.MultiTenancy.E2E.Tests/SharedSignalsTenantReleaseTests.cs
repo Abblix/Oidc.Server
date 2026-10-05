@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -80,6 +81,41 @@ public sealed class SharedSignalsTenantReleaseTests
         Assert.Single(await StreamsOfAsync(app, globex, ct));
     }
 
+    /// <summary>
+    /// A stream whose deletion fails stays and is logged, and the released tenant's other streams are deleted.
+    /// </summary>
+    [Fact]
+    public async Task AStreamThatCannotBeDeleted_LeavesTheOthersDeleted()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        var time = new FakeTimeProvider();
+        await store.AddAsync(TenantAt("acme"), ct);
+        var streams = new FirstDeleteFails(new InMemoryStreamStore());
+        await using var app = await StartAsync(store, time, streams);
+
+        // Two receivers, since one receiver holds one stream
+        foreach (var receiverId in (string[])[ReceiverId, ReceiverId + "/second"])
+        {
+            using var created = await ClientOf(app, "acme", receiverId).PostAsJsonAsync(
+                "/tenants/acme" + StreamPath,
+                new CreateStreamRequest { EventsRequested = [MembershipChanged] },
+                ct);
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        }
+
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        var stored = Assert.Single(await store.ListAsync(ct));
+        Assert.True(await store.RemoveAsync("acme", stored.Version, ct));
+        await catalog.RefreshAsync(ct);
+        time.Advance(new MultiTenancyOptions().RefreshEvery);
+        await catalog.RefreshAsync(ct);
+
+        Assert.Equal(2, streams.Deletions);
+        Assert.Single(await StreamsOfAsync(app, acme, ct));
+    }
+
     private static async Task<IReadOnlyList<StreamState>> StreamsOfAsync(
         WebApplication app,
         TenantDefinition tenant,
@@ -111,15 +147,19 @@ public sealed class SharedSignalsTenantReleaseTests
             ct);
     }
 
-    private static HttpClient ClientOf(WebApplication app, string tenantId)
+    private static HttpClient ClientOf(WebApplication app, string tenantId, string receiverId = ReceiverId)
     {
         var http = app.GetTestClient();
         http.BaseAddress = new Uri(Host);
         http.DefaultRequestHeaders.Add("X-Test-Issuer", $"{Host}/tenants/{tenantId}");
+        http.DefaultRequestHeaders.Add("X-Test-Subject", receiverId);
         return http;
     }
 
-    private static async Task<WebApplication> StartAsync(MemoryTenantStore store, FakeTimeProvider time)
+    private static async Task<WebApplication> StartAsync(
+        MemoryTenantStore store,
+        FakeTimeProvider time,
+        IStreamStore? streams = null)
     {
         await TestLicense.Loaded;
 
@@ -138,6 +178,9 @@ public sealed class SharedSignalsTenantReleaseTests
             EventsSupported = [MembershipChanged],
             DefaultSubjectsMode = StreamSubjectsMode.All,
         });
+        if (streams is not null)
+            builder.Services.Replace(ServiceDescriptor.Singleton(streams));
+
         builder.Services.AddSingleton<ITenantStore>(store);
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
@@ -150,7 +193,11 @@ public sealed class SharedSignalsTenantReleaseTests
         {
             if (context.Request.Headers.TryGetValue("X-Test-Issuer", out var issuer))
             {
-                Claim[] claims = [new(IanaClaimTypes.Sub, ReceiverId), new(IanaClaimTypes.Iss, issuer.ToString())];
+                Claim[] claims =
+                [
+                    new(IanaClaimTypes.Sub, context.Request.Headers["X-Test-Subject"].ToString()),
+                    new(IanaClaimTypes.Iss, issuer.ToString()),
+                ];
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
             }
 
@@ -168,4 +215,35 @@ public sealed class SharedSignalsTenantReleaseTests
         Issuer = $"{Host}/tenants/{id}",
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
     };
+
+    /// <summary>
+    /// A stream store whose first deletion fails, as one that loses its connection for a moment.
+    /// </summary>
+    private sealed class FirstDeleteFails(IStreamStore inner) : IStreamStore
+    {
+        public int Deletions { get; private set; }
+
+        public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
+            => inner.TryCreateAsync(stream, cancellationToken);
+
+        public Task<StreamState?> FindAsync(
+            string receiverId, string streamId, CancellationToken cancellationToken = default)
+            => inner.FindAsync(receiverId, streamId, cancellationToken);
+
+        public Task<IReadOnlyList<StreamState>> ListAsync(
+            string receiverId, CancellationToken cancellationToken = default)
+            => inner.ListAsync(receiverId, cancellationToken);
+
+        public Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
+            => inner.ListAllAsync(cancellationToken);
+
+        public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
+            => inner.UpdateAsync(stream, cancellationToken);
+
+        public Task<bool> DeleteAsync(
+            string receiverId, string streamId, CancellationToken cancellationToken = default)
+            => ++Deletions == 1
+                ? throw new InvalidOperationException("the store lost its connection")
+                : inner.DeleteAsync(receiverId, streamId, cancellationToken);
+    }
 }
