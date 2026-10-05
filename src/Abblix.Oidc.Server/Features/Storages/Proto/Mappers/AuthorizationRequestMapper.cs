@@ -54,7 +54,7 @@ internal static class AuthorizationRequestMapper
     private static void CopyOptionalScalars(Model.AuthorizationRequest source, AuthorizationRequest proto)
     {
         SetIfPresent(proto, source.ClientId, static (message, value) => message.ClientId = value);
-        SetIfPresent(proto, source.RedirectUri?.ToString(), static (message, value) => message.RedirectUri = value);
+        SetIfPresent(proto, source.RedirectUri?.OriginalString, static (message, value) => message.RedirectUri = value);
         SetIfPresent(proto, source.State, static (message, value) => message.State = value);
         SetIfPresent(proto, source.ResponseMode, static (message, value) => message.ResponseMode = value);
         SetIfPresent(proto, source.Nonce, static (message, value) => message.Nonce = value);
@@ -65,7 +65,7 @@ internal static class AuthorizationRequestMapper
         SetIfPresent(proto, source.CodeChallenge, static (message, value) => message.CodeChallenge = value);
         SetIfPresent(proto, source.CodeChallengeMethod, static (message, value) => message.CodeChallengeMethod = value);
         SetIfPresent(proto, source.Request, static (message, value) => message.Request = value);
-        SetIfPresent(proto, source.RequestUri?.ToString(), static (message, value) => message.RequestUri = value);
+        SetIfPresent(proto, source.RequestUri?.OriginalString, static (message, value) => message.RequestUri = value);
         SetIfPresent(proto, source.ProofKeyThumbprint, static (message, value) => message.ProofKeyThumbprint = value);
         SetIfPresent(
             proto,
