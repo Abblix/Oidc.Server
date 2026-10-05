@@ -126,7 +126,7 @@ builder.Services.AddOidcServices(options =>
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
     options.Resources =
     [
-        new ResourceDefinition(new Uri(TestConstants.ApiResource)),
+        new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
     ];
 
     // RFC 8628 device flow settings. The host opts into device authorization (AddDeviceAuthorization() below),

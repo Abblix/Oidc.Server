@@ -129,7 +129,7 @@ builder.Services.AddOidcServices(options =>
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
     options.Resources =
     [
-        new ResourceDefinition(new Uri(TestConstants.ApiResource)),
+        new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
     ];
 
     // RFC 8628 device flow settings. These are nullable with no DI default; the device endpoint throws
