@@ -12,8 +12,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The diagnostic that marks multi-tenancy experimental.
 /// </summary>
 /// <remarks>
-/// Experimental until every per-tenant store, setting and key is separated: until then a tenant's data is not
-/// yet kept apart from the others', and the diagnostic makes a host opt in knowingly.
+/// Experimental while the multi-tenancy API takes in what its first hosts need: its types and members may still change
+/// without the overloads a stable API keeps, and the diagnostic makes a host opt in knowingly. A tenant's data is kept
+/// apart from the others' in the server's own stores, settings and keys; the users and the consents stay the host's.
 /// </remarks>
 public static class MultiTenancyDiagnostics
 {
