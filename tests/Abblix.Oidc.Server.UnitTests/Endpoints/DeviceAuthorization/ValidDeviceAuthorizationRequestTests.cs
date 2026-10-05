@@ -21,7 +21,7 @@ public class ValidDeviceAuthorizationRequestTests
 {
     /// <summary>
     /// A scope only a requested resource declares is kept with the scopes of the request, so the host approving
-    /// the user code and the token it leads to both carry it, as on the other endpoints.
+    /// the user code receives it, as the other endpoints keep it.
     /// </summary>
     [Fact]
     public void AScopeOfARequestedResource_IsKeptWithTheScopes()

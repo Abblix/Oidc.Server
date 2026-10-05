@@ -35,7 +35,7 @@ internal static class DeviceAuthorizationRequestMapper
         {
             foreach (var resource in source.Resources)
             {
-                proto.Resources.Add(resource.ToString());
+                proto.Resources.Add(resource.OriginalString);
             }
         }
 

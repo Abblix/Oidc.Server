@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Model;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
+using StoredDeviceRequest = Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages.Proto;
@@ -231,6 +232,21 @@ public class MappersTests
         Assert.NotNull(result.Resources);
         Assert.Equal(2, result.Resources.Length);
         Assert.Equal(context.Resources![0], result.Resources[0]);
+    }
+
+    /// <summary>
+    /// A device request keeps each resource as it was written, so a token issued for it names the resource
+    /// exactly as registered rather than in a form with a path added.
+    /// </summary>
+    [Fact]
+    public void DeviceAuthorizationRequestMapper_RoundTrips_AResourceAsWritten()
+    {
+        const string resource = "https://orders.example.com";
+        var request = new StoredDeviceRequest("client", [TestConstants.DefaultScope], [new Uri(resource)], "USERCODE");
+
+        var result = request.ToProto().FromProto();
+
+        Assert.Equal(resource, Assert.Single(result.Resources!).OriginalString);
     }
 
     [Fact]
