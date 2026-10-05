@@ -107,6 +107,9 @@ public class ResourceValidatorsInferenceTests
                     new ClientRequest { ClientId = ClientId });
                 var error = await new TokenResourceValidator(resourceManager, inference)
                     .ValidateAsync(context, TestContext.Current.CancellationToken);
+
+                // The grant handler reads the request, so the resource it is issued for has to be there too
+                Assert.Equal(Uris(context.Resources), context.Request.Resources ?? []);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -155,6 +158,31 @@ public class ResourceValidatorsInferenceTests
 
         Assert.Null(error);
         Assert.Equal([Billing], resources);
+    }
+
+    /// <summary>
+    /// A token exchange naming its target as an audience has nothing inferred, so the audience it named is the
+    /// token's whole audience (RFC 8693 section 2.1).
+    /// </summary>
+    [Fact]
+    public async Task ATokenExchangeNamingAnAudience_HasNothingInferred()
+    {
+        var options = Options.Create(new OidcOptions
+        {
+            InferResourceFromScope = true,
+            Resources = [new ResourceDefinition(Orders, new ScopeDefinition(OrdersRead))],
+        });
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = ["svc-a"], Scope = [OrdersRead] },
+            new ClientRequest { ClientId = ClientId });
+
+        var error = await new TokenResourceValidator(
+                SingleIssuer.ResourceManager(options),
+                new ResourceInference(SingleIssuer.SettingsOf(options)))
+            .ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Null(context.Request.Resources);
     }
 
     /// <summary>

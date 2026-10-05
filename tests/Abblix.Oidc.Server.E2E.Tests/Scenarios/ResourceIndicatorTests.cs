@@ -336,7 +336,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
 
     /// <summary>
     /// Builds an isolated host stating a default resource indicator, leaving the shared suite on the
-    /// client-identifier fallback that every existing deployment still gets.
+    /// issuer fallback that every existing deployment still gets.
     /// </summary>
     private WebApplicationFactory<Program> CreateHostWithDefaultResource()
         => Factory.WithWebHostBuilder(builder =>

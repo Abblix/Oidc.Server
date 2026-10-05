@@ -23,7 +23,7 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
 {
     /// <summary>
     /// The grants whose audience an authorization made earlier settled: the request may narrow it, and nothing is
-    /// inferred for it.
+    /// inferred for it. Any other grant type, a host's own included, is one the request itself authorizes.
     /// </summary>
     private static readonly HashSet<string> AuthorizedEarlier = new(StringComparer.Ordinal)
     {
@@ -46,7 +46,10 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
     {
         var request = context.Request;
 
-        if (request.Resources is not { Length: > 0 } && !AuthorizedEarlier.Contains(request.GrantType))
+        // A request naming its target as an audience (RFC 8693 section 2.1) has stated it, so nothing is inferred
+        if (request.Resources is not { Length: > 0 } &&
+            request.Audiences is not { Length: > 0 } &&
+            !AuthorizedEarlier.Contains(request.GrantType))
         {
             if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
