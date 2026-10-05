@@ -39,7 +39,7 @@ public class ResourceValidatorTests
     public ResourceValidatorTests()
     {
         _resourceManager = new Mock<IResourceManager>(MockBehavior.Strict);
-        _validator = new ResourceValidator(_resourceManager.Object);
+        _validator = new ResourceValidator(_resourceManager.Object, new ResourceInference(SingleIssuer.Settings));
     }
 
     private static TokenValidationContext CreateContext(

@@ -90,6 +90,8 @@ public class TenantSettingsMirrorTests
             return "https://auth.example.com";
         if (type == typeof(Uri))
             return new Uri("https://api.example.com");
+        if (type == typeof(bool))
+            return true;
         if (type.IsEnum)
             return Enum.GetValues(type).Cast<object>().Last();
         if (type.IsArray)

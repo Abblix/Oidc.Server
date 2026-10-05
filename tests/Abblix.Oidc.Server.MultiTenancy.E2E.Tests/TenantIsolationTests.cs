@@ -65,6 +65,8 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
     private const string ConfigurationPath = "/.well-known/openid-configuration";
     private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
     private const string AcmeResource = "https://api.acme.example";
+    private const string AcmeOrdersResource = "https://orders.acme.example";
+    private const string AcmeOrdersScope = "acme:orders";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
@@ -117,8 +119,13 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
                 Clients = [Client(ClientId), Client(AcmeOnlyClientId), PairwiseClient()],
                 PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) },
                 Scopes = [new ScopeDefinition(AcmeScope)],
-                Resources = [new ResourceDefinition(new Uri(AcmeResource), new ScopeDefinition(AcmeScope))],
+                Resources =
+                [
+                    new ResourceDefinition(new Uri(AcmeResource), new ScopeDefinition(AcmeScope)),
+                    new ResourceDefinition(new Uri(AcmeOrdersResource), new ScopeDefinition(AcmeOrdersScope)),
+                ],
                 DefaultResourceIndicator = new Uri(AcmeResource),
+                InferResourceFromScope = true,
                 LoginUri = new Uri("/login", UriKind.Relative),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
                 MtlsBaseUri = new Uri(MtlsHost),
@@ -159,7 +166,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
                     "session-1",
                     context.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow(),
                     "local"),
-                new AuthorizationContext(valid.ClientId, valid.Scope, null));
+                new AuthorizationContext(valid.ClientId, valid.Scope, null, valid.Resources));
 
             return await verification.ApproveAsync(userCode, grant) ? Results.Ok() : Results.Conflict();
         });
@@ -576,4 +583,18 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         Assert.Contains(AcmeResource, payload[IanaClaimTypes.Aud]!.ToJsonString(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A tenant that infers the resource from the scopes issues a token for the resource a requested scope belongs to,
+    /// ahead of its default resource, and the scope reaches the token through the device flow.
+    /// </summary>
+    [Fact]
+    public async Task AScopeOfOneOfATenantsResources_MakesTheTokenForThatResource()
+    {
+        var tokens = await TokensOfADeviceFlowAsync(Acme, $"{Scopes.OpenId} {AcmeOrdersScope}");
+
+        var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
+        var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
+        Assert.Equal(AcmeOrdersResource, payload[IanaClaimTypes.Aud]!.GetValue<string>());
+        Assert.Contains(AcmeOrdersScope, payload[JwtClaimTypes.Scope]!.GetValue<string>().Split(' '));
+    }
 }

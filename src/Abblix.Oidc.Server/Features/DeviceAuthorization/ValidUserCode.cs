@@ -15,7 +15,9 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// </summary>
 /// <param name="ClientId">The client identifier that initiated the device authorization request.</param>
 /// <param name="Scope">The requested scopes for the authorization.</param>
-/// <param name="Resources">The requested resources (RFC 8707) for the authorization.</param>
+/// <param name="Resources">The requested resources (RFC 8707) for the authorization, the one inferred from the
+/// scopes included. The host carries them onto the AuthorizedGrant's AuthorizationContext; a grant without them
+/// issues a token for the default resource indicator, else for the issuer.</param>
 /// <param name="AuthorizationDetails">RFC 9396 section 3 Rich Authorization Requests array from
 /// the original /device_authorization request. The host's user-verification UI renders these
 /// for consent and threads the user's decision onto the AuthorizedGrant's AuthorizationContext.

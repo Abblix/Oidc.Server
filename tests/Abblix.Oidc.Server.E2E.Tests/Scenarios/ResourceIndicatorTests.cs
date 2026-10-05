@@ -285,8 +285,58 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// With inference on, a client asking for a scope only one resource declares gets a token for that resource,
+    /// carrying the scope (RFC 9068 section 3).
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_asking_for_a_resources_scope_gets_a_token_for_it_when_inferring()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options => options.InferResourceFromScope = true))));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Scope] = TestConstants.ApiScope,
+        });
+
+        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
+        Assert.Contains(TestConstants.ApiScope, payload[JwtClaimTypes.Scope]!.GetValue<string>().Split(' '));
+    }
+
+    /// <summary>
+    /// With inference off, a scope only a resource declares is refused when the request names no resource.
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_asking_for_a_resources_scope_without_it_is_refused_when_not_inferring()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Scope] = TestConstants.ApiScope,
+        });
+
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ErrorCodes.InvalidScope, JsonNode.Parse(raw)?[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// Builds an isolated host stating a default resource indicator, leaving the shared suite on the
-    /// client-identifier fallback that every existing deployment still gets.
+    /// issuer fallback that every existing deployment still gets.
     /// </summary>
     private WebApplicationFactory<Program> CreateHostWithDefaultResource()
         => Factory.WithWebHostBuilder(builder =>

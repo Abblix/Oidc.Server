@@ -95,6 +95,12 @@ public sealed class TenantDefinition
     public Uri? DefaultResourceIndicator { get; init; }
 
     /// <summary>
+    /// Whether a request naming no resource is taken to be for the one of this tenant's <see cref="Resources"/>
+    /// its scopes refer to, as <see cref="OidcOptions.InferResourceFromScope"/> does for a server without tenants.
+    /// </summary>
+    public bool InferResourceFromScope { get; init; }
+
+    /// <summary>
     /// The page a user picks an account on, as <see cref="OidcOptions.AccountSelectionUri"/> is for a server
     /// without tenants. A relative address is a page under this tenant's issuer.
     /// </summary>

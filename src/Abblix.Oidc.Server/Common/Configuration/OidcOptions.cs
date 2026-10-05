@@ -240,16 +240,14 @@ public record OidcOptions
 	public ResourceDefinition[]? Resources { get; set; }
 
 	/// <summary>
-	/// The resource an access token is minted for when the request names none. Left null, the token's
-	/// <c>aud</c> falls back to the client identifier, which is what prior versions did.
+	/// The resource an access token is minted for when the request names none and none is inferred from its
+	/// scopes (<see cref="InferResourceFromScope"/>). Left null, the token's <c>aud</c> falls back to the issuer.
 	/// </summary>
 	/// <remarks>
 	/// RFC 9068 Section 3 requires an authorization server to "use a default resource indicator in the `aud`
 	/// claim" when a request carries no <c>resource</c> parameter, and Section 4 tells a resource server to
-	/// reject a token whose <c>aud</c> does not name it. A client identifier names the party that asked for the
-	/// token rather than the one meant to consume it, so a conforming resource server should refuse it; a
-	/// deployment with one API therefore says so here once, instead of teaching every client to send
-	/// <c>resource</c>.
+	/// reject a token whose <c>aud</c> does not name it, so a deployment with one API says so here once, instead
+	/// of teaching every client to send <c>resource</c>.
 	/// This is opt-in because the value is read by every resource server in the deployment: changing it is a
 	/// change to their contract, not to this server's configuration alone. The fallback is unchanged until a
 	/// host states otherwise. Must be an absolute URI naming a registered <see cref="Resources"/> entry -
@@ -257,6 +255,22 @@ public record OidcOptions
 	/// nobody can accept.
 	/// </remarks>
 	public Uri? DefaultResourceIndicator { get; set; }
+
+	/// <summary>
+	/// Whether a request naming no resource is taken to be for the registered resource its scopes refer to: the
+	/// one among <see cref="Resources"/> whose definition declares a requested scope.
+	/// </summary>
+	/// <remarks>
+	/// RFC 9068 section 3 says an authorization server SHOULD infer the default resource indicator from the
+	/// <c>scope</c> parameter, and SHOULD reject with <c>invalid_scope</c> a request whose scopes refer to
+	/// different resources; both happen only when this is set, because the inferred resource becomes the
+	/// <c>aud</c> every resource server reads. The audience is then the resource the request names, else the one
+	/// its scopes refer to, else <see cref="DefaultResourceIndicator"/>, else the issuer. At the token endpoint
+	/// it is inferred only for a grant the token request itself authorizes and only when the request names no
+	/// <c>audience</c>; a code, a refresh token, a device code or a back-channel request carries the audience its
+	/// authorization settled.
+	/// </remarks>
+	public bool InferResourceFromScope { get; set; }
 
 	/// <summary>
 	/// Whether an access token carries only the <c>authorization_details</c> entries whose

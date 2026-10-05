@@ -123,6 +123,7 @@ public class AuthorizationResponseFormatterTests
         public ScopeDefinition[]? Scopes => null;
         public ResourceDefinition[]? Resources => null;
         public Uri? DefaultResourceIndicator => null;
+        public bool InferResourceFromScope => false;
         public Uri? AccountSelectionUri { get; init; } = new(Base + "account-selection");
         public Uri? ConsentUri { get; init; } = new(Base + "consent");
         public Uri? InteractionUri { get; init; } = new(Base + "interaction");

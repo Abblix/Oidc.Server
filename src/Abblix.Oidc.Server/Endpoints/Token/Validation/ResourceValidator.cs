@@ -17,8 +17,22 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// recognized and appropriately scoped according to OAuth 2.0 and OpenID Connect standards.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
-public class ResourceValidator(IResourceManager resourceManager): SyncTokenContextValidatorBase
+/// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
+public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference)
+    : SyncTokenContextValidatorBase
 {
+    /// <summary>
+    /// The grants whose audience an authorization made earlier settled: the request may narrow it, and nothing is
+    /// inferred for it. Any other grant type, a host's own included, is one the request itself authorizes.
+    /// </summary>
+    private static readonly HashSet<string> AuthorizedEarlier = new(StringComparer.Ordinal)
+    {
+        GrantTypes.AuthorizationCode,
+        GrantTypes.RefreshToken,
+        GrantTypes.DeviceAuthorization,
+        GrantTypes.Ciba,
+    };
+
     /// <summary>
     /// Validates the resources specified in a token request against known resource definitions.
     /// This validation ensures that only registered and approved resources are accessed by the client.
@@ -32,23 +46,33 @@ public class ResourceValidator(IResourceManager resourceManager): SyncTokenConte
     {
         var request = context.Request;
 
-        // Proceed with validation only if there are resources specified in the request.
-        if (request.Resources is { Length: > 0 })
+        // A request naming its target as an audience (RFC 8693 section 2.1) has stated it, so nothing is inferred
+        if (request.Resources is not { Length: > 0 } &&
+            request.Audiences is not { Length: > 0 } &&
+            !AuthorizedEarlier.Contains(request.GrantType))
         {
-            // Validate the requested resources using the resource manager.
-            if (!resourceManager.Validate(
-                    request.Resources,
-                    request.Scope,
-                    out var resources,
-                    out var errorDescription))
-            {
-                return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
-            }
+            if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
+                return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
-            context.Resources = resources;
+            // A grant the request itself authorizes builds its audience from the request, so the inferred
+            // resource is put where a named one would be
+            if (inferred is not null)
+                request.Resources = [inferred];
         }
 
-        // Return null indicating successful validation if there are no errors.
+        if (request.Resources is not { Length: > 0 })
+            return null;
+
+        if (!resourceManager.Validate(
+                request.Resources,
+                request.Scope,
+                out var resources,
+                out var errorDescription))
+        {
+            return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
+        }
+
+        context.Resources = resources;
         return null;
     }
 }

@@ -66,6 +66,9 @@ public sealed class TenantIssuerSettings(
     public Uri? DefaultResourceIndicator => Tenant.DefaultResourceIndicator;
 
     /// <inheritdoc />
+    public bool InferResourceFromScope => Tenant.InferResourceFromScope;
+
+    /// <inheritdoc />
     public Uri? AccountSelectionUri => Tenant.AccountSelectionUri;
 
     /// <inheritdoc />

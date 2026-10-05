@@ -66,6 +66,11 @@ public interface IIssuerSettings
     Uri? DefaultResourceIndicator { get; }
 
     /// <summary>
+    /// Whether a request naming no resource is taken to be for the resource its scopes refer to.
+    /// </summary>
+    bool InferResourceFromScope { get; }
+
+    /// <summary>
     /// The page a user picks an account on.
     /// </summary>
     Uri? AccountSelectionUri { get; }
