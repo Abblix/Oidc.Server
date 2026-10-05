@@ -65,7 +65,9 @@ internal static class StreamSubjectCommands
                 StreamSubjectsMode.All when !stream.RemovedSubjects.Any(
                         removed => SubjectMatcher.Identical(removed, subject)) =>
                     [.. stream.RemovedSubjects, subject],
-                _ => stream.RemovedSubjects,
+                StreamSubjectsMode.All or StreamSubjectsMode.None => stream.RemovedSubjects,
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(stream), stream.SubjectsMode, "A subjects mode without a removal rule."),
             },
         };
 }

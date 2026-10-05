@@ -76,7 +76,7 @@ internal sealed class ProofValidator(
             });
 
         if (jwtResult.TryGetFailure(out var validationError))
-            return MapValidationError(validationError);
+            return new ProofError(ProofErrorReasons.Of(validationError.Error), validationError.ErrorDescription);
 
         var jwt = jwtResult.GetSuccess();
         DateTimeOffset issuedAt = default;
@@ -111,27 +111,6 @@ internal sealed class ProofValidator(
         }
 
         return new Proof(jwt, jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
-    }
-
-    /// <summary>
-    /// Maps a typed <see cref="JwtValidationError"/> from the JWT validator onto the
-    /// DPoP-specific reason taxonomy. The validator already covered JWS structure, typ
-    /// pinning, alg-whitelist, header shape and signature verification; each
-    /// <see cref="JwtError"/> category maps to the matching
-    /// <see cref="ProofErrorReasons"/> token for log filters and metric labels.
-    /// </summary>
-    private static ProofError MapValidationError(JwtValidationError error)
-    {
-        var reason = error.Error switch
-        {
-            JwtError.MalformedToken => ProofErrorReasons.MalformedJwt,
-            JwtError.InvalidAlgorithm => ProofErrorReasons.InvalidAlgorithm,
-            JwtError.InvalidTokenType => ProofErrorReasons.InvalidTokenType,
-            JwtError.InvalidHeader => ProofErrorReasons.InvalidHeader,
-            JwtError.InvalidSignature => ProofErrorReasons.SignatureInvalid,
-            _ => ProofErrorReasons.SignatureInvalid,
-        };
-        return new ProofError(reason, error.ErrorDescription);
     }
 
     /// <summary>

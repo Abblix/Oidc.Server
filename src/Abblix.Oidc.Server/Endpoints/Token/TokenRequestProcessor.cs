@@ -234,7 +234,10 @@ public class TokenRequestProcessor(
 				//     the binding and the next refresh would accept any key - a section 5 violation.
 				//     authContext.ProofKeyThumbprint is null when the request carried no proof,
 				//     which keeps Bearer-only public flows unchanged.
-				_ => authContext.ProofKeyThumbprint,
+				ClientType.Public => authContext.ProofKeyThumbprint,
+
+				_ => throw new ArgumentOutOfRangeException(
+					nameof(request), clientInfo.ClientType, "A client type without a refresh-token binding rule."),
 			},
 		};
 

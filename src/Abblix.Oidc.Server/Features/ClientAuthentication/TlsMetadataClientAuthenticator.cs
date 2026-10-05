@@ -259,8 +259,21 @@ public partial class TlsMetadataClientAuthenticator(
         while (sequenceReader.HasData)
         {
             var tag = sequenceReader.PeekTag();
+            var name = (GeneralNameTag)tag.TagValue;
 
-            switch ((GeneralNameTag)tag.TagValue)
+            // The certificate is foreign input: a tag beyond the RFC 5280 list is read past rather than refused.
+            if (Enum.IsDefined(name))
+                ReadName(sequenceReader, tag, name, entries);
+            else
+                sequenceReader.ReadEncodedValue();
+        }
+
+        return entries;
+    }
+
+    private static void ReadName(AsnReader sequenceReader, Asn1Tag tag, GeneralNameTag name, SanEntries entries)
+    {
+            switch (name)
             {
                 case GeneralNameTag.Rfc822Name:
                     var email = Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag));
@@ -273,9 +286,7 @@ public partial class TlsMetadataClientAuthenticator(
                     break;
 
                 case GeneralNameTag.UniformResourceIdentifier:
-                    var uriString = Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag));
-                    if (Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
-                        entries.Uris.Add(uri);
+                    AddUri(Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag)), entries);
                     break;
 
                 case GeneralNameTag.IpAddress:
@@ -284,13 +295,24 @@ public partial class TlsMetadataClientAuthenticator(
                     entries.Ips.Add(ip);
                     break;
 
-                default:
-                    // Skip unsupported GeneralName types (otherName, directoryName, x400Address, etc.)
+                // The name forms client authentication does not match on are read past.
+                case GeneralNameTag.OtherName:
+                case GeneralNameTag.X400Address:
+                case GeneralNameTag.DirectoryName:
+                case GeneralNameTag.EdiPartyName:
+                case GeneralNameTag.RegisteredId:
                     sequenceReader.ReadEncodedValue();
                     break;
-            }
-        }
 
-        return entries;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(name), name, "A general name form without a reading rule.");
+            }
+    }
+
+    // An entry that is not an absolute URI is skipped, as the summary of the parse promises.
+    private static void AddUri(string value, SanEntries entries)
+    {
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            entries.Uris.Add(uri);
     }
 }

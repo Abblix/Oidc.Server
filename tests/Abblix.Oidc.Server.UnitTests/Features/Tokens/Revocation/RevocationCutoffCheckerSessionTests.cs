@@ -130,7 +130,7 @@ public class RevocationCutoffCheckerSessionTests
     [InlineData(RevocationScope.Session)]
     public async Task WhenTheCutoffPredatesTheSignIn_TheSessionIsUsable(RevocationScope scope)
     {
-        SetupCutoff(scope, scope is RevocationScope.Subject ? Subject : SessionId, AuthenticatedAt.AddHours(-1));
+        SetupCutoff(scope, PrincipalOf(scope), AuthenticatedAt.AddHours(-1));
 
         var refused = await Checker().IsSessionRefusedAsync(Session());
 
@@ -270,7 +270,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         // The cutoff is recorded against the principal this session does not name, so the arm that would
         // have refused has nothing to look up and the other arm has no cutoff to find.
-        SetupCutoff(scope, scope is RevocationScope.Subject ? Subject : SessionId, AuthenticatedAt.AddMinutes(1));
+        SetupCutoff(scope, PrincipalOf(scope), AuthenticatedAt.AddMinutes(1));
 
         var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
 
@@ -315,4 +315,11 @@ public class RevocationCutoffCheckerSessionTests
 
         _clients.Verify(p => p.TryFindClientAsync(It.IsAny<string>()), Times.Never);
     }
+
+    private static string PrincipalOf(RevocationScope scope) => scope switch
+    {
+        RevocationScope.Subject => Subject,
+        RevocationScope.Session => SessionId,
+        _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "A revocation scope without a principal."),
+    };
 }
