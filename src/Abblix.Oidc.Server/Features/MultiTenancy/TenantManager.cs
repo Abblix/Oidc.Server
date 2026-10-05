@@ -141,7 +141,8 @@ public sealed partial class TenantManager(
         {
             return new TenantChangeRefusal(
                 TenantChangeRefusalReason.BeyondLicense,
-                $"The license in force allows {limit} issuer(s), and the store holds at least as many tenants already.");
+                $"The license in force allows {limit} issuer(s), "
+                + "and the store holds at least as many tenants already.");
         }
 
         // A generation of its own, so the store cannot hand a new creation the generation of one removed

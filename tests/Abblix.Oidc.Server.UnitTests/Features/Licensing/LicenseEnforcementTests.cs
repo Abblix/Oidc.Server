@@ -189,16 +189,8 @@ public sealed class LicenseEnforcementTests : IDisposable
     private static void ArrangeInstallationWithNoLicence() => TestLicense.ClearChecker();
 
     /// <summary>
-    /// Puts the checker on a license that caps the number of issuers and names none of them, which is the
-    /// only arrangement under which that count is ever consulted.
+    /// Puts the checker on a license for one issuer that names none, so the second issuer is the one refused.
     /// </summary>
-    /// <remarks>
-    /// A license that names its issuers refuses an unknown one on the name, before anything is counted, and
-    /// licenses accumulate rather than replace one another - so the assembly's license and its whitelist have
-    /// to go before this one is added. That is the whole reason a test of the count reaches into the
-    /// checker's state at all, and saying it once here keeps it out of the test bodies, which then read as
-    /// what they need rather than as how the statics are arranged.
-    /// </remarks>
     private static void ArrangeLicenceThatCountsIssuers() => TestLicense.InstallWithIssuerLimit(1);
 
     /// <summary>
