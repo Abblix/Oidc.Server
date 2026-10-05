@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -33,6 +34,7 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
 
         services.TryAddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter>();
         services.TryAddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>();
+        services.Decorate<IBackChannelAuthenticationHandler, TracedBackChannelAuthenticationHandler>();
         services.TryAddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>();
         services.TryAddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
 

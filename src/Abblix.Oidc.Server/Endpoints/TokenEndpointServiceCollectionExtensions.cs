@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -47,6 +48,7 @@ public static class TokenEndpointServiceCollectionExtensions
          services.TryAddScoped<ITokenAuthorizationContextEvaluator, TokenAuthorizationContextEvaluator>();
 
          services.TryAddScoped<ITokenHandler, TokenHandler>();
+         services.Decorate<ITokenHandler, TracedTokenHandler>();
          services.TryAddScoped<ITokenRequestValidator, TokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
          services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();

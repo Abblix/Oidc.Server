@@ -318,21 +318,23 @@ public class ServiceCollectionOverrideTests
         Assert.Same(stub, descriptors[0].ImplementationInstance);
     }
 
+    /// <summary>
+    /// The host's handler is the one that handles the request; the library only wraps it in its endpoint span.
+    /// </summary>
     [Fact]
-    public void AddAuthorizationEndpoint_HostPreregisteredAuthorizationHandler_Wins()
+    public async Task AddAuthorizationEndpoint_HostPreregisteredAuthorizationHandler_Wins()
     {
         var services = new ServiceCollection();
-        var stub = new Mock<IAuthorizationHandler>().Object;
-        services.AddSingleton<IAuthorizationHandler>(stub);
+        var stub = new Mock<IAuthorizationHandler>();
+        services.AddSingleton(stub.Object);
 
         services.AddAuthorizationEndpoint();
 
-        var descriptors = services
-            .Where(d => d.ServiceType == typeof(IAuthorizationHandler))
-            .ToList();
-
-        Assert.Single(descriptors);
-        Assert.Same(stub, descriptors[0].ImplementationInstance);
+        Assert.Single(services, d => d.ServiceType == typeof(IAuthorizationHandler));
+        await using var provider = services.BuildServiceProvider();
+        var request = new AuthorizationRequest();
+        await provider.GetRequiredService<IAuthorizationHandler>().HandleAsync(request);
+        stub.Verify(handler => handler.HandleAsync(request), Times.Once);
     }
 
     [Fact]

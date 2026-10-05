@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -34,6 +36,7 @@ public static class UserInfoEndpointServiceCollectionExtensions
     public static IServiceCollection AddUserInfoEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IUserInfoHandler, UserInfoHandler>();
+        services.Decorate<IUserInfoHandler, TracedUserInfoHandler>();
         services.TryAddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>();
         services.TryAddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
         services.TryAddSingleton<IDPoPUserInfoValidator, UserInfo.Validation.DPoPUserInfoValidator>();

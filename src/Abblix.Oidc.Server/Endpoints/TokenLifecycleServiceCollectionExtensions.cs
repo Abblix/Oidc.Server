@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.DependencyInjection;
 using System.Threading.RateLimiting;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Introspection;
@@ -16,6 +17,7 @@ using Abblix.Oidc.Server.Features.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -34,6 +36,7 @@ internal static class TokenLifecycleServiceCollectionExtensions
     internal static IServiceCollection AddRevocationEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IRevocationHandler, RevocationHandler>();
+        services.Decorate<IRevocationHandler, TracedRevocationHandler>();
         services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
         services.TryAddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Revocation);
@@ -51,6 +54,7 @@ internal static class TokenLifecycleServiceCollectionExtensions
     internal static IServiceCollection AddIntrospectionEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IIntrospectionHandler, IntrospectionHandler>();
+        services.Decorate<IIntrospectionHandler, TracedIntrospectionHandler>();
         services.TryAddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>();
         services.TryAddScoped<IIntrospectionRequestProcessor, IntrospectionRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Introspection);

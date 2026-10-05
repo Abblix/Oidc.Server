@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -28,13 +30,16 @@ internal static class ClientConfigurationEndpointServiceCollectionExtensions
         services.TryAddScoped<IClientRequestValidator, ClientRequestValidator>();
 
         services.TryAddScoped<IReadClientHandler, ReadClientHandler>();
+        services.Decorate<IReadClientHandler, TracedReadClientHandler>();
         services.TryAddScoped<IReadClientRequestProcessor, ReadClientRequestProcessor>();
 
         services.TryAddScoped<IUpdateClientHandler, UpdateClientHandler>();
+        services.Decorate<IUpdateClientHandler, TracedUpdateClientHandler>();
         services.TryAddScoped<IUpdateClientRequestValidator, UpdateClientRequestValidator>();
         services.TryAddScoped<IUpdateClientRequestProcessor, UpdateClientRequestProcessor>();
 
         services.TryAddScoped<IRemoveClientHandler, RemoveClientHandler>();
+        services.Decorate<IRemoveClientHandler, TracedRemoveClientHandler>();
         services.TryAddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();
 
         return services;
