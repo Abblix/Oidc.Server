@@ -42,12 +42,21 @@ internal static class OwnEnum
     public static IOperation Unwrapped(IOperation operation) =>
         operation is IConversionOperation { IsImplicit: true } conversion ? Unwrapped(conversion.Operand) : operation;
 
-    /// <summary>A constant's numeric value whatever the underlying type, so a byte member and an int literal agree.</summary>
-    public static decimal? Numeric(object? value) => value is null or bool or string ? null : Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture);
+    /// <summary>An integral constant's value whatever its width, so a byte member and an int literal agree.</summary>
+    /// <remarks>Anything else - a float or a char typed into a switch on an enum while the code does not compile yet - is no member.</remarks>
+    public static decimal? Numeric(object? value) =>
+        value is not null && IntegralTypes.Contains(value.GetType())
+            ? Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+
+    private static readonly HashSet<Type> IntegralTypes =
+    [
+        typeof(sbyte), typeof(byte), typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long), typeof(ulong),
+    ];
 
     private static bool SameFamily(IAssemblySymbol? declaring, IAssemblySymbol analyzed) =>
         declaring is not null
-        && string.Equals(FamilyOf(declaring.Name), FamilyOf(analyzed.Name), StringComparison.Ordinal);
+        && string.Equals(FamilyOf(declaring.Name), FamilyOf(analyzed.Name), StringComparison.OrdinalIgnoreCase);
 
     private static string FamilyOf(string assemblyName)
     {
