@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,19 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the check session iframe in a span of <see cref="TelemetryEndpoints.CheckSession"/>.
+/// Handles a request of the device authorization endpoint in a span of
+/// <see cref="TelemetryEndpoints.DeviceAuthorization"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedCheckSessionHandler(
-    ICheckSessionHandler inner,
-    ITenantAccessor? tenants = null) : ICheckSessionHandler
+internal sealed class ObservedDeviceAuthorizationHandler(
+    IDeviceAuthorizationHandler inner,
+    OidcInstruments instruments,
+    ITenantAccessor? tenants = null) : IDeviceAuthorizationHandler
 {
     /// <inheritdoc />
-    public Task<CheckSessionResponse> HandleAsync()
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.CheckSession,
+    public Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(DeviceAuthorizationRequest request, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.DeviceAuthorization,
+            instruments,
             tenants,
-            () => inner.HandleAsync(),
-            EndpointSpan.NoError);
+            () => inner.HandleAsync(request, clientRequest),
+            EndpointObservation.ErrorOf);
 }

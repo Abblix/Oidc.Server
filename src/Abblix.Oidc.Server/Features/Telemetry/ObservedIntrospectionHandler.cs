@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,19 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the discovery document in a span of <see cref="TelemetryEndpoints.Configuration"/>.
+/// Handles a request of the introspection endpoint in a span of
+/// <see cref="TelemetryEndpoints.Introspection"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedConfigurationHandler(
-    IConfigurationHandler inner,
-    ITenantAccessor? tenants = null) : IConfigurationHandler
+internal sealed class ObservedIntrospectionHandler(
+    IIntrospectionHandler inner,
+    OidcInstruments instruments,
+    ITenantAccessor? tenants = null) : IIntrospectionHandler
 {
     /// <inheritdoc />
-    public Task<Endpoints.Configuration.Interfaces.ConfigurationResponse> HandleAsync()
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Configuration,
+    public Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(IntrospectionRequest introspectionRequest, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Introspection,
+            instruments,
             tenants,
-            () => inner.HandleAsync(),
-            EndpointSpan.NoError);
+            () => inner.HandleAsync(introspectionRequest, clientRequest),
+            EndpointObservation.ErrorOf);
 }

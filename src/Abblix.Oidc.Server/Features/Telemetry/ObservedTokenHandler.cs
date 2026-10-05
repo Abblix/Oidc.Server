@@ -19,22 +19,28 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/>.
+/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="grants">Tells the grant types the server supports, the only ones a span names.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedTokenHandler(
+internal sealed class ObservedTokenHandler(
     ITokenHandler inner,
     IAuthorizationGrantHandler grants,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : ITokenHandler
 {
     /// <inheritdoc />
-    public Task<Result<TokenIssued, OidcError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken)
-        => EndpointSpan.RunAsync(
+    public Task<Result<TokenIssued, OidcError>> HandleAsync(
+        TokenRequest tokenRequest,
+        ClientRequest clientRequest,
+        CancellationToken cancellationToken)
+        => EndpointObservation.RunAsync(
             TelemetryEndpoints.Token,
+            instruments,
             tenants,
             () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
-            EndpointSpan.ErrorOf,
-            () => (TelemetryTags.GrantType, grants.GrantTypesSupported.Contains(tokenRequest.GrantType, StringComparer.Ordinal) ? tokenRequest.GrantType : null));
+            EndpointObservation.ErrorOf,
+            () => (TelemetryTags.GrantType, EndpointObservation.GrantTypeOf(tokenRequest.GrantType, grants.GrantTypesSupported)));
 }

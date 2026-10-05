@@ -8,7 +8,9 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Abblix.Oidc.Server.Features.Telemetry;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -44,5 +46,54 @@ public sealed partial class TenantIsolationTests
 
         Assert.Equal("acme", await TenantNamedAt(Acme));
         Assert.Equal("globex", await TenantNamedAt(Globex));
+    }
+
+    /// <summary>
+    /// A request and the tokens it hands out are measured under the tenant serving it.
+    /// </summary>
+    [Fact]
+    public async Task ARequestAndItsTokens_AreMeasuredUnderTheTenantServingIt()
+    {
+        var meters = _app!.Services.GetRequiredService<IMeterFactory>();
+        var measured = new ConcurrentQueue<(string Instrument, string? Endpoint, string? Tenant)>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == OidcTelemetry.SourceName && ReferenceEquals(instrument.Meter.Scope, meters))
+                    listener.EnableMeasurementEvents(instrument);
+            },
+        };
+        void Record(Instrument instrument, ReadOnlySpan<KeyValuePair<string, object?>> tags)
+        {
+            var named = new Dictionary<string, object?>(tags.ToArray());
+            measured.Enqueue((
+                instrument.Name,
+                (string?)named.GetValueOrDefault(TelemetryTags.Endpoint),
+                (string?)named.GetValueOrDefault(TelemetryTags.Tenant)));
+        }
+        listener.SetMeasurementEventCallback<double>((instrument, _, tags, _) => Record(instrument, tags));
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) => Record(instrument, tags));
+        listener.Start();
+
+        await AccessTokenOfADeviceFlowAsync(Acme);
+        (await Http.GetAsync(Globex + ConfigurationPath, TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+
+        var tokenRequests = measured
+            .Where(m => m is { Instrument: OidcMetrics.RequestDuration, Endpoint: TelemetryEndpoints.Token })
+            .ToArray();
+        Assert.NotEmpty(tokenRequests);
+        Assert.All(tokenRequests, m => Assert.Equal("acme", m.Tenant));
+
+        var issued = measured.Where(m => m.Instrument == OidcMetrics.TokensIssued).ToArray();
+        Assert.NotEmpty(issued);
+        Assert.All(issued, m => Assert.Equal("acme", m.Tenant));
+
+        Assert.Contains(measured, m => m is
+        {
+            Instrument: OidcMetrics.RequestDuration,
+            Endpoint: TelemetryEndpoints.Configuration,
+            Tenant: "globex",
+        });
     }
 }

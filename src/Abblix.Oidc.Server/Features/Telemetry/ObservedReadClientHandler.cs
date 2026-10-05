@@ -18,19 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the client registration endpoint in a span of <see cref="TelemetryEndpoints.RegisterClient"/>.
+/// Handles a request of reading a registered client's configuration in a span of
+/// <see cref="TelemetryEndpoints.ReadClient"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedRegisterClientHandler(
-    IRegisterClientHandler inner,
-    ITenantAccessor? tenants = null) : IRegisterClientHandler
+internal sealed class ObservedReadClientHandler(
+    IReadClientHandler inner,
+    OidcInstruments instruments,
+    ITenantAccessor? tenants = null) : IReadClientHandler
 {
     /// <inheritdoc />
-    public Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.RegisterClient,
+    public Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.ReadClient,
+            instruments,
             tenants,
-            () => inner.HandleAsync(clientRegistrationRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(clientRequest),
+            EndpointObservation.ErrorOf);
 }

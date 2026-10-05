@@ -69,7 +69,7 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // (every contributor is Singleton - no captive-dep risk for Singleton consumers).
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
         services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
-        return services.AddEndpointSpan<IAuthorizationHandler, TracedAuthorizationHandler>();
+        return services.AddTelemetryDecorator<IAuthorizationHandler, ObservedAuthorizationHandler>();
     }
 
     /// <summary>

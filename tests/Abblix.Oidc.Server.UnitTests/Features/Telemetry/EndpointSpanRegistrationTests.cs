@@ -42,10 +42,10 @@ public sealed class EndpointSpanRegistrationTests
     [Fact]
     public void EveryEndpointHandler_IsWrappedInItsSpan()
     {
-        var decorators = typeof(EndpointSpansRegistered).Assembly
+        var decorators = typeof(TelemetryDecoratorsRegistered).Assembly
             .GetTypes()
-            .Where(type => type.Namespace == typeof(EndpointSpansRegistered).Namespace &&
-                           type.Name.StartsWith("Traced", System.StringComparison.Ordinal))
+            .Where(type => type.Namespace == typeof(TelemetryDecoratorsRegistered).Namespace &&
+                           type.Name.StartsWith("Observed", System.StringComparison.Ordinal))
             .ToArray();
         Assert.Equal(15, decorators.Length);
 

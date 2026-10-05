@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,19 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the revocation endpoint in a span of <see cref="TelemetryEndpoints.Revocation"/>.
+/// Handles a request of the end session endpoint in a span of
+/// <see cref="TelemetryEndpoints.EndSession"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedRevocationHandler(
-    IRevocationHandler inner,
-    ITenantAccessor? tenants = null) : IRevocationHandler
+internal sealed class ObservedEndSessionHandler(
+    IEndSessionHandler inner,
+    OidcInstruments instruments,
+    ITenantAccessor? tenants = null) : IEndSessionHandler
 {
     /// <inheritdoc />
-    public Task<Result<TokenRevoked, OidcError>> HandleAsync(RevocationRequest revocationRequest, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.Revocation,
+    public Task<Result<Endpoints.EndSession.Interfaces.IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.EndSession,
+            instruments,
             tenants,
-            () => inner.HandleAsync(revocationRequest, clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(endSessionRequest),
+            EndpointObservation.ErrorOf);
 }

@@ -9,10 +9,10 @@
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// The decorators already wrapping their endpoint's handler, so a registration method called again does not wrap it
-/// in a second span.
+/// The decorators already wrapping their service, so a registration method called again does not measure a call
+/// twice.
 /// </summary>
-internal sealed class EndpointSpansRegistered
+internal sealed class TelemetryDecoratorsRegistered
 {
     /// <summary>
     /// The decorators registered.

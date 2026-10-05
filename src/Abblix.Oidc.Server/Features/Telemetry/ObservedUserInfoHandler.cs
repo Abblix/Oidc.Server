@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -18,19 +18,22 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the device authorization endpoint in a span of <see cref="TelemetryEndpoints.DeviceAuthorization"/>.
+/// Handles a request of the userinfo endpoint in a span of <see cref="TelemetryEndpoints.UserInfo"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedDeviceAuthorizationHandler(
-    IDeviceAuthorizationHandler inner,
-    ITenantAccessor? tenants = null) : IDeviceAuthorizationHandler
+internal sealed class ObservedUserInfoHandler(
+    IUserInfoHandler inner,
+    OidcInstruments instruments,
+    ITenantAccessor? tenants = null) : IUserInfoHandler
 {
     /// <inheritdoc />
-    public Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(DeviceAuthorizationRequest request, ClientRequest clientRequest)
-        => EndpointSpan.RunAsync(
-            TelemetryEndpoints.DeviceAuthorization,
+    public Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest)
+        => EndpointObservation.RunAsync(
+            TelemetryEndpoints.UserInfo,
+            instruments,
             tenants,
-            () => inner.HandleAsync(request, clientRequest),
-            EndpointSpan.ErrorOf);
+            () => inner.HandleAsync(userInfoRequest, clientRequest),
+            EndpointObservation.ErrorOf);
 }

@@ -83,7 +83,8 @@ public partial class IntrospectionRequestValidator(
 			LogCallerRateLimited(clientInfo.ClientId);
 			return new TooManyRequestsError(
 				"Too many introspection requests from this client",
-				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
+				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
+				CallerRateLimiters.Introspection);
 		}
 
 		// The audience is deliberately not required to name this server. Introspection reports on a token, it

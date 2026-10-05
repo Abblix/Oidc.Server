@@ -9,6 +9,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -87,8 +88,8 @@ public class RefusalsCarryNoSynthesizedBodyTests
         }
 
         // The one shape whose arm depends on a value it carries rather than on its type.
-        AssertNoSynthesizedBody(new TooManyRequestsError("too many", TimeSpan.FromSeconds(1)), "with an interval");
-        AssertNoSynthesizedBody(new TooManyRequestsError("too many", RetryAfter: null), "naming no interval");
+        AssertNoSynthesizedBody(new TooManyRequestsError("too many", TimeSpan.FromSeconds(1), CallerRateLimiters.Introspection), "with an interval");
+        AssertNoSynthesizedBody(new TooManyRequestsError("too many", RetryAfter: null, CallerRateLimiters.Introspection), "naming no interval");
     }
 
     /// <summary>

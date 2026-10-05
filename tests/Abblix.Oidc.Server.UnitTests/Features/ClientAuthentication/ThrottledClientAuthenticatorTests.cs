@@ -90,6 +90,7 @@ public class ThrottledClientAuthenticatorTests
 
         // Assert
         Assert.NotNull(refusal.RetryAfter);
+        Assert.Equal(CallerRateLimiters.AuthenticationFailures, refusal.Refusal.Budget);
 
         // The credential in the second request never reached the authenticator, which is the whole point.
         _inner.Verify(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()), Times.Once);

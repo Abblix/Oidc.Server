@@ -8,31 +8,37 @@
 
 using Abblix.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Wraps an endpoint's handler in the span of its endpoint.
+/// Wraps a service in the decorator that measures its calls.
 /// </summary>
-internal static class EndpointSpanServiceCollectionExtensions
+internal static class TelemetryServiceCollectionExtensions
 {
     /// <summary>
-    /// Wraps the registered <typeparamref name="THandler"/> in <typeparamref name="TDecorator"/>, once however often the
-    /// endpoint's registration method runs.
+    /// Wraps the registered <typeparamref name="THandler"/> in <typeparamref name="TDecorator"/>, once however often
+    /// the registration method of the service runs.
     /// </summary>
-    public static IServiceCollection AddEndpointSpan<THandler, TDecorator>(this IServiceCollection services)
+    public static IServiceCollection AddTelemetryDecorator<THandler, TDecorator>(this IServiceCollection services)
         where THandler : class
         where TDecorator : class, THandler
     {
         var registered = services
             .Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<EndpointSpansRegistered>()
+            .OfType<TelemetryDecoratorsRegistered>()
             .SingleOrDefault();
 
         if (registered is null)
         {
-            registered = new EndpointSpansRegistered();
+            registered = new TelemetryDecoratorsRegistered();
             services.AddSingleton(registered);
+
+            // The meter comes from the host's factory, which an ASP.NET Core host registers already; the call adds
+            // one only where none is.
+            services.AddMetrics();
+            services.TryAddSingleton<OidcInstruments>();
         }
 
         return registered.Decorators.Add(typeof(TDecorator))

@@ -36,7 +36,7 @@ public static class UserInfoEndpointServiceCollectionExtensions
     public static IServiceCollection AddUserInfoEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IUserInfoHandler, UserInfoHandler>();
-        services.AddEndpointSpan<IUserInfoHandler, TracedUserInfoHandler>();
+        services.AddTelemetryDecorator<IUserInfoHandler, ObservedUserInfoHandler>();
         services.TryAddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>();
         services.TryAddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
         services.TryAddSingleton<IDPoPUserInfoValidator, UserInfo.Validation.DPoPUserInfoValidator>();

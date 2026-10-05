@@ -55,7 +55,8 @@ public sealed class AuthenticationFailureBudget(
 
         return new TooManyRequestsError(
             "Too many failed client authentications from this source",
-            available.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
+            available.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
+            CallerRateLimiters.AuthenticationFailures);
     }
 
     /// <summary>

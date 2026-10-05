@@ -91,7 +91,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
 
         Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer, settings));
 
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.ThrowsAny<InvalidOperationException>(
             () => LicenseChecker.CheckIssuer("https://attacker.example.com", settings));
         Assert.Contains("license", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

@@ -122,7 +122,8 @@ public partial class RevocationRequestValidator(
 
 			return new TooManyRequestsError(
 				"Too many revocation requests from this client",
-				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
+				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
+				CallerRateLimiters.Revocation);
 		}
 
 		return await ReadTokenAsync(revocationRequest, clientInfo);

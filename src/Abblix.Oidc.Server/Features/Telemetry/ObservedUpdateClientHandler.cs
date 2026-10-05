@@ -18,19 +18,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of updating a registered client's configuration in a span of <see cref="TelemetryEndpoints.UpdateClient"/>.
+/// Handles a request of updating a registered client's configuration in a span of
+/// <see cref="TelemetryEndpoints.UpdateClient"/> and measures it.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class TracedUpdateClientHandler(
+internal sealed class ObservedUpdateClientHandler(
     IUpdateClientHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IUpdateClientHandler
 {
     /// <inheritdoc />
     public Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(UpdateClientRequest request)
-        => EndpointSpan.RunAsync(
+        => EndpointObservation.RunAsync(
             TelemetryEndpoints.UpdateClient,
+            instruments,
             tenants,
             () => inner.HandleAsync(request),
-            EndpointSpan.ErrorOf);
+            EndpointObservation.ErrorOf);
 }

@@ -34,7 +34,7 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
 
         services.TryAddScoped<IBackChannelAuthenticationRequestFetcher, BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter>();
         services.TryAddScoped<IBackChannelAuthenticationHandler, BackChannelAuthenticationHandler>();
-        services.AddEndpointSpan<IBackChannelAuthenticationHandler, TracedBackChannelAuthenticationHandler>();
+        services.AddTelemetryDecorator<IBackChannelAuthenticationHandler, ObservedBackChannelAuthenticationHandler>();
         services.TryAddScoped<IBackChannelAuthenticationRequestValidator, BackChannelAuthenticationRequestValidator>();
         services.TryAddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
 

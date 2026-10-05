@@ -53,7 +53,7 @@ internal sealed partial class ThrottledClientAuthenticator(
         if (budget.RefuseIfSpent(source) is { } refusal)
         {
             LogSourceRefused(Sanitized.Value(source));
-            throw new TooManyAuthenticationFailuresException(refusal.RetryAfter);
+            throw new TooManyAuthenticationFailuresException(refusal);
         }
 
         var clientInfo = await inner.TryAuthenticateClientAsync(request);
