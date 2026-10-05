@@ -70,8 +70,8 @@ public static partial class LicenseChecker
     /// <remarks>
     /// A client is counted where a token is issued to it, by the client and the issuer the token names, so every
     /// client a token is issued to is counted and two tenants registering a client under one id take two places. A
-    /// client of a tenant the server's own catalog serves stops counting once the tenant is released, or once it is
-    /// removed through registration; on a server without tenants, once it is removed through registration or dropped by
+    /// client of a tenant the server's own catalog serves stops counting once the tenant is released, once the tenant's
+    /// definition stops configuring it, or once it is removed through registration; on a server without tenants, once it is removed through registration or dropped by
     /// a reload of the settings, served by the reloadable client store. A client counted under any other settings stays
     /// counted for the life of the process.
     /// </remarks>
@@ -274,8 +274,8 @@ public static partial class LicenseChecker
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
     /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
     /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; settings other than
-    /// the server's own, a tenant a catalog of the host's own resolved included, are counted by the issuer string and
-    /// never released.</param>
+    /// those of a tenant the server's own catalog serves, a server's without tenants included, are counted by the
+    /// issuer string and never released.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer, IIssuerSettings settings)
     {
