@@ -78,6 +78,9 @@ public static class ServiceCollectionExtensions
         // pre-registered its own custodian, which the repo's DI rule forbids.
         services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<KeyVaultClient>());
 
+        // The clock the custodian lets its cached crypto clients go by; a host's own wins
+        services.TryAddSingleton(TimeProvider.System);
+
         return services.RequireKeyPlacement();
     }
 
