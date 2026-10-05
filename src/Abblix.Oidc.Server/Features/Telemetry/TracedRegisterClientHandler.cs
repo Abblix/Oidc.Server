@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
 /// Handles a request of the client registration endpoint in a span of <see cref="TelemetryEndpoints.RegisterClient"/>,
-/// and counts it by how it was answered.
+/// and counts it by how it ended.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
 /// <param name="instruments">Records the request into the server's metrics.</param>
@@ -32,14 +32,22 @@ internal sealed class TracedRegisterClientHandler(
     /// <inheritdoc />
     public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest)
     {
-        var result = await EndpointSpan.RunAsync(
-            TelemetryEndpoints.RegisterClient,
-            instruments,
-            tenants,
-            () => inner.HandleAsync(clientRegistrationRequest),
-            EndpointSpan.ErrorOf);
+        var outcome = TelemetryOutcomes.Failed;
+        try
+        {
+            var result = await EndpointSpan.RunAsync(
+                TelemetryEndpoints.RegisterClient,
+                instruments,
+                tenants,
+                () => inner.HandleAsync(clientRegistrationRequest),
+                EndpointSpan.ErrorOf);
 
-        instruments.ClientRegistration(result.TryGetSuccess(out _) ? TelemetryOutcomes.Success : TelemetryOutcomes.Refused);
-        return result;
+            outcome = result.TryGetSuccess(out _) ? TelemetryOutcomes.Success : TelemetryOutcomes.Refused;
+            return result;
+        }
+        finally
+        {
+            instruments.ClientRegistration(outcome);
+        }
     }
 }

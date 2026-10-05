@@ -19,11 +19,13 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -169,36 +171,44 @@ public sealed class EndpointMetricsTests : IDisposable
         Assert.Single(refusal);
     }
 
-    [Fact]
-    public async Task ATokenResponse_CountsEachTokenItHandsOut()
-    {
-        var inner = new Mock<ITokenHandler>();
-        inner
-            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Issued with { IdToken = AToken, RefreshToken = AToken });
-        var grants = Mock.Of<IAuthorizationGrantHandler>(g => g.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode });
-        var traced = new TracedTokenHandler(inner.Object, grants, _instruments);
+    private static ValidTokenRequest ValidRequest(string grantType) => new(
+        new TokenRequest { GrantType = grantType },
+        new AuthorizedGrant(
+            new AuthSession("subject", "session-1", DateTimeOffset.UnixEpoch, "idp"),
+            new AuthorizationContext("client-1", [Scopes.OpenId], null)),
+        new ClientInfo("client-1"),
+        [],
+        []);
 
-        await traced.HandleAsync(
-            new TokenRequest { GrantType = GrantTypes.AuthorizationCode }, new ClientRequest(), CancellationToken.None);
+    [Fact]
+    public async Task AProcessedTokenRequest_CountsEachTokenItHandsOut()
+    {
+        var inner = new Mock<ITokenRequestProcessor>();
+        inner
+            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync(Issued with { IdToken = AToken, RefreshToken = AToken });
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments);
+
+        // A CIBA push delivery mints its tokens through the processor with no request to the token endpoint
+        await measured.ProcessAsync(ValidRequest(GrantTypes.Ciba));
 
         var issued = _measured.Of(OidcMetrics.TokensIssued);
         Assert.Equal(
             [TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken, TelemetryTokenTypes.RefreshToken],
             issued.Select(tags => tags[TelemetryTags.TokenType]));
-        Assert.All(issued, tags => Assert.Equal(GrantTypes.AuthorizationCode, tags[TelemetryTags.GrantType]));
+        Assert.All(issued, tags => Assert.Equal(GrantTypes.Ciba, tags[TelemetryTags.GrantType]));
     }
 
     [Fact]
     public async Task ARefusedTokenRequest_CountsNoToken()
     {
-        var inner = new Mock<ITokenHandler>();
+        var inner = new Mock<ITokenRequestProcessor>();
         inner
-            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "The code has expired"));
-        var traced = new TracedTokenHandler(inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments);
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments);
 
-        await traced.HandleAsync(new TokenRequest(), new ClientRequest(), CancellationToken.None);
+        await measured.ProcessAsync(ValidRequest(GrantTypes.AuthorizationCode));
 
         Assert.Empty(_measured.Of(OidcMetrics.TokensIssued));
     }
@@ -244,6 +254,22 @@ public sealed class EndpointMetricsTests : IDisposable
             _measured.Of(OidcMetrics.ClientsRegistered).Select(tags => tags[TelemetryTags.Outcome]));
     }
 
+    [Fact]
+    public async Task ARegistrationEndingInAnException_IsCountedAsFailedAndPassesOn()
+    {
+        var inner = new Mock<IRegisterClientHandler>();
+        inner
+            .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
+            .ThrowsAsync(new TimeoutException());
+        var traced = new TracedRegisterClientHandler(inner.Object, _instruments);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => traced.HandleAsync(new ClientRegistrationRequest()));
+
+        Assert.Equal(
+            TelemetryOutcomes.Failed,
+            Assert.Single(_measured.Of(OidcMetrics.ClientsRegistered))[TelemetryTags.Outcome]);
+    }
+
     [Theory]
     [InlineData(SigningAlgorithms.RS256, SigningAlgorithms.RS256)]
     [InlineData(null, TelemetryTags.Other)]
@@ -256,9 +282,25 @@ public sealed class EndpointMetricsTests : IDisposable
             .ReturnsAsync("jws");
         var signer = new MeasuredJsonWebTokenSigner(inner.Object, _instruments);
 
-        Assert.Equal("jws", await signer.SignAsync(new JsonWebToken(), null, TestContext.Current.CancellationToken));
+        Assert.Equal("jws", await signer.SignAsync(new JsonWebToken(), SigningKey, TestContext.Current.CancellationToken));
 
         var signing = Assert.Single(_measured.Of(OidcMetrics.TokenSigningDuration));
         Assert.Equal(measured, signing[TelemetryTags.SigningAlgorithm]);
     }
+
+    [Fact]
+    public async Task ATokenLeftUnsigned_IsNotMeasured()
+    {
+        var inner = new Mock<IJsonWebTokenSigner>();
+        inner
+            .Setup(s => s.SignAsync(It.IsAny<JsonWebToken>(), null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("jwt.");
+        var signer = new MeasuredJsonWebTokenSigner(inner.Object, _instruments);
+
+        Assert.Equal("jwt.", await signer.SignAsync(new JsonWebToken(), null, TestContext.Current.CancellationToken));
+
+        Assert.Empty(_measured.Of(OidcMetrics.TokenSigningDuration));
+    }
+
+    private static readonly JsonWebKey SigningKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 }

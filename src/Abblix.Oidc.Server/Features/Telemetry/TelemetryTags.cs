@@ -26,7 +26,8 @@ public static class TelemetryTags
 
     /// <summary>
     /// The grant type of a token request, when it is one the server supports; on a token the authorization endpoint
-    /// hands out, <c>implicit</c>.
+    /// hands out through the front channel, <c>implicit</c>, which then counts the hybrid flow's tokens too, since
+    /// the protocol names no grant type of its own for them.
     /// </summary>
     public const string GrantType = "oauth.grant_type";
 

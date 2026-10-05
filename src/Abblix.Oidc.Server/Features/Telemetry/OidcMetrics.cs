@@ -22,24 +22,28 @@ public static class OidcMetrics
     /// <summary>
     /// A histogram of the seconds the server takes to handle a request of an endpoint, by
     /// <see cref="TelemetryTags.Endpoint"/>, <see cref="TelemetryTags.Outcome"/>, <see cref="TelemetryTags.Error"/>
-    /// and <see cref="TelemetryTags.Tenant"/>. Its count is the number of requests.
+    /// and <see cref="TelemetryTags.Tenant"/>. Its count is the number of requests of the endpoints
+    /// <see cref="TelemetryEndpoints"/> names; the key set is served as it stands and is not among them, so a host
+    /// sees it in its own HTTP measurements.
     /// </summary>
     public const string RequestDuration = "oidc.request.duration";
 
     /// <summary>
     /// A counter of the tokens the server hands out, by <see cref="TelemetryTags.TokenType"/>,
-    /// <see cref="TelemetryTags.GrantType"/> and <see cref="TelemetryTags.Tenant"/>.
+    /// <see cref="TelemetryTags.GrantType"/> and <see cref="TelemetryTags.Tenant"/>: at the token endpoint, in a CIBA
+    /// push delivery, and through the front channel of the authorization endpoint.
     /// </summary>
     public const string TokensIssued = "oidc.tokens.issued";
 
     /// <summary>
     /// A histogram of the seconds signing one token takes, by <see cref="TelemetryTags.SigningAlgorithm"/>; a key
-    /// held by an external custodian shows here as the round trip to it.
+    /// held by an external custodian shows here as the round trip to it. A token left unsigned is not recorded.
     /// </summary>
     public const string TokenSigningDuration = "oidc.token.signing.duration";
 
     /// <summary>
-    /// A counter of dynamic client registration requests, by <see cref="TelemetryTags.Outcome"/>.
+    /// A counter of dynamic client registration requests, by <see cref="TelemetryTags.Outcome"/>, a registration
+    /// ending in an exception included.
     /// </summary>
     public const string ClientsRegistered = "oidc.clients.registered";
 

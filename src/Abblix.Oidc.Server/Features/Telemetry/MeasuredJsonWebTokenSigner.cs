@@ -12,7 +12,8 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Records how long signing each token takes into <see cref="OidcMetrics.TokenSigningDuration"/>.
+/// Records how long signing each token takes into <see cref="OidcMetrics.TokenSigningDuration"/>; a token left
+/// unsigned, for want of a key, is not a signing and is not recorded.
 /// </summary>
 /// <param name="inner">The signer the server uses.</param>
 /// <param name="instruments">Records the signing into the server's metrics.</param>
@@ -25,6 +26,9 @@ internal sealed class MeasuredJsonWebTokenSigner(IJsonWebTokenSigner inner, Oidc
         JsonWebKey? signingKey,
         CancellationToken cancellationToken = default)
     {
+        if (signingKey is null)
+            return await inner.SignAsync(token, signingKey, cancellationToken);
+
         var started = Stopwatch.GetTimestamp();
         var jws = await inner.SignAsync(token, signingKey, cancellationToken);
 
