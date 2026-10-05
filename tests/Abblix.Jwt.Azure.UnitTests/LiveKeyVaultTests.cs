@@ -67,7 +67,8 @@ public sealed class LiveKeyVaultTests : IDisposable
             NullLogger<KeyVaultClient>.Instance,
             new AzureKeyVaultOptions { KeyVaultUri = uri },
             credential,
-            _httpClient);
+            _httpClient,
+            TimeProvider.System);
 
         var keyNames = await keyClient.GetPropertiesOfKeysAsync(cancellationToken)
             .Select(key => key.Name)

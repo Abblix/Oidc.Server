@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Collections.Concurrent;
 using System.Net;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt.ExternalKeys;
@@ -29,14 +28,13 @@ namespace Abblix.Jwt.Azure;
 /// Thin wrapper over the Azure Key Vault SDK. Signing and unwrapping run inside the vault against a key whose
 /// private half never leaves it, so this type only moves bytes across the boundary. The Azure SDK is pointed at
 /// the host's <see cref="IHttpClientFactory"/> transport (like the Vault client), so it inherits the host's HTTP
-/// handlers, logging and pooling. A <see cref="CryptographyClient"/> is cached per key name because creating one
-/// resolves the key's metadata on first use.
+/// handlers, logging and pooling. The crypto client of each key version is kept in <see cref="CryptographyClients"/>.
 /// </summary>
-public sealed partial class KeyVaultClient : IKeyCustodian
+public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
 {
     private readonly ILogger<KeyVaultClient> _logger;
     private readonly KeyVault.KeyClient _keyClient;
-    private readonly ConcurrentDictionary<string, CryptographyClient> _cryptographyClients = new();
+    private readonly CryptographyClients _cryptographyClients;
 
     /// <summary>
     /// Creates the client for the vault named by <paramref name="options"/>, selecting a client-secret
@@ -48,7 +46,7 @@ public sealed partial class KeyVaultClient : IKeyCustodian
     /// Azure SDK rides the host's HTTP pipeline.</param>
     [ActivatorUtilitiesConstructor]
     public KeyVaultClient(ILogger<KeyVaultClient> logger, IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
-        : this(logger, options.Value, BuildCredential(options.Value), httpClient)
+        : this(logger, options.Value, BuildCredential(options.Value), httpClient, TimeProvider.System)
     {
     }
 
@@ -61,11 +59,13 @@ public sealed partial class KeyVaultClient : IKeyCustodian
     /// <param name="settings">The Azure Key Vault options.</param>
     /// <param name="credential">The credential the SDK authenticates with.</param>
     /// <param name="httpClient">The transport for every Key Vault call.</param>
+    /// <param name="timeProvider">The clock the cached crypto clients are let go by.</param>
     internal KeyVaultClient(
         ILogger<KeyVaultClient> logger,
         AzureKeyVaultOptions settings,
         TokenCredential credential,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        TimeProvider timeProvider)
     {
         _logger = logger;
 
@@ -76,6 +76,7 @@ public sealed partial class KeyVaultClient : IKeyCustodian
             settings.KeyVaultUri,
             credential,
             new KeyVault.KeyClientOptions { Transport = new HttpClientTransport(httpClient) });
+        _cryptographyClients = new CryptographyClients(_keyClient, timeProvider);
     }
 
     // Use explicit service-principal credentials from configuration when all three are set; otherwise fall back to
@@ -101,7 +102,7 @@ public sealed partial class KeyVaultClient : IKeyCustodian
             "sign",
             async () =>
             {
-                var client = GetCryptographyClient(keyId);
+                var client = _cryptographyClients.For(keyId);
                 var signatureAlgorithm = KeyVaultAlgorithms.ForSigning(algorithm);
                 var result = await client.SignDataAsync(signatureAlgorithm, data, cancellationToken);
                 return result.Signature;
@@ -128,7 +129,7 @@ public sealed partial class KeyVaultClient : IKeyCustodian
         {
         try
         {
-            var client = GetCryptographyClient(keyId);
+            var client = _cryptographyClients.For(keyId);
             var result = await client.DecryptAsync(encryptionAlgorithm, encryptedKey, cancellationToken);
             return result.Plaintext;
         }
@@ -177,21 +178,6 @@ public sealed partial class KeyVaultClient : IKeyCustodian
             yield return version;
     }
 
-    /// <summary>
-    /// The crypto client for a key version, cached because building one costs a metadata resolve on first use.
-    /// </summary>
-    /// <param name="keyId">The published <c>kid</c>: the key name and its version, as this client stamped it.</param>
-    /// <remarks>
-    /// The SDK builds the client from the parent <see cref="KeyVault.KeyClient"/>, which hands down its own
-    /// credential, options and pipeline - so the injected transport carries through without being restated, and
-    /// the key's URI is composed by the SDK rather than by string concatenation here.
-    /// </remarks>
-    private CryptographyClient GetCryptographyClient(string keyId)
-        => _cryptographyClients.GetOrAdd(
-            keyId,
-            id =>
-            {
-                var (name, version) = KeyVaultKeyId.Parse(id);
-                return _keyClient.GetCryptographyClient(name, version);
-            });
+    /// <inheritdoc />
+    public void Dispose() => _cryptographyClients.Dispose();
 }

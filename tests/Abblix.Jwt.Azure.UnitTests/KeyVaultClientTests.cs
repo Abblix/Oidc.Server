@@ -12,6 +12,7 @@ using Azure.Identity;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using Abblix.Jwt.ExternalKeys;
 
@@ -31,7 +32,7 @@ public sealed class KeyVaultClientTests : IDisposable
     // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
     private readonly List<HttpClient> _httpClients = [];
 
-    private KeyVaultClient ClientOver(StubHttpMessageHandler handler)
+    private KeyVaultClient ClientOver(StubHttpMessageHandler handler, TimeProvider? timeProvider = null)
     {
         var httpClient = new HttpClient(handler);
         _httpClients.Add(httpClient);
@@ -39,8 +40,36 @@ public sealed class KeyVaultClientTests : IDisposable
             NullLogger<KeyVaultClient>.Instance,
             new AzureKeyVaultOptions { KeyVaultUri = VaultUri },
             new StaticTokenCredential(),
-            httpClient);
+            httpClient,
+            timeProvider ?? TimeProvider.System);
     }
+
+    /// <summary>
+    /// The client for a key version is kept while it is used, so signing again asks the vault for the key no second
+    /// time, and let go once it has gone unused for the idle lifetime, so the clients of rotated versions and of
+    /// tenants no longer served do not pile up: the next signature builds a new one, which asks for the key again.
+    /// </summary>
+    [Fact]
+    public async Task TheClientOfAKeyVersion_IsKeptWhileUsed_AndLetGoWhenIdle()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var key = KeyFor(SigningAlgorithms.RS256);
+        var handler = SignResponder("oidc-sign", [1, 2, 3], key.Bundle);
+        var time = new FakeTimeProvider();
+        var custodian = ClientOver(handler, time);
+
+        await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        Assert.Equal(1, KeyReads(handler));
+
+        time.Advance(CryptographyClients.IdleLifetime + TimeSpan.FromSeconds(1));
+        await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        Assert.Equal(2, KeyReads(handler));
+    }
+
+    // The requests that read the key itself, as a new crypto client does before its first operation
+    private static int KeyReads(StubHttpMessageHandler handler)
+        => handler.Requests.Count(request => request.Method == HttpMethod.Get);
 
 
     [Fact]
