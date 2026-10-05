@@ -91,7 +91,7 @@ public record AuthorizationContext
     /// An array of unique scope names represented as strings, combining those from scopes
     /// and resources.
     /// </returns>
-    private static string[] GetScopeNames(ScopeDefinition[] scopes, ResourceDefinition[] resources)
+    internal static string[] GetScopeNames(ScopeDefinition[] scopes, ResourceDefinition[] resources)
     {
         return scopes
             .Concat(resources.SelectMany(rd => rd.Scopes))

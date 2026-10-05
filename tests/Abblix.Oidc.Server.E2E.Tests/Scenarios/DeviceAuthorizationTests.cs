@@ -152,7 +152,7 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
     }
 
     [Fact]
-    public async Task A_device_flow_may_ask_for_a_scope_the_resource_it_names_declares()
+    public async Task A_device_request_for_a_scope_the_resource_it_names_declares_is_accepted()
     {
         // A scope declared only by a resource is valid only beside that resource, so the resource has to be
         // read before the scope is judged, as the other endpoints read it.

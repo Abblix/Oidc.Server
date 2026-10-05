@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -27,7 +28,7 @@ public record ValidDeviceAuthorizationRequest
     {
         Model = context.Request;
         ClientInfo = context.ClientInfo;
-        Scope = context.Scope.Select(s => s.Scope).ToArray();
+        Scope = AuthorizationContext.GetScopeNames(context.Scope, context.Resources);
         Resources = context.Resources.Select(r => r.Resource).ToArray();
         AuthorizationDetails = context.AuthorizationDetails;
     }
