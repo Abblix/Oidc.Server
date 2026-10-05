@@ -82,6 +82,10 @@ public static class TestConstants
         Justification = "Canonical test resource indicator shared by resource-indicator scenarios; not a deployment URL.")]
     public const string ApiResource = "https://api.example.com/orders";
 
+    /// <summary>A scope only <see cref="ApiResource"/> declares, so a request asking for it names that
+    /// resource too.</summary>
+    public const string ApiScope = "orders.read";
+
     /// <summary>The single canonical redirect_uri.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri shared by every pre-seeded client; not a deployment URL.")]

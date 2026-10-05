@@ -48,8 +48,8 @@ public static class DeviceAuthorizationServiceCollectionExtensions
 
     /// <summary>
     /// Configures and registers a composite of device authorization context validators into the
-    /// service collection. Validators run in sequence to verify the client, the requested scopes,
-    /// and the requested resources before a device authorization request (RFC 8628) is accepted.
+    /// service collection. Validators run in sequence to verify the client, the requested resources,
+    /// and the requested scopes before a device authorization request (RFC 8628) is accepted.
     /// </summary>
     /// <param name="services">The service collection to which the device authorization context validators will be added.</param>
     /// <returns>The modified service collection with the registered device authorization context validators.</returns>
@@ -57,8 +57,9 @@ public static class DeviceAuthorizationServiceCollectionExtensions
     {
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ClientValidator>(),
-            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>(),
+            // The resources go first: a scope only a resource declares is judged against the resources requested
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>(),
+            ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>(),
             // RFC 9396 section 3 authorization_details on device authorization requests.
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorizationDetailsValidator>(),
         ]);

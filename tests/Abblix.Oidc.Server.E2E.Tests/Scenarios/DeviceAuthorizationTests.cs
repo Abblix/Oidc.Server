@@ -10,6 +10,7 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -148,6 +149,33 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         var body = await ReadJsonAsync(response);
         Assert.Null(body[DeviceResponse.Parameters.DeviceCode]);
         Assert.Null(body[DeviceResponse.Parameters.UserCode]);
+    }
+
+    [Fact]
+    public async Task A_device_request_for_a_scope_the_resource_it_names_declares_is_accepted()
+    {
+        // A scope declared only by a resource is valid only beside that resource, so the resource has to be
+        // read before the scope is judged, as the other endpoints read it.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var device = await RegisterDeviceClientAsync(client, discovery, "device-resource-scope");
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.DeviceAuthorizationEndpoint!,
+            new Dictionary<string, string>
+            {
+                [DeviceRequest.Parameters.Scope] = $"{Scopes.OpenId} {TestConstants.ApiScope}",
+                [DeviceRequest.Parameters.Resource] = TestConstants.ApiResource,
+                [ClientRequest.Parameters.ClientId] = device.ClientId,
+                [ClientRequest.Parameters.ClientSecret] = device.ClientSecret,
+            });
+
+        var body = await ReadJsonAsync(response);
+        Assert.True(
+            response.IsSuccessStatusCode,
+            $"device authorization should succeed, got {(int)response.StatusCode}: {body}");
+        Assert.NotNull(body[DeviceResponse.Parameters.DeviceCode]);
     }
 
     [Fact]
