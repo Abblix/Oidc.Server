@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the discovery document in a span of <see cref="TelemetryEndpoints.Configuration"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedConfigurationHandler(
     IConfigurationHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IConfigurationHandler
 {
     /// <inheritdoc />
     public Task<Endpoints.Configuration.Interfaces.ConfigurationResponse> HandleAsync()
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.Configuration,
+            instruments,
             tenants,
             () => inner.HandleAsync(),
             EndpointSpan.NoError);

@@ -20,6 +20,9 @@ namespace Abblix.Oidc.Server.Common;
 /// How long before the budget is available again, as the limiter reports it. Null when the limiter names no
 /// interval, and then the response carries no <c>Retry-After</c>.
 /// </param>
+/// <param name="Budget">The budget the caller has spent, as the key it is registered under - one of
+/// <see cref="Features.RateLimiting.CallerRateLimiters"/> for the server's own - which the server's metrics
+/// count the refusal under.</param>
 /// <remarks>
 /// The status and the header carry the whole answer: no registered OAuth error code describes a caller that has
 /// asked too often, and the nearest two say something else - <c>slow_down</c> tells a client polling for a
@@ -27,5 +30,5 @@ namespace Abblix.Oidc.Server.Common;
 /// the browser again. The code and the description here never reach a caller; a host reads them if it decorates
 /// one of the validators.
 /// </remarks>
-public sealed record TooManyRequestsError(string ErrorDescription, TimeSpan? RetryAfter)
+public sealed record TooManyRequestsError(string ErrorDescription, TimeSpan? RetryAfter, string Budget)
     : OidcError(ErrorCodes.TemporarilyUnavailable, ErrorDescription);

@@ -40,7 +40,7 @@ public static class ConfigurationEndpointServiceCollectionExtensions
         services.TryAddSingleton<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
         services.TryAddScoped<IAcrMetadataProvider, AcrMetadataProvider>();
         services.TryAddScoped<IConfigurationHandler, ConfigurationHandler>();
-        services.AddEndpointSpan<IConfigurationHandler, TracedConfigurationHandler>();
+        services.AddTelemetryDecorator<IConfigurationHandler, TracedConfigurationHandler>();
         // Scoped to match the adapters' response formatters, which are the only consumers and are themselves
         // scoped: the signature is produced per request over that request's resolved endpoint URLs.
         services.TryAddScoped<ISignedMetadataProvider, SignedMetadataProvider>();

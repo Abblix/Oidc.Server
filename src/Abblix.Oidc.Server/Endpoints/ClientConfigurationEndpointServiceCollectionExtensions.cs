@@ -30,16 +30,16 @@ internal static class ClientConfigurationEndpointServiceCollectionExtensions
         services.TryAddScoped<IClientRequestValidator, ClientRequestValidator>();
 
         services.TryAddScoped<IReadClientHandler, ReadClientHandler>();
-        services.AddEndpointSpan<IReadClientHandler, TracedReadClientHandler>();
+        services.AddTelemetryDecorator<IReadClientHandler, TracedReadClientHandler>();
         services.TryAddScoped<IReadClientRequestProcessor, ReadClientRequestProcessor>();
 
         services.TryAddScoped<IUpdateClientHandler, UpdateClientHandler>();
-        services.AddEndpointSpan<IUpdateClientHandler, TracedUpdateClientHandler>();
+        services.AddTelemetryDecorator<IUpdateClientHandler, TracedUpdateClientHandler>();
         services.TryAddScoped<IUpdateClientRequestValidator, UpdateClientRequestValidator>();
         services.TryAddScoped<IUpdateClientRequestProcessor, UpdateClientRequestProcessor>();
 
         services.TryAddScoped<IRemoveClientHandler, RemoveClientHandler>();
-        services.AddEndpointSpan<IRemoveClientHandler, TracedRemoveClientHandler>();
+        services.AddTelemetryDecorator<IRemoveClientHandler, TracedRemoveClientHandler>();
         services.TryAddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();
 
         return services;

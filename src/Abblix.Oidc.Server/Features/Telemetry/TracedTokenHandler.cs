@@ -19,22 +19,50 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/>.
+/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/>, and counts the tokens
+/// it hands out.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
-/// <param name="grants">Tells the grant types the server supports, the only ones a span names.</param>
+/// <param name="grants">Tells the grant types the server supports, the only ones a span or a measurement names.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedTokenHandler(
     ITokenHandler inner,
     IAuthorizationGrantHandler grants,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : ITokenHandler
 {
     /// <inheritdoc />
-    public Task<Result<TokenIssued, OidcError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken)
-        => EndpointSpan.RunAsync(
+    public async Task<Result<TokenIssued, OidcError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken)
+    {
+        var result = await EndpointSpan.RunAsync(
             TelemetryEndpoints.Token,
+            instruments,
             tenants,
             () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
             EndpointSpan.ErrorOf,
-            () => (TelemetryTags.GrantType, grants.GrantTypesSupported.Contains(tokenRequest.GrantType, StringComparer.Ordinal) ? tokenRequest.GrantType : null));
+            () => (TelemetryTags.GrantType, GrantTypeOf(tokenRequest)));
+
+        if (result.TryGetSuccess(out var issued))
+        {
+            var grantType = GrantTypeOf(tokenRequest);
+            var tenant = EndpointSpan.TenantOf(tenants);
+            instruments.TokenIssued(TelemetryTokenTypes.AccessToken, grantType, tenant);
+            if (issued.IdToken is not null)
+                instruments.TokenIssued(TelemetryTokenTypes.IdToken, grantType, tenant);
+            if (issued.RefreshToken is not null)
+                instruments.TokenIssued(TelemetryTokenTypes.RefreshToken, grantType, tenant);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// The grant type of the request when the server supports it, so a client cannot put a value of its own on a
+    /// span or a measurement.
+    /// </summary>
+    private string? GrantTypeOf(TokenRequest tokenRequest)
+        => grants.GrantTypesSupported.Contains(tokenRequest.GrantType, StringComparer.Ordinal)
+            ? tokenRequest.GrantType
+            : null;
 }

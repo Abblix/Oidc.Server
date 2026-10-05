@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the userinfo endpoint in a span of <see cref="TelemetryEndpoints.UserInfo"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedUserInfoHandler(
     IUserInfoHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IUserInfoHandler
 {
     /// <inheritdoc />
     public Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.UserInfo,
+            instruments,
             tenants,
             () => inner.HandleAsync(userInfoRequest, clientRequest),
             EndpointSpan.ErrorOf);

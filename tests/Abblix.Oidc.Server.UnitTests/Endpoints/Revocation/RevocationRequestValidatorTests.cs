@@ -506,6 +506,7 @@ public class RevocationRequestValidatorTests
         Assert.True(second.TryGetFailure(out var error));
         var refusal = Assert.IsType<TooManyRequestsError>(error);
         Assert.Equal(ErrorCodes.TemporarilyUnavailable, refusal.Error);
+        Assert.Equal(CallerRateLimiters.Revocation, refusal.Budget);
         Assert.NotNull(refusal.RetryAfter);
         _jwtValidator.Verify(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()), Times.Once);
     }

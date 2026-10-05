@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the revocation endpoint in a span of <see cref="TelemetryEndpoints.Revocation"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedRevocationHandler(
     IRevocationHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IRevocationHandler
 {
     /// <inheritdoc />
     public Task<Result<TokenRevoked, OidcError>> HandleAsync(RevocationRequest revocationRequest, ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.Revocation,
+            instruments,
             tenants,
             () => inner.HandleAsync(revocationRequest, clientRequest),
             EndpointSpan.ErrorOf);

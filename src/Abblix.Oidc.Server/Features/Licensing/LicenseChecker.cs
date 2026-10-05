@@ -10,6 +10,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
 
@@ -107,7 +108,7 @@ public static partial class LicenseChecker
                     Named(client));
             }
 
-            throw new InvalidOperationException("The license terms violation detected");
+            throw new LicenseViolationException(LicenseRefusalReasons.ClientLimit);
         }
 
         Count(_knownClientIds, client, client.ClientId, released);
@@ -293,7 +294,7 @@ public static partial class LicenseChecker
                 LogIssuerNotAllowed(LicenseLogger.Instance, issuer, currentLicense.ValidIssuers);
             }
 
-            throw new InvalidOperationException("The license terms violation detected");
+            throw new LicenseViolationException(LicenseRefusalReasons.IssuerNotAllowed);
         }
 
         if (currentLicense.IssuerLimit.HasValue)
@@ -316,7 +317,7 @@ public static partial class LicenseChecker
                         _knownIssuers.Values.Select(counted => counted.Name));
                 }
 
-                throw new InvalidOperationException("The license terms violation detected");
+                throw new LicenseViolationException(LicenseRefusalReasons.IssuerLimit);
             }
         }
 

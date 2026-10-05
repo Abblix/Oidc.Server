@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of reading a registered client's configuration in a span of <see cref="TelemetryEndpoints.ReadClient"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedReadClientHandler(
     IReadClientHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IReadClientHandler
 {
     /// <inheritdoc />
     public Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.ReadClient,
+            instruments,
             tenants,
             () => inner.HandleAsync(clientRequest),
             EndpointSpan.ErrorOf);

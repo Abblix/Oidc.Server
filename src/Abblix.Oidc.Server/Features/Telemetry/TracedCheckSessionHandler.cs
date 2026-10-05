@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the check session iframe in a span of <see cref="TelemetryEndpoints.CheckSession"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedCheckSessionHandler(
     ICheckSessionHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : ICheckSessionHandler
 {
     /// <inheritdoc />
     public Task<CheckSessionResponse> HandleAsync()
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.CheckSession,
+            instruments,
             tenants,
             () => inner.HandleAsync(),
             EndpointSpan.NoError);

@@ -33,7 +33,7 @@ public static class PushedAuthorizationEndpointServiceCollectionExtensions
     {
         services.TryAddScoped<IPushedAuthorizationHandler>(sp => sp.CreateService<PushedAuthorizationHandler>(
             Dependency.Override<IAuthorizationRequestFetcher, RequestObjectFetchAdapter>()));
-        services.AddEndpointSpan<IPushedAuthorizationHandler, TracedPushedAuthorizationHandler>();
+        services.AddTelemetryDecorator<IPushedAuthorizationHandler, TracedPushedAuthorizationHandler>();
         services.TryAddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>();
         services.TryAddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
         return services;

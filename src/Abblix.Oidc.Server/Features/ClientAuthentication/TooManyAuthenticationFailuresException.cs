@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
+
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
 /// <summary>
@@ -18,12 +20,17 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// credential was wrong, which this is not. Every endpoint that authenticates a client is covered by that one
 /// decision, rather than each of them having to remember to ask.
 /// </remarks>
-/// <param name="retryAfter">How long before the budget is available again, or null when nothing named it.</param>
-public sealed class TooManyAuthenticationFailuresException(TimeSpan? retryAfter)
+/// <param name="refusal">The refusal the budget answered with.</param>
+public sealed class TooManyAuthenticationFailuresException(TooManyRequestsError refusal)
     : Exception("Too many failed client authentications from this source")
 {
     /// <summary>
-    /// How long before the budget is available again, as the limiter reports it.
+    /// The refusal the budget answered with, which names the budget spent.
     /// </summary>
-    public TimeSpan? RetryAfter { get; } = retryAfter;
+    public TooManyRequestsError Refusal { get; } = refusal;
+
+    /// <summary>
+    /// How long before the budget is available again, as the limiter reports it, or null when nothing named it.
+    /// </summary>
+    public TimeSpan? RetryAfter { get; } = refusal.RetryAfter;
 }

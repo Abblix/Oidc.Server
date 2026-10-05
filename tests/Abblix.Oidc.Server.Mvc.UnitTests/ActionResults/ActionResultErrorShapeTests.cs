@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -222,7 +223,8 @@ public class ActionResultErrorShapeTests
     {
         var error = new TooManyRequestsError(
             "Too many introspection requests from this client",
-            TimeSpan.FromMilliseconds(1500));
+            TimeSpan.FromMilliseconds(1500),
+            CallerRateLimiters.Introspection);
 
         var response = await ActionResultRunner.RunAsync(
             error.Format(StatusCodes.Status401Unauthorized, Realm));
@@ -240,7 +242,7 @@ public class ActionResultErrorShapeTests
     [Fact]
     public async Task A_caller_over_its_budget_answers_429_under_the_dpop_overload_too()
     {
-        var error = new TooManyRequestsError("Too many requests from this client", TimeSpan.FromSeconds(1));
+        var error = new TooManyRequestsError("Too many requests from this client", TimeSpan.FromSeconds(1), CallerRateLimiters.Introspection);
 
         var response = await ActionResultRunner.RunAsync(
             error.Format(StatusCodes.Status400BadRequest, Realm, DPoPAlgs, advertiseBearer: true));
@@ -260,7 +262,7 @@ public class ActionResultErrorShapeTests
     [Fact]
     public async Task A_refusal_naming_no_interval_carries_no_retry_after_header()
     {
-        var error = new TooManyRequestsError("Too many requests from this client", RetryAfter: null);
+        var error = new TooManyRequestsError("Too many requests from this client", RetryAfter: null, CallerRateLimiters.Introspection);
 
         var response = await ActionResultRunner.RunAsync(
             error.Format(StatusCodes.Status400BadRequest, Realm));

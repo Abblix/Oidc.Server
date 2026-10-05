@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the device authorization endpoint in a span of <see cref="TelemetryEndpoints.DeviceAuthorization"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedDeviceAuthorizationHandler(
     IDeviceAuthorizationHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IDeviceAuthorizationHandler
 {
     /// <inheritdoc />
     public Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(DeviceAuthorizationRequest request, ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.DeviceAuthorization,
+            instruments,
             tenants,
             () => inner.HandleAsync(request, clientRequest),
             EndpointSpan.ErrorOf);

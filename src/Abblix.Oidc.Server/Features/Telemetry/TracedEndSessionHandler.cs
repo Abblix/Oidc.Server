@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the end session endpoint in a span of <see cref="TelemetryEndpoints.EndSession"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedEndSessionHandler(
     IEndSessionHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IEndSessionHandler
 {
     /// <inheritdoc />
     public Task<Result<Endpoints.EndSession.Interfaces.IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.EndSession,
+            instruments,
             tenants,
             () => inner.HandleAsync(endSessionRequest),
             EndpointSpan.ErrorOf);

@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the introspection endpoint in a span of <see cref="TelemetryEndpoints.Introspection"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedIntrospectionHandler(
     IIntrospectionHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IIntrospectionHandler
 {
     /// <inheritdoc />
     public Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(IntrospectionRequest introspectionRequest, ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.Introspection,
+            instruments,
             tenants,
             () => inner.HandleAsync(introspectionRequest, clientRequest),
             EndpointSpan.ErrorOf);

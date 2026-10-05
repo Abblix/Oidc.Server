@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of removing a registered client in a span of <see cref="TelemetryEndpoints.RemoveClient"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedRemoveClientHandler(
     IRemoveClientHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IRemoveClientHandler
 {
     /// <inheritdoc />
     public Task<Result<RemoveClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.RemoveClient,
+            instruments,
             tenants,
             () => inner.HandleAsync(clientRequest),
             EndpointSpan.ErrorOf);

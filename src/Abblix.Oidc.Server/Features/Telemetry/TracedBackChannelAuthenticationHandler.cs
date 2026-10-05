@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the back-channel authentication endpoint in a span of <see cref="TelemetryEndpoints.BackChannelAuthentication"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedBackChannelAuthenticationHandler(
     IBackChannelAuthenticationHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IBackChannelAuthenticationHandler
 {
     /// <inheritdoc />
     public Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(BackChannelAuthenticationRequest request, ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.BackChannelAuthentication,
+            instruments,
             tenants,
             () => inner.HandleAsync(request, clientRequest),
             EndpointSpan.ErrorOf);

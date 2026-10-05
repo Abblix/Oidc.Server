@@ -1,0 +1,264 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Diagnostics.Metrics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RateLimiting;
+using Abblix.Oidc.Server.Features.Telemetry;
+using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Xunit;
+
+// The tenant a measurement names comes from the multi-tenancy feature
+#pragma warning disable ABXMT001
+
+namespace Abblix.Oidc.Server.UnitTests.Features.Telemetry;
+
+/// <summary>
+/// Each request of an endpoint, each token handed out, each signing and each refusal for a spent budget or by the
+/// license is recorded once into the server's meter, with attributes from their closed sets.
+/// </summary>
+public sealed class EndpointMetricsTests : IDisposable
+{
+    private readonly ServiceProvider _services = new ServiceCollection().AddMetrics().BuildServiceProvider();
+    private readonly OidcInstruments _instruments;
+    private readonly MeasurementRecorder _measured;
+
+    public EndpointMetricsTests()
+    {
+        var factory = _services.GetRequiredService<IMeterFactory>();
+        _measured = new MeasurementRecorder(factory);
+        _instruments = new OidcInstruments(factory);
+    }
+
+    public void Dispose()
+    {
+        _measured.Dispose();
+        _services.Dispose();
+    }
+
+    private Task<Result<TokenIssued, OidcError>> Token(
+        Result<TokenIssued, OidcError> result,
+        ITenantAccessor? tenants = null)
+        => EndpointSpan.RunAsync(
+            TelemetryEndpoints.Token, _instruments, tenants, () => Task.FromResult(result), EndpointSpan.ErrorOf);
+
+    private static TokenIssued Issued => new(
+        new EncodedJsonWebToken(new JsonWebToken(), "token"),
+        TokenTypes.Bearer,
+        TimeSpan.FromMinutes(5),
+        TokenTypeIdentifiers.AccessToken);
+
+    private static EncodedJsonWebToken AToken => new(new JsonWebToken(), "token");
+
+    [Fact]
+    public async Task AServedRequest_IsMeasuredAsASuccess()
+    {
+        await Token(Issued);
+
+        var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
+        Assert.Equal(TelemetryEndpoints.Token, request[TelemetryTags.Endpoint]);
+        Assert.Equal(TelemetryOutcomes.Success, request[TelemetryTags.Outcome]);
+        Assert.False(request.ContainsKey(TelemetryTags.Error));
+        Assert.False(request.ContainsKey(TelemetryTags.Tenant));
+        Assert.True(Assert.Single(_measured.ValuesOf(OidcMetrics.RequestDuration)) >= 0);
+    }
+
+    [Fact]
+    public async Task ARefusedRequest_IsMeasuredWithItsErrorCode()
+    {
+        await Token(new OidcError(ErrorCodes.InvalidGrant, "The code has expired"));
+
+        var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
+        Assert.Equal(TelemetryOutcomes.Refused, request[TelemetryTags.Outcome]);
+        Assert.Equal(ErrorCodes.InvalidGrant, request[TelemetryTags.Error]);
+        Assert.Empty(_measured.Of(OidcMetrics.RateLimitRefusals));
+    }
+
+    [Fact]
+    public async Task AFailedRequest_IsMeasuredAsFailedAndPassesOn()
+    {
+        await Assert.ThrowsAsync<TimeoutException>(() => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
+            TelemetryEndpoints.Token, _instruments, null, () => throw new TimeoutException(), EndpointSpan.ErrorOf));
+
+        var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
+        Assert.Equal(TelemetryOutcomes.Failed, request[TelemetryTags.Outcome]);
+        Assert.Empty(_measured.Of(OidcMetrics.LicenseRefusals));
+    }
+
+    [Fact]
+    public async Task UnderMultiTenancy_TheRequestNamesTheTenant()
+    {
+        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
+
+        await Token(Issued, Mock.Of<ITenantAccessor>(accessor => accessor.Current == served));
+
+        Assert.Equal("acme", Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Tenant]);
+    }
+
+    [Theory]
+    [InlineData(CallerRateLimiters.AuthenticationFailures, CallerRateLimiters.AuthenticationFailures)]
+    [InlineData(CallerRateLimiters.Introspection, CallerRateLimiters.Introspection)]
+    [InlineData("a-budget-of-the-host", TelemetryTags.Other)]
+    public async Task ASpentBudget_IsCountedUnderTheEndpointAndTheBudget(string budget, string counted)
+    {
+        await Token(new TooManyRequestsError("Too many", RetryAfter: null, budget));
+
+        var refusal = Assert.Single(_measured.Of(OidcMetrics.RateLimitRefusals));
+        Assert.Equal(TelemetryEndpoints.Token, refusal[TelemetryTags.Endpoint]);
+        Assert.Equal(counted, refusal[TelemetryTags.RateLimitBudget]);
+    }
+
+    [Fact]
+    public async Task SpentAuthenticationFailures_AreCountedAsARefusalAndPassOn()
+    {
+        var spent = new TooManyRequestsError("Too many", RetryAfter: null, CallerRateLimiters.AuthenticationFailures);
+
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
+                TelemetryEndpoints.Token,
+                _instruments,
+                null,
+                () => throw new TooManyAuthenticationFailuresException(spent),
+                EndpointSpan.ErrorOf));
+
+        var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
+        Assert.Equal(TelemetryOutcomes.Refused, request[TelemetryTags.Outcome]);
+        Assert.Equal(ErrorCodes.TemporarilyUnavailable, request[TelemetryTags.Error]);
+        var refusal = Assert.Single(_measured.Of(OidcMetrics.RateLimitRefusals));
+        Assert.Equal(CallerRateLimiters.AuthenticationFailures, refusal[TelemetryTags.RateLimitBudget]);
+    }
+
+    [Theory]
+    [InlineData(LicenseRefusalReasons.IssuerNotAllowed)]
+    [InlineData(LicenseRefusalReasons.IssuerLimit)]
+    [InlineData(LicenseRefusalReasons.ClientLimit)]
+    public async Task ALicenseRefusal_IsCountedByItsReasonAndPassesOn(string reason)
+    {
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(
+            () => EndpointSpan.RunAsync<Result<TokenIssued, OidcError>>(
+                TelemetryEndpoints.Token,
+                _instruments,
+                null,
+                () => throw new LicenseViolationException(reason),
+                EndpointSpan.ErrorOf));
+
+        var refusal = Assert.Single(_measured.Of(OidcMetrics.LicenseRefusals));
+        Assert.Equal(reason, refusal[TelemetryTags.LicenseRefusalReason]);
+        Assert.Single(refusal);
+    }
+
+    [Fact]
+    public async Task ATokenResponse_CountsEachTokenItHandsOut()
+    {
+        var inner = new Mock<ITokenHandler>();
+        inner
+            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Issued with { IdToken = AToken, RefreshToken = AToken });
+        var grants = Mock.Of<IAuthorizationGrantHandler>(g => g.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode });
+        var traced = new TracedTokenHandler(inner.Object, grants, _instruments);
+
+        await traced.HandleAsync(
+            new TokenRequest { GrantType = GrantTypes.AuthorizationCode }, new ClientRequest(), CancellationToken.None);
+
+        var issued = _measured.Of(OidcMetrics.TokensIssued);
+        Assert.Equal(
+            [TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken, TelemetryTokenTypes.RefreshToken],
+            issued.Select(tags => tags[TelemetryTags.TokenType]));
+        Assert.All(issued, tags => Assert.Equal(GrantTypes.AuthorizationCode, tags[TelemetryTags.GrantType]));
+    }
+
+    [Fact]
+    public async Task ARefusedTokenRequest_CountsNoToken()
+    {
+        var inner = new Mock<ITokenHandler>();
+        inner
+            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "The code has expired"));
+        var traced = new TracedTokenHandler(inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments);
+
+        await traced.HandleAsync(new TokenRequest(), new ClientRequest(), CancellationToken.None);
+
+        Assert.Empty(_measured.Of(OidcMetrics.TokensIssued));
+    }
+
+    [Fact]
+    public async Task AnAuthorizationResponse_CountsItsTokensUnderTheImplicitGrant()
+    {
+        var request = new AuthorizationRequest();
+        var inner = new Mock<IAuthorizationHandler>();
+        inner
+            .Setup(h => h.HandleAsync(request))
+            .ReturnsAsync(new SuccessfullyAuthenticated(request, ResponseModes.Fragment, null, [])
+            {
+                AccessToken = AToken,
+                IdToken = AToken,
+            });
+        var traced = new TracedAuthorizationHandler(inner.Object, _instruments);
+
+        await traced.HandleAsync(request);
+
+        var issued = _measured.Of(OidcMetrics.TokensIssued);
+        Assert.Equal(
+            [TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken],
+            issued.Select(tags => tags[TelemetryTags.TokenType]));
+        Assert.All(issued, tags => Assert.Equal(GrantTypes.Implicit, tags[TelemetryTags.GrantType]));
+    }
+
+    [Fact]
+    public async Task ARegistration_IsCountedByHowItWasAnswered()
+    {
+        var inner = new Mock<IRegisterClientHandler>();
+        inner
+            .SetupSequence(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
+            .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token"))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRedirectUri, "Refused"));
+        var traced = new TracedRegisterClientHandler(inner.Object, _instruments);
+
+        await traced.HandleAsync(new ClientRegistrationRequest());
+        await traced.HandleAsync(new ClientRegistrationRequest());
+
+        Assert.Equal(
+            [TelemetryOutcomes.Success, TelemetryOutcomes.Refused],
+            _measured.Of(OidcMetrics.ClientsRegistered).Select(tags => tags[TelemetryTags.Outcome]));
+    }
+
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, SigningAlgorithms.RS256)]
+    [InlineData(null, TelemetryTags.Other)]
+    public async Task ASigning_IsMeasuredUnderTheAlgorithmTheSignerSettled(string? settled, string measured)
+    {
+        var inner = new Mock<IJsonWebTokenSigner>();
+        inner
+            .Setup(s => s.SignAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<CancellationToken>()))
+            .Callback<JsonWebToken, JsonWebKey?, CancellationToken>((token, _, _) => token.Header.Algorithm = settled)
+            .ReturnsAsync("jws");
+        var signer = new MeasuredJsonWebTokenSigner(inner.Object, _instruments);
+
+        Assert.Equal("jws", await signer.SignAsync(new JsonWebToken(), null, TestContext.Current.CancellationToken));
+
+        var signing = Assert.Single(_measured.Of(OidcMetrics.TokenSigningDuration));
+        Assert.Equal(measured, signing[TelemetryTags.SigningAlgorithm]);
+    }
+}

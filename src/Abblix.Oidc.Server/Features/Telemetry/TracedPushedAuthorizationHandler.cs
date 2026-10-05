@@ -21,15 +21,18 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Handles a request of the pushed authorization request endpoint in a span of <see cref="TelemetryEndpoints.PushedAuthorization"/>.
 /// </summary>
 /// <param name="inner">The handler of the endpoint.</param>
+/// <param name="instruments">Records the request into the server's metrics.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class TracedPushedAuthorizationHandler(
     IPushedAuthorizationHandler inner,
+    OidcInstruments instruments,
     ITenantAccessor? tenants = null) : IPushedAuthorizationHandler
 {
     /// <inheritdoc />
     public Task<Endpoints.Authorization.Interfaces.AuthorizationResponse> HandleAsync(Model.AuthorizationRequest authorizationRequest, ClientRequest clientRequest)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.PushedAuthorization,
+            instruments,
             tenants,
             () => inner.HandleAsync(authorizationRequest, clientRequest),
             EndpointSpan.ErrorOf,

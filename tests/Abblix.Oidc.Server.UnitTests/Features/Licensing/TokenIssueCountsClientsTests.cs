@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -68,7 +69,8 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
         for (var index = 0; index < 3; index++)
             await issue($"client-{index}");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => issue("newcomer"));
+        var refusal = await Assert.ThrowsAsync<LicenseViolationException>(() => issue("newcomer"));
+        Assert.Equal(LicenseRefusalReasons.ClientLimit, refusal.Reason);
     }
 
     /// <summary>

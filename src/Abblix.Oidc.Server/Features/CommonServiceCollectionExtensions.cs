@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -43,6 +44,8 @@ public static class CommonServiceCollectionExtensions
         // The next-poll instant of a polled request, kept apart from the request itself: a poll
         // writing the request back to note it overwrote whatever the approval had changed.
         services.TryAddSingleton<IPollScheduleStore, PollScheduleStore>();
-        return services.AddJsonWebTokens();
+        return services
+            .AddJsonWebTokens()
+            .AddTelemetryDecorator<IJsonWebTokenSigner, MeasuredJsonWebTokenSigner>();
     }
 }
