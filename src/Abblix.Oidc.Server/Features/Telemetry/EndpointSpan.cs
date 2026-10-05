@@ -158,6 +158,14 @@ internal static class EndpointSpan
     public static OidcError? NoError<TResult>(TResult _) => null;
 
     /// <summary>
+    /// The grant type of a request when it is one of <paramref name="supported"/>, compared exactly; null otherwise,
+    /// so neither a client nor a host's differently spelled configuration puts a value of its own on a span or a
+    /// measurement.
+    /// </summary>
+    public static string? GrantTypeOf(string? grantType, IEnumerable<string> supported)
+        => grantType is not null && supported.Contains(grantType, StringComparer.Ordinal) ? grantType : null;
+
+    /// <summary>
     /// The response type of a request, its values ordered and space-separated, when each value is one the protocol
     /// defines; null otherwise, so a client cannot put a value of its own on a span.
     /// </summary>

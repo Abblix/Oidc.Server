@@ -32,12 +32,15 @@ internal sealed class TracedTokenHandler(
     ITenantAccessor? tenants = null) : ITokenHandler
 {
     /// <inheritdoc />
-    public Task<Result<TokenIssued, OidcError>> HandleAsync(TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken)
+    public Task<Result<TokenIssued, OidcError>> HandleAsync(
+        TokenRequest tokenRequest,
+        ClientRequest clientRequest,
+        CancellationToken cancellationToken)
         => EndpointSpan.RunAsync(
             TelemetryEndpoints.Token,
             instruments,
             tenants,
             () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
             EndpointSpan.ErrorOf,
-            () => (TelemetryTags.GrantType, grants.GrantTypesSupported.Contains(tokenRequest.GrantType, StringComparer.Ordinal) ? tokenRequest.GrantType : null));
+            () => (TelemetryTags.GrantType, EndpointSpan.GrantTypeOf(tokenRequest.GrantType, grants.GrantTypesSupported)));
 }

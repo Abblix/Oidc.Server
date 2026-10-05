@@ -31,7 +31,8 @@ public static class OidcMetrics
     /// <summary>
     /// A counter of the tokens the server hands out, by <see cref="TelemetryTags.TokenType"/>,
     /// <see cref="TelemetryTags.GrantType"/> and <see cref="TelemetryTags.Tenant"/>: at the token endpoint, in a CIBA
-    /// push delivery, and through the front channel of the authorization endpoint.
+    /// push delivery, and through the front channel of the authorization endpoint. A token is counted when it is
+    /// minted, so one a push delivery fails to bring to the client is counted too.
     /// </summary>
     public const string TokensIssued = "oidc.tokens.issued";
 

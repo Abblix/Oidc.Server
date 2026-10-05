@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
@@ -25,10 +26,12 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// </remarks>
 /// <param name="inner">The processor the server uses.</param>
 /// <param name="instruments">Records the tokens into the server's metrics.</param>
+/// <param name="grants">Tells the grant types the server supports, the only ones a measurement names.</param>
 /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
 internal sealed class MeasuredTokenRequestProcessor(
     ITokenRequestProcessor inner,
     OidcInstruments instruments,
+    IAuthorizationGrantHandler grants,
     ITenantAccessor? tenants = null) : ITokenRequestProcessor
 {
     /// <inheritdoc />
@@ -37,8 +40,7 @@ internal sealed class MeasuredTokenRequestProcessor(
         var result = await inner.ProcessAsync(request);
         if (result.TryGetSuccess(out var issued))
         {
-            // A validated request carries a grant type the server handled, so it is one of the server's own
-            var grantType = request.Model.GrantType;
+            var grantType = EndpointSpan.GrantTypeOf(request.Model.GrantType, grants.GrantTypesSupported);
             var tenant = EndpointSpan.TenantOf(tenants);
             instruments.TokenIssued(TelemetryTokenTypes.AccessToken, grantType, tenant);
             if (issued.IdToken is not null)
