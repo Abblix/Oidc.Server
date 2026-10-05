@@ -136,11 +136,11 @@ public sealed partial class TenantManager(
             return AlreadyExists(tenant.Id);
 
         // Refused here rather than served: past the limit the license refuses the issuer of every tenant
-        if (LicenseChecker.IssuerLimit is { } limit && catalog.ServedTenants.Count() >= limit)
+        if (LicenseChecker.IssuerLimit is { } limit && listed.Count >= limit)
         {
             return new TenantChangeRefusal(
                 TenantChangeRefusalReason.BeyondLicense,
-                $"The license in force allows {limit} issuer(s), and as many tenants are served already.");
+                $"The license in force allows {limit} issuer(s), and the store holds as many tenants already.");
         }
 
         // A generation of its own, so the store cannot hand a new creation the generation of one removed

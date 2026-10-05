@@ -12,7 +12,10 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.Features.Licensing;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +28,12 @@ using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 
-public class TenantManagerTests
+/// <remarks>
+/// The manager refuses a tenant beyond the license's issuer limit, and several tests here hold up to three tenants, so
+/// they run under a license for three issuers, in the collection that owns the checker's process-wide state.
+/// </remarks>
+[Collection(nameof(LicenseEnforcementTests))]
+public sealed class TenantManagerTests : IDisposable
 {
     /// <summary>
     /// A store of tenants in memory that writes only while the version a change names is the one it holds, and can
@@ -119,6 +127,14 @@ public class TenantManagerTests
 
     public TenantManagerTests()
     {
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = 3,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+
         var options = Options.Create(new MultiTenancyOptions());
         _catalog = new StoreTenantCatalog(
             NullLogger<StoreTenantCatalog>.Instance,
@@ -135,6 +151,8 @@ public class TenantManagerTests
             _catalog,
             _store);
     }
+
+    public void Dispose() => TestLicense.ResetChecker();
 
     private static TenantDefinition Tenant(string id, string issuer) => new() { Id = id, Issuer = issuer };
 

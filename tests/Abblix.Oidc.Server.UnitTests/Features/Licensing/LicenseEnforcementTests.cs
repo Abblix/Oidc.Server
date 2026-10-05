@@ -202,6 +202,17 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
     /// itself and cannot be driven from here, so the license is simply made wide enough to cover any run.
     /// </remarks>
+    private static void ArrangeLicenceThatCountsIssuers()
+    {
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = 1,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
     /// <summary>
     /// A tenant that would take the server past the license's issuer limit is refused when the manager of the
     /// tenants is asked to create it, so the tenants already served keep working instead of all being refused on
@@ -223,7 +234,6 @@ public sealed class LicenseEnforcementTests : IDisposable
         var store = new WritableTenantStore();
         await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }, ct);
         var catalog = Catalog(store);
-        await catalog.RefreshAsync(ct);
         var manager = new TenantManager(
             NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], catalog, store);
 
@@ -237,17 +247,6 @@ public sealed class LicenseEnforcementTests : IDisposable
             Assert.True(result.TryGetFailure(out var refusal));
             Assert.Equal(TenantChangeRefusalReason.BeyondLicense, refusal.Reason);
         }
-    }
-
-    private static void ArrangeLicenceThatCountsIssuers()
-    {
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
-        {
-            IssuerLimit = 1,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
     }
 
     [Fact]

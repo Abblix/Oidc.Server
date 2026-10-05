@@ -37,7 +37,11 @@ public enum TenantChangeRefusalReason
     Conflict,
 
     /// <summary>
-    /// The license in force allows no more issuers than the tenants already served, and each tenant is one.
+    /// The license in force allows no more issuers than the tenants the store already holds, and each tenant is one.
     /// </summary>
+    /// <remarks>
+    /// A removed tenant frees its place for the license only once the server releases it, so a tenant created
+    /// right after a removal can still take the server past the limit until then.
+    /// </remarks>
     BeyondLicense,
 }
