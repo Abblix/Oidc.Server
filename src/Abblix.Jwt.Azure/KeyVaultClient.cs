@@ -44,9 +44,14 @@ public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
     /// <param name="options">The configured Azure Key Vault options.</param>
     /// <param name="httpClient">The transport for every Key Vault call, supplied by <c>AddHttpClient</c> so the
     /// Azure SDK rides the host's HTTP pipeline.</param>
+    /// <param name="timeProvider">The host's clock, which the cached crypto clients are let go by.</param>
     [ActivatorUtilitiesConstructor]
-    public KeyVaultClient(ILogger<KeyVaultClient> logger, IOptions<AzureKeyVaultOptions> options, HttpClient httpClient)
-        : this(logger, options.Value, BuildCredential(options.Value), httpClient, TimeProvider.System)
+    public KeyVaultClient(
+        ILogger<KeyVaultClient> logger,
+        IOptions<AzureKeyVaultOptions> options,
+        HttpClient httpClient,
+        TimeProvider timeProvider)
+        : this(logger, options.Value, BuildCredential(options.Value), httpClient, timeProvider)
     {
     }
 

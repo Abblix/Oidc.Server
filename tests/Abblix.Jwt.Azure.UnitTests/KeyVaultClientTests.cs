@@ -58,8 +58,15 @@ public sealed class KeyVaultClientTests : IDisposable
         var time = new FakeTimeProvider();
         var custodian = ClientOver(handler, time);
 
+        // Used every half of the idle lifetime for twice its length: kept the whole time
+        var halfIdle = CryptographyClients.IdleLifetime / 2;
         await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
-        await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        foreach (var _ in Enumerable.Range(0, 4))
+        {
+            time.Advance(halfIdle);
+            await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        }
+
         Assert.Equal(1, KeyReads(handler));
 
         time.Advance(CryptographyClients.IdleLifetime + TimeSpan.FromSeconds(1));
