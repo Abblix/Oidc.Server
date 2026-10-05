@@ -255,6 +255,12 @@ public static partial class LicenseChecker
         => client.IssuerId.Length == 0 ? client.ClientId : $"{client.IssuerId}/{client.ClientId}";
 
     /// <summary>
+    /// How many issuers the license in force allows, or null when it sets no limit.
+    /// </summary>
+    internal static int? IssuerLimit
+        => (LicenseManager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow()) ?? FreeLicense).IssuerLimit;
+
+    /// <summary>
     /// Applies licensing checks to an issuer value.
     /// </summary>
     /// <param name="issuer">The issuer to check against licensing constraints.</param>

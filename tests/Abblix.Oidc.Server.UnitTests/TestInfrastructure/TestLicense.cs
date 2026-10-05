@@ -94,6 +94,29 @@ internal static class TestLicense
     }
 
     /// <summary>
+    /// Empties the checker and installs a license that caps the number of issuers at <paramref name="issuerLimit"/>
+    /// and names none of them, which is the only arrangement under which that count is ever consulted.
+    /// </summary>
+    /// <remarks>
+    /// A license that names its issuers refuses an unknown one on the name, before anything is counted, and
+    /// licenses accumulate rather than replace one another - so the assembly's license and its whitelist have
+    /// to go before this one is added.
+    ///
+    /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock itself
+    /// and cannot be driven from here, so the license is simply made wide enough to cover any run.
+    /// </remarks>
+    internal static void InstallWithIssuerLimit(int issuerLimit)
+    {
+        ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = issuerLimit,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
+    /// <summary>
     /// Empties the throttle window <see cref="LicenseLogger"/> keeps, so a test can observe a record that the
     /// logger would otherwise suppress.
     /// </summary>

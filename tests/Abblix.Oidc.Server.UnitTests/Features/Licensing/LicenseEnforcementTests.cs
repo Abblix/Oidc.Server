@@ -189,28 +189,38 @@ public sealed class LicenseEnforcementTests : IDisposable
     private static void ArrangeInstallationWithNoLicence() => TestLicense.ClearChecker();
 
     /// <summary>
-    /// Puts the checker on a license that caps the number of issuers and names none of them, which is the
-    /// only arrangement under which that count is ever consulted.
+    /// Puts the checker on a license for one issuer that names none, so the second issuer is the one refused.
     /// </summary>
-    /// <remarks>
-    /// A license that names its issuers refuses an unknown one on the name, before anything is counted, and
-    /// licenses accumulate rather than replace one another - so the assembly's license and its whitelist have
-    /// to go before this one is added. That is the whole reason a test of the count reaches into the
-    /// checker's state at all, and saying it once here keeps it out of the test bodies, which then read as
-    /// what they need rather than as how the statics are arranged.
-    ///
-    /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
-    /// itself and cannot be driven from here, so the license is simply made wide enough to cover any run.
-    /// </remarks>
-    private static void ArrangeLicenceThatCountsIssuers()
+    private static void ArrangeLicenceThatCountsIssuers() => TestLicense.InstallWithIssuerLimit(1);
+
+    /// <summary>
+    /// A tenant that would take the server past the license's issuer limit is refused when the manager of the
+    /// tenants is asked to create it, so the tenants already served keep working instead of all being refused on
+    /// their next request; under a limit with room for it, the same tenant is created.
+    /// </summary>
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public async Task A_tenant_beyond_the_issuer_limit_is_refused_when_created(int issuerLimit, bool created)
     {
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
+        var ct = TestContext.Current.CancellationToken;
+        TestLicense.InstallWithIssuerLimit(issuerLimit);
+        var store = new WritableTenantStore();
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }, ct);
+        var catalog = Catalog(store);
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], catalog, store);
+
+        var result = await manager.CreateAsync(
+            new TenantDefinition { Id = "globex", Issuer = "https://globex.example.com" }, ct);
+
+        Assert.Equal(created, result.TryGetSuccess(out _));
+        Assert.Equal(created ? 2 : 1, store.Tenants.Count);
+        if (!created)
         {
-            IssuerLimit = 1,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
+            Assert.True(result.TryGetFailure(out var refusal));
+            Assert.Equal(TenantChangeRefusalReason.BeyondLicense, refusal.Reason);
+        }
     }
 
     [Fact]
