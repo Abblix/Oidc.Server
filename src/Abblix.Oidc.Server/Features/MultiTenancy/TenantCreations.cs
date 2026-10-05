@@ -153,10 +153,10 @@ internal sealed partial class TenantCreations(
     }
 
     /// <summary>
-    /// Hands each creation <see cref="Track"/> released to every closing, each call within <paramref name="limit"/>
-    /// of its own, so a closing that does not answer costs its own tenant and no other. A closing that fails, runs
-    /// out of time or is stopped is logged with the tenant's id, and every tenant after it is still handed over,
-    /// since a released creation is not handed over again.
+    /// Hands each creation <see cref="Track"/> released to every closing, each call with a token canceled after
+    /// <paramref name="limit"/> of its own, so a closing that heeds it and does not answer costs its own tenant and no
+    /// other. A closing that fails, runs out of time or is stopped is logged with the tenant's id, and every tenant
+    /// after it is still handed over, since a released creation is not handed over again.
     /// </summary>
     public async Task CloseAsync(
         IReadOnlyCollection<TenantDefinition> released,
