@@ -22,11 +22,11 @@ using StoredDeviceRequest = Abblix.Oidc.Server.Features.DeviceAuthorization.Devi
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages.Proto;
 
 /// <summary>
-/// Every address a stored record carries reads back exactly as it was written, so what the server sends on - a
-/// token's audience, a redirect, a notification - names it as the client registered it, not in a canonical form
-/// with a slash added, the host's case changed or its port dropped. The addresses are found on each record by type,
-/// so one added later is held to the same rule; one the store does not keep, such as an address the server sets
-/// after reading the record, reads back empty and is not this test's subject.
+/// Every address a stored record keeps reads back exactly as it was written, not in a canonical form with a slash
+/// added, the host's case changed or its port dropped; it shows in a token's audience and in a form_post action
+/// after a resumed flow. The addresses are found on each record by type, so one the store keeps that is added
+/// later is held to the same rule; one the store does not keep, such as an address the server sets after reading
+/// the record, reads back empty and is not this test's subject.
 /// </summary>
 public class StoredAddressesTests
 {
