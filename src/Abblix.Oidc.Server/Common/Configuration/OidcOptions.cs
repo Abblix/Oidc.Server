@@ -266,8 +266,9 @@ public record OidcOptions
 	/// different resources; both happen only when this is set, because the inferred resource becomes the
 	/// <c>aud</c> every resource server reads. The audience is then the resource the request names, else the one
 	/// its scopes refer to, else <see cref="DefaultResourceIndicator"/>, else the issuer. At the token endpoint
-	/// it is inferred only for a grant the token request itself authorizes; a code, a refresh token, a device code
-	/// or a back-channel request carries the audience its authorization settled.
+	/// it is inferred only for a grant the token request itself authorizes and only when the request names no
+	/// <c>audience</c>; a code, a refresh token, a device code or a back-channel request carries the audience its
+	/// authorization settled.
 	/// </remarks>
 	public bool InferResourceFromScope { get; set; }
 
