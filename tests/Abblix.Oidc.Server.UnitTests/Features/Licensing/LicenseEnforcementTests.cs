@@ -198,20 +198,8 @@ public sealed class LicenseEnforcementTests : IDisposable
     /// to go before this one is added. That is the whole reason a test of the count reaches into the
     /// checker's state at all, and saying it once here keeps it out of the test bodies, which then read as
     /// what they need rather than as how the statics are arranged.
-    ///
-    /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
-    /// itself and cannot be driven from here, so the license is simply made wide enough to cover any run.
     /// </remarks>
-    private static void ArrangeLicenceThatCountsIssuers()
-    {
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
-        {
-            IssuerLimit = 1,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
-    }
+    private static void ArrangeLicenceThatCountsIssuers() => TestLicense.InstallWithIssuerLimit(1);
 
     /// <summary>
     /// A tenant that would take the server past the license's issuer limit is refused when the manager of the
@@ -224,13 +212,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     public async Task A_tenant_beyond_the_issuer_limit_is_refused_when_created(int issuerLimit, bool created)
     {
         var ct = TestContext.Current.CancellationToken;
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
-        {
-            IssuerLimit = issuerLimit,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
+        TestLicense.InstallWithIssuerLimit(issuerLimit);
         var store = new WritableTenantStore();
         await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }, ct);
         var catalog = Catalog(store);

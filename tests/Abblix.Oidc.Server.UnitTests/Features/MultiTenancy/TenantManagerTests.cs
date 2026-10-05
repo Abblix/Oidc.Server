@@ -12,7 +12,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.UnitTests.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -127,13 +126,7 @@ public sealed class TenantManagerTests : IDisposable
 
     public TenantManagerTests()
     {
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
-        {
-            IssuerLimit = 3,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
+        TestLicense.InstallWithIssuerLimit(3);
 
         var options = Options.Create(new MultiTenancyOptions());
         _catalog = new StoreTenantCatalog(
