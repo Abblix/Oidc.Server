@@ -22,6 +22,18 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
     : SyncTokenContextValidatorBase
 {
     /// <summary>
+    /// The grants whose audience an authorization made earlier settled: the request may narrow it, and nothing is
+    /// inferred for it.
+    /// </summary>
+    private static readonly HashSet<string> AuthorizedEarlier = new(StringComparer.Ordinal)
+    {
+        GrantTypes.AuthorizationCode,
+        GrantTypes.RefreshToken,
+        GrantTypes.DeviceAuthorization,
+        GrantTypes.Ciba,
+    };
+
+    /// <summary>
     /// Validates the resources specified in a token request against known resource definitions.
     /// This validation ensures that only registered and approved resources are accessed by the client.
     /// </summary>
@@ -33,21 +45,23 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
     protected override OidcError? Validate(TokenValidationContext context)
     {
         var request = context.Request;
-        var requested = request.Resources;
 
-        if (requested is not { Length: > 0 })
+        if (request.Resources is not { Length: > 0 } && !AuthorizedEarlier.Contains(request.GrantType))
         {
             if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
-            if (inferred is null)
-                return null;
-
-            requested = [inferred];
+            // A grant the request itself authorizes builds its audience from the request, so the inferred
+            // resource is put where a named one would be
+            if (inferred is not null)
+                request.Resources = [inferred];
         }
 
+        if (request.Resources is not { Length: > 0 })
+            return null;
+
         if (!resourceManager.Validate(
-                requested,
+                request.Resources,
                 request.Scope,
                 out var resources,
                 out var errorDescription))

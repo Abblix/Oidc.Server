@@ -50,6 +50,7 @@ public class ResourceValidatorsInferenceTests
     private static async Task<(string? Error, Uri[] Resources)> ValidateAsync(
         string endpoint,
         bool infer,
+        Uri[]? resources,
         params string[] scopes)
     {
         var options = Options.Create(new OidcOptions
@@ -75,6 +76,7 @@ public class ResourceValidatorsInferenceTests
                     ResponseType = [ResponseTypes.Code],
                     RedirectUri = new Uri("https://client.example.com/callback"),
                     Scope = scopes,
+                    Resources = resources,
                 }) { ClientInfo = client };
                 var error = await new AuthorizationResourceValidator(resourceManager, inference).ValidateAsync(context);
                 return (error?.Error, Uris(context.Resources));
@@ -83,7 +85,7 @@ public class ResourceValidatorsInferenceTests
             case "back-channel":
             {
                 var context = new BackChannelAuthenticationValidationContext(
-                    new BackChannelAuthenticationRequest { Scope = scopes },
+                    new BackChannelAuthenticationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
                 var error = await new BackChannelResourceValidator(resourceManager, inference).ValidateAsync(context);
                 return (error?.Error, Uris(context.Resources));
@@ -92,7 +94,7 @@ public class ResourceValidatorsInferenceTests
             case "device":
             {
                 var context = new DeviceAuthorizationValidationContext(
-                    new DeviceAuthorizationRequest { Scope = scopes },
+                    new DeviceAuthorizationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
                 var error = await new DeviceResourceValidator(resourceManager, inference).ValidateAsync(context);
                 return (error?.Error, Uris(context.Resources));
@@ -101,7 +103,7 @@ public class ResourceValidatorsInferenceTests
             case "token":
             {
                 var context = new TokenValidationContext(
-                    new TokenRequest { Scope = scopes },
+                    new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId });
                 var error = await new TokenResourceValidator(resourceManager, inference)
                     .ValidateAsync(context, TestContext.Current.CancellationToken);
@@ -120,7 +122,7 @@ public class ResourceValidatorsInferenceTests
     [MemberData(nameof(Endpoints))]
     public async Task AScopeOfOneResource_TakesTheRequestToBeForIt(string endpoint)
     {
-        var (error, resources) = await ValidateAsync(endpoint, infer: true, Scopes.OpenId, OrdersRead);
+        var (error, resources) = await ValidateAsync(endpoint, infer: true, null, Scopes.OpenId, OrdersRead);
 
         Assert.Null(error);
         Assert.Equal([Orders], resources);
@@ -130,7 +132,7 @@ public class ResourceValidatorsInferenceTests
     [MemberData(nameof(Endpoints))]
     public async Task ScopesOfTwoResources_AreRefusedAsInvalidScope(string endpoint)
     {
-        var (error, _) = await ValidateAsync(endpoint, infer: true, OrdersRead, BillingRead);
+        var (error, _) = await ValidateAsync(endpoint, infer: true, null, OrdersRead, BillingRead);
 
         Assert.Equal(ErrorCodes.InvalidScope, error);
     }
@@ -139,9 +141,53 @@ public class ResourceValidatorsInferenceTests
     [MemberData(nameof(Endpoints))]
     public async Task WithInferenceOff_ARequestNamingNoResourceStaysWithout(string endpoint)
     {
-        var (error, resources) = await ValidateAsync(endpoint, infer: false, OrdersRead, BillingRead);
+        var (error, resources) = await ValidateAsync(endpoint, infer: false, null, OrdersRead, BillingRead);
 
         Assert.Null(error);
         Assert.Empty(resources);
+    }
+
+    [Theory]
+    [MemberData(nameof(Endpoints))]
+    public async Task AResourceTheRequestNames_WinsOverTheOneItsScopesReferTo(string endpoint)
+    {
+        var (error, resources) = await ValidateAsync(endpoint, infer: true, [Billing], OrdersRead);
+
+        Assert.Null(error);
+        Assert.Equal([Billing], resources);
+    }
+
+    /// <summary>
+    /// A token request redeeming an authorization made earlier keeps the audience that authorization settled:
+    /// nothing is inferred for it, so scopes of several resources are not refused.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.AuthorizationCode)]
+    [InlineData(GrantTypes.RefreshToken)]
+    [InlineData(GrantTypes.DeviceAuthorization)]
+    [InlineData(GrantTypes.Ciba)]
+    public async Task AGrantAuthorizedEarlier_HasNothingInferred(string grantType)
+    {
+        var options = Options.Create(new OidcOptions
+        {
+            InferResourceFromScope = true,
+            Resources =
+            [
+                new ResourceDefinition(Orders, new ScopeDefinition(OrdersRead)),
+                new ResourceDefinition(Billing, new ScopeDefinition(BillingRead)),
+            ],
+        });
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = grantType, Scope = [OrdersRead, BillingRead] },
+            new ClientRequest { ClientId = ClientId });
+
+        var error = await new TokenResourceValidator(
+                SingleIssuer.ResourceManager(options),
+                new ResourceInference(SingleIssuer.SettingsOf(options)))
+            .ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Empty(context.Resources);
+        Assert.Null(context.Request.Resources);
     }
 }
