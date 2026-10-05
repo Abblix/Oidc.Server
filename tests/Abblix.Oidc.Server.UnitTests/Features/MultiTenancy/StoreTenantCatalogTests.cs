@@ -68,10 +68,12 @@ public class StoreTenantCatalogTests
         }
     }
 
-    /// <summary>Counts the records of refused tenants.</summary>
+    /// <summary>Counts the records of refused tenants, and keeps each error's event and the tenant it names.</summary>
     private sealed class RecordingLogger : ILogger<StoreTenantCatalog>
     {
         public List<string> Errors { get; } = [];
+
+        public List<(int EventId, object? TenantId)> ErrorEvents { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -81,8 +83,14 @@ public class StoreTenantCatalogTests
             LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == LogLevel.Error)
-                Errors.Add(formatter(state, exception));
+            if (logLevel != LogLevel.Error)
+                return;
+
+            Errors.Add(formatter(state, exception));
+            ErrorEvents.Add((
+                eventId.Id,
+                (state as IEnumerable<KeyValuePair<string, object?>>)?
+                    .FirstOrDefault(pair => pair.Key == "TenantId").Value));
         }
     }
 
@@ -135,6 +143,8 @@ public class StoreTenantCatalogTests
     private readonly FakeStore _store = new();
     private readonly RecordingLogger _logger = new();
     private readonly FakeOpening _opening = new();
+    private readonly FakeClosing _failingClosing = new() { Failing = { "acme" } };
+    private readonly FakeClosing _closing = new();
 
     private readonly MultiTenancyOptions _options = new();
 
@@ -147,11 +157,12 @@ public class StoreTenantCatalogTests
         await catalog.RefreshAsync(ct);
     }
 
-    private StoreTenantCatalog Catalog(ITenantStore? store = null) => new(
+    private StoreTenantCatalog Catalog(ITenantStore? store = null, ITenantClosing[]? closings = null) => new(
         _logger,
         store ?? _store,
         [new TenantDefinitionsCheck()],
         [_opening],
+        closings ?? [_closing],
         Options.Create(_options),
         _time);
 
@@ -486,6 +497,7 @@ public class StoreTenantCatalogTests
             _store,
             [new TenantDefinitionsCheck()],
             [_opening],
+            [],
             Options.Create(_options),
             clock.Object);
         var pause = _options.RefreshEvery;
@@ -533,6 +545,141 @@ public class StoreTenantCatalogTests
 
         Assert.True(globex.IsCancellationRequested);
         Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant released is handed to every closing within the reading that releases it, in the creation that was
+    /// served; one closing that fails for it is logged and keeps neither the other closings nor the other tenants from
+    /// running, nor fails the reading.
+    /// </summary>
+    [Fact]
+    public async Task AReleasedTenant_IsClosed_AndAClosingThatFailsIsLogged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [_failingClosing, _closing]);
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        Assert.Empty(_closing.Closed);
+
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["acme/g1", "globex/g1"], _closing.Closed.Order());
+        Assert.Equal(["globex/g1"], _failingClosing.Closed);
+        Assert.Equal(
+            [(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")],
+            _logger.ErrorEvents);
+    }
+
+    /// <summary>
+    /// A closing that does not answer is cut off one refresh period into its call and logged with its tenant, and the
+    /// calls after it get a period of their own, so a closing that heeds its token still closes every tenant.
+    /// </summary>
+    [Fact]
+    public async Task AClosingThatDoesNotAnswer_IsCutOffAndCostsNoOtherTenant()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hanging = new FakeClosing { Hanging = { "acme" } };
+        var heeding = new FakeClosing { HeedsItsToken = true };
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [hanging, heeding]);
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _time.Advance(_options.RefreshEvery);
+
+        var reading = catalog.RefreshAsync(ct);
+        Assert.False(reading.IsCompleted);
+        _time.Advance(_options.RefreshEvery);
+
+        // Bounded in real time too, so a closing never cut off turns the test red rather than hang it
+        await reading.WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+        Assert.Equal(["acme/g1", "globex/g1"], heeding.Closed.Order());
+        Assert.Equal(
+            [(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")],
+            _logger.ErrorEvents.Distinct());
+    }
+
+    /// <summary>
+    /// A reading stopped while a closing runs, as when the server shuts down, still hands every released tenant over
+    /// and logs each one not closed with its id, since none is handed over again.
+    /// </summary>
+    [Fact]
+    public async Task AReadingStoppedWhileClosing_LogsEveryTenantNotClosed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hanging = new FakeClosing { Hanging = { "acme", "globex" } };
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [hanging]);
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _time.Advance(_options.RefreshEvery);
+
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var reading = catalog.RefreshAsync(stopping.Token);
+        await stopping.CancelAsync();
+        await Record.ExceptionAsync(() => reading);
+
+        Assert.Equal(
+            ["acme", "globex"],
+            _logger.ErrorEvents
+                .Where(entry => entry.EventId == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
+                .Select(entry => (string)entry.TenantId!)
+                .Order());
+    }
+
+    /// <summary>
+    /// A creation released after its tenant was created again under the same id is closed in the definition last
+    /// served for that creation, not the one the new creation serves nor the one it was first listed in.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReplacedByANewOne_IsClosedInItsOwnLastDefinition()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("acme", "https://acme.example.net", "2"));
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.org", Generation = "g2" }, "3"));
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["acme/g1"], _closing.Closed);
+        Assert.Equal(["https://acme.example.net"], _closing.Issuers);
+    }
+
+    /// <summary>
+    /// A tenant whose definition changed within its creation, as to another issuer, is closed in the definition last
+    /// served, since that is the one what it kept was kept under.
+    /// </summary>
+    [Fact]
+    public async Task ATenantChangedWithinItsCreation_IsClosedInTheDefinitionLastServed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("acme", "https://acme.example.net", "2"));
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["https://acme.example.net"], _closing.Issuers);
     }
 
     /// <summary>
@@ -743,5 +890,36 @@ public class StoreTenantCatalogTests
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
 
         Assert.NotNull(await Catalog().FindByIdAsync("acme", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A closing that records each tenant it closed, by id and generation, and fails for the tenants named.
+    /// </summary>
+    private sealed class FakeClosing : ITenantClosing
+    {
+        public HashSet<string> Failing { get; } = new(StringComparer.Ordinal);
+
+        public HashSet<string> Hanging { get; } = new(StringComparer.Ordinal);
+
+        public bool HeedsItsToken { get; init; }
+
+        public List<string> Closed { get; } = [];
+
+        public List<string> Issuers { get; } = [];
+
+        public async Task CloseAsync(TenantDefinition tenant, CancellationToken cancellationToken)
+        {
+            if (Failing.Contains(tenant.Id))
+                throw new InvalidOperationException("the tenant's streams could not be deleted");
+
+            if (Hanging.Contains(tenant.Id))
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+
+            if (HeedsItsToken)
+                cancellationToken.ThrowIfCancellationRequested();
+
+            Closed.Add($"{tenant.Id}/{tenant.Generation}");
+            Issuers.Add(tenant.Issuer);
+        }
     }
 }

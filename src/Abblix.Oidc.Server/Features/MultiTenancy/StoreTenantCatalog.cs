@@ -30,6 +30,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
 /// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
 /// <param name="openings">What readies each tenant the checks pass before it is first served.</param>
+/// <param name="closings">What lets go of each tenant once it is released.</param>
 /// <param name="options">How long the openings of one reading may take, and how long a tenant gone from the store
 /// is kept.</param>
 /// <param name="timeProvider">Tells how long a tenant has been gone from the store.</param>
@@ -39,6 +40,7 @@ public sealed partial class StoreTenantCatalog(
     ITenantStore store,
     IEnumerable<ITenantsCheck> checks,
     IEnumerable<ITenantOpening> openings,
+    IEnumerable<ITenantClosing> closings,
     IOptions<MultiTenancyOptions> options,
     TimeProvider timeProvider) : ITenantCatalog
 {
@@ -61,11 +63,11 @@ public sealed partial class StoreTenantCatalog(
     // One reading at a time: a slower reading begun earlier would otherwise replace a newer one when it ends
     private readonly SemaphoreSlim _readingOne = new(1, 1);
 
-    private readonly CompositeTenantOpening _opening = new(openings, options);
+    private readonly CompositeTenantOpening _opening = new(openings, options, store);
 
     private Reading? _reading;
 
-    private readonly TenantCreations _creations = new(timeProvider, logger);
+    private readonly TenantCreations _creations = new(timeProvider, logger, closings);
 
     /// <summary>
     /// Reads the store again and serves what the checks let through.
@@ -93,7 +95,10 @@ public sealed partial class StoreTenantCatalog(
         var listed = await store.ListAsync(cancellationToken);
         var previous = Volatile.Read(ref _reading);
 
-        _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshEvery);
+        await _creations.CloseAsync(
+            _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshEvery),
+            options.Value.RefreshEvery,
+            cancellationToken);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
         var refusals = (
@@ -164,7 +169,7 @@ public sealed partial class StoreTenantCatalog(
 
         var failures = await _opening.OpenAsync(
             [..fresh.Select(tenant => tenant.Tenant)],
-            previous is null && store is OptionsTenantStore,
+            previous is null,
             cancellationToken);
 
         foreach (var (tenantId, exception) in failures)

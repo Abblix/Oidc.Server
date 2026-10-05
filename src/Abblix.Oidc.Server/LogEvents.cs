@@ -965,7 +965,8 @@ internal static class LogEvents
         /// <summary>
         /// <c>Features/MultiTenancy/StoreTenantCatalog.cs</c> and <c>TenantCreations.cs</c>, logging under the
         /// catalog - tenants a reading leaves out, refused by the checks of the tenant list or not readied to be
-        /// served, and tenants gone from the store whose release failed (sub-range 10700-10719).
+        /// served, tenants gone from the store whose release failed, and released tenants whose closing failed
+        /// (sub-range 10700-10719).
         /// </summary>
         public static class StoreTenantCatalog
         {
@@ -974,6 +975,7 @@ internal static class LogEvents
             public const int TenantsLeftOut = Base;
             public const int TenantNotOpened = Base + 1;
             public const int TenantNotReleased = Base + 2;
+            public const int TenantNotClosed = Base + 3;
         }
 
         /// <summary>

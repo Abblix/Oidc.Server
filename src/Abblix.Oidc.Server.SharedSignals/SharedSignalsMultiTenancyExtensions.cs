@@ -25,7 +25,7 @@ public static class SharedSignalsMultiTenancyExtensions
 {
     /// <summary>
     /// Keeps each tenant's streams apart, has the transmitter answer as the tenant serving the request and sign
-    /// with that tenant's keys, and runs push delivery for each tenant served.
+    /// with that tenant's keys, runs push delivery for each tenant served, and deletes a released tenant's streams.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -63,6 +63,7 @@ public static class SharedSignalsMultiTenancyExtensions
         services.Decorate<IPushDeliverySweep, TenantPushDeliverySweep>();
         services.Replace(ServiceDescriptor.Singleton<ITransmitterIdentity, TenantTransmitterIdentity>());
         services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantClosing, TenantStreamsClosing>());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantSharedSignalsValidator>());
 
