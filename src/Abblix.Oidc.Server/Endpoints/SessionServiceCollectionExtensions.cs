@@ -7,13 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
-using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
-using Abblix.Oidc.Server.Endpoints.EndSession;
+using Abblix.Oidc.Server.Endpoints.CheckSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
-using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Endpoints.EndSession;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -38,6 +39,7 @@ public static class SessionServiceCollectionExtensions
     internal static IServiceCollection AddCheckSessionEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<ICheckSessionHandler, CheckSessionHandler>();
+        services.AddEndpointSpan<ICheckSessionHandler, TracedCheckSessionHandler>();
         return services;
     }
 
@@ -52,6 +54,7 @@ public static class SessionServiceCollectionExtensions
     {
         services.AddEndSessionContextValidators();
         services.TryAddScoped<IEndSessionHandler, EndSessionHandler>();
+        services.AddEndpointSpan<IEndSessionHandler, TracedEndSessionHandler>();
         services.TryAddScoped<IEndSessionRequestValidator, EndSessionRequestValidator>();
         services.TryAddScoped<IEndSessionRequestProcessor, EndSessionRequestProcessor>();
         return services;

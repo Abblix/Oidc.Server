@@ -7,14 +7,16 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Threading.RateLimiting;
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Revocation;
+using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Features.RateLimiting;
-using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints;
@@ -34,6 +36,7 @@ internal static class TokenLifecycleServiceCollectionExtensions
     internal static IServiceCollection AddRevocationEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IRevocationHandler, RevocationHandler>();
+        services.AddEndpointSpan<IRevocationHandler, TracedRevocationHandler>();
         services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
         services.TryAddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Revocation);
@@ -51,6 +54,7 @@ internal static class TokenLifecycleServiceCollectionExtensions
     internal static IServiceCollection AddIntrospectionEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IIntrospectionHandler, IntrospectionHandler>();
+        services.AddEndpointSpan<IIntrospectionHandler, TracedIntrospectionHandler>();
         services.TryAddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>();
         services.TryAddScoped<IIntrospectionRequestProcessor, IntrospectionRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Introspection);

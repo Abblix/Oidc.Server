@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Endpoints.Configuration;
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Endpoints.Configuration;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -38,6 +40,7 @@ public static class ConfigurationEndpointServiceCollectionExtensions
         services.TryAddSingleton<IJwtAlgorithmsProvider, JwtAlgorithmsProvider>();
         services.TryAddScoped<IAcrMetadataProvider, AcrMetadataProvider>();
         services.TryAddScoped<IConfigurationHandler, ConfigurationHandler>();
+        services.AddEndpointSpan<IConfigurationHandler, TracedConfigurationHandler>();
         // Scoped to match the adapters' response formatters, which are the only consumers and are themselves
         // scoped: the signature is produced per request over that request's resolved endpoint URLs.
         services.TryAddScoped<ISignedMetadataProvider, SignedMetadataProvider>();

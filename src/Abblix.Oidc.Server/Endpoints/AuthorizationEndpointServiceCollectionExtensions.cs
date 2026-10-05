@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
+using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -67,7 +68,8 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // IGrantTypeInformer set, so the IGrantTypeInformer chain stays Singleton-friendly
         // (every contributor is Singleton - no captive-dep risk for Singleton consumers).
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
-        return services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
+        services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
+        return services.AddEndpointSpan<IAuthorizationHandler, TracedAuthorizationHandler>();
     }
 
     /// <summary>
@@ -93,22 +95,6 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // Compose the individual fetchers into a composite fetcher
         return services
             .Compose<IAuthorizationRequestFetcher, CompositeRequestFetcher>();
-    }
-
-    /// <summary>
-    /// Registers validators and processors for pushed authorization requests (PAR), enhancing the security and
-    /// efficiency of the authorization process by allowing clients to send requests directly to
-    /// the authorization server via a back-channel connection.
-    /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
-    /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    public static IServiceCollection AddPushedAuthorizationEndpoint(this IServiceCollection services)
-    {
-        services.TryAddScoped<IPushedAuthorizationHandler>(sp => sp.CreateService<PushedAuthorizationHandler>(
-            Dependency.Override<IAuthorizationRequestFetcher, Authorization.RequestFetching.RequestObjectFetchAdapter>()));
-        services.TryAddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>();
-        services.TryAddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
-        return services;
     }
 
     /// <summary>
