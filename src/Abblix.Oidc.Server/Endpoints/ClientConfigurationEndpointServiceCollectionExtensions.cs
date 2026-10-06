@@ -28,19 +28,24 @@ internal static class ClientConfigurationEndpointServiceCollectionExtensions
     internal static IServiceCollection AddClientConfigurationEndpoint(this IServiceCollection services)
     {
         services.TryAddScoped<IClientRequestValidator, ClientRequestValidator>();
+        services.AddTelemetryDecorator<IClientRequestValidator, ObservedClientRequestValidator>();
 
         services.TryAddScoped<IReadClientHandler, ReadClientHandler>();
         services.AddTelemetryDecorator<IReadClientHandler, ObservedReadClientHandler>();
         services.TryAddScoped<IReadClientRequestProcessor, ReadClientRequestProcessor>();
+        services.AddTelemetryDecorator<IReadClientRequestProcessor, ObservedReadClientRequestProcessor>();
 
         services.TryAddScoped<IUpdateClientHandler, UpdateClientHandler>();
         services.AddTelemetryDecorator<IUpdateClientHandler, ObservedUpdateClientHandler>();
         services.TryAddScoped<IUpdateClientRequestValidator, UpdateClientRequestValidator>();
+        services.AddTelemetryDecorator<IUpdateClientRequestValidator, ObservedUpdateClientRequestValidator>();
         services.TryAddScoped<IUpdateClientRequestProcessor, UpdateClientRequestProcessor>();
+        services.AddTelemetryDecorator<IUpdateClientRequestProcessor, ObservedUpdateClientRequestProcessor>();
 
         services.TryAddScoped<IRemoveClientHandler, RemoveClientHandler>();
         services.AddTelemetryDecorator<IRemoveClientHandler, ObservedRemoveClientHandler>();
         services.TryAddScoped<IRemoveClientRequestProcessor, RemoveClientRequestProcessor>();
+        services.AddTelemetryDecorator<IRemoveClientRequestProcessor, ObservedRemoveClientRequestProcessor>();
 
         return services;
     }

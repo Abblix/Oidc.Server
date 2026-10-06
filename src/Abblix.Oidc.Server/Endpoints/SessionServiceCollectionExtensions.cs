@@ -56,7 +56,9 @@ public static class SessionServiceCollectionExtensions
         services.TryAddScoped<IEndSessionHandler, EndSessionHandler>();
         services.AddTelemetryDecorator<IEndSessionHandler, ObservedEndSessionHandler>();
         services.TryAddScoped<IEndSessionRequestValidator, EndSessionRequestValidator>();
+        services.AddTelemetryDecorator<IEndSessionRequestValidator, ObservedEndSessionRequestValidator>();
         services.TryAddScoped<IEndSessionRequestProcessor, EndSessionRequestProcessor>();
+        services.AddTelemetryDecorator<IEndSessionRequestProcessor, ObservedEndSessionRequestProcessor>();
         return services;
     }
 

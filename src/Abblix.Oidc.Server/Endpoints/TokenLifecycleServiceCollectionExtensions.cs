@@ -38,7 +38,9 @@ internal static class TokenLifecycleServiceCollectionExtensions
         services.TryAddScoped<IRevocationHandler, RevocationHandler>();
         services.AddTelemetryDecorator<IRevocationHandler, ObservedRevocationHandler>();
         services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
+        services.AddTelemetryDecorator<IRevocationRequestValidator, ObservedRevocationRequestValidator>();
         services.TryAddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
+        services.AddTelemetryDecorator<IRevocationRequestProcessor, ObservedRevocationRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Revocation);
         services.TryAddSingleton<UnnamedSourceNotice>();
         return services;
@@ -56,7 +58,9 @@ internal static class TokenLifecycleServiceCollectionExtensions
         services.TryAddScoped<IIntrospectionHandler, IntrospectionHandler>();
         services.AddTelemetryDecorator<IIntrospectionHandler, ObservedIntrospectionHandler>();
         services.TryAddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>();
+        services.AddTelemetryDecorator<IIntrospectionRequestValidator, ObservedIntrospectionRequestValidator>();
         services.TryAddScoped<IIntrospectionRequestProcessor, IntrospectionRequestProcessor>();
+        services.AddTelemetryDecorator<IIntrospectionRequestProcessor, ObservedIntrospectionRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Introspection);
         return services;
     }

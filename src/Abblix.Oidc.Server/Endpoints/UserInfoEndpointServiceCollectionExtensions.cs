@@ -38,7 +38,9 @@ public static class UserInfoEndpointServiceCollectionExtensions
         services.TryAddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddTelemetryDecorator<IUserInfoHandler, ObservedUserInfoHandler>();
         services.TryAddScoped<IUserInfoRequestValidator, UserInfoRequestValidator>();
+        services.AddTelemetryDecorator<IUserInfoRequestValidator, ObservedUserInfoRequestValidator>();
         services.TryAddScoped<IUserInfoRequestProcessor, UserInfoRequestProcessor>();
+        services.AddTelemetryDecorator<IUserInfoRequestProcessor, ObservedUserInfoRequestProcessor>();
         services.TryAddSingleton<IDPoPUserInfoValidator, UserInfo.Validation.DPoPUserInfoValidator>();
         services.TryAddSingleton<IMtlsUserInfoValidator, UserInfo.Validation.MtlsUserInfoValidator>();
         return services;

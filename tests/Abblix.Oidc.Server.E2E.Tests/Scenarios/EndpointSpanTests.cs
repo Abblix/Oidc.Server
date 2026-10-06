@@ -59,6 +59,8 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         await DriveFlowAsync(client);
 
         var spans = _stopped.Where(span => span.Source.Name == OidcTelemetry.SourceName && span.TraceId == trace).ToArray();
+        var endpointSpans = spans.Where(span => span.GetTagItem(TelemetryTags.Endpoint) is not null).ToArray();
+        var stageSpans = spans.Except(endpointSpans).ToArray();
 
         Assert.Equal(
             new[]
@@ -69,9 +71,12 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
                 TelemetryEndpoints.PushedAuthorization, TelemetryEndpoints.ReadClient, TelemetryEndpoints.EndSession,
                 TelemetryEndpoints.CheckSession,
             }.Order(),
-            spans.Select(span => (string)span.GetTagItem(TelemetryTags.Endpoint)!).Distinct().Order());
+            endpointSpans.Select(span => (string)span.GetTagItem(TelemetryTags.Endpoint)!).Distinct().Order());
 
-        Assert.All(spans, span => Assert.Equal(HostingSource, span.Parent?.Source.Name));
+        // An endpoint's span sits under the host's request, and each stage's under the endpoint's span or another stage
+        Assert.All(endpointSpans, span => Assert.Equal(HostingSource, span.Parent?.Source.Name));
+        Assert.NotEmpty(stageSpans);
+        Assert.All(stageSpans, span => Assert.Equal(OidcTelemetry.SourceName, span.Parent?.Source.Name));
         AssertOnlyAdmittedAttributes(spans);
 
         var refused = Assert.Single(spans, span => Equals(span.GetTagItem(TelemetryTags.Error), ErrorCodes.UnauthorizedClient));
@@ -82,7 +87,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
     }
 
     /// <summary>
-    /// Every attribute is one of the server's, and every value one of its key's set: the endpoints, the grant types
+    /// Every attribute is one of the server's, and every value one of its key's set: the endpoints, the stages, the grant types
     /// the host serves, the response types and the library's error codes, so no span of this flow, which runs no handler
     /// of the host's, names an error code as unknown. No span of a server without tenants
     /// names one, and none of this flow fails with an exception.
@@ -90,6 +95,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
     private void AssertOnlyAdmittedAttributes(Activity[] spans)
     {
         var endpoints = ConstantsOf(typeof(TelemetryEndpoints));
+        var stages = ConstantsOf(typeof(TelemetryStages));
         var errors = ConstantsOf(typeof(ErrorCodes));
         var responseTypes = ConstantsOf(typeof(ResponseTypes));
         using var scope = Factory.Services.CreateScope();
@@ -101,6 +107,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             var admitted = key switch
             {
                 TelemetryTags.Endpoint => endpoints.Contains(value),
+                TelemetryTags.Stage => stages.Contains(value),
                 TelemetryTags.GrantType => grantTypes.Contains(value),
                 TelemetryTags.ResponseType => value.Split(' ') is var parts &&
                                               parts.All(responseTypes.Contains) &&

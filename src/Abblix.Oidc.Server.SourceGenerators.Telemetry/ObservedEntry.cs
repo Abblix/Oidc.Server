@@ -16,7 +16,8 @@ namespace Abblix.Oidc.Server.SourceGenerators.Telemetry;
 /// </summary>
 /// <param name="Service">The handler interface the decorator implements.</param>
 /// <param name="ClassName">The name of the decorator.</param>
-/// <param name="Endpoint">The endpoint the handler serves.</param>
+/// <param name="Kind">What the decorator observes.</param>
+/// <param name="Name">The endpoint the handler serves, or the stage the service performs.</param>
 /// <param name="TagsRequest">Whether the decorator names an attribute of the request.</param>
 /// <param name="ObservesResult">Whether the decorator looks at what the handler returned.</param>
 /// <param name="Dependencies">The services the hooks need.</param>
@@ -26,7 +27,8 @@ namespace Abblix.Oidc.Server.SourceGenerators.Telemetry;
 internal sealed record ObservedEntry(
 	INamedTypeSymbol Service,
 	string ClassName,
-	string Endpoint,
+	ObservationKind Kind,
+	string Name,
 	bool TagsRequest,
 	bool ObservesResult,
 	INamedTypeSymbol[] Dependencies,
