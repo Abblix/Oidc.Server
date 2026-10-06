@@ -37,6 +37,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 {
     private const string LoginPath = "/login";
     private const string RegistrationPath = "/register";
+    private const string AccountSelectionPath = "/select-account";
     private const string State = "state";
 
     private static readonly IServiceProvider JwtServices = BuildJwtServices();
@@ -171,6 +172,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     [InlineData($"{Prompts.Consent} {Prompts.Login}", LoginPath)]
     [InlineData($"{Prompts.Login} {Prompts.Create}", RegistrationPath)]
     [InlineData($"{Prompts.Consent} {Prompts.Create}", RegistrationPath)]
+    [InlineData($"{Prompts.Login} {Prompts.SelectAccount}", AccountSelectionPath)]
     public async Task PromptList_SendsToItsFirstPage(string prompt, string page)
     {
         var (client, _, host) = Start();
@@ -321,6 +323,46 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         endUser.SignInAgain();
 
         AssertCode(await ReturnFromPage(client, discovery, clientId, sentTo));
+    }
+
+    /// <summary>
+    /// A list inside a signed request object is read as the same list in the query is.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptListInRequestObject_SendsToItsFirstPage(bool pushed)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.Consent} {Prompts.Login}");
+
+        var sentTo = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed));
+
+        Assert.Equal(LoginPath, PathOf(sentTo));
+    }
+
+    /// <summary>
+    /// A value the server does not support inside a request object is answered as the same value in the query is:
+    /// with 400, and nothing goes to the redirect URI.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedPromptValueInRequestObject_IsAnsweredWith400()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, "unknown");
+
+        var response = await client.GetAsync(
+            await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
     }
 
     /// <summary>

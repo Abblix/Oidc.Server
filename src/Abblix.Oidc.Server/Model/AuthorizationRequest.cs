@@ -125,9 +125,9 @@ public record AuthorizationRequest
 	/// registration extension <c>create</c>; their order in the parameter carries no meaning.
 	/// </summary>
 	/// <remarks>
-	/// A value outside that list is refused as the request is read, with 400 and <c>invalid_request</c>, as Initiating
-	/// User Registration via OpenID Connect 1.0, section 4.1, recommends for a value not in
-	/// <c>prompt_values_supported</c>.
+	/// A value outside that list is refused with 400 and <c>invalid_request</c>, as Initiating User Registration via
+	/// OpenID Connect 1.0, section 4.1, recommends for a value not in <c>prompt_values_supported</c>: by the adapters'
+	/// models as the request is read, and by the request object's merge for a value inside a request object.
 	/// </remarks>
 	[JsonPropertyName(Parameters.Prompt)]
 	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]

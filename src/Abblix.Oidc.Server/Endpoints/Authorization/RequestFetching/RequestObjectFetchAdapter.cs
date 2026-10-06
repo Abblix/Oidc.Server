@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Reflection;
+using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -62,6 +64,14 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// from the outer one - without this check an attacker-supplied object could silently swap the
     /// flow or the client identity relative to what the plain OAuth parameters declared.
     /// </summary>
+    /// <summary>
+    /// The <c>prompt</c> values the request model declares supported.
+    /// </summary>
+    private static readonly string[] SupportedPrompts = typeof(AuthorizationRequest)
+        .GetProperty(nameof(AuthorizationRequest.Prompt))!
+        .GetCustomAttribute<AllowedValuesAttribute>()!
+        .AllowedValues;
+
     private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
         AuthorizationRequest outer,
         AuthorizationRequest merged)
@@ -72,6 +82,17 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
                 ErrorCodes.InvalidRequestObject,
                 $"The {AuthorizationRequest.Parameters.ClientId} inside the request object " +
                 "does not match the one outside of it");
+        }
+
+        // The request object is read past the adapters' models, whose declared value list refuses an unsupported
+        // prompt in the query, so the same list refuses it here
+        if (merged.Prompt?.FirstOrDefault(value => !SupportedPrompts.Contains(value, StringComparer.Ordinal))
+            is { } unsupported)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                $"The {AuthorizationRequest.Parameters.Prompt} value '{unsupported}' inside the request object " +
+                "is not supported");
         }
 
         if (outer.ResponseType != null && merged.ResponseType != null &&

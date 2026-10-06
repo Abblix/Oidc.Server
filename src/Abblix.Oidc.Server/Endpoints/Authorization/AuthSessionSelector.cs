@@ -28,6 +28,13 @@ internal sealed class AuthSessionSelector(
 	TimeProvider clock)
 {
 	/// <summary>
+	/// The values of <c>prompt</c> this selection answers, in the order it answers them: none, which allows no page
+	/// at all, then the pages in the order they come - account creation or account selection, then authentication.
+	/// Consent is asked after a session is chosen.
+	/// </summary>
+	private static readonly string[] SessionPrompts = [Prompts.None, Prompts.Create, Prompts.SelectAccount, Prompts.Login];
+
+	/// <summary>
 	/// Selects the session the request proceeds with.
 	/// </summary>
 	/// <param name="request">The validated authorization request.</param>
@@ -145,12 +152,6 @@ internal sealed class AuthSessionSelector(
 
 		return openedSince.Count > 0 ? (null, openedSince) : (prompt, authSessions);
 	}
-
-	/// <summary>
-	/// The values of <c>prompt</c> this selection answers, in the order their pages come: account creation or
-	/// account selection, then authentication. Consent is asked after a session is chosen.
-	/// </summary>
-	private static readonly string[] SessionPrompts = [Prompts.None, Prompts.Create, Prompts.SelectAccount, Prompts.Login];
 
 	/// <summary>
 	/// The value of <paramref name="prompt"/> this selection answers first, or null when it asks for none of them.
