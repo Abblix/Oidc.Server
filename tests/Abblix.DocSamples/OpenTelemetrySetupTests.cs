@@ -11,6 +11,7 @@ using System.Diagnostics.Metrics;
 using Abblix.DocSamples.Samples;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -45,5 +46,11 @@ public sealed class OpenTelemetrySetupTests
 
         using var meter = new Meter(OidcTelemetry.SourceName);
         Assert.True(meter.CreateCounter<long>("probe").Enabled);
+
+        // The host's own requests are recorded, so the server's spans under them are kept by the default sampler
+        using var hosting = new ActivitySource("Microsoft.AspNetCore");
+        Assert.True(hosting.HasListeners());
+
+        Assert.True(provider.GetRequiredService<ILoggerFactory>().CreateLogger(OidcTelemetry.LogCategory).IsEnabled(LogLevel.Debug));
     }
 }

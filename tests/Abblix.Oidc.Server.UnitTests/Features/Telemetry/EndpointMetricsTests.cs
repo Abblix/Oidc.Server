@@ -311,6 +311,23 @@ public sealed class EndpointMetricsTests : IDisposable
     }
 
     [Fact]
+    public async Task ARegistrationRefusedForSpentAuthenticationFailures_IsCountedAsRefusedAsItsRequestIs()
+    {
+        var spent = new TooManyRequestsError("Too many", RetryAfter: null, CallerRateLimiters.AuthenticationFailures);
+        var inner = new Mock<IRegisterClientHandler>();
+        inner
+            .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
+            .ThrowsAsync(new TooManyAuthenticationFailuresException(spent));
+        var observed = new ObservedRegisterClientHandler(inner.Object, _instruments);
+
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => observed.HandleAsync(new ClientRegistrationRequest()));
+
+        Assert.Equal(TelemetryOutcomes.Refused, Assert.Single(_measured.Of(OidcMetrics.ClientsRegistered))[TelemetryTags.Outcome]);
+        Assert.Equal(TelemetryOutcomes.Refused, Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Outcome]);
+    }
+
+    [Fact]
     public async Task ARegistrationEndingInAnException_IsCountedAsFailedAndPassesOn()
     {
         var inner = new Mock<IRegisterClientHandler>();

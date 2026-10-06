@@ -20,11 +20,14 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// span, an instrument nobody listens to records nothing, so the host's subscription is the only switch. With the
 /// logging bridge on, a record the server logs while an endpoint span is open carries that span's trace and span. A
 /// refused request is logged at <see cref="Microsoft.Extensions.Logging.LogLevel.Debug"/> under
-/// <see cref="LogCategory"/>, so a host that wants those records lowers its level for that category.
+/// <see cref="LogCategory"/>, <c>Abblix.Oidc.Server.Telemetry</c>, so a host that wants those records lowers its level
+/// for that category. A host without instrumentation of its own requests starts each request's activity unrecorded,
+/// and the default sampler then drops the server's spans under it, so the setup instruments them too.
 /// The attributes are listed in <see cref="TelemetryTags"/>, the instruments in <see cref="OidcMetrics"/>.
 /// <code>
+/// services.AddLogging(logging => logging.AddFilter(OidcTelemetry.LogCategory, LogLevel.Debug));
 /// services.AddOpenTelemetry()
-///     .WithTracing(tracing => tracing.AddSource(OidcTelemetry.SourceName))
+///     .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddSource(OidcTelemetry.SourceName))
 ///     .WithMetrics(metrics => metrics.AddMeter(OidcTelemetry.SourceName))
 ///     .WithLogging();
 /// </code>
@@ -39,7 +42,7 @@ public static class OidcTelemetry
     /// <summary>
     /// The category the server logs a refused request under, for a host's logging filter.
     /// </summary>
-    public static readonly string LogCategory = typeof(OidcInstruments).FullName!;
+    public const string LogCategory = "Abblix.Oidc.Server.Telemetry";
 
     /// <summary>
     /// The version of the package, its build metadata left out, which the source and the meter carry.

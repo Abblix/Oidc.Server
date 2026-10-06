@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -24,8 +25,9 @@ internal static class OpenTelemetrySetupSample
     internal static void Configure(IServiceCollection services)
     {
         // <sample>
+        services.AddLogging(logging => logging.AddFilter(OidcTelemetry.LogCategory, LogLevel.Debug));
         services.AddOpenTelemetry()
-            .WithTracing(tracing => tracing.AddSource(OidcTelemetry.SourceName))
+            .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddSource(OidcTelemetry.SourceName))
             .WithMetrics(metrics => metrics.AddMeter(OidcTelemetry.SourceName))
             .WithLogging();
         // </sample>

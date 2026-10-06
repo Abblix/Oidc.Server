@@ -49,7 +49,7 @@ internal sealed partial class OidcInstruments
             OidcMetrics.TokenSigningDuration,
             Seconds,
             "The time signing one token takes.",
-            advice: DurationAdvice);
+            advice: SigningDurationAdvice);
 
         _clientsRegistered = meter.CreateCounter<long>(
             OidcMetrics.ClientsRegistered,
@@ -79,6 +79,16 @@ internal sealed partial class OidcInstruments
     };
 
     private readonly ILogger _logger;
+    /// <summary>
+    /// Bucket boundaries in seconds for a signing, from a fraction of a millisecond, which an in-process key takes, to
+    /// the round trip to an external custodian.
+    /// </summary>
+    private static readonly InstrumentAdvice<double> SigningDurationAdvice = new()
+    {
+        HistogramBucketBoundaries =
+            [0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+    };
+
     private readonly Histogram<double> _requestDuration;
     private readonly Counter<long> _tokensIssued;
     private readonly Histogram<double> _tokenSigningDuration;
@@ -98,6 +108,10 @@ internal sealed partial class OidcInstruments
             tags.Add(TelemetryTags.Tenant, tenant);
 
         _requestDuration.Record(duration.TotalSeconds, tags);
+
+        // Counted from the outcome the request was measured with, so the two instruments never disagree on one
+        if (endpoint == TelemetryEndpoints.RegisterClient)
+            _clientsRegistered.Add(1, new KeyValuePair<string, object?>(TelemetryTags.Outcome, outcome));
 
         // The code logged is the one the span and the measurement carry, so a log record and a span of one refusal
         // agree, and a host's logging bridge ties the record to the span open around it
@@ -126,12 +140,6 @@ internal sealed partial class OidcInstruments
         => _tokenSigningDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>(TelemetryTags.SigningAlgorithm, algorithm));
-
-    /// <summary>
-    /// Counts a dynamic client registration request that ended with <paramref name="outcome"/>.
-    /// </summary>
-    public void ClientRegistration(string outcome)
-        => _clientsRegistered.Add(1, new KeyValuePair<string, object?>(TelemetryTags.Outcome, outcome));
 
     /// <summary>
     /// Counts a request the license refused for <paramref name="reason"/>.
