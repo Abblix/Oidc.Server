@@ -366,6 +366,49 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A pushed request object carrying a value the server does not support is refused when it is pushed, with 400 and
+    /// invalid_request, so no request_uri is issued for it.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedPromptValueInPushedRequestObject_IsRefusedWhenPushed()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, "unknown");
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.PushedAuthorizationRequestEndpoint!,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientSecret] = clientSecret,
+                [AuthorizationRequest.Parameters.Request] = requestObject,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A trailing space inside a request object separates no value, as in the query: none alone is asked, and the end
+    /// user signed in gets a code without a page.
+    /// </summary>
+    [Fact]
+    public async Task PromptWithTrailingSpaceInRequestObject_IsReadAsItsValueAlone()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, $"{Prompts.None} ");
+
+        AssertCode(await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false)));
+    }
+
+    /// <summary>
     /// A pushed request carrying a signed request object is used once: after its code is issued, presenting its
     /// <c>request_uri</c> again is refused (RFC 9126 section 7.3).
     /// </summary>

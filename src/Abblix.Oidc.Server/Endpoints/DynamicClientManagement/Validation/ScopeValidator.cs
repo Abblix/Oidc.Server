@@ -22,8 +22,13 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncClientRegistration
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var scope = context.Request.Scope;
-        if (scope is not { Length: > 0 })
+        if (scope is null)
             return null;
+
+        // A scope naming no value would be stored as no list at all, which the server reads as no restriction: the
+        // opposite of what the client sent. A client registering without a restriction leaves the member out.
+        if (scope.Length == 0)
+            return ErrorFactory.InvalidClientMetadata("The scope names no value");
 
         return (from value in scope
             where !scopeManager.TryGet(value, out _)

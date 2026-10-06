@@ -49,10 +49,11 @@ public class ScopeValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsync_WithEmptyScope_ShouldReturnNull()
+    public async Task ValidateAsync_WithEmptyScope_IsRefusedAsInvalidClientMetadata()
     {
         var result = await _validator.ValidateAsync(CreateContext([]));
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     [Fact]
