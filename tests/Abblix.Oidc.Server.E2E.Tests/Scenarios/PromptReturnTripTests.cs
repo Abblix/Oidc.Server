@@ -127,8 +127,8 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// The server over the test's end user and the consent it records, the latter behind the library's handling of
-    /// prompt=consent, which replacing the host's provider would otherwise drop.
+    /// The server over the test's end user and the consent it records, each replacing what the host registered, as a
+    /// host replacing its own provider does: prompt=consent keeps working over it.
     /// </summary>
     private (HttpClient Client, SignedInEndUser EndUser, RecordedConsents Consents, IDisposable Host) StartWithConsents()
     {
@@ -137,7 +137,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser));
-            services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider>(new PromptConsentDecorator(consents)));
+            services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider>(consents));
         }));
         var client = host.CreateClient(new WebApplicationFactoryClientOptions
         {

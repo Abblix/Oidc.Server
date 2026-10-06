@@ -92,9 +92,8 @@ public class AuthorizationRequestProcessor(
 			: null;
 
 		// Retrieve user consents (i.e., permissions granted for requested
-		// scopes/resources/authorization_details). The 'prompt=consent' case is not forgotten but
-		// processed inside this call.
-		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
+		// scopes/resources/authorization_details), as prompt=consent leaves them
+		var userConsents = ConsentAskedOf(request, await consentsProvider.GetUserConsentsAsync(request, authSession));
 
 		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
@@ -120,6 +119,32 @@ public class AuthorizationRequestProcessor(
 
 		var authContext = await BuildAuthorizationContextAsync(request, userConsents, requestedDetails);
 		return await IssueAsync(request, authSession, authContext, responseType);
+	}
+
+	/// <summary>
+	/// The host's consents, or everything the request asks for pending while it asks for consent (OIDC Core section
+	/// 3.1.2.1, <c>prompt=consent</c>) and the end user has not given it on this request's consent page, as
+	/// <see cref="UserConsents.GivenAt"/> tells.
+	/// </summary>
+	/// <remarks>
+	/// Decided here rather than around the host's provider, so a host replacing its provider keeps the prompt working.
+	/// A consent the host records no moment for, as one the server grants on its own, never answers the prompt.
+	/// </remarks>
+	private static UserConsents ConsentAskedOf(ValidAuthorizationRequest request, UserConsents consents)
+	{
+		if (!PromptPages.Asks(request.Model, Prompts.Consent) ||
+			PromptPages.AnsweredBy(request.Model, Prompts.Consent, consents.GivenAt))
+		{
+			return consents;
+		}
+
+		return new UserConsents
+		{
+			Pending = new(request.Scope, request.Resources)
+			{
+				AuthorizationDetails = request.AuthorizationDetails,
+			},
+		};
 	}
 
 	/// <summary>
