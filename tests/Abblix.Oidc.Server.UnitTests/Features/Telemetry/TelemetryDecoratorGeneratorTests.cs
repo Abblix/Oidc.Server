@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.IO;
@@ -87,6 +88,18 @@ public sealed class TelemetryDecoratorGeneratorTests
         "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\", Dependencies = new[] { typeof(IInstruments) })]",
         "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); } public interface IInstruments {}",
         "ABXT007", 0, 0)]
+    [InlineData(
+        "[assembly: ObservedEndpoint(typeof(INullableHandler), \"token\")]",
+        "public interface INullableHandler { Task<" + Ok + "?> HandleAsync(); }",
+        "ABXT003", 0, 0)]
+    [InlineData(
+        "[assembly: ObservedEndpoint(typeof(IFooHandler), \"token\")]\n[assembly: ObservedEndpoint(typeof(IfooHandler), \"token\")]",
+        "public interface IFooHandler { Task<" + Ok + "> HandleAsync(); } public interface IfooHandler { Task<" + Ok + "> HandleAsync(); }",
+        "ABXT005", 1, 1)]
+    [InlineData(
+        "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\", Dependencies = new[] { typeof(I) })]",
+        "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); } public interface I {}",
+        "ABXT007", 0, 0)]
     public void AListTheGeneratorCannotHonor_FailsTheBuildAtItsEntry(
         string list,
         string declarations,
@@ -102,6 +115,21 @@ public sealed class TelemetryDecoratorGeneratorTests
         Assert.Equal(listTree.FilePath, diagnostic.Location.GetLineSpan().Path);
         Assert.Equal(line, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
         Assert.Equal(generated, result.GeneratedTrees.Length);
+    }
+
+    [Fact]
+    public void ADecoratorNamedAgainInAnotherFile_FailsTheBuildAtTheLaterEntry()
+    {
+        var (_, result) = Run(
+            "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\")]",
+            "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); }",
+            AbblixReferences,
+            "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\")]");
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("ABXT005", diagnostic.Id);
+        Assert.Equal("List2.cs", diagnostic.Location.GetLineSpan().Path);
+        Assert.Single(result.GeneratedTrees);
     }
 
     [Fact]
@@ -146,7 +174,8 @@ public sealed class TelemetryDecoratorGeneratorTests
     private static (SyntaxTree List, GeneratorDriverRunResult Result) Run(
         string list,
         string declarations,
-        MetadataReference[] references)
+        MetadataReference[] references,
+        string? secondList = null)
     {
         const string attribute = """
             namespace Abblix.Oidc.Server.Features.Telemetry
@@ -165,15 +194,23 @@ public sealed class TelemetryDecoratorGeneratorTests
             list + "\n", path: "List.cs", cancellationToken: TestContext.Current.CancellationToken);
         var declarationsTree = CSharpSyntaxTree.ParseText(
             "using System.Threading.Tasks;\n" + declarations, cancellationToken: TestContext.Current.CancellationToken);
+        var trees = new List<SyntaxTree>
+        {
+            CSharpSyntaxTree.ParseText(
+                "global using Abblix.Oidc.Server.Features.Telemetry;\n" + attribute,
+                cancellationToken: TestContext.Current.CancellationToken),
+            listTree,
+            declarationsTree,
+        };
+        if (secondList is not null)
+        {
+            trees.Add(CSharpSyntaxTree.ParseText(
+                secondList + "\n", path: "List2.cs", cancellationToken: TestContext.Current.CancellationToken));
+        }
+
         var compilation = CSharpCompilation.Create(
             "probe",
-            [
-                CSharpSyntaxTree.ParseText(
-                    "global using Abblix.Oidc.Server.Features.Telemetry;\n" + attribute,
-                    cancellationToken: TestContext.Current.CancellationToken),
-                listTree,
-                declarationsTree,
-            ],
+            trees,
             // The runtime's own assemblies, so the attribute's base type resolves; the application's assemblies, which
             // the trusted list carries too, come only through the references a case asks for
             Directory.GetFiles(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "*.dll")

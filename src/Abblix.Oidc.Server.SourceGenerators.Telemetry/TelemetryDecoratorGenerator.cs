@@ -33,6 +33,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private const string AuthorizationResponseTypeName =
 		"Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse";
 	private const string TaskOfTypeName = "System.Threading.Tasks.Task`1";
+	private const string NullableTypeName = "System.Nullable`1";
 
 	private const string TagsRequestProperty = "TagsRequest";
 	private const string ObservesResultProperty = "ObservesResult";
@@ -85,7 +86,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private static readonly DiagnosticDescriptor DuplicateDecorator = new(
 		id: "ABXT005",
 		title: "Two entries name the same decorator",
-		messageFormat: "'{0}' names the decorator '{1}', which an earlier entry of the list already generates",
+		messageFormat: "The entry for '{0}' names the decorator '{1}', which an earlier entry of the list already " +
+		               "generates under a name differing at most in case",
 		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
@@ -93,7 +95,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private static readonly DiagnosticDescriptor HooksNeedOneMethod = new(
 		id: "ABXT006",
 		title: "Hooks need a handler of one method",
-		messageFormat: "'{0}' asks for hooks but declares {1} methods; a hook is declared once and serves one method",
+		messageFormat: "'{0}' asks for hooks but has {1} methods, those it inherits included; a hook is declared " +
+		               "once and serves one method",
 		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
@@ -101,7 +104,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private static readonly DiagnosticDescriptor DependencyNameTaken = new(
 		id: "ABXT007",
 		title: "Dependency name is taken",
-		messageFormat: "The dependency '{0}' of '{1}' would be named '{2}', a name the decorator already uses",
+		messageFormat: "The dependency '{0}' of '{1}' would be named '{2}', a name that is empty or one the " +
+		               "decorator already uses",
 		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
@@ -126,7 +130,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 		context.RegisterSourceOutput(results, static (productionContext, decorators) =>
 		{
-			var generated = new HashSet<string>(StringComparer.Ordinal);
+			// The compiler holds generated file names unique ignoring case, so two names differing only in case are one
+			var generated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			foreach (var decorator in decorators)
 			{
 				foreach (var diagnostic in decorator.Result.Diagnostics)
@@ -140,7 +145,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				if (!generated.Add(decorator.ClassName))
 				{
 					productionContext.ReportDiagnostic(new DiagnosticInfo(
-						DuplicateDecorator, decorator.Location, decorator.Result.HintName, decorator.ClassName).ToDiagnostic());
+						DuplicateDecorator, decorator.Location, decorator.Service, decorator.ClassName).ToDiagnostic());
 					continue;
 				}
 
@@ -157,7 +162,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		var service = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
 		var serviceName = service?.ToDisplayString() ?? string.Empty;
 		if (service is not { TypeKind: TypeKind.Interface })
-			return Refused(serviceName, location, new DiagnosticInfo(ServiceIsNotAnInterface, location, serviceName));
+			return Refused(serviceName, serviceName, location, new DiagnosticInfo(ServiceIsNotAnInterface, location, serviceName));
 
 		var members = service.GetMembers()
 			.Concat(service.AllInterfaces.SelectMany(parent => parent.GetMembers()))
@@ -180,11 +185,11 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 		var refusals = RefusalsOf(entry, compilation);
 		if (refusals.Length > 0)
-			return Refused(entry.ClassName, location, refusals);
+			return Refused(serviceName, entry.ClassName, location, refusals);
 
 		var generated = new GenerationResult(
 			$"{entry.ClassName}.g.cs", Render(entry), new EquatableArray<DiagnosticInfo>([]));
-		return new DecoratorResult(entry.ClassName, generated, location);
+		return new DecoratorResult(serviceName, entry.ClassName, generated, location);
 	}
 
 	/// <summary>
@@ -228,13 +233,17 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			.ToArray();
 
 	private static DiagnosticInfo[] HooksWithoutOneMethod(ObservedEntry entry)
-		=> (entry.TagsRequest || entry.ObservesResult) && entry.Methods.Length != 1
-			? [new DiagnosticInfo(HooksNeedOneMethod, entry.Location, entry.Service.ToDisplayString(), entry.Methods.Length)]
-			: [];
+	{
+		if (!(entry.TagsRequest || entry.ObservesResult) || entry.Methods.Length == 1)
+			return [];
+
+		return [new DiagnosticInfo(HooksNeedOneMethod, entry.Location, entry.Service.ToDisplayString(), entry.Methods.Length)];
+	}
 
 	private static DiagnosticInfo[] TakenDependencyNames(ObservedEntry entry)
 		=> entry.Dependencies
-			.Where(dependency => ReservedNames.Contains(DependencyName(dependency)) ||
+			.Where(dependency => DependencyName(dependency).Length == 0 ||
+			                     ReservedNames.Contains(DependencyName(dependency)) ||
 			                     entry.Dependencies.Count(other => DependencyName(other) == DependencyName(dependency)) > 1)
 			.Select(dependency => new DiagnosticInfo(
 				DependencyNameTaken,
@@ -273,8 +282,16 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		return source.AppendLine("}").ToString();
 	}
 
-	private static DecoratorResult Refused(string className, LocationInfo location, params DiagnosticInfo[] diagnostics)
-		=> new(className, new GenerationResult($"{className}.g.cs", null, new EquatableArray<DiagnosticInfo>(diagnostics)), location);
+	private static DecoratorResult Refused(
+		string service,
+		string className,
+		LocationInfo location,
+		params DiagnosticInfo[] diagnostics)
+		=> new(
+			service,
+			className,
+			new GenerationResult($"{className}.g.cs", null, new EquatableArray<DiagnosticInfo>(diagnostics)),
+			location);
 
 	private static void AppendConstructor(
 		StringBuilder source,
@@ -401,6 +418,13 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	/// </summary>
 	private static string? ErrorOf(ITypeSymbol result)
 	{
+		// A nullable result answers with no result at all, which the observation has no refusal to read from
+		if (result is INamedTypeSymbol { IsGenericType: true } wrapped &&
+		    MetadataName(wrapped.OriginalDefinition) == NullableTypeName)
+		{
+			return null;
+		}
+
 		if (result is INamedTypeSymbol { IsGenericType: true } named &&
 		    MetadataName(named.OriginalDefinition) == ResultTypeName)
 		{
@@ -429,7 +453,11 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 	private static string DependencyName(INamedTypeSymbol dependency)
 	{
+		// A type named by the prefix alone leaves nothing, which the entry is refused for rather than named by
 		var name = StripInterfacePrefix(dependency.Name);
+		if (name.Length == 0)
+			return name;
+
 		return char.ToLowerInvariant(name[0]) + name.Substring(1);
 	}
 
