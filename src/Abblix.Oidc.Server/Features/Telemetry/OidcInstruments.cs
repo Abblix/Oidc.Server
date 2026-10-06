@@ -49,7 +49,7 @@ internal sealed partial class OidcInstruments
             OidcMetrics.TokenSigningDuration,
             Seconds,
             "The time signing one token takes.",
-            advice: SigningDurationAdvice);
+            advice: ShortDurationAdvice);
 
         _clientsRegistered = meter.CreateCounter<long>(
             OidcMetrics.ClientsRegistered,
@@ -65,6 +65,12 @@ internal sealed partial class OidcInstruments
             OidcMetrics.RateLimitRefusals,
             "{request}",
             "The requests refused for a spent budget.");
+
+        _storageOperationDuration = meter.CreateHistogram(
+            OidcMetrics.StorageOperationDuration,
+            Seconds,
+            "The time one call to the server's entity storage takes.",
+            advice: ShortDurationAdvice);
     }
 
     private const string Seconds = "s";
@@ -80,10 +86,10 @@ internal sealed partial class OidcInstruments
 
     private readonly ILogger _logger;
     /// <summary>
-    /// Bucket boundaries in seconds for a signing, from a fraction of a millisecond, which an in-process key takes, to
-    /// the round trip to an external custodian.
+    /// Bucket boundaries in seconds for a signing or a storage call, from a fraction of a millisecond, which an
+    /// in-process key or an in-memory store takes, to the round trip to an external custodian or a remote store.
     /// </summary>
-    private static readonly InstrumentAdvice<double> SigningDurationAdvice = new()
+    private static readonly InstrumentAdvice<double> ShortDurationAdvice = new()
     {
         HistogramBucketBoundaries =
             [0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
@@ -95,6 +101,7 @@ internal sealed partial class OidcInstruments
     private readonly Counter<long> _clientsRegistered;
     private readonly Counter<long> _licenseRefusals;
     private readonly Counter<long> _rateLimitRefusals;
+    private readonly Histogram<double> _storageOperationDuration;
 
     /// <summary>
     /// Records a request of <paramref name="endpoint"/> handled in <paramref name="duration"/>.
@@ -158,6 +165,15 @@ internal sealed partial class OidcInstruments
             new KeyValuePair<string, object?>(
                 TelemetryTags.RateLimitBudget,
                 KnownBudgets.Contains(budget) ? budget : TelemetryTags.Other));
+
+    /// <summary>
+    /// Records a call to the server's entity storage, doing <paramref name="operation"/>, that took
+    /// <paramref name="duration"/>.
+    /// </summary>
+    public void StorageOperation(string operation, TimeSpan duration)
+        => _storageOperationDuration.Record(
+            duration.TotalSeconds,
+            new KeyValuePair<string, object?>(TelemetryTags.StorageOperation, operation));
 
     private static readonly HashSet<string> KnownBudgets = new(StringComparer.Ordinal)
     {

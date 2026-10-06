@@ -37,20 +37,24 @@ internal static class EndpointObservation
     /// <param name="errorOf">The error the outcome refuses the request with, or null when it does not.</param>
     /// <param name="tags">The request's attribute, from the closed set its tag documents; asked only when a span is
     /// started, so a source nobody listens to does not pay for reading it.</param>
+    /// <param name="enrichment">The host's enrichers of the span, with the request they see.</param>
     public static async Task<TResult> RunAsync<TResult>(
         string endpoint,
         OidcInstruments instruments,
         ITenantAccessor? tenants,
         Func<Task<TResult>> handle,
         Func<TResult, OidcError?> errorOf,
-        Func<(string Key, string? Value)>? tags = null)
+        Func<(string Key, string? Value)>? tags = null,
+        EndpointEnrichment enrichment = default)
     {
         var tenant = TenantOf(tenants);
         using var span = StartSpan(endpoint, tenant, tags);
+
         var started = Stopwatch.GetTimestamp();
         (string Outcome, string? Error) ended = (TelemetryOutcomes.Failed, null);
         try
         {
+            enrichment.Apply(span, endpoint);
             var result = await handle();
             ended = Close(span, endpoint, instruments, errorOf(result));
             return result;

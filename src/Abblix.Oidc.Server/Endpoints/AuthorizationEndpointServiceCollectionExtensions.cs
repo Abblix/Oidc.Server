@@ -45,6 +45,7 @@ public static class AuthorizationEndpointServiceCollectionExtensions
 
         services.TryAddScoped<AuthorizationHandler>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
+        services.AddTelemetryDecorator<IAuthorizationRequestValidator, ObservedAuthorizationRequestValidator>();
         services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
@@ -52,6 +53,7 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // terminal success has minted a code or token. Mirrors the session-management decorator and stacks
         // with it; both act independently on a SuccessfullyAuthenticated outcome.
         services.Decorate<IAuthorizationRequestProcessor, PushedAuthorizationRequestProcessorDecorator>();
+        services.AddTelemetryDecorator<IAuthorizationRequestProcessor, ObservedAuthorizationRequestProcessor>();
 
         // Response encoding (iss/scope gating + JARM packing) lives in the framework-agnostic core and
         // runs from the handler after the full processing chain. Scoped: it reads per-request issuer state.

@@ -35,7 +35,9 @@ public static class PushedAuthorizationEndpointServiceCollectionExtensions
             Dependency.Override<IAuthorizationRequestFetcher, RequestObjectFetchAdapter>()));
         services.AddTelemetryDecorator<IPushedAuthorizationHandler, ObservedPushedAuthorizationHandler>();
         services.TryAddScoped<IPushedAuthorizationRequestValidator, PushedAuthorizationRequestValidator>();
+        services.AddTelemetryDecorator<IPushedAuthorizationRequestValidator, ObservedPushedAuthorizationRequestValidator>();
         services.TryAddScoped<IPushedAuthorizationRequestProcessor, PushedAuthorizationRequestProcessor>();
+        services.AddTelemetryDecorator<IPushedAuthorizationRequestProcessor, ObservedPushedAuthorizationRequestProcessor>();
         return services;
     }
 }

@@ -195,6 +195,23 @@ public sealed class EndpointSpanTests : IDisposable
     }
 
     [Fact]
+    public async Task AnEnricherOfTheHost_SeesTheSpanTheEndpointAndTheRequest()
+    {
+        var enricher = new Mock<IEndpointSpanEnricher>();
+        var inner = new Mock<ITokenHandler>();
+        inner
+            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Issued);
+        var observed = new ObservedTokenHandler(
+            inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments, enrichers: [enricher.Object]);
+        var request = new TokenRequest();
+
+        var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest(), CancellationToken.None));
+
+        enricher.Verify(e => e.Enrich(span, TelemetryEndpoints.Token, request), Times.Once);
+    }
+
+    [Fact]
     public void TheSourceIsVersionedWithoutBuildMetadata()
     {
         Assert.False(string.IsNullOrEmpty(OidcTelemetry.Source.Version));

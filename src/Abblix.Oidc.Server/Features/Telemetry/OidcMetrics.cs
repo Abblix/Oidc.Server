@@ -58,4 +58,11 @@ public static class OidcMetrics
     /// <see cref="TelemetryTags.RateLimitBudget"/>.
     /// </summary>
     public const string RateLimitRefusals = "oidc.rate_limit.refusals";
+
+    /// <summary>
+    /// A histogram of the seconds one call to the server's entity storage takes, by
+    /// <see cref="TelemetryTags.StorageOperation"/>; a call made outside a request, by a background service, is
+    /// measured as well.
+    /// </summary>
+    public const string StorageOperationDuration = "oidc.storage.operation.duration";
 }

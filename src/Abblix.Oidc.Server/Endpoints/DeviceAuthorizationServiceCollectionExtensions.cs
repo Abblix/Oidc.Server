@@ -37,7 +37,9 @@ public static class DeviceAuthorizationServiceCollectionExtensions
         services.TryAddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
         services.AddTelemetryDecorator<IDeviceAuthorizationHandler, ObservedDeviceAuthorizationHandler>();
         services.TryAddScoped<IDeviceAuthorizationRequestValidator, DeviceAuthorizationRequestValidator>();
+        services.AddTelemetryDecorator<IDeviceAuthorizationRequestValidator, ObservedDeviceAuthorizationRequestValidator>();
         services.TryAddScoped<IDeviceAuthorizationRequestProcessor, DeviceAuthorizationRequestProcessor>();
+        services.AddTelemetryDecorator<IDeviceAuthorizationRequestProcessor, ObservedDeviceAuthorizationRequestProcessor>();
 
         // Fail loud at startup when the device endpoint is enabled but its settings are absent, instead of letting the
         // gap surface as an unhandled 500 on the first request. TryAddEnumerable because the options framework

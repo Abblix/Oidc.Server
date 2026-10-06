@@ -132,6 +132,30 @@ public sealed class EndpointMetricsTests : IDisposable
     }
 
     [Fact]
+    public async Task AnEnricherThatThrows_FailsTheRequestAsMeasured()
+    {
+        var enricher = new Mock<IEndpointSpanEnricher>();
+        enricher
+            .Setup(e => e.Enrich(It.IsAny<System.Diagnostics.Activity>(), It.IsAny<string>(), It.IsAny<object?>()))
+            .Throws<InvalidOperationException>();
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OidcTelemetry.SourceName,
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _)
+                => System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(Issued), EndpointObservation.NoError,
+            enrichment: new EndpointEnrichment(null, [enricher.Object])));
+
+        Assert.Equal(
+            TelemetryOutcomes.Failed,
+            Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Outcome]);
+    }
+
+    [Fact]
     public async Task UnderMultiTenancy_TheRequestNamesTheTenant()
     {
         var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };

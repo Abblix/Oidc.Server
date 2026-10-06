@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -145,7 +146,8 @@ public static class AuthorizationGrantServiceCollectionExtensions
     {
         return services
             .Compose<IAuthorizationGrantHandler, CompositeAuthorizationGrantHandler>()
-            .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>();
+            .AddAlias<IGrantTypeInformer, CompositeAuthorizationGrantHandler>()
+            .AddTelemetryDecorator<IAuthorizationGrantHandler, ObservedAuthorizationGrantHandler>();
     }
 
     /// <summary>

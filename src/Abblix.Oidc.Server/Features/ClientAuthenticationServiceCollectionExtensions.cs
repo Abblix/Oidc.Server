@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -81,8 +82,11 @@ public static class ClientAuthenticationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, CallerRateLimitOptionsValidator>());
 
-        // Outermost, so a source that has spent its budget of failures is refused before anything below it
-        // looks at the credential - which for a signed assertion means before a signature is verified.
-        return services.Decorate<IClientAuthenticator, ThrottledClientAuthenticator>();
+        // Throttling outermost, so a source that has spent its budget of failures is refused before anything below
+        // it looks at the credential - which for a signed assertion means before a signature is verified - the
+        // stage's span included.
+        return services
+            .AddTelemetryDecorator<IClientAuthenticator, ObservedClientAuthenticator>()
+            .Decorate<IClientAuthenticator, ThrottledClientAuthenticator>();
     }
 }

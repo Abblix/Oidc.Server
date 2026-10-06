@@ -97,6 +97,14 @@ public sealed class TelemetryDecoratorGeneratorTests
         "public interface IFooHandler { Task<" + Ok + "> HandleAsync(); } public interface IfooHandler { Task<" + Ok + "> HandleAsync(); }",
         "ABXT005", 1, 1)]
     [InlineData(
+        "[assembly: ObservedStage(typeof(IStatusStage), \"validation\")]",
+        "public interface IStatusStage { Task<string> CheckAsync(); }",
+        "ABXT003", 0, 0)]
+    [InlineData(
+        "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\", Dependencies = new[] { typeof(IEnrichers) })]",
+        "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); } public interface IEnrichers {}",
+        "ABXT007", 0, 0)]
+    [InlineData(
         "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\", Dependencies = new[] { typeof(I) })]",
         "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); } public interface I {}",
         "ABXT007", 0, 0)]
@@ -123,6 +131,18 @@ public sealed class TelemetryDecoratorGeneratorTests
         var (_, result) = Run(
             "[assembly: ObservedEndpoint(typeof(ICountHandler), \"token\")]",
             "public interface ICountHandler { Task<int?> CountAsync(); }",
+            AbblixReferences);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+    }
+
+    [Fact]
+    public void AStageThatSaysItNeverRefuses_IsWrapped()
+    {
+        var (_, result) = Run(
+            "[assembly: ObservedStage(typeof(IStatusStage), \"validation\", NeverRefuses = true)]",
+            "public interface IStatusStage { Task<string> CheckAsync(); }",
             AbblixReferences);
 
         Assert.Empty(result.Diagnostics);
@@ -198,6 +218,13 @@ public sealed class TelemetryDecoratorGeneratorTests
                     public bool TagsRequest { get; set; }
                     public bool ObservesResult { get; set; }
                     public System.Type[] Dependencies { get; set; } = [];
+                }
+
+                [System.AttributeUsage(System.AttributeTargets.Assembly, AllowMultiple = true)]
+                internal sealed class ObservedStageAttribute(System.Type service, string stage) : System.Attribute
+                {
+                    public bool RefusesWithNull { get; set; }
+                    public bool NeverRefuses { get; set; }
                 }
             }
             """;
