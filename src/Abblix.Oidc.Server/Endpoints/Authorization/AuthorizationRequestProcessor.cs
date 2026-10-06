@@ -44,6 +44,8 @@ public class AuthorizationRequestProcessor(
 {
 	// Extracted collaborator: which session answers the request is one question with its own dependencies,
 	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
+	private readonly UserConsentsReader _consentsReader = new(consentsProvider);
+
 	private readonly AuthSessionSelector _sessionSelector =
 		new(authSessionService, cutoffChecker, subjectTypeConverter, clock);
 
@@ -93,7 +95,7 @@ public class AuthorizationRequestProcessor(
 
 		// Retrieve user consents (i.e., permissions granted for requested
 		// scopes/resources/authorization_details), as prompt=consent leaves them
-		var userConsents = ConsentAskedOf(request, await consentsProvider.GetUserConsentsAsync(request, authSession));
+		var userConsents = await _consentsReader.ReadAsync(request, authSession);
 
 		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
@@ -119,32 +121,6 @@ public class AuthorizationRequestProcessor(
 
 		var authContext = await BuildAuthorizationContextAsync(request, userConsents, requestedDetails);
 		return await IssueAsync(request, authSession, authContext, responseType);
-	}
-
-	/// <summary>
-	/// The host's consents, or everything the request asks for pending while it asks for consent (OIDC Core section
-	/// 3.1.2.1, <c>prompt=consent</c>) and the end user has not given it on this request's consent page, as
-	/// <see cref="UserConsents.GivenAt"/> tells.
-	/// </summary>
-	/// <remarks>
-	/// Decided here rather than around the host's provider, so a host replacing its provider keeps the prompt working.
-	/// A consent the host records no moment for, as one the server grants on its own, never answers the prompt.
-	/// </remarks>
-	private static UserConsents ConsentAskedOf(ValidAuthorizationRequest request, UserConsents consents)
-	{
-		if (!PromptPages.Asks(request.Model, Prompts.Consent) ||
-			PromptPages.AnsweredBy(request.Model, Prompts.Consent, consents.GivenAt))
-		{
-			return consents;
-		}
-
-		return new UserConsents
-		{
-			Pending = new(request.Scope, request.Resources)
-			{
-				AuthorizationDetails = request.AuthorizationDetails,
-			},
-		};
 	}
 
 	/// <summary>

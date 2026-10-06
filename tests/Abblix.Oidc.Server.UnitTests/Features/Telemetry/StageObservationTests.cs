@@ -11,8 +11,11 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Endpoints.Authorization;
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Consents;
@@ -105,17 +108,21 @@ public sealed class StageObservationTests : IDisposable
         Assert.Equal(ActivityStatusCode.Error, stage.Status);
     }
 
+    /// <summary>
+    /// Reading the host's consents runs as a consent stage at the call, so a host replacing its provider keeps it.
+    /// </summary>
     [Fact]
-    public async Task FindingTheConsents_RunsAsAConsentStage()
+    public async Task ReadingTheConsents_RunsAsAConsentStage()
     {
         var inner = new Mock<IUserConsentsProvider>();
         inner
             .Setup(provider => provider.GetUserConsentsAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
             .ReturnsAsync(new UserConsents());
-        var observed = new ObservedUserConsentsProvider(inner.Object);
+        var reader = new UserConsentsReader(inner.Object);
+        var request = new ValidAuthorizationRequest(
+            new AuthorizationValidationContext(new AuthorizationRequest()) { ClientInfo = new ClientInfo("client") });
 
-        // The decorator hands its arguments on untouched, so what they hold is the stub's business
-        var (_, stages) = await UnderAnEndpointSpan(() => observed.GetUserConsentsAsync(null!, null!));
+        var (_, stages) = await UnderAnEndpointSpan(() => reader.ReadAsync(request, null!));
 
         Assert.Equal(TelemetryStages.Consent, Assert.Single(stages).GetTagItem(TelemetryTags.Stage));
     }

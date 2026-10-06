@@ -37,8 +37,8 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// <summary>
     /// When the session was last signed in through <see cref="IAuthSessionService.SignInAsync"/>: on authentication,
     /// or when the end user picked it among their sessions. A session signed in after the server sent the end user to
-    /// choose an account is the one <c>prompt=select_account</c> asked for. Null for a session the host never signed
-    /// in that way.
+    /// choose an account is the one <c>prompt=select_account</c> asked for, so a host signing a session in again for any
+    /// other reason while that page is open answers it too. Null for a session the host never signed in that way.
     /// </summary>
     public DateTimeOffset? SignedInAt { get; init; }
 

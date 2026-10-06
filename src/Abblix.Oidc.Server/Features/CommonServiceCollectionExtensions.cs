@@ -32,7 +32,6 @@ public static class CommonServiceCollectionExtensions
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
         services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
-        services.AddTelemetryDecorator<IUserConsentsProvider, ObservedUserConsentsProvider>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();

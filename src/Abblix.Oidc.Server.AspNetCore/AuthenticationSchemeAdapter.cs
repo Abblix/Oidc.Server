@@ -45,12 +45,6 @@ public class AuthenticationSchemeAdapter(
 	/// are excluded when reconstructing additional claims on read. A single set keeps the write-skip and the read-exclude
 	/// from drifting apart.
 	/// </summary>
-	/// <summary>
-	/// The claim the cookie keeps the moment a session was signed in under. It is the adapter's own, so it is reserved
-	/// and never read back as an additional claim a token would carry.
-	/// </summary>
-	private const string SignedInAtClaimType = "abblix_signed_in_at";
-
 	private static readonly HashSet<string> ReservedClaimTypes =
 	[
 		SignedInAtClaimType,
@@ -66,6 +60,12 @@ public class AuthenticationSchemeAdapter(
 	/// <summary>
 	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
 	/// </summary>
+	/// <summary>
+	/// The claim the cookie keeps the moment a session was signed in under. It is the adapter's own, so it is reserved
+	/// and never read back as an additional claim a token would carry.
+	/// </summary>
+	private const string SignedInAtClaimType = "abblix_signed_in_at";
+
 	private (Type, string) WrittenInThisRequest => (typeof(AuthenticationSchemeAdapter), authenticationScheme);
 
 	/// <summary>
@@ -182,6 +182,25 @@ public class AuthenticationSchemeAdapter(
 	}
 
 	/// <summary>
+	/// The moment the session was signed in, or null when the cookie carries none or one out of range, read as the
+	/// authentication time is.
+	/// </summary>
+	private static DateTimeOffset? SignedInAtOf(ClaimsPrincipal principal)
+	{
+		if (!long.TryParse(principal.FindFirstValue(SignedInAtClaimType), Integer, InvariantCulture, out var seconds))
+			return null;
+
+		try
+		{
+			return DateTimeOffset.FromUnixTimeSeconds(seconds);
+		}
+		catch (ArgumentOutOfRangeException)
+		{
+			return null;
+		}
+	}
+
+	/// <summary>
 	/// Adds to a session the claims it may carry.
 	/// </summary>
 	private static AuthSession WithOptionalClaims(AuthSession authSession, ClaimsPrincipal principal)
@@ -193,9 +212,7 @@ public class AuthenticationSchemeAdapter(
 			EmailVerified = bool.TryParse(principal.FindFirstValue(JwtClaimTypes.EmailVerified), out var emailVerified)
 				? emailVerified
 				: null,
-			SignedInAt = long.TryParse(principal.FindFirstValue(SignedInAtClaimType), Integer, InvariantCulture, out var signedInAt)
-				? DateTimeOffset.FromUnixTimeSeconds(signedInAt)
-				: null,
+			SignedInAt = SignedInAtOf(principal),
 		};
 
 		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))

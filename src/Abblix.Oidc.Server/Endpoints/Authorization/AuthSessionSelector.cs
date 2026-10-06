@@ -44,7 +44,22 @@ internal sealed class AuthSessionSelector(
 		var (authSessions, authenticationLevelUnmet) = await GetAvailableAuthSessionsAsync(request);
 
 		var (prompt, sessionsAnswering) = PromptStillAsked(request.Model, authSessions);
-		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet);
+
+		// Asked only when it decides something: a request asking to choose an account with no usable session
+		var hostHoldsNone = prompt == Prompts.SelectAccount &&
+		                    sessionsAnswering.Count == 0 &&
+		                    !await HostHoldsAnySessionAsync();
+
+		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet, hostHoldsNone);
+	}
+
+	/// <summary>
+	/// Whether the host holds any session at all, before the request's filters.
+	/// </summary>
+	private async Task<bool> HostHoldsAnySessionAsync()
+	{
+		await using var sessions = authSessionService.GetAvailableAuthSessions().GetAsyncEnumerator();
+		return await sessions.MoveNextAsync();
 	}
 
 	/// <summary>
@@ -54,7 +69,8 @@ internal sealed class AuthSessionSelector(
 		ValidAuthorizationRequest request,
 		List<AuthSession> authSessions,
 		string? prompt,
-		bool authenticationLevelUnmet)
+		bool authenticationLevelUnmet,
+		bool hostHoldsNone)
 	{
 		var model = request.Model;
 		switch (authSessions.Count, prompt)
@@ -100,20 +116,23 @@ internal sealed class AuthSessionSelector(
 					request.ResponseMode,
 					model.RedirectUri);
 
-			// The request asks the end user to choose an account whatever sessions exist: with none, the page is where
-			// they reach an account they are not signed in to yet.
-			case (_, Prompts.SelectAccount):
-				return new AccountSelectionRequired(
-					PromptPages.Stamped(model, Prompts.SelectAccount, clock.GetUtcNow()),
-					authSessions.ToArray());
+			// The request asks the end user to choose an account. With no session at all, the page is where they reach
+			// an account they are not signed in to yet; a session the request's filters left out goes to the login
+			// page below instead, since choosing it again could not get it past them.
+			case (> 0, Prompts.SelectAccount):
+			case (0, Prompts.SelectAccount) when hostHoldsNone:
+				return SendToAccountSelection(model, authSessions);
 
 			// If no sessions exist, or the request explicitly asks for a login, prompt the user for login.
 			case (0, _) or (_, Prompts.Login):
-				return SendToLogin(model, prompt);
+				return SendToLogin(model);
 
-			// If multiple sessions exist, prompt the user to select an account.
+			// If multiple sessions exist, prompt the user to select an account. Sessions that all answered an earlier
+			// selection page are asked again under a new stamp, so the next pick narrows them.
 			case (> 1, _):
-				return new AccountSelectionRequired(model, authSessions.ToArray());
+				return PromptPages.Asks(model, Prompts.SelectAccount)
+					? SendToAccountSelection(model, authSessions)
+					: new AccountSelectionRequired(model, authSessions.ToArray());
 
 			// If a single session exists, proceed with that session for further processing.
 			case (1, _):
@@ -131,8 +150,21 @@ internal sealed class AuthSessionSelector(
 	/// Sends the end user to log in, stamping the request with the moment when the client asked for that login,
 	/// so the request coming back with a session opened since is not sent there again.
 	/// </summary>
-	private LoginRequired SendToLogin(Model.AuthorizationRequest model, string? prompt)
-		=> new(prompt == Prompts.Login ? PromptPages.Stamped(model, Prompts.Login, clock.GetUtcNow()) : model);
+	private AccountSelectionRequired SendToAccountSelection(Model.AuthorizationRequest model, List<AuthSession> authSessions)
+	{
+		var now = clock.GetUtcNow();
+		var stamped = PromptPages.Stamped(model, Prompts.SelectAccount, now);
+
+		// An end user authenticating on the selection page answers a login the request also asks for, so they are not
+		// sent to authenticate twice; picking a session authenticated earlier still leaves the login page to come
+		if (PromptPages.Asks(model, Prompts.Login) && model.Prompted?.ContainsKey(Prompts.Login) is not true)
+			stamped = PromptPages.Stamped(stamped, Prompts.Login, now);
+
+		return new AccountSelectionRequired(stamped, authSessions.ToArray());
+	}
+
+	private LoginRequired SendToLogin(Model.AuthorizationRequest model)
+		=> new(PromptPages.Asks(model, Prompts.Login) ? PromptPages.Stamped(model, Prompts.Login, clock.GetUtcNow()) : model);
 
 	/// <summary>
 	/// The prompt the request still asks this selection for, and the sessions that may answer the request.

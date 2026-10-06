@@ -364,15 +364,54 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         var (client, _, consents, host) = StartWithConsents();
         using var _ = host;
         consents.Give();
-
-        // Moments are compared to the second, so the consent given before the page falls in an earlier one
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
         var discovery = await FetchDiscoveryAsync(client);
 
         var sentTo = await RedirectOf(
             client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
         Assert.Equal(ConsentPath, PathOf(sentTo));
         consents.Give();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// A consent given before the consent page was shown does not answer it: coming back without giving consent there
+    /// leads to the page again.
+    /// </summary>
+    [Fact]
+    public async Task PromptConsent_ConsentGivenBeforeThePage_DoesNotAnswerIt()
+    {
+        var (client, _, consents, host) = StartWithConsents();
+        using var _ = host;
+        consents.Give();
+
+        // Moments are compared to the second, so the page is shown in a later one than the consent
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        var discovery = await FetchDiscoveryAsync(client);
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
+
+        Assert.Equal(
+            ConsentPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+    }
+
+    /// <summary>
+    /// With no session, an end user who signs in on the account selection page has answered a login asked beside
+    /// it, and gets a code without authenticating a second time.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLogin_SigningInOnTheSelectionPage_AuthenticatesOnce()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        endUser.HasSession = false;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Login}")));
+        Assert.Equal(AccountSelectionPath, PathOf(sentTo));
+        endUser.SignInAgain();
 
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
     }
@@ -746,7 +785,11 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         using var _ = host;
         var discovery = await FetchDiscoveryAsync(client);
         var parameters = AuthorizeParameters(Prompts.Login);
-        parameters[nameof(AuthorizationRequest.Prompted)] = "2000-01-01T00:00:00Z";
+        // A session authenticated an hour ago would answer a login page shown in 2000, in each shape a binder reads a
+        // dictionary entry from
+        parameters[$"{nameof(AuthorizationRequest.Prompted)}[{Prompts.Login}]"] = "2000-01-01T00:00:00Z";
+        parameters[$"prompted[{Prompts.Login}]"] = "2000-01-01T00:00:00Z";
+        parameters[$"{nameof(AuthorizationRequest.Prompted)}.{Prompts.Login}"] = "2000-01-01T00:00:00Z";
         parameters["prompted_at"] = "2000-01-01T00:00:00Z";
 
         var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
