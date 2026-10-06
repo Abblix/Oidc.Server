@@ -135,11 +135,6 @@ public class SupportedResponseTypeValidatorTests
     }
 
     /// <summary>
-    /// Empty <c>response_types</c> array - nothing to validate against - passes the gate
-    /// (other validators handle the «must be specified» rule, this one is purely about
-    /// support).
-    /// </summary>
-    /// <summary>
     /// An empty string among the response types names none, so it is refused rather than registered as a
     /// combination no authorization request can match.
     /// </summary>
@@ -154,6 +149,11 @@ public class SupportedResponseTypeValidatorTests
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
+    /// <summary>
+    /// Empty <c>response_types</c> array - nothing to validate against - passes the gate
+    /// (other validators handle the «must be specified» rule, this one is purely about
+    /// support).
+    /// </summary>
     [Fact]
     public async Task ValidateAsync_EmptyResponseTypes_Passes()
     {

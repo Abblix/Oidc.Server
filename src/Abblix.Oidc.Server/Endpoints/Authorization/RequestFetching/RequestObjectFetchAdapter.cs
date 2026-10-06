@@ -70,7 +70,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// MUST match the ones inside the request object when the object carries them. The merge gives
     /// the request object's values precedence, so a mismatch surfaces as the merged value differing
     /// from the outer one - without this check an attacker-supplied object could silently swap the
-    /// flow or the client identity relative to what the plain OAuth parameters declared.
+    /// flow or the client identity relative to what the plain OAuth parameters declared. A prompt value outside
+    /// <see cref="SupportedPrompts"/> is refused with invalid_request, as the same value is in the query.
     /// </summary>
     private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
         AuthorizationRequest outer,

@@ -25,7 +25,7 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncClientRegistration
         if (scope is null)
             return null;
 
-        // A scope naming no value would be stored as no list at all, which the server reads as no restriction: the
+        // A scope naming no value would be stored as an empty list, which the server reads as no restriction: the
         // opposite of what the client sent. A client registering without a restriction leaves the member out.
         if (scope.Length == 0)
             return ErrorFactory.InvalidClientMetadata("The scope names no value");
