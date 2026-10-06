@@ -162,7 +162,10 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		var service = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
 		var serviceName = service?.ToDisplayString() ?? string.Empty;
 		if (service is not { TypeKind: TypeKind.Interface })
-			return Refused(serviceName, serviceName, location, new DiagnosticInfo(ServiceIsNotAnInterface, location, serviceName));
+		{
+			return Refused(
+				serviceName, serviceName, location, new DiagnosticInfo(ServiceIsNotAnInterface, location, serviceName));
+		}
 
 		var members = service.GetMembers()
 			.Concat(service.AllInterfaces.SelectMany(parent => parent.GetMembers()))
@@ -237,7 +240,10 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		if (!(entry.TagsRequest || entry.ObservesResult) || entry.Methods.Length == 1)
 			return [];
 
-		return [new DiagnosticInfo(HooksNeedOneMethod, entry.Location, entry.Service.ToDisplayString(), entry.Methods.Length)];
+		return
+		[
+			new DiagnosticInfo(HooksNeedOneMethod, entry.Location, entry.Service.ToDisplayString(), entry.Methods.Length),
+		];
 	}
 
 	private static DiagnosticInfo[] TakenDependencyNames(ObservedEntry entry)
@@ -418,11 +424,19 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	/// </summary>
 	private static string? ErrorOf(ITypeSymbol result)
 	{
-		// A nullable result answers with no result at all, which the observation has no refusal to read from
+		// A nullable Result hides its refusal behind the nullable, where the observation does not read it; any other
+		// nullable value refuses exactly as the value does
 		if (result is INamedTypeSymbol { IsGenericType: true } wrapped &&
 		    MetadataName(wrapped.OriginalDefinition) == NullableTypeName)
 		{
-			return null;
+			var value = wrapped.TypeArguments[0];
+			if (value is INamedTypeSymbol { IsGenericType: true } inner &&
+			    MetadataName(inner.OriginalDefinition) == ResultTypeName)
+			{
+				return null;
+			}
+
+			return ErrorOf(value);
 		}
 
 		if (result is INamedTypeSymbol { IsGenericType: true } named &&

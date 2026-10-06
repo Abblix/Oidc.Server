@@ -118,6 +118,18 @@ public sealed class TelemetryDecoratorGeneratorTests
     }
 
     [Fact]
+    public void ANullableValueOtherThanAResult_IsWrappedAsTheValueIs()
+    {
+        var (_, result) = Run(
+            "[assembly: ObservedEndpoint(typeof(ICountHandler), \"token\")]",
+            "public interface ICountHandler { Task<int?> CountAsync(); }",
+            AbblixReferences);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+    }
+
+    [Fact]
     public void ADecoratorNamedAgainInAnotherFile_FailsTheBuildAtTheLaterEntry()
     {
         var (_, result) = Run(
