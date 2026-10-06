@@ -44,6 +44,13 @@ public sealed class TenantTransmitterIdentity(
     /// </remarks>
     public string? ReceiverIssuer => Tenant.Issuer;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Null outside a tenant rather than a refusal: a measurement taken there names no tenant instead of failing the
+    /// work it measures.
+    /// </remarks>
+    public string? TenantId => tenantAccessor.Current?.Tenant.Id;
+
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 
     private Uri Under(string pathAndQuery) => new(Tenant.Issuer.TrimEnd('/') + pathAndQuery, UriKind.Absolute);

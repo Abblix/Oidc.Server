@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.SharedSignals.Telemetry;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -52,6 +53,8 @@ public static class TransmitterServiceCollectionExtensions
         // identity, so they cannot name different issuers - a receiver applying SSF 1.0 Section 7.2.2 would refuse
         // every token while this side records the POST as delivered.
         services.TryAddSingleton<ITransmitterIdentity, OptionsTransmitterIdentity>();
+        services.AddMetrics();
+        services.TryAddSingleton<SharedSignalsInstruments>();
 
         // Built through the factory so the sharing policy stays optional: a host that registered none runs
         // without one.

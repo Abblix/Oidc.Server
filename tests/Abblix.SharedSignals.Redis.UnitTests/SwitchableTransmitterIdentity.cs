@@ -26,4 +26,6 @@ internal sealed class SwitchableTransmitterIdentity(string issuer) : ITransmitte
     public bool Serves => true;
 
     public string? ReceiverIssuer => null;
+
+    public string? TenantId => null;
 }

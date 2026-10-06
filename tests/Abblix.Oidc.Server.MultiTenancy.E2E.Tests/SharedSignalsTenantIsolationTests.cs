@@ -7,7 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Buffers.Text;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -28,6 +30,7 @@ using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
+using Abblix.SharedSignals.Telemetry;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -199,7 +202,7 @@ public sealed class SharedSignalsTenantIsolationTests
     /// <summary>
     /// Push delivery runs on a timer, outside any request, and still delivers each tenant's events from inside that
     /// tenant: the event dispatched in acme reaches acme's receiver once, signed as acme, and globex's stream at the
-    /// same address receives nothing.
+    /// same address receives nothing. What the transmitter records of the event names acme too.
     /// </summary>
     [Fact]
     public async Task PushDelivery_DeliversEachTenantsEventsFromInsideIt()
@@ -211,7 +214,8 @@ public sealed class SharedSignalsTenantIsolationTests
                 new HttpClient(receiver),
                 provider.GetRequiredService<IEventOutbox>(),
                 provider.GetRequiredService<ReceiverAddressPolicy>(),
-                NullLogger<PushDeliverySender>.Instance))));
+                NullLogger<PushDeliverySender>.Instance,
+                provider.GetRequiredService<SharedSignalsInstruments>()))));
 
         foreach (var tenant in (string[])[Acme, Globex])
         {
@@ -226,10 +230,25 @@ public sealed class SharedSignalsTenantIsolationTests
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         }
 
+        var meters = app.Services.GetRequiredService<IMeterFactory>();
+        var tenants = new ConcurrentQueue<(string Instrument, object? Tenant)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Scope == meters && instrument.Meter.Name == SharedSignalsTelemetry.SourceName)
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) => tenants.Enqueue(
+            (instrument.Name, tags.ToArray().SingleOrDefault(tag => tag.Key == SharedSignalsTags.Tenant).Value)));
+        listener.Start();
+
         Assert.Equal(1, await DispatchAsync(app, "acme", ct));
         await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
 
         Assert.Equal(Host + Acme, IssuerOf(Assert.Single(receiver.Tokens)));
+        (string, object?)[] expected =
+            [(SharedSignalsMetrics.EventsTransmitted, "acme"), (SharedSignalsMetrics.PushDeliveries, "acme")];
+        Assert.Equal(expected, tenants.ToArray());
     }
 
     /// <summary>

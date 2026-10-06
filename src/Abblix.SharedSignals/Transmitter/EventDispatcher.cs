@@ -6,11 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics;
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Telemetry;
 
 using Microsoft.Extensions.Logging;
 
@@ -29,6 +31,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="identity">
 /// Names the transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
 /// configuration metadata asserts (SSF 1.0 Section 7.1) - each time a SET is minted.</param>
+/// <param name="instruments">Traces each SET minted for a stream and counts it once it is in the outbox.</param>
 /// <param name="sharingPolicy">
 /// The host's Section 9.2 verdict; null shares every otherwise-matching event, which is the
 /// honest default only for a transmitter whose events carry nothing the receiver may not see.
@@ -46,6 +49,7 @@ public sealed partial class EventDispatcher(
     IEventOutbox outbox,
     ISecurityEventTokenSigner signer,
     ITransmitterIdentity identity,
+    SharedSignalsInstruments instruments,
     IEventSharingPolicy? sharingPolicy = null,
     IEventPayloadPolicy? payloadPolicy = null,
     TimeProvider? clock = null)
@@ -183,7 +187,36 @@ public sealed partial class EventDispatcher(
                 $"Unknown {nameof(StreamSubjectsMode)}: {stream.SubjectsMode}."),
         };
 
+    /// <summary>
+    /// Mints the SET of <paramref name="descriptor"/> for <paramref name="stream"/> and puts it into the stream's
+    /// outbox, in a span of its own, and counts it once the outbox holds it.
+    /// </summary>
+    /// <remarks>
+    /// Both doors come through here, so the framework's own verification and stream-updated events are traced and
+    /// counted beside the host's. A stream whose SET could not be minted or enqueued is not counted.
+    /// </remarks>
     private async Task MintAndEnqueueAsync(
+        StreamState stream,
+        SecurityEventDescriptor descriptor,
+        bool asStatusAnnouncement,
+        CancellationToken cancellationToken)
+    {
+        using var span = instruments.StartSpan(SharedSignalsTelemetry.TransmitSpan, ActivityKind.Internal);
+        span?.SetTag(SharedSignalsTags.EventType, descriptor.EventType);
+        try
+        {
+            await MintAndEnqueueCoreAsync(stream, descriptor, asStatusAnnouncement, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            SharedSignalsInstruments.Fail(span, exception);
+            throw;
+        }
+
+        instruments.EventTransmitted(descriptor.EventType);
+    }
+
+    private async Task MintAndEnqueueCoreAsync(
         StreamState stream,
         SecurityEventDescriptor descriptor,
         bool asStatusAnnouncement,

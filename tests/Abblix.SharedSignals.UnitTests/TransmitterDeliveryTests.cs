@@ -76,7 +76,7 @@ public class TransmitterDeliveryTests
             .Enqueue(HttpStatusCode.Accepted)
             .Enqueue(HttpStatusCode.Accepted);
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"), new OutboxItem("jti-2", "b.b.b"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance, TestInstruments.Create());
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -98,7 +98,7 @@ public class TransmitterDeliveryTests
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"),
             new OutboxItem("jti-3", "c.c.c"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance, TestInstruments.Create());
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -143,7 +143,7 @@ public class TransmitterDeliveryTests
             new OutboxItem("jti-1", "a.a.a"), new OutboxItem("jti-2", "b.b.b"), new OutboxItem("jti-3", "c.c.c"));
         var logger = new CapturingLogger();
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create());
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         Assert.Equal(3, outcome.Rejected);
@@ -176,7 +176,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
         var logger = new CapturingLogger();
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create());
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         var written = Assert.Single(logger.Written);
@@ -204,7 +204,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
         var logger = new CapturingLogger();
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create());
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         var written = Assert.Single(logger.Written).Text;
@@ -233,7 +233,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
         var logger = new CapturingLogger();
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create());
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         Assert.Empty(logger.Written);
@@ -282,7 +282,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance, TestInstruments.Create());
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -307,7 +307,7 @@ public class TransmitterDeliveryTests
     {
         var handler = new StubHttpHandler().Enqueue(HttpStatusCode.BadRequest, body, mediaType);
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance, TestInstruments.Create());
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -324,7 +324,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b", IsStatusAnnouncement: true));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance, TestInstruments.Create());
 
         var outcome = await sender.SendPendingAsync(
             PushStream(StreamStatuses.Paused), TestContext.Current.CancellationToken);
@@ -411,7 +411,7 @@ public class TransmitterDeliveryTests
         var signer = new FakeSigner();
         var options = new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" };
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, signer, new OptionsTransmitterIdentity(options));
+            NullLogger<EventDispatcher>.Instance, store, outbox, signer, new OptionsTransmitterIdentity(options), TestInstruments.Create());
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options));
 

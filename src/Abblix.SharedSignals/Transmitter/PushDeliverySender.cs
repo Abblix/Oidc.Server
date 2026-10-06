@@ -16,6 +16,7 @@ using Abblix.SecurityEvents.Delivery;
 using Microsoft.Extensions.Logging;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
+using Abblix.SharedSignals.Telemetry;
 
 namespace Abblix.SharedSignals.Transmitter;
 
@@ -30,11 +31,14 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="outbox">The queues being drained.</param>
 /// <param name="addressPolicy">Judges the receiver's address before anything is sent to it.</param>
 /// <param name="logger">Carries the receiver's own reason for a refusal into this deployment's log.</param>
+/// <param name="instruments">Traces each transmission and records how the receiver answered it and how long it
+/// took.</param>
 public sealed partial class PushDeliverySender(
     HttpClient httpClient,
     IEventOutbox outbox,
     ReceiverAddressPolicy addressPolicy,
-    ILogger<PushDeliverySender> logger)
+    ILogger<PushDeliverySender> logger,
+    SharedSignalsInstruments instruments)
 {
     /// <summary>How much of the receiver's description is carried into the log.</summary>
     /// <remarks>
@@ -143,7 +147,8 @@ public sealed partial class PushDeliverySender(
     }
 
     /// <summary>
-    /// Transmits one queued SET and records its outcome in <paramref name="tally"/>.
+    /// Transmits one queued SET in a span of its own, and records how the receiver answered it and how long the
+    /// answer took.
     /// </summary>
     /// <returns>True when the pass may go on to the next item; false when it must stop here so the
     /// item keeps its place at the head of the queue.</returns>
@@ -154,10 +159,13 @@ public sealed partial class PushDeliverySender(
         PushDeliveryTally tally,
         CancellationToken cancellationToken)
     {
-        HttpResponseMessage response;
         try
         {
-            response = await SendAsync(push, item, cancellationToken);
+            return await instruments.ObservePushAsync(async () =>
+            {
+                using var response = await SendAsync(push, item, cancellationToken);
+                return (await SettleAsync(stream, item, tally, response, cancellationToken), response.StatusCode);
+            });
         }
         catch (HttpRequestException)
         {
@@ -165,37 +173,47 @@ public sealed partial class PushDeliverySender(
             // so the pass ends and the item waits for the next one, order intact.
             return false;
         }
+    }
 
-        using (response)
+    /// <summary>
+    /// Acts on the receiver's answer to one SET and records it in <paramref name="tally"/>.
+    /// </summary>
+    /// <returns>True when the pass may go on to the next item; false when it must stop here so the
+    /// item keeps its place at the head of the queue.</returns>
+    private async Task<bool> SettleAsync(
+        StreamState stream,
+        OutboxItem item,
+        PushDeliveryTally tally,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.StatusCode == HttpStatusCode.BadRequest)
         {
-            if (response.StatusCode == HttpStatusCode.BadRequest)
+            var verdict = await ReadVerdictAsync(response, cancellationToken);
+            if (!DeliveryErrorCodes.IsFinal(verdict?.Error))
             {
-                var verdict = await ReadVerdictAsync(response, cancellationToken);
-                if (!DeliveryErrorCodes.IsFinal(verdict?.Error))
-                {
-                    // The receiver objects to this transmitter, not to this event: leave it queued so a
-                    // later pass can deliver it once the credentials or the grant are put right.
-                    // Non-null by construction: IsFinal answers false only for a code it recognizes.
-                    LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
-                    return false;
-                }
-
-                await outbox.AcknowledgeAsync(
-                    stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
-                tally.RecordRejected(verdict ?? Unexplained);
-                return true;
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
+                // The receiver objects to this transmitter, not to this event: leave it queued so a
+                // later pass can deliver it once the credentials or the grant are put right.
+                // Non-null by construction: IsFinal answers false only for a code it recognizes.
+                LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
                 return false;
             }
 
             await outbox.AcknowledgeAsync(
                 stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
-            tally.RecordDelivered();
+            tally.RecordRejected(verdict ?? Unexplained);
             return true;
         }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        await outbox.AcknowledgeAsync(
+            stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
+        tally.RecordDelivered();
+        return true;
     }
 
     /// <summary>
