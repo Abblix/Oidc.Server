@@ -12,8 +12,9 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Records how long signing each token takes into <see cref="OidcMetrics.TokenSigningDuration"/>; a token left
-/// unsigned, for want of a key, is not a signing and is not recorded.
+/// Runs signing each token as a stage of the request and records how long it takes into
+/// <see cref="OidcMetrics.TokenSigningDuration"/>; a token left unsigned, for want of a key, is not a signing and is
+/// neither run as a stage nor recorded.
 /// </summary>
 /// <param name="inner">The signer the server uses.</param>
 /// <param name="instruments">Records the signing into the server's metrics.</param>
@@ -30,7 +31,10 @@ internal sealed class MeasuredJsonWebTokenSigner(IJsonWebTokenSigner inner, Oidc
             return await inner.SignAsync(token, signingKey, cancellationToken);
 
         var started = Stopwatch.GetTimestamp();
-        var jws = await inner.SignAsync(token, signingKey, cancellationToken);
+        var jws = await StageObservation.RunAsync(
+            TelemetryStages.Signing,
+            () => inner.SignAsync(token, signingKey, cancellationToken),
+            StageObservation.NeverRefused);
 
         // Read after signing: the signer settles the algorithm from the key and the header together and writes it
         // into the header, so before the call the header may name none or another one.

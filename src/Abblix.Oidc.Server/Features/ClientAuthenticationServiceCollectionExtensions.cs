@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Telemetry;
 using System.Threading.RateLimiting;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -83,6 +84,10 @@ public static class ClientAuthenticationServiceCollectionExtensions
 
         // Outermost, so a source that has spent its budget of failures is refused before anything below it
         // looks at the credential - which for a signed assertion means before a signature is verified.
-        return services.Decorate<IClientAuthenticator, ThrottledClientAuthenticator>();
+        // The span sits inside the throttling, which stays outermost so a spent budget is refused before anything
+        // else runs, the span included
+        return services
+            .AddTelemetryDecorator<IClientAuthenticator, ObservedClientAuthenticator>()
+            .Decorate<IClientAuthenticator, ThrottledClientAuthenticator>();
     }
 }

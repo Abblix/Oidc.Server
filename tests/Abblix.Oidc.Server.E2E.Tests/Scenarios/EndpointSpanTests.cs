@@ -82,8 +82,39 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         var refused = Assert.Single(spans, span => Equals(span.GetTagItem(TelemetryTags.Error), ErrorCodes.UnauthorizedClient));
         Assert.Equal(ActivityStatusCode.Error, refused.Status);
         Assert.Null(refused.GetTagItem(TelemetryTags.GrantType));
-        Assert.Contains(spans, span => span.Status == ActivityStatusCode.Ok &&
-                                       Equals(span.GetTagItem(TelemetryTags.GrantType), GrantTypes.AuthorizationCode));
+        var token = Assert.Single(spans, span => span.Status == ActivityStatusCode.Ok &&
+                                                 Equals(span.GetTagItem(TelemetryTags.GrantType), GrantTypes.AuthorizationCode));
+
+        // The stages of the token request start in the order the pipeline runs them, each under the token span
+        var firstStarts = spans
+            .Where(span => IsUnder(span, token) && span.GetTagItem(TelemetryTags.Stage) is string)
+            .GroupBy(span => (string)span.GetTagItem(TelemetryTags.Stage)!)
+            .ToDictionary(stage => stage.Key, stage => stage.Min(span => span.StartTimeUtc));
+        Assert.Equal(
+            new[]
+            {
+                TelemetryStages.Validation, TelemetryStages.ClientAuthentication, TelemetryStages.Grant,
+                TelemetryStages.Issuance,
+            },
+            new[]
+            {
+                TelemetryStages.Validation, TelemetryStages.ClientAuthentication, TelemetryStages.Grant,
+                TelemetryStages.Issuance,
+            }.OrderBy(stage => firstStarts[stage]));
+        Assert.Contains(TelemetryStages.Signing, firstStarts.Keys);
+        Assert.Contains(TelemetryStages.Storage, firstStarts.Keys);
+
+    }
+
+    private static bool IsUnder(Activity span, Activity ancestor)
+    {
+        for (var parent = span.Parent; parent != null; parent = parent.Parent)
+        {
+            if (parent == ancestor)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

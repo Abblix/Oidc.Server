@@ -75,6 +75,7 @@ public sealed class EndpointMetricsTests(TestFactory factory) : TestBase(factory
             tags => Assert.Equal(GrantTypes.AuthorizationCode, tags[TelemetryTags.GrantType]));
 
         Assert.NotEmpty(Of(OidcMetrics.TokenSigningDuration));
+        Assert.NotEmpty(Of(OidcMetrics.StorageOperationDuration));
         Assert.Equal(TelemetryOutcomes.Success, Assert.Single(Of(OidcMetrics.ClientsRegistered))[TelemetryTags.Outcome]);
 
         var spent = Assert.Single(Of(OidcMetrics.RateLimitRefusals));
@@ -99,6 +100,7 @@ public sealed class EndpointMetricsTests(TestFactory factory) : TestBase(factory
         var algorithms = ConstantsOf(typeof(SigningAlgorithms));
         var budgets = ConstantsOf(typeof(CallerRateLimiters));
         var reasons = ConstantsOf(typeof(LicenseRefusalReasons));
+        var storageOperations = ConstantsOf(typeof(TelemetryStorageOperations));
         using var scope = services.CreateScope();
         var grantTypes = scope.ServiceProvider.GetRequiredService<IAuthorizationGrantHandler>().GrantTypesSupported
             .Append(GrantTypes.Implicit)
@@ -117,6 +119,7 @@ public sealed class EndpointMetricsTests(TestFactory factory) : TestBase(factory
                 TelemetryTags.SigningAlgorithm => algorithms.Contains(text),
                 TelemetryTags.RateLimitBudget => budgets.Contains(text),
                 TelemetryTags.LicenseRefusalReason => reasons.Contains(text),
+                TelemetryTags.StorageOperation => storageOperations.Contains(text),
                 _ => false,
             };
             Assert.True(admitted, $"{key} = {text} is not admitted");

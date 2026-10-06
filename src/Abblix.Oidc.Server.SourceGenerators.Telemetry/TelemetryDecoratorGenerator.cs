@@ -39,6 +39,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 	private const string TagsRequestProperty = "TagsRequest";
 	private const string ObservesResultProperty = "ObservesResult";
+	private const string RefusesWithNullProperty = "RefusesWithNull";
 	private const string DependenciesProperty = "Dependencies";
 
 	private const string DecoratorPrefix = "Observed";
@@ -186,6 +187,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			(string?)attribute.ConstructorArguments[1].Value ?? string.Empty,
 			NamedFlag(attribute, TagsRequestProperty),
 			NamedFlag(attribute, ObservesResultProperty),
+			NamedFlag(attribute, RefusesWithNullProperty),
 			attribute.NamedArguments
 				.Where(argument => argument.Key == DependenciesProperty)
 				.SelectMany(argument => argument.Value.Values)
@@ -236,7 +238,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 	private static DiagnosticInfo[] UnreadableRefusals(ObservedEntry entry)
 		=> entry.Methods
-			.Where(method => RefusalReaderOf(entry.Kind, ResultOf(method)!) == null)
+			.Where(method => RefusalReaderOf(entry, ResultOf(method)!) == null)
 			.Select(method => new DiagnosticInfo(
 				UnknownRefusal,
 				entry.Location,
@@ -374,7 +376,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			$"{parameter.Type.ToDisplayString(FullyQualifiedWithNullability)} {Escape(parameter.Name)}"));
 		var arguments = string.Join(", ", method.Parameters.Select(parameter => Escape(parameter.Name)));
 		var name = SymbolDisplay.FormatLiteral(entry.Name, quote: true);
-		var reader = RefusalReaderOf(entry.Kind, result)!;
+		var reader = RefusalReaderOf(entry, result)!;
 		var tagsRequest = entry.TagsRequest;
 		var observesResult = entry.ObservesResult;
 
@@ -488,21 +490,24 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	}
 
 	/// <summary>
-	/// The member of the observation of <paramref name="kind"/> that reads whether a result refuses, or null for a
-	/// result whose refusal it cannot read.
+	/// The member of the entry's observation that reads whether a result refuses, or null for a result whose refusal
+	/// it cannot read.
 	/// </summary>
-	private static string? RefusalReaderOf(ObservationKind kind, ITypeSymbol result)
+	private static string? RefusalReaderOf(ObservedEntry entry, ITypeSymbol result)
 	{
-		switch (kind)
+		switch (entry.Kind)
 		{
 			case ObservationKind.Endpoint:
 				return ErrorOf(result);
+
+			case ObservationKind.Stage when entry.RefusesWithNull:
+				return "RefusedWhenNull";
 
 			case ObservationKind.Stage:
 				return StageRefusalOf(result);
 
 			default:
-				throw new ArgumentOutOfRangeException(nameof(kind), kind, "The kind of observation is not known");
+				throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, "The kind of observation is not known");
 		}
 	}
 

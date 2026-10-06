@@ -17,8 +17,11 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Telemetry;
 
 [assembly: ObservedStage(typeof(IAuthorizationRequestValidator), TelemetryStages.Validation)]
@@ -46,3 +49,6 @@ using Abblix.Oidc.Server.Features.Telemetry;
 [assembly: ObservedStage(typeof(IUpdateClientRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(IUpdateClientRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IRemoveClientRequestProcessor), TelemetryStages.Processing)]
+[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication, RefusesWithNull = true)]
+[assembly: ObservedStage(typeof(IAuthorizationGrantHandler), TelemetryStages.Grant)]
+[assembly: ObservedStage(typeof(IUserConsentsProvider), TelemetryStages.Consent)]

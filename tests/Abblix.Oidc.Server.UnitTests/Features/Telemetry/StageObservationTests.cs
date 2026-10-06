@@ -11,7 +11,12 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.Telemetry;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Moq;
 using Xunit;
@@ -84,6 +89,33 @@ public sealed class StageObservationTests : IDisposable
         var (_, stages) = await UnderAnEndpointSpan(() => Stage(42).CheckAsync("request"));
 
         Assert.Equal(ActivityStatusCode.Error, Assert.Single(stages).Status);
+    }
+
+    [Fact]
+    public async Task AClientAuthenticationFindingNoClient_ClosesItsSpanWithAnError()
+    {
+        var observed = new ObservedClientAuthenticator(Mock.Of<IClientAuthenticator>());
+
+        var (_, stages) = await UnderAnEndpointSpan(() => observed.TryAuthenticateClientAsync(new ClientRequest()));
+
+        var stage = Assert.Single(stages);
+        Assert.Equal(TelemetryStages.ClientAuthentication, stage.GetTagItem(TelemetryTags.Stage));
+        Assert.Equal(ActivityStatusCode.Error, stage.Status);
+    }
+
+    [Fact]
+    public async Task FindingTheConsents_RunsAsAConsentStage()
+    {
+        var inner = new Mock<IUserConsentsProvider>();
+        inner
+            .Setup(provider => provider.GetUserConsentsAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
+            .ReturnsAsync(new UserConsents());
+        var observed = new ObservedUserConsentsProvider(inner.Object);
+
+        // The decorator hands its arguments on untouched, so what they hold is the stub's business
+        var (_, stages) = await UnderAnEndpointSpan(() => observed.GetUserConsentsAsync(null!, null!));
+
+        Assert.Equal(TelemetryStages.Consent, Assert.Single(stages).GetTagItem(TelemetryTags.Stage));
     }
 
     [Fact]

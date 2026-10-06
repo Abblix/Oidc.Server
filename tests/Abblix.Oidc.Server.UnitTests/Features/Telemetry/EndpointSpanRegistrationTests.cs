@@ -52,11 +52,17 @@ public sealed class EndpointSpanRegistrationTests
             .ToArray();
         Assert.Equal(15, decorators.Length);
 
-        // And no endpoint decorator stands outside the list, where nothing would generate or check it
+        // And no endpoint decorator stands outside the list, where nothing would generate or check it; the stages'
+        // decorators are another list's
+        var stageDecorators = assembly
+            .GetCustomAttributes<ObservedStageAttribute>()
+            .Select(observed => $"Observed{observed.Service.Name[1..]}")
+            .ToHashSet();
         var declared = assembly.GetTypes()
             .Where(type => type.Namespace == typeof(TelemetryDecoratorsRegistered).Namespace &&
                            type.Name.StartsWith("Observed", System.StringComparison.Ordinal) &&
-                           type.Name.EndsWith("Handler", System.StringComparison.Ordinal));
+                           type.Name.EndsWith("Handler", System.StringComparison.Ordinal) &&
+                           !stageDecorators.Contains(type.Name));
         Assert.Equal(decorators.OrderBy(type => type.Name), declared.OrderBy(type => type.Name));
 
         var services = new ServiceCollection();

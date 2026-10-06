@@ -65,6 +65,12 @@ public static class TelemetryTags
     public const string Stage = "oidc.stage";
 
     /// <summary>
+    /// The operation of the server's entity storage a measurement records, one of
+    /// <see cref="TelemetryStorageOperations"/>.
+    /// </summary>
+    public const string StorageOperation = "oidc.storage.operation";
+
+    /// <summary>
     /// The response parameter a token is handed out in, one of <see cref="TelemetryTokenTypes"/>.
     /// </summary>
     public const string TokenType = "oidc.token_type";

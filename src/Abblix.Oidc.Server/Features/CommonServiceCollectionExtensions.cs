@@ -33,6 +33,7 @@ public static class CommonServiceCollectionExtensions
     {
         services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
         services.Decorate<IUserConsentsProvider, PromptConsentDecorator>();
+        services.AddTelemetryDecorator<IUserConsentsProvider, ObservedUserConsentsProvider>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
@@ -40,6 +41,7 @@ public static class CommonServiceCollectionExtensions
         services.TryAddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
         services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
+        services.AddTelemetryDecorator<IEntityStorage, MeasuredEntityStorage>();
 
         // The next-poll instant of a polled request, kept apart from the request itself: a poll
         // writing the request back to note it overwrote whatever the approval had changed.

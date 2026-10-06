@@ -67,6 +67,11 @@ internal static class StageObservation
     public static bool Refused(AuthorizationResponse response) => response is AuthorizationError;
 
     /// <summary>
+    /// Whether a result refuses, for a service that refuses with null.
+    /// </summary>
+    public static bool RefusedWhenNull<TResult>(TResult? result) where TResult : class => result is null;
+
+    /// <summary>
     /// An outcome that never refuses.
     /// </summary>
     public static bool NeverRefused<TResult>(TResult _) => false;

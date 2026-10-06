@@ -27,4 +27,10 @@ internal sealed class ObservedStageAttribute(Type service, string stage) : Attri
     /// The stage the service performs, one of <see cref="TelemetryStages"/>.
     /// </summary>
     public string Stage { get; } = stage;
+
+    /// <summary>
+    /// Whether the service answers a refusal with null, as a client authenticator does for a credential that does not
+    /// verify, so the decorator closes the span with an error when the result is null.
+    /// </summary>
+    public bool RefusesWithNull { get; set; }
 }
