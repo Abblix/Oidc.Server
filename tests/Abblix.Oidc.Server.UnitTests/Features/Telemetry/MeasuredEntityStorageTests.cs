@@ -40,7 +40,7 @@ public sealed class MeasuredEntityStorageTests : IDisposable
         _measured = new MeasurementRecorder(meters);
         _storage = new MeasuredEntityStorage(
             Mock.Of<IEntityStorage>(),
-            new OidcInstruments(NullLoggerFactory.Instance, meters));
+            new OidcInstruments(NullLoggerFactory.Instance, meters, []));
         _listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == OidcTelemetry.SourceName,

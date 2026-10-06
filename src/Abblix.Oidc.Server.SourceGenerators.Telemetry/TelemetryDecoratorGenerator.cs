@@ -390,6 +390,9 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 					.Append($"global::{TelemetryNamespace}.EndpointObservation.{reader}");
 				if (tagsRequest)
 					run.Append($", () => RequestTagOf({arguments})");
+
+				// The host's enrichers see the request the handler receives first
+				run.Append(method.Parameters.Length > 0 ? $", request: {Escape(method.Parameters[0].Name)}" : string.Empty);
 				break;
 
 			case ObservationKind.Stage:

@@ -61,7 +61,7 @@ public sealed class EndpointSpanTests : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
         _instruments = new OidcInstruments(
-            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>());
+            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>(), []);
     }
 
     public void Dispose()
@@ -192,6 +192,24 @@ public sealed class EndpointSpanTests : IDisposable
             new TokenRequest { GrantType = requested }, new ClientRequest(), CancellationToken.None));
 
         Assert.Equal(named, span.GetTagItem(TelemetryTags.GrantType));
+    }
+
+    [Fact]
+    public async Task AnEnricherOfTheHost_SeesTheSpanTheEndpointAndTheRequest()
+    {
+        var enricher = new Mock<IEndpointSpanEnricher>();
+        var instruments = new OidcInstruments(
+            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>(), [enricher.Object]);
+        var inner = new Mock<ITokenHandler>();
+        inner
+            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Issued);
+        var observed = new ObservedTokenHandler(inner.Object, Mock.Of<IAuthorizationGrantHandler>(), instruments);
+        var request = new TokenRequest();
+
+        var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest(), CancellationToken.None));
+
+        enricher.Verify(e => e.Enrich(span, TelemetryEndpoints.Token, request), Times.Once);
     }
 
     [Fact]

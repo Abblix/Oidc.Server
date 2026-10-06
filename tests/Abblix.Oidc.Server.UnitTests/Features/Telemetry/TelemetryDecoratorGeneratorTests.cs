@@ -48,7 +48,7 @@ public sealed class TelemetryDecoratorGeneratorTests
         inner.Setup(h => h.HandleAsync("request")).ReturnsAsync("handled");
         var decorator = new ObservedProbeHandler(
             inner.Object,
-            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>()));
+            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>(), []));
 
         var trace = ActivityTraceId.CreateRandom();
         using (new Activity("test").SetParentId(trace, ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded).Start())

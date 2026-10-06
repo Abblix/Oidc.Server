@@ -48,6 +48,7 @@ public static class Enrolment
 
         new("T:Abblix.Oidc.Server.Features.MultiTenancy.TenantScope", 0, "TenantScope.cs"),
         new("T:Abblix.Oidc.Server.Features.Telemetry.OidcTelemetry", 0, "OpenTelemetrySetup.cs"),
+        new("T:Abblix.Oidc.Server.Features.Telemetry.IEndpointSpanEnricher", 0, "SpanEnricher.cs"),
     ];
 
     /// <summary>
