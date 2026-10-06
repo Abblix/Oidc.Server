@@ -17,7 +17,10 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// Called once per request, after the server has tagged the span and before the request is handled, and only when
 /// the span is recorded, so a host that receives no traces pays nothing for it. The attributes it adds are the
 /// host's: the server's table in <see cref="TelemetryTags"/> does not list them, and what they may carry about a
-/// client or an end user is the host's decision. Every enricher registered runs, as a singleton.
+/// client or an end user is the host's decision. The request reaches an enricher before it is validated, so its
+/// content is whatever the caller sent, and it may carry credentials: the access token of a UserInfo request, the
+/// registration access token of a client configuration request. Every enricher registered runs, with the lifetime
+/// it is registered with. One that throws fails the request.
 /// <code>
 /// public sealed class ScopeCountEnricher : IEndpointSpanEnricher
 /// {

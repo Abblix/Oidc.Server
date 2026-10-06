@@ -29,14 +29,9 @@ internal sealed partial class OidcInstruments
     /// <param name="loggerFactory">Creates the logger of each refused request, under
     /// <see cref="OidcTelemetry.LogCategory"/>.</param>
     /// <param name="meterFactory">The host's factory of meters.</param>
-    /// <param name="enrichers">The host's enrichers of endpoint spans.</param>
-    public OidcInstruments(
-        ILoggerFactory loggerFactory,
-        IMeterFactory meterFactory,
-        IEnumerable<IEndpointSpanEnricher> enrichers)
+    public OidcInstruments(ILoggerFactory loggerFactory, IMeterFactory meterFactory)
     {
         _logger = loggerFactory.CreateLogger(OidcTelemetry.LogCategory);
-        _enrichers = enrichers.ToArray();
         var meter = meterFactory.Create(OidcTelemetry.SourceName, OidcTelemetry.Version);
 
         _requestDuration = meter.CreateHistogram(
@@ -90,7 +85,6 @@ internal sealed partial class OidcInstruments
     };
 
     private readonly ILogger _logger;
-    private readonly IEndpointSpanEnricher[] _enrichers;
     /// <summary>
     /// Bucket boundaries in seconds for a signing or a storage call, from a fraction of a millisecond, which an
     /// in-process key or an in-memory store takes, to the round trip to an external custodian or a remote store.
@@ -108,16 +102,6 @@ internal sealed partial class OidcInstruments
     private readonly Counter<long> _licenseRefusals;
     private readonly Counter<long> _rateLimitRefusals;
     private readonly Histogram<double> _storageOperationDuration;
-
-    /// <summary>
-    /// Lets each of the host's enrichers add its attributes to the recorded span of a request of
-    /// <paramref name="endpoint"/>.
-    /// </summary>
-    public void Enrich(Activity span, string endpoint, object? request)
-    {
-        foreach (var enricher in _enrichers)
-            enricher.Enrich(span, endpoint, request);
-    }
 
     /// <summary>
     /// Records a request of <paramref name="endpoint"/> handled in <paramref name="duration"/>.

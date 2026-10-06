@@ -61,7 +61,7 @@ public sealed class EndpointSpanTests : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
         _instruments = new OidcInstruments(
-            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>(), []);
+            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>());
     }
 
     public void Dispose()
@@ -198,13 +198,12 @@ public sealed class EndpointSpanTests : IDisposable
     public async Task AnEnricherOfTheHost_SeesTheSpanTheEndpointAndTheRequest()
     {
         var enricher = new Mock<IEndpointSpanEnricher>();
-        var instruments = new OidcInstruments(
-            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>(), [enricher.Object]);
         var inner = new Mock<ITokenHandler>();
         inner
             .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Issued);
-        var observed = new ObservedTokenHandler(inner.Object, Mock.Of<IAuthorizationGrantHandler>(), instruments);
+        var observed = new ObservedTokenHandler(
+            inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments, enrichers: [enricher.Object]);
         var request = new TokenRequest();
 
         var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest(), CancellationToken.None));

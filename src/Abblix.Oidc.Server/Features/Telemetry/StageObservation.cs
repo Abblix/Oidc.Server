@@ -8,6 +8,7 @@
 
 using System.Diagnostics;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
@@ -34,9 +35,7 @@ internal static class StageObservation
         Func<Task<TResult>> handle,
         Func<TResult, bool> refused)
     {
-        using var span = Activity.Current?.Source == OidcTelemetry.Source
-            ? OidcTelemetry.Source.StartActivity(stage)
-            : null;
+        using var span = WithinServerSpan() ? OidcTelemetry.Source.StartActivity(stage) : null;
         if (span is null)
             return await handle();
 
@@ -47,12 +46,32 @@ internal static class StageObservation
             span.SetStatus(refused(result) ? ActivityStatusCode.Error : ActivityStatusCode.Ok);
             return result;
         }
+        catch (TooManyAuthenticationFailuresException)
+        {
+            // A spent budget refuses the request, as the endpoint's span records it, rather than failing it
+            span.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
         catch (Exception exception)
         {
             span.SetTag(TelemetryTags.ErrorType, exception.GetType().FullName);
             span.SetStatus(ActivityStatusCode.Error);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Whether a span of the server is open around the call, however many of the host's own activities sit between.
+    /// </summary>
+    private static bool WithinServerSpan()
+    {
+        for (var activity = Activity.Current; activity != null; activity = activity.Parent)
+        {
+            if (activity.Source == OidcTelemetry.Source)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

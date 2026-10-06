@@ -103,7 +103,6 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             }.OrderBy(stage => firstStarts[stage]));
         Assert.Contains(TelemetryStages.Signing, firstStarts.Keys);
         Assert.Contains(TelemetryStages.Storage, firstStarts.Keys);
-
     }
 
     private static bool IsUnder(Activity span, Activity ancestor)

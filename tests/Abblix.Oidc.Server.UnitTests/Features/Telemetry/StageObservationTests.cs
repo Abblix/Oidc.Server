@@ -12,7 +12,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.Telemetry;
@@ -116,6 +118,36 @@ public sealed class StageObservationTests : IDisposable
         var (_, stages) = await UnderAnEndpointSpan(() => observed.GetUserConsentsAsync(null!, null!));
 
         Assert.Equal(TelemetryStages.Consent, Assert.Single(stages).GetTagItem(TelemetryTags.Stage));
+    }
+
+    [Fact]
+    public async Task ASpentAuthenticationBudget_RefusesTheStageWithoutNamingAFailure()
+    {
+        var throttled = new Mock<IClientAuthenticator>();
+        throttled
+            .Setup(authenticator => authenticator.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .ThrowsAsync(new TooManyAuthenticationFailuresException(
+                new TooManyRequestsError("Too many", null, CallerRateLimiters.AuthenticationFailures)));
+        var observed = new ObservedClientAuthenticator(throttled.Object);
+
+        var (_, stages) = await UnderAnEndpointSpan(() => Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => observed.TryAuthenticateClientAsync(new ClientRequest())));
+
+        var stage = Assert.Single(stages);
+        Assert.Equal(ActivityStatusCode.Error, stage.Status);
+        Assert.Null(stage.GetTagItem(TelemetryTags.ErrorType));
+    }
+
+    [Fact]
+    public async Task AnActivityOfTheHostBetweenTheEndpointAndTheStage_LeavesTheStageTraced()
+    {
+        var (_, stages) = await UnderAnEndpointSpan(async () =>
+        {
+            using var host = new Activity("host").Start();
+            await Stage("checked").CheckAsync("request");
+        });
+
+        Assert.Equal(TelemetryStages.Validation, Assert.Single(stages).GetTagItem(TelemetryTags.Stage));
     }
 
     [Fact]

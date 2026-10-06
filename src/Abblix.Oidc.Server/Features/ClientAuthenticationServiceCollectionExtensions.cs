@@ -6,13 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Features.Telemetry;
 using System.Threading.RateLimiting;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -82,10 +82,9 @@ public static class ClientAuthenticationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, CallerRateLimitOptionsValidator>());
 
-        // Outermost, so a source that has spent its budget of failures is refused before anything below it
-        // looks at the credential - which for a signed assertion means before a signature is verified.
-        // The span sits inside the throttling, which stays outermost so a spent budget is refused before anything
-        // else runs, the span included
+        // Throttling outermost, so a source that has spent its budget of failures is refused before anything below
+        // it looks at the credential - which for a signed assertion means before a signature is verified - the
+        // stage's span included.
         return services
             .AddTelemetryDecorator<IClientAuthenticator, ObservedClientAuthenticator>()
             .Decorate<IClientAuthenticator, ThrottledClientAuthenticator>();

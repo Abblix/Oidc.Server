@@ -31,6 +31,7 @@ public sealed class MeasuredEntityStorageTests : IDisposable
     private readonly ServiceProvider _services = new ServiceCollection().AddMetrics().BuildServiceProvider();
     private readonly MeasurementRecorder _measured;
     private readonly MeasuredEntityStorage _storage;
+    private readonly OidcInstruments _instruments;
     private readonly ConcurrentBag<Activity> _stopped = [];
     private readonly ActivityListener _listener;
 
@@ -38,9 +39,8 @@ public sealed class MeasuredEntityStorageTests : IDisposable
     {
         var meters = _services.GetRequiredService<IMeterFactory>();
         _measured = new MeasurementRecorder(meters);
-        _storage = new MeasuredEntityStorage(
-            Mock.Of<IEntityStorage>(),
-            new OidcInstruments(NullLoggerFactory.Instance, meters, []));
+        _instruments = new OidcInstruments(NullLoggerFactory.Instance, meters);
+        _storage = new MeasuredEntityStorage(Mock.Of<IEntityStorage>(), _instruments);
         _listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == OidcTelemetry.SourceName,
@@ -76,6 +76,22 @@ public sealed class MeasuredEntityStorageTests : IDisposable
                 TelemetryStorageOperations.Remove,
             ],
             _measured.Of(OidcMetrics.StorageOperationDuration).Select(tags => tags[TelemetryTags.StorageOperation]));
+    }
+
+    [Fact]
+    public async Task AFailingCall_IsMeasuredOnceAndPassesOn()
+    {
+        var failing = new Mock<IEntityStorage>();
+        failing
+            .Setup(storage => storage.RemoveAsync("key", It.IsAny<CancellationToken?>()))
+            .ThrowsAsync(new TimeoutException());
+        var storage = new MeasuredEntityStorage(failing.Object, _instruments);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => storage.RemoveAsync("key", TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            TelemetryStorageOperations.Remove,
+            Assert.Single(_measured.Of(OidcMetrics.StorageOperationDuration))[TelemetryTags.StorageOperation]);
     }
 
     [Fact]

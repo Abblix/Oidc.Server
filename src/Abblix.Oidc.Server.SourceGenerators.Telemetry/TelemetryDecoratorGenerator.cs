@@ -40,6 +40,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private const string TagsRequestProperty = "TagsRequest";
 	private const string ObservesResultProperty = "ObservesResult";
 	private const string RefusesWithNullProperty = "RefusesWithNull";
+	private const string NeverRefusesProperty = "NeverRefuses";
 	private const string DependenciesProperty = "Dependencies";
 
 	private const string DecoratorPrefix = "Observed";
@@ -71,8 +72,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private static readonly DiagnosticDescriptor UnknownRefusal = new(
 		id: "ABXT003",
 		title: "Observed result refuses in a way the observation cannot read",
-		messageFormat: "'{0}.{1}' returns '{2}', a result whose refusal the endpoint observation has no way to read, " +
-		               "so every refusal of it would be measured as a success",
+		messageFormat: "'{0}.{1}' returns '{2}', a result whose refusal the observation has no way to read, so " +
+		               "every refusal of it would be recorded as a success; a stage that never refuses says so",
 		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
@@ -116,7 +117,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	/// <summary>
 	/// The names every decorator takes for itself, which a dependency therefore cannot take.
 	/// </summary>
-	private static readonly string[] ReservedNames = ["inner", "instruments", "tenants"];
+	private static readonly string[] ReservedNames = ["inner", "instruments", "tenants", "enrichers"];
 
 	/// <inheritdoc />
 	public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -188,6 +189,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			NamedFlag(attribute, TagsRequestProperty),
 			NamedFlag(attribute, ObservesResultProperty),
 			NamedFlag(attribute, RefusesWithNullProperty),
+			NamedFlag(attribute, NeverRefusesProperty),
 			attribute.NamedArguments
 				.Where(argument => argument.Key == DependenciesProperty)
 				.SelectMany(argument => argument.Value.Values)
@@ -326,7 +328,10 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			source
 				.AppendLine($"\tprivate readonly global::{TelemetryNamespace}.OidcInstruments _instruments;")
-				.AppendLine("\tprivate readonly global::Abblix.Oidc.Server.Features.MultiTenancy.ITenantAccessor? _tenants;");
+				.AppendLine("\tprivate readonly global::Abblix.Oidc.Server.Features.MultiTenancy.ITenantAccessor? _tenants;")
+				.AppendLine(
+					$"\tprivate readonly global::System.Collections.Generic.IEnumerable<global::{TelemetryNamespace}." +
+					"IEndpointSpanEnricher>? _enrichers;");
 		}
 
 		var parameters = new List<string> { $"{serviceType} inner" };
@@ -336,12 +341,18 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			parameters.Add($"global::{TelemetryNamespace}.OidcInstruments instruments");
 			parameters.Add("global::Abblix.Oidc.Server.Features.MultiTenancy.ITenantAccessor? tenants = null");
+			parameters.Add(
+				$"global::System.Collections.Generic.IEnumerable<global::{TelemetryNamespace}.IEndpointSpanEnricher>? " +
+				"enrichers = null");
 		}
 
 		source
 			.AppendLine()
-			.AppendLine($"\tpublic {entry.ClassName}(")
-			.AppendLine("\t\t" + string.Join(",\n\t\t", parameters) + ")")
+			.AppendLine($"\tpublic {entry.ClassName}(");
+		for (var index = 0; index < parameters.Count; index++)
+			source.AppendLine($"\t\t{parameters[index]}{(index < parameters.Count - 1 ? "," : ")")}");
+
+		source
 			.AppendLine("\t{")
 			.AppendLine("\t\t_inner = inner;");
 		foreach (var dependency in entry.Dependencies)
@@ -351,7 +362,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			source
 				.AppendLine("\t\t_instruments = instruments;")
-				.AppendLine("\t\t_tenants = tenants;");
+				.AppendLine("\t\t_tenants = tenants;")
+				.AppendLine("\t\t_enrichers = enrichers;");
 		}
 
 		source
@@ -393,6 +405,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 				// The host's enrichers see the request the handler receives first
 				run.Append(method.Parameters.Length > 0 ? $", request: {Escape(method.Parameters[0].Name)}" : string.Empty);
+				run.Append(", enrichers: _enrichers");
 				break;
 
 			case ObservationKind.Stage:
@@ -507,7 +520,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				return "RefusedWhenNull";
 
 			case ObservationKind.Stage:
-				return StageRefusalOf(result);
+				return StageRefusalOf(result, entry.NeverRefuses);
 
 			default:
 				throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, "The kind of observation is not known");
@@ -518,18 +531,22 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	/// The member of the stage observation that tells whether a result refuses, or null for a nullable Result, whose
 	/// refusal sits behind the nullable. A stage reads only whether its result refuses, so a Result of any error does.
 	/// </summary>
-	private static string? StageRefusalOf(ITypeSymbol result)
+	private static string? StageRefusalOf(ITypeSymbol result, bool neverRefuses)
 	{
 		if (result is INamedTypeSymbol { IsGenericType: true } wrapped &&
 		    MetadataName(wrapped.OriginalDefinition) == NullableTypeName)
 		{
-			return IsResult(wrapped.TypeArguments[0]) ? null : StageRefusalOf(wrapped.TypeArguments[0]);
+			return IsResult(wrapped.TypeArguments[0]) ? null : StageRefusalOf(wrapped.TypeArguments[0], neverRefuses);
 		}
 
 		if (IsResult(result) || IsAuthorizationResponse(result))
 			return "Refused";
 
-		return "NeverRefused";
+		// Any other result is read as never refusing only where the entry says so, rather than by default
+		if (neverRefuses)
+			return "NeverRefused";
+
+		return null;
 	}
 
 	private static bool IsResult(ITypeSymbol type)

@@ -23,7 +23,8 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// <see cref="LogCategory"/>, <c>Abblix.Oidc.Server.Telemetry</c>, so a host that wants those records lowers its level
 /// for that category. A host without instrumentation of its own requests starts each request's activity unrecorded,
 /// and the default sampler then drops the server's spans under it, so the setup instruments them too.
-/// The attributes are listed in <see cref="TelemetryTags"/>, the instruments in <see cref="OidcMetrics"/>.
+/// The attributes are listed in <see cref="TelemetryTags"/>, the instruments in <see cref="OidcMetrics"/>, and a host
+/// adds attributes of its own to an endpoint's span through <see cref="IEndpointSpanEnricher"/>.
 /// <code>
 /// services.AddLogging(logging => logging.AddFilter(OidcTelemetry.LogCategory, LogLevel.Debug));
 /// services.AddOpenTelemetry()

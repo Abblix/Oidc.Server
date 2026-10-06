@@ -33,4 +33,10 @@ internal sealed class ObservedStageAttribute(Type service, string stage) : Attri
     /// verify, so the decorator closes the span with an error when the result is null.
     /// </summary>
     public bool RefusesWithNull { get; set; }
+
+    /// <summary>
+    /// Whether the service never refuses, as a provider of what the end user consented to does. A stage returning
+    /// neither a Result nor an authorization response is refused by the build unless it says so.
+    /// </summary>
+    public bool NeverRefuses { get; set; }
 }

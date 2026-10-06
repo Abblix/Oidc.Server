@@ -54,7 +54,7 @@ public sealed class EndpointMetricsTests : IDisposable
     {
         var factory = _services.GetRequiredService<IMeterFactory>();
         _measured = new MeasurementRecorder(factory);
-        _instruments = new OidcInstruments(_logs, factory, []);
+        _instruments = new OidcInstruments(_logs, factory);
     }
 
     public void Dispose()
@@ -129,6 +129,30 @@ public sealed class EndpointMetricsTests : IDisposable
         var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
         Assert.Equal(TelemetryOutcomes.Failed, request[TelemetryTags.Outcome]);
         Assert.Empty(_measured.Of(OidcMetrics.LicenseRefusals));
+    }
+
+    [Fact]
+    public async Task AnEnricherThatThrows_FailsTheRequestAsMeasured()
+    {
+        var enricher = new Mock<IEndpointSpanEnricher>();
+        enricher
+            .Setup(e => e.Enrich(It.IsAny<System.Diagnostics.Activity>(), It.IsAny<string>(), It.IsAny<object?>()))
+            .Throws<InvalidOperationException>();
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OidcTelemetry.SourceName,
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _)
+                => System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(Issued), EndpointObservation.NoError,
+            enrichers: [enricher.Object]));
+
+        Assert.Equal(
+            TelemetryOutcomes.Failed,
+            Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Outcome]);
     }
 
     [Fact]
