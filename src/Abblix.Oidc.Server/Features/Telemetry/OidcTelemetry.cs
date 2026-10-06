@@ -18,7 +18,10 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// <remarks>
 /// The server records spans and measurements whether or not anything listens: a source nobody listens to starts no
 /// span, an instrument nobody listens to records nothing, so the host's subscription is the only switch. With the
-/// logging bridge on, a record the server logs while an endpoint span is open carries that span's trace and span.
+/// logging bridge on, a record the server logs while an endpoint span is open carries that span's trace and span. A
+/// refused request is logged at <see cref="Microsoft.Extensions.Logging.LogLevel.Debug"/> under the category
+/// <c>Abblix.Oidc.Server.Features.Telemetry.OidcInstruments</c>, so a host that wants those records lowers its level
+/// for that category.
 /// The attributes are listed in <see cref="TelemetryTags"/>, the instruments in <see cref="OidcMetrics"/>.
 /// <code>
 /// services.AddOpenTelemetry()

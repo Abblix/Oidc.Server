@@ -33,16 +33,18 @@ public sealed class EndpointLogCorrelationTests(TestFactory factory) : TestBase(
     [Fact]
     public async Task A_refused_token_request_is_logged_under_its_token_span()
     {
-        var spans = new List<Activity>();
-        var logs = new List<LogRecord>();
+        // One trace for every request of this test: the source is shared by every host in the process, so what
+        // this test's requests produce is told apart by it
+        var trace = ActivityTraceId.CreateRandom();
+        var spans = new OwnTraceSpans(trace);
+        var logs = new OwnTraceLogs(trace);
 
-        // A host of its own, so its logging bridge exports only what this test's requests log
         await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.AddLogging(logging => logging.AddFilter(typeof(OidcTelemetry).Namespace, LogLevel.Debug));
             services.AddOpenTelemetry()
-                .WithTracing(tracing => tracing.AddSource(OidcTelemetry.SourceName).AddInMemoryExporter(spans))
-                .WithLogging(logging => logging.AddInMemoryExporter(logs));
+                .WithTracing(tracing => tracing.AddSource(OidcTelemetry.SourceName).AddProcessor(spans))
+                .WithLogging(logging => logging.AddProcessor(logs));
         }));
         var client = host.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -50,8 +52,6 @@ public sealed class EndpointLogCorrelationTests(TestFactory factory) : TestBase(
             BaseAddress = TestServerAddress.BaseAddress,
         });
 
-        // The source is shared by every host in the process, so the span of this request is told apart by its trace
-        var trace = ActivityTraceId.CreateRandom();
         client.DefaultRequestHeaders.Add("traceparent", $"00-{trace}-{ActivitySpanId.CreateRandom()}-01");
 
         var discovery = await FetchDiscoveryAsync(client);
@@ -63,13 +63,13 @@ public sealed class EndpointLogCorrelationTests(TestFactory factory) : TestBase(
         });
         Assert.False(refusal.IsSuccessStatusCode);
 
-        var span = Assert.Single(spans, span => span.TraceId == trace &&
-                                                span.OperationName == TelemetryEndpoints.Token);
-        var logged = Assert.Single(logs, record => record.TraceId == trace &&
-                                                   record.Attributes!.Any(a => a is { Key: "Endpoint", Value: TelemetryEndpoints.Token }));
+        var span = Assert.Single(spans.Spans, span => span.OperationName == TelemetryEndpoints.Token);
+        var logged = Assert.Single(
+            logs.Records,
+            record => Equals(record.Attributes.GetValueOrDefault("Endpoint"), TelemetryEndpoints.Token));
 
         Assert.Equal(span.SpanId, logged.SpanId);
         Assert.Equal(ErrorCodes.UnauthorizedClient, span.GetTagItem(TelemetryTags.Error));
-        Assert.Equal(span.GetTagItem(TelemetryTags.Error), logged.Attributes!.Single(a => a.Key == "Error").Value);
+        Assert.Equal(span.GetTagItem(TelemetryTags.Error), logged.Attributes["Error"]);
     }
 }

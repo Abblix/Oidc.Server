@@ -172,6 +172,8 @@ public sealed class EndpointMetricsTests : IDisposable
         Assert.Equal(ErrorCodes.TemporarilyUnavailable, request[TelemetryTags.Error]);
         var refusal = Assert.Single(_measured.Of(OidcMetrics.RateLimitRefusals));
         Assert.Equal(CallerRateLimiters.AuthenticationFailures, refusal[TelemetryTags.RateLimitBudget]);
+        var logged = Assert.Single(_logs.Entries, entry => entry.EventId.Id == LogEvents.Telemetry.OidcInstruments.RequestRefused);
+        Assert.Equal(ErrorCodes.TemporarilyUnavailable, logged.Value("Error"));
     }
 
     [Theory]
