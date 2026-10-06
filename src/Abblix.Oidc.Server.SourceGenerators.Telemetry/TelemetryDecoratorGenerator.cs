@@ -51,6 +51,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
 	private const string DiagnosticCategory = "Abblix.Oidc.Server.SourceGenerators.Telemetry";
+	private const string UnknownKindMessage = "The kind of observation is not known";
 
 	private static readonly DiagnosticDescriptor ServiceIsNotAnInterface = new(
 		id: "ABXT001",
@@ -268,7 +269,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				return "; a stage that never refuses says so with NeverRefuses = true on its entry";
 
 			default:
-				throw new ArgumentOutOfRangeException(nameof(kind), kind, "The kind of observation is not known");
+				throw new ArgumentOutOfRangeException(nameof(kind), kind, UnknownKindMessage);
 		}
 	}
 
@@ -427,8 +428,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 					run.Append($", () => RequestTagOf({arguments})");
 
 				// The host's enrichers see the request the handler receives first
-				run.Append(method.Parameters.Length > 0 ? $", request: {Escape(method.Parameters[0].Name)}" : string.Empty);
-				run.Append(", enrichers: _enrichers");
+				var request = method.Parameters.Length > 0 ? Escape(method.Parameters[0].Name) : "null";
+				run.Append($", enrichment: new global::{TelemetryNamespace}.EndpointEnrichment({request}, _enrichers)");
 				break;
 
 			case ObservationKind.Stage:
@@ -439,7 +440,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				break;
 
 			default:
-				throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, "The kind of observation is not known");
+				throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, UnknownKindMessage);
 		}
 
 		run.Append(')');
@@ -505,7 +506,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				return "its stage.";
 
 			default:
-				throw new ArgumentOutOfRangeException(nameof(kind), kind, "The kind of observation is not known");
+				throw new ArgumentOutOfRangeException(nameof(kind), kind, UnknownKindMessage);
 		}
 	}
 
@@ -524,7 +525,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				return false;
 
 			default:
-				throw new ArgumentOutOfRangeException(nameof(kind), kind, "The kind of observation is not known");
+				throw new ArgumentOutOfRangeException(nameof(kind), kind, UnknownKindMessage);
 		}
 	}
 
@@ -546,7 +547,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				return StageRefusalOf(result, entry.NeverRefuses);
 
 			default:
-				throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, "The kind of observation is not known");
+				throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, UnknownKindMessage);
 		}
 	}
 

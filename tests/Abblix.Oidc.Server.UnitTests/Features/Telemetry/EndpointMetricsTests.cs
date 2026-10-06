@@ -148,7 +148,7 @@ public sealed class EndpointMetricsTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => EndpointObservation.RunAsync(
             TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(Issued), EndpointObservation.NoError,
-            enrichers: [enricher.Object]));
+            enrichment: new EndpointEnrichment(null, [enricher.Object])));
 
         Assert.Equal(
             TelemetryOutcomes.Failed,

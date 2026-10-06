@@ -49,8 +49,7 @@ public sealed class UnrecordedSpanTests
             null,
             () => Task.FromResult(0),
             EndpointObservation.NoError,
-            request: new TokenRequest(),
-            enrichers: [enricher.Object]);
+            enrichment: new EndpointEnrichment(new TokenRequest(), [enricher.Object]));
 
         enricher.Verify(e => e.Enrich(It.IsAny<Activity>(), It.IsAny<string>(), It.IsAny<object?>()), Times.Never);
     }

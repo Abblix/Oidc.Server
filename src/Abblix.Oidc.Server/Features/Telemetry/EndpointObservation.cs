@@ -37,9 +37,7 @@ internal static class EndpointObservation
     /// <param name="errorOf">The error the outcome refuses the request with, or null when it does not.</param>
     /// <param name="tags">The request's attribute, from the closed set its tag documents; asked only when a span is
     /// started, so a source nobody listens to does not pay for reading it.</param>
-    /// <param name="request">The request the handler receives first, which the host's enrichers see.</param>
-    /// <param name="enrichers">The host's enrichers, which add attributes of their own to a recorded span; one that
-    /// throws fails the request as its handling would, and is recorded so.</param>
+    /// <param name="enrichment">The host's enrichers of the span, with the request they see.</param>
     public static async Task<TResult> RunAsync<TResult>(
         string endpoint,
         OidcInstruments instruments,
@@ -47,8 +45,7 @@ internal static class EndpointObservation
         Func<Task<TResult>> handle,
         Func<TResult, OidcError?> errorOf,
         Func<(string Key, string? Value)>? tags = null,
-        object? request = null,
-        IEnumerable<IEndpointSpanEnricher>? enrichers = null)
+        EndpointEnrichment enrichment = default)
     {
         var tenant = TenantOf(tenants);
         using var span = StartSpan(endpoint, tenant, tags);
@@ -57,7 +54,7 @@ internal static class EndpointObservation
         (string Outcome, string? Error) ended = (TelemetryOutcomes.Failed, null);
         try
         {
-            Enrich(span, endpoint, request, enrichers);
+            enrichment.Apply(span, endpoint);
             var result = await handle();
             ended = Close(span, endpoint, instruments, errorOf(result));
             return result;
@@ -139,23 +136,6 @@ internal static class EndpointObservation
 
         span?.SetTag(TelemetryTags.ErrorType, exception.GetType().FullName);
         span?.SetStatus(ActivityStatusCode.Error);
-    }
-
-    /// <summary>
-    /// Lets each of the host's enrichers add its attributes to a span that is recorded; a span nobody records costs
-    /// them nothing.
-    /// </summary>
-    private static void Enrich(
-        Activity? span,
-        string endpoint,
-        object? request,
-        IEnumerable<IEndpointSpanEnricher>? enrichers)
-    {
-        if (span is not { IsAllDataRequested: true } || enrichers is null)
-            return;
-
-        foreach (var enricher in enrichers)
-            enricher.Enrich(span, endpoint, request);
     }
 
     /// <summary>
