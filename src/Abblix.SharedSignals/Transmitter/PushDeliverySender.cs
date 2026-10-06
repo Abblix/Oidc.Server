@@ -16,6 +16,7 @@ using Abblix.SecurityEvents.Delivery;
 using Microsoft.Extensions.Logging;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
+using Abblix.SharedSignals.Telemetry;
 
 namespace Abblix.SharedSignals.Transmitter;
 
@@ -30,11 +31,14 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="outbox">The queues being drained.</param>
 /// <param name="addressPolicy">Judges the receiver's address before anything is sent to it.</param>
 /// <param name="logger">Carries the receiver's own reason for a refusal into this deployment's log.</param>
+/// <param name="instruments">Traces each transmission and records how the receiver answered it and how long it
+/// took.</param>
 public sealed partial class PushDeliverySender(
     HttpClient httpClient,
     IEventOutbox outbox,
     ReceiverAddressPolicy addressPolicy,
-    ILogger<PushDeliverySender> logger)
+    ILogger<PushDeliverySender> logger,
+    SharedSignalsInstruments instruments)
 {
     /// <summary>How much of the receiver's description is carried into the log.</summary>
     /// <remarks>
@@ -143,59 +147,75 @@ public sealed partial class PushDeliverySender(
     }
 
     /// <summary>
-    /// Transmits one queued SET and records its outcome in <paramref name="tally"/>.
+    /// Transmits one queued SET in a span of its own, and records how the receiver answered it and how long the
+    /// transmission took until its answer was acted on.
     /// </summary>
     /// <returns>True when the pass may go on to the next item; false when it must stop here so the
     /// item keeps its place at the head of the queue.</returns>
-    private async Task<bool> TransmitAsync(
+    private Task<bool> TransmitAsync(
         StreamState stream,
         PushDeliveryMethod push,
         OutboxItem item,
         PushDeliveryTally tally,
         CancellationToken cancellationToken)
-    {
-        HttpResponseMessage response;
-        try
+        => instruments.ObservePushAsync(async () =>
         {
-            response = await SendAsync(push, item, cancellationToken);
-        }
-        catch (HttpRequestException)
-        {
-            // The transport failed before the receiver answered: transient by definition,
-            // so the pass ends and the item waits for the next one, order intact.
-            return false;
-        }
-
-        using (response)
-        {
-            if (response.StatusCode == HttpStatusCode.BadRequest)
+            HttpResponseMessage response;
+            try
             {
-                var verdict = await ReadVerdictAsync(response, cancellationToken);
-                if (!DeliveryErrorCodes.IsFinal(verdict?.Error))
-                {
-                    // The receiver objects to this transmitter, not to this event: leave it queued so a
-                    // later pass can deliver it once the credentials or the grant are put right.
-                    // Non-null by construction: IsFinal answers false only for a code it recognizes.
-                    LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
-                    return false;
-                }
-
-                await outbox.AcknowledgeAsync(
-                    stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
-                tally.RecordRejected(verdict ?? Unexplained);
-                return true;
+                response = await SendAsync(push, item, cancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                // The transport failed before the receiver answered: transient by definition,
+                // so the pass ends and the item waits for the next one, order intact.
+                return PushTransmission.Failed(exception);
             }
 
-            if (!response.IsSuccessStatusCode)
+            using (response)
             {
-                return false;
+                return await SettleAsync(stream, item, tally, response, cancellationToken);
+            }
+        });
+
+    /// <summary>
+    /// Acts on the receiver's answer to one SET and records it in <paramref name="tally"/>.
+    /// </summary>
+    /// <returns>Whether the pass may go on to the next item, and how the receiver answered.</returns>
+    private async Task<PushTransmission> SettleAsync(
+        StreamState stream,
+        OutboxItem item,
+        PushDeliveryTally tally,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var verdict = await ReadVerdictAsync(response, cancellationToken);
+            if (!DeliveryErrorCodes.IsFinal(verdict?.Error))
+            {
+                // The receiver objects to this transmitter, not to this event: leave it queued so a
+                // later pass can deliver it once the credentials or the grant are put right.
+                // Non-null by construction: IsFinal answers false only for a code it recognizes.
+                LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
+                return PushTransmission.Refused(continues: false);
             }
 
             await outbox.AcknowledgeAsync(
                 stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
-            tally.RecordDelivered();
-            return true;
+            tally.RecordRejected(verdict ?? Unexplained);
+            return PushTransmission.Refused(continues: true);
         }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return PushTransmission.Failed();
+        }
+
+        await outbox.AcknowledgeAsync(
+            stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
+        tally.RecordDelivered();
+        return PushTransmission.Delivered;
     }
 
     /// <summary>

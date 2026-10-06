@@ -56,4 +56,10 @@ public interface ITransmitterIdentity
     /// cannot reach another tenant's streams by presenting its own credentials under that tenant's address.
     /// </remarks>
     string? ReceiverIssuer { get; }
+
+    /// <summary>
+    /// The identifier of the tenant the transmitter answers as, which its spans and measurements name, or null on a
+    /// deployment answering as one issuer.
+    /// </summary>
+    string? TenantId => null;
 }

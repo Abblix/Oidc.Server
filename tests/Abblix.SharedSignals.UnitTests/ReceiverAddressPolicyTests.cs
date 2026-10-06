@@ -143,7 +143,7 @@ public class ReceiverAddressPolicyTests
         var outbox = new InMemoryEventOutbox();
         await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy(), NullLogger<PushDeliverySender>.Instance);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy(), NullLogger<PushDeliverySender>.Instance, TestInstruments.Create());
         var stream = new StreamState
         {
             ReceiverId = "receiver-a",

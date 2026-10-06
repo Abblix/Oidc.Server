@@ -102,6 +102,7 @@ public class StreamManagementServiceTests
             outbox,
             signer,
             identity ?? new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
             clock: clock);
 
         return new Harness(
@@ -217,6 +218,7 @@ public class StreamManagementServiceTests
             outbox,
             new StubSigner(),
             new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
             clock: clock);
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
@@ -268,6 +270,7 @@ public class StreamManagementServiceTests
             outbox,
             new StubSigner(),
             new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
             clock: clock);
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);

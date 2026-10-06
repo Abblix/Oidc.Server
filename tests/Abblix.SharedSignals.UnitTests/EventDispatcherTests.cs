@@ -97,6 +97,7 @@ public class EventDispatcherTests
             outbox,
             signer,
             new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
+            TestInstruments.Create(),
             policy), outbox, signer);
     }
 
@@ -113,7 +114,7 @@ public class EventDispatcherTests
         var identity = new SwitchableTransmitterIdentity("https://first.example.com");
         var signer = new CapturingSigner();
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, new InMemoryEventOutbox(), signer, identity);
+            NullLogger<EventDispatcher>.Instance, store, new InMemoryEventOutbox(), signer, identity, TestInstruments.Create());
 
         identity.Issuer = "https://second.example.com";
         Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));

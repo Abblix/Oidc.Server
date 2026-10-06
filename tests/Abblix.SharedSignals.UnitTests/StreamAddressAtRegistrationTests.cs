@@ -273,6 +273,7 @@ public class StreamAddressAtRegistrationTests
             outbox,
             new NeverSigner(),
             new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
             clock: clock);
 
         // A resolver of the test's own, so the one branch of the policy that is not a string comparison

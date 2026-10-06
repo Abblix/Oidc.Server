@@ -480,6 +480,7 @@ public sealed class CaepInteropProfileDispatchTests
                 outbox,
                 new StubSigner(),
                 new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
+                TestInstruments.Create(),
                 payloadPolicy: payloadPolicy),
             outbox,
             stream);
