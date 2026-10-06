@@ -9,24 +9,29 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Abblix.Oidc.Server.Features.RateLimiting;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Records the measurements of <see cref="OidcMetrics"/> into the server's meter.
+/// Records the measurements of <see cref="OidcMetrics"/> into the server's meter, and logs each refused request with
+/// the error code its span and its measurement name.
 /// </summary>
 /// <remarks>
 /// The meter comes from the host's <see cref="IMeterFactory"/>, so each container gets its own and a listener can
 /// tell one host's measurements from another's in the same process.
 /// </remarks>
-internal sealed class OidcInstruments
+internal sealed partial class OidcInstruments
 {
     /// <summary>
     /// Creates the server's instruments in a meter named <see cref="OidcTelemetry.SourceName"/>.
     /// </summary>
+    /// <param name="loggerFactory">Creates the logger of each refused request, under
+    /// <see cref="OidcTelemetry.LogCategory"/>.</param>
     /// <param name="meterFactory">The host's factory of meters.</param>
-    public OidcInstruments(IMeterFactory meterFactory)
+    public OidcInstruments(ILoggerFactory loggerFactory, IMeterFactory meterFactory)
     {
+        _logger = loggerFactory.CreateLogger(OidcTelemetry.LogCategory);
         var meter = meterFactory.Create(OidcTelemetry.SourceName, OidcTelemetry.Version);
 
         _requestDuration = meter.CreateHistogram(
@@ -44,7 +49,7 @@ internal sealed class OidcInstruments
             OidcMetrics.TokenSigningDuration,
             Seconds,
             "The time signing one token takes.",
-            advice: DurationAdvice);
+            advice: SigningDurationAdvice);
 
         _clientsRegistered = meter.CreateCounter<long>(
             OidcMetrics.ClientsRegistered,
@@ -73,6 +78,17 @@ internal sealed class OidcInstruments
         HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10],
     };
 
+    private readonly ILogger _logger;
+    /// <summary>
+    /// Bucket boundaries in seconds for a signing, from a fraction of a millisecond, which an in-process key takes, to
+    /// the round trip to an external custodian.
+    /// </summary>
+    private static readonly InstrumentAdvice<double> SigningDurationAdvice = new()
+    {
+        HistogramBucketBoundaries =
+            [0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+    };
+
     private readonly Histogram<double> _requestDuration;
     private readonly Counter<long> _tokensIssued;
     private readonly Histogram<double> _tokenSigningDuration;
@@ -92,6 +108,15 @@ internal sealed class OidcInstruments
             tags.Add(TelemetryTags.Tenant, tenant);
 
         _requestDuration.Record(duration.TotalSeconds, tags);
+
+        // Counted from the outcome the request was measured with, so the two instruments never disagree on one
+        if (endpoint == TelemetryEndpoints.RegisterClient)
+            _clientsRegistered.Add(1, new KeyValuePair<string, object?>(TelemetryTags.Outcome, outcome));
+
+        // The code logged is the one the span and the measurement carry, so a log record and a span of one refusal
+        // agree, and a host's logging bridge ties the record to the span open around it
+        if (error is not null)
+            LogRequestRefused(_logger, endpoint, error);
     }
 
     /// <summary>
@@ -115,12 +140,6 @@ internal sealed class OidcInstruments
         => _tokenSigningDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>(TelemetryTags.SigningAlgorithm, algorithm));
-
-    /// <summary>
-    /// Counts a dynamic client registration request that ended with <paramref name="outcome"/>.
-    /// </summary>
-    public void ClientRegistration(string outcome)
-        => _clientsRegistered.Add(1, new KeyValuePair<string, object?>(TelemetryTags.Outcome, outcome));
 
     /// <summary>
     /// Counts a request the license refused for <paramref name="reason"/>.

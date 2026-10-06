@@ -43,8 +43,8 @@ public static class OidcMetrics
     public const string TokenSigningDuration = "oidc.token.signing.duration";
 
     /// <summary>
-    /// A counter of dynamic client registration requests, by <see cref="TelemetryTags.Outcome"/>, a registration
-    /// ending in an exception included.
+    /// A counter of dynamic client registration requests, by <see cref="TelemetryTags.Outcome"/>, the same outcome
+    /// <see cref="RequestDuration"/> measures the request with.
     /// </summary>
     public const string ClientsRegistered = "oidc.clients.registered";
 

@@ -989,4 +989,20 @@ internal static class LogEvents
             public const int ChangeNotServedYet = Base;
         }
     }
+
+    /// <summary>
+    /// Range 10900-10999: <c>Features/Telemetry</c> - what the server records about the requests it serves.
+    /// </summary>
+    public static class Telemetry
+    {
+        /// <summary>
+        /// <c>Features/Telemetry/OidcInstruments.cs</c> - a request an endpoint refused (sub-range 10900-10919).
+        /// </summary>
+        public static class OidcInstruments
+        {
+            private const int Base = 10900;
+
+            public const int RequestRefused = Base;
+        }
+    }
 }
