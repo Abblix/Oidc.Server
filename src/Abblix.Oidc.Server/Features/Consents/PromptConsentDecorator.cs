@@ -30,15 +30,18 @@ public class PromptConsentDecorator(IUserConsentsProvider inner) : IUserConsents
     /// <param name="request">The validated authorization request whose <c>prompt</c> parameter drives the decision.</param>
     /// <param name="authSession">The current authentication session forwarded to the inner provider.</param>
     public async Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
-        => request.Model.Prompt switch
+    {
+        if (request.Model.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true)
         {
-            Prompts.Consent => new UserConsents
+            return new UserConsents
             {
                 Pending = new(request.Scope, request.Resources)
                 {
                     AuthorizationDetails = request.AuthorizationDetails,
                 },
-            },
-            _ => await inner.GetUserConsentsAsync(request, authSession),
-        };
+            };
+        }
+
+        return await inner.GetUserConsentsAsync(request, authSession);
+    }
 }

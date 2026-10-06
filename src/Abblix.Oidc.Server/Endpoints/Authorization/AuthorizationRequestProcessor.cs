@@ -138,7 +138,7 @@ public class AuthorizationRequestProcessor(
 			or { AuthorizationDetails.Count: > 0 })
 		{
 			// If user interaction is disallowed but consent is necessary, return an error.
-			if (model.Prompt == Prompts.None)
+			if (model.Prompt?.Contains(Prompts.None, StringComparer.Ordinal) is true)
 			{
 				return new AuthorizationError(
 					model,

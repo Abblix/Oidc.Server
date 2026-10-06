@@ -119,13 +119,21 @@ public record AuthorizationRequest
     public string? Display { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>prompt</c> parameter (OIDC Core section 3.1.2.1) controlling whether the authorization server
-	/// re-prompts for authentication and consent. Values: <c>none</c>, <c>login</c>, <c>consent</c>,
-	/// <c>select_account</c>, and the registration extension <c>create</c>.
+	/// The OIDC <c>prompt</c> parameter (OIDC Core section 3.1.2.1), "Space-delimited, case-sensitive list of ASCII
+	/// string values", controlling whether the authorization server prompts the end user for authentication, account
+	/// selection and consent. Values: <c>none</c>, <c>login</c>, <c>consent</c>, <c>select_account</c>, and the
+	/// registration extension <c>create</c>; their order in the parameter carries no meaning.
 	/// </summary>
+	/// <remarks>
+	/// A value outside that list is refused as the request is read, with 400 and <c>invalid_request</c>, as Initiating
+	/// User Registration via OpenID Connect 1.0, section 4.1, recommends for a value not in
+	/// <c>prompt_values_supported</c>.
+	/// </remarks>
 	[JsonPropertyName(Parameters.Prompt)]
+	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
     [AllowedValues(Prompts.Create, Prompts.Consent, Prompts.Login, Prompts.None, Prompts.SelectAccount)]
-    public string? Prompt { get; init; }
+    public string[]? Prompt { get; init; }
 
 	/// <summary>
 	/// The OIDC <c>max_age</c> parameter (OIDC Core section 3.1.2.1) bounding the elapsed time since the last

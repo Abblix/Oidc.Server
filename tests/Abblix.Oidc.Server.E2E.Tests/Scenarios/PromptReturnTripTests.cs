@@ -22,6 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -158,6 +159,85 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         endUser.SignInAgain();
 
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// The parameter is a list whose order and repeats carry no meaning: the pages come in the server's order,
+    /// account creation before authentication before consent, however the client wrote the values.
+    /// </summary>
+    [Theory]
+    [InlineData($"{Prompts.Login} {Prompts.Login}", LoginPath)]
+    [InlineData($"{Prompts.Login} {Prompts.Consent}", LoginPath)]
+    [InlineData($"{Prompts.Consent} {Prompts.Login}", LoginPath)]
+    [InlineData($"{Prompts.Login} {Prompts.Create}", RegistrationPath)]
+    [InlineData($"{Prompts.Consent} {Prompts.Create}", RegistrationPath)]
+    public async Task PromptList_SendsToItsFirstPage(string prompt, string page)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)));
+
+        Assert.Equal(page, PathOf(sentTo));
+    }
+
+    [Fact]
+    public async Task PromptLoginRepeated_ReturningAfterSignIn_IssuesCode()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.Login} {Prompts.Login}")));
+        endUser.SignInAgain();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// None with any other value is refused (OpenID Connect Core 1.0, section 3.1.2.1), and the client is told at its
+    /// redirect URI, since the client and the redirect URI are valid.
+    /// </summary>
+    [Theory]
+    [InlineData($"{Prompts.None} {Prompts.Login}")]
+    [InlineData($"{Prompts.Consent} {Prompts.None}")]
+    public async Task PromptNoneWithAnotherValue_IsRefusedAtTheRedirectUri(string prompt)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var location = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+        Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+    }
+
+    /// <summary>
+    /// A value the server does not support, the wrong case of a supported one included, is answered with 400 and
+    /// nothing goes to the redirect URI (Initiating User Registration via OpenID Connect 1.0, section 4.1).
+    /// </summary>
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("Login")]
+    [InlineData($"{Prompts.Login} unknown")]
+    public async Task UnsupportedPromptValue_IsAnsweredWith400(string prompt)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
     }
 
     [Fact]

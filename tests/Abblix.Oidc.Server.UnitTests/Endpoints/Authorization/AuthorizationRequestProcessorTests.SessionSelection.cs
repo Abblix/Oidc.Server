@@ -29,7 +29,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithNoSessionsAndPromptNone_ShouldReturnLoginRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.None);
+        var request = CreateRequest(prompt: [Prompts.None]);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -54,7 +54,7 @@ public partial class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithPromptNoneAndAHintNamingOneOfTwoSessions_UsesThatOne()
     {
-        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "user_2");
+        var request = CreateRequest(prompt: [Prompts.None], idTokenHintSubject: "user_2");
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -97,7 +97,7 @@ public partial class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithPromptNoneAndAHintNamingNobodyLoggedIn_ShouldReturnLoginRequired()
     {
-        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "somebody-else");
+        var request = CreateRequest(prompt: [Prompts.None], idTokenHintSubject: "somebody-else");
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -118,7 +118,7 @@ public partial class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithPromptNoneAndNoHint_StillRefusesToChoose()
     {
-        var request = CreateRequest(prompt: Prompts.None);
+        var request = CreateRequest(prompt: [Prompts.None]);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -141,7 +141,7 @@ public partial class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithAHintDifferingOnlyInCase_ShouldReturnLoginRequired()
     {
-        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "USER_1");
+        var request = CreateRequest(prompt: [Prompts.None], idTokenHintSubject: "USER_1");
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -165,7 +165,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithPromptCreate_NoSessions_ShouldReturnRegistrationRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.Create);
+        var request = CreateRequest(prompt: [Prompts.Create]);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -187,7 +187,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithPromptCreate_ExistingSession_ShouldReturnRegistrationRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.Create);
+        var request = CreateRequest(prompt: [Prompts.Create]);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -210,7 +210,7 @@ public partial class AuthorizationRequestProcessorTests
         // Arrange - request has no max_age; the client registered default_max_age = 5 minutes.
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         _timeProvider.SetUtcNow(now);
-        var request = CreateRequest(prompt: Prompts.None, defaultMaxAge: TimeSpan.FromMinutes(5));
+        var request = CreateRequest(prompt: [Prompts.None], defaultMaxAge: TimeSpan.FromMinutes(5));
         var staleSession = CreateAuthSession("stale", authTime: now - TimeSpan.FromHours(1));
 
         _authSessionService
@@ -233,7 +233,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithoutAcrValues_AppliesClientDefaultAcrValues()
     {
         // Arrange - request has no acr_values; the client registered default_acr_values = ["high"].
-        var request = CreateRequest(prompt: Prompts.None, defaultAcrValues: ["high"]);
+        var request = CreateRequest(prompt: [Prompts.None], defaultAcrValues: ["high"]);
         var session = CreateAuthSession("s1", acr: "low");
 
         _authSessionService
@@ -256,7 +256,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithMultipleSessionsAndPromptNone_ShouldReturnAccountSelectionRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.None);
+        var request = CreateRequest(prompt: [Prompts.None]);
         var sessions = new[] { CreateAuthSession("s1"), CreateAuthSession("s2") };
 
         _authSessionService
@@ -301,7 +301,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithPromptLogin_ShouldReturnLoginRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.Login);
+        var request = CreateRequest(prompt: [Prompts.Login]);
         var session = CreateAuthSession();
 
         _authSessionService
@@ -324,7 +324,7 @@ public partial class AuthorizationRequestProcessorTests
     [InlineData(Prompts.Create)]
     public async Task PromptLoginOrCreate_StampsRequestWhenSendingEndUser(string prompt)
     {
-        var request = CreateRequest(prompt: prompt);
+        var request = CreateRequest(prompt: [prompt]);
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { CreateAuthSession() }.ToAsyncEnumerable());
@@ -346,7 +346,7 @@ public partial class AuthorizationRequestProcessorTests
         var promptedAt = _timeProvider.GetUtcNow();
         _timeProvider.Advance(TimeSpan.FromMinutes(1));
         var session = CreateAuthSession(authTime: _timeProvider.GetUtcNow());
-        var request = CreateRequest(prompt: prompt, promptedAt: promptedAt);
+        var request = CreateRequest(prompt: [prompt], promptedAt: promptedAt);
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
@@ -376,7 +376,7 @@ public partial class AuthorizationRequestProcessorTests
         var promptedAt = _timeProvider.GetUtcNow();
         _timeProvider.Advance(TimeSpan.FromMinutes(1));
         var since = CreateAuthSession(sessionId: "since", authTime: _timeProvider.GetUtcNow());
-        var request = CreateRequest(prompt: Prompts.Login, promptedAt: promptedAt);
+        var request = CreateRequest(prompt: [Prompts.Login], promptedAt: promptedAt);
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { before, since }.ToAsyncEnumerable());
@@ -404,7 +404,7 @@ public partial class AuthorizationRequestProcessorTests
     {
         var second = DateTimeOffset.FromUnixTimeSeconds(_timeProvider.GetUtcNow().ToUnixTimeSeconds());
         var session = CreateAuthSession(authTime: second);
-        var request = CreateRequest(prompt: Prompts.Login, promptedAt: second.AddMilliseconds(500));
+        var request = CreateRequest(prompt: [Prompts.Login], promptedAt: second.AddMilliseconds(500));
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
@@ -433,7 +433,7 @@ public partial class AuthorizationRequestProcessorTests
     {
         var session = CreateAuthSession(authTime: _timeProvider.GetUtcNow());
         _timeProvider.Advance(TimeSpan.FromMinutes(1));
-        var request = CreateRequest(prompt: prompt, promptedAt: _timeProvider.GetUtcNow());
+        var request = CreateRequest(prompt: [prompt], promptedAt: _timeProvider.GetUtcNow());
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
@@ -475,7 +475,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithPromptSelectAccount_ShouldReturnAccountSelectionRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.SelectAccount);
+        var request = CreateRequest(prompt: [Prompts.SelectAccount]);
         var session = CreateAuthSession();
 
         _authSessionService
@@ -574,7 +574,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithPromptNoneAndSingleSession_ShouldSucceed()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.None);
+        var request = CreateRequest(prompt: [Prompts.None]);
         var session = CreateAuthSession();
         var consents = CreateConsents();
 

@@ -97,7 +97,7 @@ public partial class AuthorizationRequestProcessorTests
 
     private static ValidAuthorizationRequest CreateRequest(
         string[]? responseType = null,
-        string? prompt = null,
+        string[]? prompt = null,
         TimeSpan? maxAge = null,
         string[]? acrValues = null,
         string[]? scope = null,

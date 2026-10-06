@@ -58,6 +58,8 @@ public static class AuthorizationValidationServiceCollectionExtensions
             // description imposes a condition, and a refusal over it travels the same way.
             ServiceDescriptor.Singleton<IAuthorizationContextValidator,
                 Authorization.Validation.RequiredAuthContextClassRefValidator>(),
+            // After the validators that decide where a refusal goes, for the reason the hint validator gives above
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.PromptValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),

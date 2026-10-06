@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
@@ -418,7 +419,7 @@ public class ProtobufSerializerTests
             ResponseMode = "query",
             Nonce = "nonce-abc",
             Display = "page",
-            Prompt = "consent",
+            Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromMinutes(30),
             UiLocales = [new CultureInfo("en-US"), new CultureInfo("fr-FR")],
             ClaimsLocales = [new CultureInfo("en-US")],

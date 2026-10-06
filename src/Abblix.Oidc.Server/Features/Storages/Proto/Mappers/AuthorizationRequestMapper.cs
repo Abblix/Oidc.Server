@@ -59,7 +59,10 @@ internal static class AuthorizationRequestMapper
         SetIfPresent(proto, source.ResponseMode, static (message, value) => message.ResponseMode = value);
         SetIfPresent(proto, source.Nonce, static (message, value) => message.Nonce = value);
         SetIfPresent(proto, source.Display, static (message, value) => message.Display = value);
-        SetIfPresent(proto, source.Prompt, static (message, value) => message.Prompt = value);
+        SetIfPresent(
+            proto,
+            source.Prompt is { } prompt ? string.Join(' ', prompt) : null,
+            static (message, value) => message.Prompt = value);
         SetIfPresent(proto, source.IdTokenHint, static (message, value) => message.IdTokenHint = value);
         SetIfPresent(proto, source.LoginHint, static (message, value) => message.LoginHint = value);
         SetIfPresent(proto, source.CodeChallenge, static (message, value) => message.CodeChallenge = value);
@@ -106,7 +109,7 @@ internal static class AuthorizationRequestMapper
             ResponseMode = ProtoMapper.GetString(source.ResponseMode, source.HasResponseMode),
             Nonce = ProtoMapper.GetString(source.Nonce, source.HasNonce),
             Display = ProtoMapper.GetString(source.Display, source.HasDisplay),
-            Prompt = ProtoMapper.GetString(source.Prompt, source.HasPrompt),
+            Prompt = ProtoMapper.GetString(source.Prompt, source.HasPrompt)?.Split(' ', StringSplitOptions.RemoveEmptyEntries),
             MaxAge = source.MaxAge?.ToTimeSpan(),
             UiLocales = source.UiLocales.GetArray(name => new CultureInfo(name)),
             ClaimsLocales = source.ClaimsLocales.GetArray(name => new CultureInfo(name)),

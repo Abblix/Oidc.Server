@@ -9,6 +9,7 @@
 using System;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -658,7 +659,7 @@ public class MappersTests
             ResponseMode = "form_post",
             Nonce = "nonce-abc",
             Display = "popup",
-            Prompt = "login consent",
+            Prompt = [Prompts.Login, Prompts.Consent],
             MaxAge = TimeSpan.FromMinutes(15),
             IdTokenHint = "eyJhbGc...",
             LoginHint = "user@example.com",
@@ -698,6 +699,20 @@ public class MappersTests
         Assert.Equal(request.ClientId, result.ClientId);
         Assert.Equal(request.State, result.State);
         Assert.Equal(request.Nonce, result.Nonce);
+        Assert.Equal(request.Prompt, result.Prompt);
+    }
+
+    /// <summary>
+    /// A request that carries an empty prompt is stored as one, apart from a request that carries none.
+    /// </summary>
+    [Fact]
+    public void AuthorizationRequestMapper_KeepsAnEmptyPromptApartFromAnAbsentOne()
+    {
+        var empty = new AuthorizationRequest { Prompt = [] }.ToProto().FromProto();
+        var absent = new AuthorizationRequest { Prompt = null }.ToProto().FromProto();
+
+        Assert.Equal(Array.Empty<string>(), empty.Prompt);
+        Assert.Null(absent.Prompt);
     }
 
     [Theory]

@@ -111,7 +111,7 @@ internal sealed class AuthSessionSelector(
 			// does not match the expected conditions.
 			default:
 				throw new InvalidOperationException(
-					$"Unexpected number of auth sessions: {authSessions.Count} or prompt: {model.Prompt}");
+					$"Unexpected number of auth sessions: {authSessions.Count} or prompt: {prompt}");
 		}
 	}
 
@@ -135,15 +135,32 @@ internal sealed class AuthSessionSelector(
 		Model.AuthorizationRequest model,
 		List<AuthSession> authSessions)
 	{
-		if (model.Prompt is not (Prompts.Login or Prompts.Create) || model.PromptedAt is not { } promptedAt)
-			return (model.Prompt, authSessions);
+		var prompt = SessionPromptOf(model.Prompt);
+		if (prompt is not (Prompts.Login or Prompts.Create) || model.PromptedAt is not { } promptedAt)
+			return (prompt, authSessions);
 
 		var openedSince = authSessions
 			.Where(session => promptedAt.ToUnixTimeSeconds() <= session.AuthenticationTime.ToUnixTimeSeconds())
 			.ToList();
 
-		return openedSince.Count > 0 ? (null, openedSince) : (model.Prompt, authSessions);
+		return openedSince.Count > 0 ? (null, openedSince) : (prompt, authSessions);
 	}
+
+	/// <summary>
+	/// The values of <c>prompt</c> this selection answers, in the order their pages come: account creation or
+	/// account selection, then authentication. Consent is asked after a session is chosen.
+	/// </summary>
+	private static readonly string[] SessionPrompts = [Prompts.None, Prompts.Create, Prompts.SelectAccount, Prompts.Login];
+
+	/// <summary>
+	/// The value of <paramref name="prompt"/> this selection answers first, or null when it asks for none of them.
+	/// </summary>
+	/// <remarks>
+	/// The parameter is a list whose order carries no meaning, so the order of the pages is the server's, the same
+	/// for every way a client may write the same values.
+	/// </remarks>
+	private static string? SessionPromptOf(string[]? prompt)
+		=> prompt is null ? null : SessionPrompts.FirstOrDefault(value => prompt.Contains(value, StringComparer.Ordinal));
 
 	/// <summary>
 	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).
