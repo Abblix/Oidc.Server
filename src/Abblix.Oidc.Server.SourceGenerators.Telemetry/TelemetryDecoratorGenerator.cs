@@ -247,18 +247,22 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				entry.Service.ToDisplayString(),
 				method.Name,
 				ResultOf(method)!.ToDisplayString(),
-				RefusalHintOf(entry.Kind)))
+				RefusalHintOf(entry.Kind, ResultOf(method)!)))
 			.ToArray();
 
 	/// <summary>
-	/// What an entry of <paramref name="kind"/> can say to have an unreadable result accepted.
+	/// What an entry of <paramref name="kind"/> can say to have <paramref name="result"/> accepted, or why nothing it
+	/// says would.
 	/// </summary>
-	private static string RefusalHintOf(ObservationKind kind)
+	private static string RefusalHintOf(ObservationKind kind, ITypeSymbol result)
 	{
 		switch (kind)
 		{
 			case ObservationKind.Endpoint:
 				return string.Empty;
+
+			case ObservationKind.Stage when IsNullableResult(result):
+				return "; a nullable Result hides its refusal from any stage, whatever its entry says";
 
 			case ObservationKind.Stage:
 				return "; a stage that never refuses says so with NeverRefuses = true on its entry";
@@ -568,6 +572,11 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 		return null;
 	}
+
+	private static bool IsNullableResult(ITypeSymbol type)
+		=> type is INamedTypeSymbol { IsGenericType: true } wrapped &&
+		   MetadataName(wrapped.OriginalDefinition) == NullableTypeName &&
+		   IsResult(wrapped.TypeArguments[0]);
 
 	private static bool IsResult(ITypeSymbol type)
 		=> type is INamedTypeSymbol { IsGenericType: true } named &&
