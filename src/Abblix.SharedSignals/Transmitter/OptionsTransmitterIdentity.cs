@@ -40,7 +40,4 @@ public sealed class OptionsTransmitterIdentity(SharedSignalsTransmitterOptions o
 
     /// <inheritdoc />
     public string? ReceiverIssuer => null;
-
-    /// <inheritdoc />
-    public string? TenantId => null;
 }

@@ -8,7 +8,6 @@
 
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Net;
 using Abblix.SharedSignals.Transmitter;
 
 namespace Abblix.SharedSignals.Telemetry;
@@ -46,7 +45,7 @@ public sealed class SharedSignalsInstruments
         _pushDeliveryDuration = meter.CreateHistogram<double>(
             SharedSignalsMetrics.PushDeliveryDuration,
             "s",
-            "The time one push transmission of a security event token takes, the receiver's answer included.",
+            "The time one push transmission of a security event token takes, from posting it to recording the answer.",
             advice: DurationAdvice);
     }
 
@@ -98,22 +97,27 @@ public sealed class SharedSignalsInstruments
     /// Runs one push transmission in a span of its own, and records how the receiver answered it and how long the
     /// transmission took.
     /// </summary>
-    /// <param name="transmit">Posts one security event token and acts on the answer, returning what the caller
-    /// returns and the status the receiver answered with.</param>
-    /// <returns>What <paramref name="transmit"/> returned.</returns>
+    /// <param name="transmit">Posts one security event token and acts on the answer, returning how the transmission
+    /// ended.</param>
+    /// <returns>Whether the pass may go on to the next item.</returns>
     /// <remarks>
     /// A transmission that throws is a failure whatever the receiver answered, since the token stays queued.
     /// </remarks>
-    internal async Task<bool> ObservePushAsync(Func<Task<(bool Result, HttpStatusCode Status)>> transmit)
+    internal async Task<bool> ObservePushAsync(Func<Task<PushTransmission>> transmit)
     {
-        using var span = StartSpan(SharedSignalsTelemetry.PushSpan, ActivityKind.Client);
+        // Internal rather than client: the span holds the outbox's acknowledgement too, and the host's HTTP client
+        // instrumentation opens the client span of the request itself under it
+        using var span = StartSpan(SharedSignalsTelemetry.PushSpan, ActivityKind.Internal);
         var started = Stopwatch.GetTimestamp();
         var outcome = PushDeliveryOutcomes.Failed;
         try
         {
-            var (result, status) = await transmit();
-            outcome = OutcomeOf(status);
-            return result;
+            var transmission = await transmit();
+            outcome = transmission.Outcome;
+            if (transmission.TransportFailure is { } failure)
+                Fail(span, failure);
+
+            return transmission.Continues;
         }
         catch (Exception exception)
         {
@@ -131,19 +135,6 @@ public sealed class SharedSignalsInstruments
             _pushDeliveryDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, tags);
         }
     }
-
-    /// <summary>
-    /// What the receiver's status says about a transmission: a "400 Bad Request" carries the receiver's verdict
-    /// (RFC 8935 Section 2.3), any other status outside success is a failure the next pass retries.
-    /// </summary>
-    private static string OutcomeOf(HttpStatusCode status) => status switch
-    {
-        HttpStatusCode.BadRequest => PushDeliveryOutcomes.Refused,
-        >= HttpStatusCode.OK and < HttpStatusCode.MultipleChoices => PushDeliveryOutcomes.Delivered,
-
-        // The status is the receiver's to choose from the whole numeric range, so the rest is one outcome
-        _ => PushDeliveryOutcomes.Failed,
-    };
 
     /// <summary>
     /// The attribute of a measurement, with the tenant beside it where the transmitter answers as one.

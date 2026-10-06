@@ -61,5 +61,5 @@ public interface ITransmitterIdentity
     /// The identifier of the tenant the transmitter answers as, which its spans and measurements name, or null on a
     /// deployment answering as one issuer.
     /// </summary>
-    string? TenantId { get; }
+    string? TenantId => null;
 }

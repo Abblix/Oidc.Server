@@ -25,7 +25,8 @@ public static class PushDeliveryOutcomes
     public const string Refused = "refused";
 
     /// <summary>
-    /// The receiver gave no answer, or answered with a status other than success and 400; the event stays queued.
+    /// The receiver gave no answer, answered with a status other than success and 400, or answered in a way the
+    /// transmitter could not record; the event stays queued.
     /// </summary>
     public const string Failed = "failed";
 }

@@ -37,7 +37,8 @@ public sealed class TransmitterTelemetryTests : IDisposable
     private readonly ServiceProvider _services = new ServiceCollection().AddMetrics().BuildServiceProvider();
     private readonly MeterListener _meterListener = new();
     private readonly ActivityListener _activityListener;
-    private readonly ConcurrentQueue<(string Name, object Value, Dictionary<string, object?> Tags)> _measurements = new();
+    private readonly ConcurrentQueue<(string Name, string? Unit, object Value, Dictionary<string, object?> Tags)>
+        _measurements = new();
     private readonly ConcurrentQueue<Activity> _spans = new();
 
     // The spans of this test are the ones under its own trace: tests running beside it record into the same source
@@ -78,7 +79,8 @@ public sealed class TransmitterTelemetryTests : IDisposable
 
     private void Record<T>(Instrument instrument, T value, ReadOnlySpan<KeyValuePair<string, object?>> tags, object? state)
         where T : struct
-        => _measurements.Enqueue((instrument.Name, value, new Dictionary<string, object?>(tags.ToArray())));
+        => _measurements.Enqueue(
+            (instrument.Name, instrument.Unit, value, new Dictionary<string, object?>(tags.ToArray())));
 
     private SharedSignalsInstruments Instruments(string? tenant = null)
         => new(_services.GetRequiredService<IMeterFactory>(), new SwitchableTransmitterIdentity(Issuer) { TenantId = tenant });
@@ -113,7 +115,7 @@ public sealed class TransmitterTelemetryTests : IDisposable
         return outbox;
     }
 
-    private async Task SendPendingAsync(HttpMessageHandler handler, InMemoryEventOutbox outbox, string? tenant = null)
+    private async Task SendPendingAsync(HttpMessageHandler handler, IEventOutbox outbox, string? tenant = null)
     {
         var sender = new PushDeliverySender(
             new HttpClient(handler, disposeHandler: false),
@@ -143,6 +145,56 @@ public sealed class TransmitterTelemetryTests : IDisposable
         Assert.All(spans, span => Assert.Equal(SharedSignalsTelemetry.PushSpan, span.OperationName));
         Assert.Equal(expected, spans.Select(span => span.GetTagItem(SharedSignalsTags.PushOutcome)));
         Assert.Equal([ActivityStatusCode.Unset, ActivityStatusCode.Error], spans.Select(span => span.Status));
+    }
+
+    /// <summary>
+    /// A 400 whose verdict objects to the transmitter rather than to the event keeps the event queued and stops the
+    /// pass, and is still the receiver refusing it.
+    /// </summary>
+    [Fact]
+    public async Task A400ThatKeepsTheEventQueued_IsRecordedAsRefused()
+    {
+        var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
+
+        await SendPendingAsync(
+            new StubHttpHandler().Enqueue(HttpStatusCode.BadRequest, """{"err": "access_denied", "description": "-"}"""),
+            outbox);
+
+        Assert.Equal([PushDeliveryOutcomes.Refused], Outcomes(SharedSignalsMetrics.PushDeliveries));
+        Assert.Single(await outbox.PendingAsync("receiver-a", StreamId, null, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The duration is in seconds: a receiver that takes a twentieth of a second to answer is measured as about that.
+    /// </summary>
+    [Fact]
+    public async Task ATransmissionsDuration_IsMeasuredInSeconds()
+    {
+        var answerTime = TimeSpan.FromMilliseconds(50);
+
+        await SendPendingAsync(
+            new DelayedHandler(answerTime, new StubHttpHandler().Enqueue(HttpStatusCode.Accepted)),
+            await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a")));
+
+        var duration = Assert.Single(_measurements, m => m.Name == SharedSignalsMetrics.PushDeliveryDuration);
+        Assert.Equal("s", duration.Unit);
+        Assert.InRange((double)duration.Value, answerTime.TotalSeconds, TimeSpan.FromSeconds(5).TotalSeconds);
+    }
+
+    /// <summary>
+    /// Only the transport's failure ends the pass quietly: an outbox that fails over HTTP while recording a delivered
+    /// token reaches the caller, and the transmission is a failure since the token stays queued.
+    /// </summary>
+    [Fact]
+    public async Task AnOutboxFailingToRecordTheAnswer_ReachesTheCaller_AndIsAFailure()
+    {
+        var outbox = new AcknowledgementFailingOutbox(await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a")));
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => SendPendingAsync(new StubHttpHandler().Enqueue(HttpStatusCode.Accepted), outbox));
+
+        Assert.Equal([PushDeliveryOutcomes.Failed], Outcomes(SharedSignalsMetrics.PushDeliveries));
+        Assert.Equal(typeof(HttpRequestException).FullName, Assert.Single(_spans).GetTagItem(SharedSignalsTags.ErrorType));
     }
 
     [Fact]
@@ -277,6 +329,38 @@ public sealed class TransmitterTelemetryTests : IDisposable
     {
         public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("The key is gone.");
+    }
+
+    private sealed class DelayedHandler(TimeSpan delay, HttpMessageHandler inner) : DelegatingHandler(inner)
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(delay, cancellationToken);
+            return await base.SendAsync(request, cancellationToken);
+        }
+    }
+
+    private sealed class AcknowledgementFailingOutbox(IEventOutbox inner) : IEventOutbox
+    {
+        public Task EnqueueAsync(
+            string receiverId, string streamId, OutboxItem item, CancellationToken cancellationToken = default)
+            => inner.EnqueueAsync(receiverId, streamId, item, cancellationToken);
+
+        public Task<IReadOnlyList<OutboxItem>> PendingAsync(
+            string receiverId, string streamId, int? maxCount = null, CancellationToken cancellationToken = default)
+            => inner.PendingAsync(receiverId, streamId, maxCount, cancellationToken);
+
+        public Task AcknowledgeAsync(
+            string receiverId,
+            string streamId,
+            IReadOnlyCollection<string> jwtIds,
+            CancellationToken cancellationToken = default)
+            => throw new HttpRequestException("The outbox store did not answer.");
+
+        public Task ClearAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
+            => inner.ClearAsync(receiverId, streamId, cancellationToken);
     }
 
     private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler

@@ -9,14 +9,14 @@
 namespace Abblix.SharedSignals.Telemetry;
 
 /// <summary>
-/// The attributes the transmitter puts on its spans and measurements, each from a set bounded by the deployment's own
-/// configuration.
+/// The attributes the transmitter puts on its spans and measurements.
 /// </summary>
 public static class SharedSignalsTags
 {
     /// <summary>
-    /// The type of a security event: one the transmitter supports, since a stream is sent only the types it receives
-    /// from that list, or one of the framework's own verification and stream-updated events.
+    /// The type of a security event, as the host dispatched it. Dispatching to every matching stream sends only the
+    /// types a stream receives; dispatching to one stream sends whatever type it is given, which the library itself uses
+    /// only for its verification and stream-updated events.
     /// </summary>
     public const string EventType = "ssf.event_type";
 

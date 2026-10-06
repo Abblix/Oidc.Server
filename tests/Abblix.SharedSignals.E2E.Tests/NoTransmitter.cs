@@ -25,6 +25,4 @@ internal sealed class NoTransmitter : ITransmitterIdentity
     public bool Serves => false;
 
     public string? ReceiverIssuer => null;
-
-    public string? TenantId => null;
 }

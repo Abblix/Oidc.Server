@@ -18,7 +18,8 @@ namespace Abblix.SharedSignals.Telemetry;
 /// <remarks>
 /// The transmitter records spans and measurements whether or not anything listens: a source nobody listens to starts
 /// no span, an instrument nobody listens to records nothing, so the host's subscription is the only switch. Push
-/// delivery runs on a timer outside any request, so its spans are roots of their own traces. An event dispatched
+/// delivery runs on a timer outside any request, so its spans are roots of their own traces, and a stream whose
+/// receiver address the delivery policy refuses records none, since nothing is posted to it. An event dispatched
 /// while a request is handled is traced under that request's span; a host without instrumentation of its own
 /// requests starts that span unrecorded, and the default sampler then drops the transmitter's spans under it, so the
 /// setup instruments them too. No span or measurement names a stream, a receiver's address or a subject. The
@@ -42,7 +43,8 @@ public static class SharedSignalsTelemetry
     public const string TransmitSpan = "ssf.transmit";
 
     /// <summary>
-    /// The span of one security event token posted to a receiver's push endpoint.
+    /// The span of one security event token posted to a receiver's push endpoint, the answer recorded in the outbox
+    /// included.
     /// </summary>
     public const string PushSpan = "ssf.push";
 

@@ -152,35 +152,37 @@ public sealed partial class PushDeliverySender(
     /// </summary>
     /// <returns>True when the pass may go on to the next item; false when it must stop here so the
     /// item keeps its place at the head of the queue.</returns>
-    private async Task<bool> TransmitAsync(
+    private Task<bool> TransmitAsync(
         StreamState stream,
         PushDeliveryMethod push,
         OutboxItem item,
         PushDeliveryTally tally,
         CancellationToken cancellationToken)
-    {
-        try
+        => instruments.ObservePushAsync(async () =>
         {
-            return await instruments.ObservePushAsync(async () =>
+            HttpResponseMessage response;
+            try
             {
-                using var response = await SendAsync(push, item, cancellationToken);
-                return (await SettleAsync(stream, item, tally, response, cancellationToken), response.StatusCode);
-            });
-        }
-        catch (HttpRequestException)
-        {
-            // The transport failed before the receiver answered: transient by definition,
-            // so the pass ends and the item waits for the next one, order intact.
-            return false;
-        }
-    }
+                response = await SendAsync(push, item, cancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                // The transport failed before the receiver answered: transient by definition,
+                // so the pass ends and the item waits for the next one, order intact.
+                return PushTransmission.Failed(exception);
+            }
+
+            using (response)
+            {
+                return await SettleAsync(stream, item, tally, response, cancellationToken);
+            }
+        });
 
     /// <summary>
     /// Acts on the receiver's answer to one SET and records it in <paramref name="tally"/>.
     /// </summary>
-    /// <returns>True when the pass may go on to the next item; false when it must stop here so the
-    /// item keeps its place at the head of the queue.</returns>
-    private async Task<bool> SettleAsync(
+    /// <returns>Whether the pass may go on to the next item, and how the receiver answered.</returns>
+    private async Task<PushTransmission> SettleAsync(
         StreamState stream,
         OutboxItem item,
         PushDeliveryTally tally,
@@ -196,24 +198,24 @@ public sealed partial class PushDeliverySender(
                 // later pass can deliver it once the credentials or the grant are put right.
                 // Non-null by construction: IsFinal answers false only for a code it recognizes.
                 LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
-                return false;
+                return PushTransmission.Refused(continues: false);
             }
 
             await outbox.AcknowledgeAsync(
                 stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
             tally.RecordRejected(verdict ?? Unexplained);
-            return true;
+            return PushTransmission.Refused(continues: true);
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            return false;
+            return PushTransmission.Failed();
         }
 
         await outbox.AcknowledgeAsync(
             stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
         tally.RecordDelivered();
-        return true;
+        return PushTransmission.Delivered;
     }
 
     /// <summary>

@@ -26,7 +26,8 @@ public static class SharedSignalsMetrics
     public const string PushDeliveries = "ssf.push.deliveries";
 
     /// <summary>
-    /// The time, in seconds, one push transmission of a security event token takes, the receiver's answer included, by
+    /// The time, in seconds, one push transmission of a security event token takes, from posting it to recording the
+    /// answer in the outbox, by
     /// <see cref="SharedSignalsTags.PushOutcome"/> and <see cref="SharedSignalsTags.Tenant"/>.
     /// </summary>
     public const string PushDeliveryDuration = "ssf.push.delivery.duration";
