@@ -45,7 +45,7 @@ public sealed class SharedSignalsInstruments
         _pushDeliveryDuration = meter.CreateHistogram<double>(
             SharedSignalsMetrics.PushDeliveryDuration,
             "s",
-            "The time one push transmission of a security event token takes, from posting it to recording the answer.",
+            "The time one push transmission of a security event token takes, from posting it until its answer is acted on.",
             advice: DurationAdvice);
     }
 
@@ -115,7 +115,9 @@ public sealed class SharedSignalsInstruments
             var transmission = await transmit();
             outcome = transmission.Outcome;
             if (transmission.TransportFailure is { } failure)
+            {
                 Fail(span, failure);
+            }
 
             return transmission.Continues;
         }
@@ -128,7 +130,9 @@ public sealed class SharedSignalsInstruments
         {
             span?.SetTag(SharedSignalsTags.PushOutcome, outcome);
             if (outcome != PushDeliveryOutcomes.Delivered)
+            {
                 span?.SetStatus(ActivityStatusCode.Error);
+            }
 
             var tags = TagsOf(SharedSignalsTags.PushOutcome, outcome);
             _pushDeliveries.Add(1, tags);
@@ -143,7 +147,9 @@ public sealed class SharedSignalsInstruments
     {
         var tags = new TagList { { key, value } };
         if (Tenant is { } tenant)
+        {
             tags.Add(SharedSignalsTags.Tenant, tenant);
+        }
 
         return tags;
     }

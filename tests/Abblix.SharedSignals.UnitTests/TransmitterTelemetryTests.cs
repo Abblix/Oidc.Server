@@ -166,6 +166,8 @@ public sealed class TransmitterTelemetryTests : IDisposable
 
     /// <summary>
     /// The duration is in seconds: a receiver that takes a twentieth of a second to answer is measured as about that.
+    /// The lower bound is half the delay, since the timer behind the delay may release it a tick early, and is still
+    /// far above a measurement in minutes and far below one in milliseconds.
     /// </summary>
     [Fact]
     public async Task ATransmissionsDuration_IsMeasuredInSeconds()
@@ -178,7 +180,7 @@ public sealed class TransmitterTelemetryTests : IDisposable
 
         var duration = Assert.Single(_measurements, m => m.Name == SharedSignalsMetrics.PushDeliveryDuration);
         Assert.Equal("s", duration.Unit);
-        Assert.InRange((double)duration.Value, answerTime.TotalSeconds, TimeSpan.FromSeconds(5).TotalSeconds);
+        Assert.InRange((double)duration.Value, answerTime.TotalSeconds / 2, TimeSpan.FromSeconds(5).TotalSeconds);
     }
 
     /// <summary>

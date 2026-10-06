@@ -43,8 +43,7 @@ public static class SharedSignalsTelemetry
     public const string TransmitSpan = "ssf.transmit";
 
     /// <summary>
-    /// The span of one security event token posted to a receiver's push endpoint, the answer recorded in the outbox
-    /// included.
+    /// The span of one security event token posted to a receiver's push endpoint, until its answer is acted on.
     /// </summary>
     public const string PushSpan = "ssf.push";
 

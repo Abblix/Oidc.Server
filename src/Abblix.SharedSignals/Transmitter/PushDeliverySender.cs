@@ -148,7 +148,7 @@ public sealed partial class PushDeliverySender(
 
     /// <summary>
     /// Transmits one queued SET in a span of its own, and records how the receiver answered it and how long the
-    /// answer took.
+    /// transmission took until its answer was acted on.
     /// </summary>
     /// <returns>True when the pass may go on to the next item; false when it must stop here so the
     /// item keeps its place at the head of the queue.</returns>
