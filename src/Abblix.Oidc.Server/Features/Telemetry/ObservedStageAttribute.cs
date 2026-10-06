@@ -36,7 +36,9 @@ internal sealed class ObservedStageAttribute(Type service, string stage) : Attri
 
     /// <summary>
     /// Whether the service never refuses, as a provider of what the end user consented to does. A stage returning
-    /// neither a Result nor an authorization response is refused by the build unless it says so.
+    /// neither a Result nor an authorization response is refused by the build unless it says so. It speaks only for
+    /// such a result and only without <see cref="RefusesWithNull"/>, which takes precedence: the two describe
+    /// different services and are not set together.
     /// </summary>
     public bool NeverRefuses { get; set; }
 }

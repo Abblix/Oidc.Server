@@ -101,6 +101,10 @@ public sealed class TelemetryDecoratorGeneratorTests
         "public interface IStatusStage { Task<string> CheckAsync(); }",
         "ABXT003", 0, 0)]
     [InlineData(
+        "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\", Dependencies = new[] { typeof(IEnrichers) })]",
+        "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); } public interface IEnrichers {}",
+        "ABXT007", 0, 0)]
+    [InlineData(
         "[assembly: ObservedEndpoint(typeof(IOkHandler), \"token\", Dependencies = new[] { typeof(I) })]",
         "public interface IOkHandler { Task<" + Ok + "> HandleAsync(); } public interface I {}",
         "ABXT007", 0, 0)]

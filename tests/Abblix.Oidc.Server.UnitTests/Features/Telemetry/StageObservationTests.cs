@@ -123,15 +123,17 @@ public sealed class StageObservationTests : IDisposable
     [Fact]
     public async Task ASpentAuthenticationBudget_RefusesTheStageWithoutNamingAFailure()
     {
-        var throttled = new Mock<IClientAuthenticator>();
+        // The throttling sits outside the client authentication's stage, so the refusal surfaces in the validation
+        // stage around it, as a validator authenticating its client meets it
+        var throttled = new Mock<IProbeStage>();
         throttled
-            .Setup(authenticator => authenticator.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Setup(stage => stage.CheckAsync("request"))
             .ThrowsAsync(new TooManyAuthenticationFailuresException(
                 new TooManyRequestsError("Too many", null, CallerRateLimiters.AuthenticationFailures)));
-        var observed = new ObservedClientAuthenticator(throttled.Object);
+        var observed = new ObservedProbeStage(throttled.Object);
 
         var (_, stages) = await UnderAnEndpointSpan(() => Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
-            () => observed.TryAuthenticateClientAsync(new ClientRequest())));
+            () => observed.CheckAsync("request")));
 
         var stage = Assert.Single(stages);
         Assert.Equal(ActivityStatusCode.Error, stage.Status);

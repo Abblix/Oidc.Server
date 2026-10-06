@@ -15,7 +15,9 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// </summary>
 /// <remarks>
 /// Called once per request, after the server has tagged the span and before the request is handled, and only when
-/// the span is recorded, so a host that receives no traces pays nothing for it. The attributes it adds are the
+/// the span is recorded. The enrichers are taken by the decorator of each endpoint's handler, so one registered per
+/// request is created for every request, recorded or not; a host that registers an endpoint's handler as a singleton
+/// registers its enrichers as singletons too. The attributes it adds are the
 /// host's: the server's table in <see cref="TelemetryTags"/> does not list them, and what they may carry about a
 /// client or an end user is the host's decision. The request reaches an enricher before it is validated, so its
 /// content is whatever the caller sent, and it may carry credentials: the access token of a UserInfo request, the

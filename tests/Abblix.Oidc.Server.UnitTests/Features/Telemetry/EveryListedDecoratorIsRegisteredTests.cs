@@ -6,11 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -51,20 +53,31 @@ public sealed class EveryListedDecoratorIsRegisteredTests
     }
 
     /// <summary>
-    /// An enricher the host registers per request is taken by the decorator of each request's handler, which lives as
-    /// long, so validated scopes resolve it.
+    /// An enricher the host registers per request reaches the decorator the container builds for an endpoint's
+    /// handler, which lives as long, so validated scopes resolve it and the endpoint's recorded span is enriched.
     /// </summary>
     [Fact]
-    public void AnEnricherRegisteredPerRequest_ResolvesWithTheEndpointsHandler()
+    public async Task AnEnricherRegisteredPerRequest_EnrichesTheSpanOfAContainerBuiltHandler()
     {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OidcTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
         // Without the device endpoint, whose settings the options check asks for once anything is resolved
         var services = Server(withDeviceAuthorization: false);
-        services.AddScoped(_ => Mock.Of<IEndpointSpanEnricher>());
+        var enricher = new Mock<IEndpointSpanEnricher>();
+        services.AddScoped(_ => enricher.Object);
 
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        using var scope = provider.CreateScope();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<ICheckSessionHandler>().HandleAsync();
 
-        Assert.IsType<ObservedTokenHandler>(scope.ServiceProvider.GetRequiredService<ITokenHandler>());
+        enricher.Verify(
+            e => e.Enrich(It.IsAny<Activity>(), TelemetryEndpoints.CheckSession, null),
+            Times.Once);
     }
 
     private static ServiceCollection Server(bool withDeviceAuthorization = true)

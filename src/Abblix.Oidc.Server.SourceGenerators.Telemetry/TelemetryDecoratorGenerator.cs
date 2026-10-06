@@ -73,7 +73,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		id: "ABXT003",
 		title: "Observed result refuses in a way the observation cannot read",
 		messageFormat: "'{0}.{1}' returns '{2}', a result whose refusal the observation has no way to read, so " +
-		               "every refusal of it would be recorded as a success; a stage that never refuses says so",
+		               "every refusal of it would be recorded as a success{3}",
 		category: DiagnosticCategory,
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
@@ -246,8 +246,27 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				entry.Location,
 				entry.Service.ToDisplayString(),
 				method.Name,
-				ResultOf(method)!.ToDisplayString()))
+				ResultOf(method)!.ToDisplayString(),
+				RefusalHintOf(entry.Kind)))
 			.ToArray();
+
+	/// <summary>
+	/// What an entry of <paramref name="kind"/> can say to have an unreadable result accepted.
+	/// </summary>
+	private static string RefusalHintOf(ObservationKind kind)
+	{
+		switch (kind)
+		{
+			case ObservationKind.Endpoint:
+				return string.Empty;
+
+			case ObservationKind.Stage:
+				return "; a stage that never refuses says so with NeverRefuses = true on its entry";
+
+			default:
+				throw new ArgumentOutOfRangeException(nameof(kind), kind, "The kind of observation is not known");
+		}
+	}
 
 	private static DiagnosticInfo[] HooksWithoutOneMethod(ObservedEntry entry)
 	{
@@ -528,8 +547,9 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	}
 
 	/// <summary>
-	/// The member of the stage observation that tells whether a result refuses, or null for a nullable Result, whose
-	/// refusal sits behind the nullable. A stage reads only whether its result refuses, so a Result of any error does.
+	/// The member of the stage observation that tells whether a result refuses, or null for a result it cannot read: a
+	/// nullable Result, whose refusal sits behind the nullable, or any other result of a stage that does not declare it
+	/// never refuses. A stage reads only whether its result refuses, so a Result of any error does.
 	/// </summary>
 	private static string? StageRefusalOf(ITypeSymbol result, bool neverRefuses)
 	{
@@ -542,7 +562,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		if (IsResult(result) || IsAuthorizationResponse(result))
 			return "Refused";
 
-		// Any other result is read as never refusing only where the entry says so, rather than by default
+		// Any other result is read as never refusing only where the entry says so
 		if (neverRefuses)
 			return "NeverRefused";
 
