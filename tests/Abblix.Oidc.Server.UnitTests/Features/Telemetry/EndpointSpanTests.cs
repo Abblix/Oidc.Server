@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -58,7 +59,8 @@ public sealed class EndpointSpanTests : IDisposable
             ActivityStopped = activity => _stopped.Add(activity),
         };
         ActivitySource.AddActivityListener(_listener);
-        _instruments = new OidcInstruments(_services.GetRequiredService<IMeterFactory>());
+        _instruments = new OidcInstruments(
+            NullLogger<OidcInstruments>.Instance, _services.GetRequiredService<IMeterFactory>());
     }
 
     public void Dispose()

@@ -324,7 +324,8 @@ public class ServiceCollectionOverrideTests
     [Fact]
     public async Task AddAuthorizationEndpoint_HostPreregisteredAuthorizationHandler_Wins()
     {
-        var services = new ServiceCollection();
+        // Logging is the host's, as every host has it: the endpoint's decorator logs a refused request
+        var services = new ServiceCollection().AddLogging();
         var stub = new Mock<IAuthorizationHandler>();
         services.AddSingleton(stub.Object);
 

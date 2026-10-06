@@ -28,7 +28,9 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -46,12 +48,13 @@ public sealed class EndpointMetricsTests : IDisposable
     private readonly ServiceProvider _services = new ServiceCollection().AddMetrics().BuildServiceProvider();
     private readonly OidcInstruments _instruments;
     private readonly MeasurementRecorder _measured;
+    private readonly RecordingLoggerFactory _logs = new();
 
     public EndpointMetricsTests()
     {
         var factory = _services.GetRequiredService<IMeterFactory>();
         _measured = new MeasurementRecorder(factory);
-        _instruments = new OidcInstruments(factory);
+        _instruments = new OidcInstruments(_logs.CreateLogger<OidcInstruments>(), factory);
     }
 
     public void Dispose()
@@ -96,6 +99,25 @@ public sealed class EndpointMetricsTests : IDisposable
         Assert.Equal(TelemetryOutcomes.Refused, request[TelemetryTags.Outcome]);
         Assert.Equal(ErrorCodes.InvalidGrant, request[TelemetryTags.Error]);
         Assert.Empty(_measured.Of(OidcMetrics.RateLimitRefusals));
+    }
+
+    [Fact]
+    public async Task ARefusedRequest_IsLoggedWithTheCodeItsMeasurementNames()
+    {
+        await Token(new OidcError("a_code_of_the_host", "Refused"));
+
+        var logged = Assert.Single(_logs.Entries, entry => entry.EventId.Id == LogEvents.Telemetry.OidcInstruments.RequestRefused);
+        Assert.Equal(LogLevel.Debug, logged.Level);
+        Assert.Equal(TelemetryEndpoints.Token, logged.Value("Endpoint"));
+        Assert.Equal(Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Error], logged.Value("Error"));
+    }
+
+    [Fact]
+    public async Task AServedRequest_IsNotLogged()
+    {
+        await Token(Issued);
+
+        Assert.DoesNotContain(_logs.Entries, entry => entry.EventId.Id == LogEvents.Telemetry.OidcInstruments.RequestRefused);
     }
 
     [Fact]

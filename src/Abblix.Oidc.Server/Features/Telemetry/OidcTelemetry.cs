@@ -13,12 +13,19 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
 /// The name the server's traces and metrics are published under, which a host passes to its OpenTelemetry setup to
-/// receive them: <c>AddOpenTelemetry().WithTracing(t =&gt; t.AddSource(OidcTelemetry.SourceName))</c> and
-/// <c>.WithMetrics(m =&gt; m.AddMeter(OidcTelemetry.SourceName))</c>.
+/// receive them.
 /// </summary>
 /// <remarks>
 /// The server records spans and measurements whether or not anything listens: a source nobody listens to starts no
-/// span, an instrument nobody listens to records nothing, so the host's subscription is the only switch.
+/// span, an instrument nobody listens to records nothing, so the host's subscription is the only switch. With the
+/// logging bridge on, a record the server logs while an endpoint span is open carries that span's trace and span.
+/// The attributes are listed in <see cref="TelemetryTags"/>, the instruments in <see cref="OidcMetrics"/>.
+/// <code>
+/// services.AddOpenTelemetry()
+///     .WithTracing(tracing => tracing.AddSource(OidcTelemetry.SourceName))
+///     .WithMetrics(metrics => metrics.AddMeter(OidcTelemetry.SourceName))
+///     .WithLogging();
+/// </code>
 /// </remarks>
 public static class OidcTelemetry
 {

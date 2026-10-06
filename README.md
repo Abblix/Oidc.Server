@@ -51,6 +51,7 @@
 - **Current with the modern security stack:** DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
 - **Engineering you can audit:** 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
 - **Modern .NET, minimal friction:** targets .NET 11, with drop-in adapters for both MVC and Minimal API.
+- **Observable through OpenTelemetry:** each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
 
 Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints (one for MVC controllers and routing, one for Minimal API endpoint routing), so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
 

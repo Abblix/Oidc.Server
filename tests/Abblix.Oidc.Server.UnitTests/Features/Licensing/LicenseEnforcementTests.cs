@@ -89,7 +89,7 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         await Assert.ThrowsAsync<LicenseViolationException>(() => EndpointObservation.RunAsync(
             TelemetryEndpoints.UserInfo,
-            new OidcInstruments(meters),
+            new OidcInstruments(NullLogger<OidcInstruments>.Instance, meters),
             null,
             () => Task.FromResult(LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings)),
             EndpointObservation.NoError));

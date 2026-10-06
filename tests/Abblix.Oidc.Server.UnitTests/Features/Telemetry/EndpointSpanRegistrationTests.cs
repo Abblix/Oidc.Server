@@ -94,7 +94,8 @@ public sealed class EndpointSpanRegistrationTests
         var stub = new Mock<IUserInfoHandler>();
         stub.Setup(h => h.HandleAsync(It.IsAny<UserInfoRequest>(), It.IsAny<ClientRequest>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "Refused"));
-        var services = new ServiceCollection();
+        // Logging is the host's, as every host has it: the endpoint's decorator logs a refused request
+        var services = new ServiceCollection().AddLogging();
         services.AddSingleton(stub.Object);
         services.AddUserInfoEndpoint();
         services.AddUserInfoEndpoint();
