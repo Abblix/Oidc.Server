@@ -16,5 +16,5 @@ partial class OidcInstruments
         EventId = LogEvents.Telemetry.OidcInstruments.RequestRefused,
         Level = LogLevel.Debug,
         Message = "The {Endpoint} endpoint refused a request with {Error}")]
-    private partial void LogRequestRefused(string Endpoint, string Error);
+    private static partial void LogRequestRefused(ILogger logger, string Endpoint, string Error);
 }

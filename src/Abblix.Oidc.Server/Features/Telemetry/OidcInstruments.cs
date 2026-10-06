@@ -116,7 +116,7 @@ internal sealed partial class OidcInstruments
         // The code logged is the one the span and the measurement carry, so a log record and a span of one refusal
         // agree, and a host's logging bridge ties the record to the span open around it
         if (error is not null)
-            LogRequestRefused(endpoint, error);
+            LogRequestRefused(_logger, endpoint, error);
     }
 
     /// <summary>
