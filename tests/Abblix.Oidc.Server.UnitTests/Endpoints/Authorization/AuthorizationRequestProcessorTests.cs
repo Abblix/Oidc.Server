@@ -120,7 +120,8 @@ public partial class AuthorizationRequestProcessorTests
             MaxAge = maxAge,
             AcrValues = acrValues,
             AuthorizationDetails = authorizationDetails,
-            PromptedAt = promptedAt,
+            // Every page the prompt names was shown at that moment
+            Prompted = promptedAt is { } shownAt ? prompt?.ToDictionary(value => value, _ => shownAt) : null,
         };
 
         var clientInfo = new ClientInfo(clientId)

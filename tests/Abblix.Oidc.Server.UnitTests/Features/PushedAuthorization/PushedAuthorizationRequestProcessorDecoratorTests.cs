@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -61,7 +62,9 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [Scopes.OpenId],
             PushedRequestUri = requestUri,
-            PromptedAt = promptedAt,
+            Prompted = promptedAt is { } shownAt
+                ? new Dictionary<string, DateTimeOffset> { [Prompts.Login] = shownAt }
+                : null,
             OriginRequestUri = pushedBy,
         };
         var context = new AuthorizationValidationContext(model)

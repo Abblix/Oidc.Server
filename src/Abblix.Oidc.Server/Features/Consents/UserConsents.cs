@@ -28,4 +28,11 @@ public record UserConsents
     public ConsentDefinition Pending { get; init; } = new(
         [],
         []);
+
+    /// <summary>
+    /// When the end user last gave the consent the host records, or null when the host records no such moment, as for
+    /// a consent the server grants on its own. A consent given after the server sent the end user to the consent page
+    /// is the one <c>prompt=consent</c> asked for; any other leaves every scope pending again.
+    /// </summary>
+    public DateTimeOffset? GivenAt { get; init; }
 };

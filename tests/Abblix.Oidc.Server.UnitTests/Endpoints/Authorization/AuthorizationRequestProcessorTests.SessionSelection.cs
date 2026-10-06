@@ -331,7 +331,7 @@ public partial class AuthorizationRequestProcessorTests
 
         var result = await _processor.ProcessAsync(request);
 
-        Assert.Equal(_timeProvider.GetUtcNow(), result.Model.PromptedAt);
+        Assert.Equal(_timeProvider.GetUtcNow(), result.Model.Prompted![prompt]);
     }
 
     /// <summary>

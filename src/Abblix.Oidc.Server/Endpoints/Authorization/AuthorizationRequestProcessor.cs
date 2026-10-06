@@ -125,7 +125,7 @@ public class AuthorizationRequestProcessor(
 	/// <summary>
 	/// The answer a request gets while consent for some of what it asks is still pending, or null when none is.
 	/// </summary>
-	private static AuthorizationResponse? ConsentStillOwed(
+	private AuthorizationResponse? ConsentStillOwed(
 		ValidAuthorizationRequest request,
 		AuthSession authSession,
 		UserConsents userConsents)
@@ -138,7 +138,7 @@ public class AuthorizationRequestProcessor(
 			or { AuthorizationDetails.Count: > 0 })
 		{
 			// If user interaction is disallowed but consent is necessary, return an error.
-			if (model.Prompt?.Contains(Prompts.None, StringComparer.Ordinal) is true)
+			if (PromptPages.Asks(model, Prompts.None))
 			{
 				return new AuthorizationError(
 					model,
@@ -149,7 +149,11 @@ public class AuthorizationRequestProcessor(
 			}
 
 			// Prompt for consent if necessary permissions are not yet granted.
-			return new ConsentRequired(model, authSession, userConsents.Pending);
+			// A request asking for consent is stamped, so the consent the host records on that page answers it
+			var consentPage = PromptPages.Asks(model, Prompts.Consent)
+				? PromptPages.Stamped(model, Prompts.Consent, clock.GetUtcNow())
+				: model;
+			return new ConsentRequired(consentPage, authSession, userConsents.Pending);
 		}
 
 		return null;

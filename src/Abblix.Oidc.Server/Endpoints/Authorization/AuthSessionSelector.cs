@@ -28,11 +28,10 @@ internal sealed class AuthSessionSelector(
 	TimeProvider clock)
 {
 	/// <summary>
-	/// The values of <c>prompt</c> this selection answers, in the order it answers them: none, which allows no page
-	/// at all, then the pages in the order they come - account creation or account selection, then authentication.
-	/// Consent is asked after a session is chosen.
+	/// The values of <c>prompt</c> whose pages a session answers, in the order the pages come: account creation or
+	/// account selection, then authentication. Consent is asked after a session is chosen.
 	/// </summary>
-	private static readonly string[] SessionPrompts = [Prompts.None, Prompts.Create, Prompts.SelectAccount, Prompts.Login];
+	private static readonly string[] SessionPrompts = [Prompts.Create, Prompts.SelectAccount, Prompts.Login];
 
 	/// <summary>
 	/// Selects the session the request proceeds with.
@@ -65,7 +64,7 @@ internal sealed class AuthSessionSelector(
 			// advertises create in prompt_values_supported must act on it. Without its own arm the
 			// value falls through to the generic branches and the registration intent is lost.
 			case (_, Prompts.Create):
-				return new RegistrationRequired(model with { PromptedAt = clock.GetUtcNow() });
+				return new RegistrationRequired(PromptPages.Stamped(model, Prompts.Create, clock.GetUtcNow()));
 
 			// A request requiring an authentication level, forbidding interaction and left with no session is
 			// the failed authentication attempt section 5.5.1.1 demands, and the OpenID Foundation gives it a
@@ -101,13 +100,19 @@ internal sealed class AuthSessionSelector(
 					request.ResponseMode,
 					model.RedirectUri);
 
+			// The request asks the end user to choose an account whatever sessions exist: with none, the page is where
+			// they reach an account they are not signed in to yet.
+			case (_, Prompts.SelectAccount):
+				return new AccountSelectionRequired(
+					PromptPages.Stamped(model, Prompts.SelectAccount, clock.GetUtcNow()),
+					authSessions.ToArray());
+
 			// If no sessions exist, or the request explicitly asks for a login, prompt the user for login.
 			case (0, _) or (_, Prompts.Login):
 				return SendToLogin(model, prompt);
 
-			// If multiple sessions exist, or the request requires account selection,
-			// prompt the user to select an account.
-			case (> 1, _) or (_, Prompts.SelectAccount):
+			// If multiple sessions exist, prompt the user to select an account.
+			case (> 1, _):
 				return new AccountSelectionRequired(model, authSessions.ToArray());
 
 			// If a single session exists, proceed with that session for further processing.
@@ -127,41 +132,54 @@ internal sealed class AuthSessionSelector(
 	/// so the request coming back with a session opened since is not sent there again.
 	/// </summary>
 	private LoginRequired SendToLogin(Model.AuthorizationRequest model, string? prompt)
-		=> new(prompt == Prompts.Login ? model with { PromptedAt = clock.GetUtcNow() } : model);
+		=> new(prompt == Prompts.Login ? PromptPages.Stamped(model, Prompts.Login, clock.GetUtcNow()) : model);
 
 	/// <summary>
-	/// The prompt the request still asks for, and the sessions that may answer it.
+	/// The prompt the request still asks this selection for, and the sessions that may answer the request.
 	/// </summary>
 	/// <remarks>
-	/// The request comes back from the login or account-creation page still carrying prompt=login or
-	/// prompt=create, and asking again would send the end user round in a loop. A session authenticated
-	/// since the server sent the end user there is the one the client asked for, so the request proceeds
-	/// with it alone. A session's authentication time is kept to the second, so the comparison is too.
+	/// The request comes back from each page still carrying its prompt, and asking again would send the end user round
+	/// in a loop. The pages come in the server's order whatever order the client wrote: account creation or selection,
+	/// then authentication; consent is asked after a session is chosen. Each is answered by a session the host wrote
+	/// since the server sent the end user there, and the request proceeds with those sessions alone. A new account
+	/// answers selection and authentication alike, so nothing after it is asked.
 	/// </remarks>
 	private static (string? Prompt, List<AuthSession> Sessions) PromptStillAsked(
 		Model.AuthorizationRequest model,
 		List<AuthSession> authSessions)
 	{
-		var prompt = SessionPromptOf(model.Prompt);
-		if (prompt is not (Prompts.Login or Prompts.Create) || model.PromptedAt is not { } promptedAt)
-			return (prompt, authSessions);
+		if (PromptPages.Asks(model, Prompts.None))
+			return (Prompts.None, authSessions);
 
-		var openedSince = authSessions
-			.Where(session => promptedAt.ToUnixTimeSeconds() <= session.AuthenticationTime.ToUnixTimeSeconds())
-			.ToList();
+		foreach (var prompt in SessionPrompts)
+		{
+			if (!PromptPages.Asks(model, prompt))
+				continue;
 
-		return openedSince.Count > 0 ? (null, openedSince) : (prompt, authSessions);
+			var answering = authSessions
+				.Where(session => PromptPages.AnsweredBy(model, prompt, AnswerOf(prompt, session)))
+				.ToList();
+			if (answering.Count == 0)
+				return (prompt, authSessions);
+
+			authSessions = answering;
+			if (prompt == Prompts.Create)
+				break;
+		}
+
+		return (null, authSessions);
 	}
 
 	/// <summary>
-	/// The value of <paramref name="prompt"/> this selection answers first, or null when it asks for none of them.
+	/// The moment <paramref name="session"/> was written in a way that answers the page of <paramref name="prompt"/>:
+	/// authenticated for an account created or a login, signed in for an account chosen.
 	/// </summary>
-	/// <remarks>
-	/// The parameter is a list whose order carries no meaning, so the order of the pages is the server's, the same
-	/// for every way a client may write the same values.
-	/// </remarks>
-	private static string? SessionPromptOf(string[]? prompt)
-		=> prompt is null ? null : SessionPrompts.FirstOrDefault(value => prompt.Contains(value, StringComparer.Ordinal));
+	private static DateTimeOffset? AnswerOf(string prompt, AuthSession session) => prompt switch
+	{
+		Prompts.Create or Prompts.Login => session.AuthenticationTime,
+		Prompts.SelectAccount => session.SignedInAt,
+		_ => throw new ArgumentOutOfRangeException(nameof(prompt), prompt, "No session answers this prompt"),
+	};
 
 	/// <summary>
 	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).

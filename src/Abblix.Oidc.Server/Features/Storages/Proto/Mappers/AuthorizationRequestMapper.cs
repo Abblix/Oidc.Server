@@ -35,8 +35,11 @@ internal static class AuthorizationRequestMapper
         if (source.MaxAge.HasValue)
             proto.MaxAge = Duration.FromTimeSpan(source.MaxAge.Value);
 
-        if (source.PromptedAt.HasValue)
-            proto.PromptedAt = source.PromptedAt.Value.ToTimestamp();
+        if (source.Prompted is { } prompted)
+        {
+            foreach (var (prompt, sentAt) in prompted)
+                proto.Prompted.Add(prompt, sentAt.ToTimestamp());
+        }
 
         proto.UiLocales.AddIfNotNull(source.UiLocales, c => c.Name);
         proto.ClaimsLocales.AddIfNotNull(source.ClaimsLocales, c => c.Name);
@@ -125,7 +128,9 @@ internal static class AuthorizationRequestMapper
             AuthorizationDetails = source.HasAuthorizationDetailsJson
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
-            PromptedAt = source.PromptedAt?.ToDateTimeOffset(),
+            Prompted = source.Prompted.Count > 0
+                ? source.Prompted.ToDictionary(entry => entry.Key, entry => entry.Value.ToDateTimeOffset())
+                : null,
             OriginRequestUri = ProtoMapper.GetUri(source.OriginRequestUri, source.HasOriginRequestUri),
         };
     }
