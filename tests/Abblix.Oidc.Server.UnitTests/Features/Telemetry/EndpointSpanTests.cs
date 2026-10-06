@@ -17,6 +17,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -198,6 +199,21 @@ public sealed class EndpointSpanTests : IDisposable
     {
         Assert.False(string.IsNullOrEmpty(OidcTelemetry.Source.Version));
         Assert.DoesNotContain('+', OidcTelemetry.Source.Version);
+    }
+
+    [Fact]
+    public async Task APushedAuthorizationSpanNamesTheResponseType()
+    {
+        var request = new AuthorizationRequest { ResponseType = [ResponseTypes.IdToken, ResponseTypes.Code] };
+        var inner = new Mock<IPushedAuthorizationHandler>();
+        inner
+            .Setup(h => h.HandleAsync(request, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new AuthorizationError(request, ErrorCodes.InvalidRequest, "Refused", ResponseModes.Query, null));
+        var observed = new ObservedPushedAuthorizationHandler(inner.Object, _instruments);
+
+        var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest()));
+
+        Assert.Equal("code id_token", span.GetTagItem(TelemetryTags.ResponseType));
     }
 
     [Theory]

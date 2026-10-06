@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.SourceGenerators.Telemetry;
 public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 {
 	// The generator targets netstandard2.0 and reads the server's types through compilation symbols only, so their
-	// names are mirrored here as constants. A rename on the server side shows as a build error in the generated code,
-	// which names the type it no longer finds.
+	// names are mirrored here as constants. A rename of a type the generated code names shows as a build error in that
+	// code; a rename of a type a refusal is read by shows as ABXT004, since nothing would name it otherwise.
 	private const string ObservedEndpointAttributeName = "Abblix.Oidc.Server.Features.Telemetry.ObservedEndpointAttribute";
 	private const string TelemetryNamespace = "Abblix.Oidc.Server.Features.Telemetry";
 	private const string ResultTypeName = "Abblix.Utils.Result`2";
@@ -64,73 +64,188 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
 
+	private static readonly DiagnosticDescriptor UnknownRefusal = new(
+		id: "ABXT003",
+		title: "Observed result refuses in a way the observation cannot read",
+		messageFormat: "'{0}.{1}' returns '{2}', a result whose refusal the endpoint observation has no way to read, " +
+		               "so every refusal of it would be measured as a success",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	private static readonly DiagnosticDescriptor AnchorNotFound = new(
+		id: "ABXT004",
+		title: "Type the generator reads results by is not found",
+		messageFormat: "The type '{0}' the generator tells a refusal by is not in the compilation; it was renamed or " +
+		               "moved, and every result of it would be measured as a success",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	private static readonly DiagnosticDescriptor DuplicateDecorator = new(
+		id: "ABXT005",
+		title: "Two entries name the same decorator",
+		messageFormat: "'{0}' names the decorator '{1}', which an earlier entry of the list already generates",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	private static readonly DiagnosticDescriptor HooksNeedOneMethod = new(
+		id: "ABXT006",
+		title: "Hooks need a handler of one method",
+		messageFormat: "'{0}' asks for hooks but declares {1} methods; a hook is declared once and serves one method",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	private static readonly DiagnosticDescriptor DependencyNameTaken = new(
+		id: "ABXT007",
+		title: "Dependency name is taken",
+		messageFormat: "The dependency '{0}' of '{1}' would be named '{2}', a name the decorator already uses",
+		category: DiagnosticCategory,
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true);
+
+	/// <summary>
+	/// The names every decorator takes for itself, which a dependency therefore cannot take.
+	/// </summary>
+	private static readonly string[] ReservedNames = ["inner", "instruments", "tenants"];
+
 	/// <inheritdoc />
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
+		// Collected across every file of the list, since a decorator named twice is a fact about the whole list
 		var results = context.SyntaxProvider
 			.ForAttributeWithMetadataName(
 				ObservedEndpointAttributeName,
 				predicate: static (node, _) => node is CompilationUnitSyntax,
-				transform: static (ctx, _) => new EquatableArray<GenerationResult>(
-					ctx.Attributes.Select(Generate).ToArray()))
-			.SelectMany(static (results, _) => results);
+				transform: static (ctx, _) => new EquatableArray<DecoratorResult>(
+					ctx.Attributes.Select(attribute => Generate(attribute, ctx.SemanticModel.Compilation)).ToArray()))
+			.SelectMany(static (results, _) => results)
+			.Collect();
 
-		context.RegisterSourceOutput(results, static (productionContext, result) =>
+		context.RegisterSourceOutput(results, static (productionContext, decorators) =>
 		{
-			foreach (var diagnostic in result.Diagnostics)
+			var generated = new HashSet<string>(StringComparer.Ordinal);
+			foreach (var decorator in decorators)
 			{
-				productionContext.ReportDiagnostic(diagnostic.ToDiagnostic());
-			}
+				foreach (var diagnostic in decorator.Result.Diagnostics)
+				{
+					productionContext.ReportDiagnostic(diagnostic.ToDiagnostic());
+				}
 
-			if (result.Source != null)
-			{
-				productionContext.AddSource(result.HintName, SourceText.From(result.Source, Encoding.UTF8));
+				if (decorator.Result.Source == null)
+					continue;
+
+				if (!generated.Add(decorator.ClassName))
+				{
+					productionContext.ReportDiagnostic(new DiagnosticInfo(
+						DuplicateDecorator, decorator.Location, decorator.Result.HintName, decorator.ClassName).ToDiagnostic());
+					continue;
+				}
+
+				productionContext.AddSource(
+					decorator.Result.HintName, SourceText.From(decorator.Result.Source, Encoding.UTF8));
 			}
 		});
 	}
 
-	private static GenerationResult Generate(AttributeData attribute)
+	private static DecoratorResult Generate(AttributeData attribute, Compilation compilation)
 	{
 		var location = LocationInfo.From(
 			attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None);
 		var service = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
-		var endpoint = (string?)attribute.ConstructorArguments[1].Value ?? string.Empty;
 		var serviceName = service?.ToDisplayString() ?? string.Empty;
-
 		if (service is not { TypeKind: TypeKind.Interface })
-		{
-			return new GenerationResult(
-				$"{DecoratorPrefix}.{serviceName}.g.cs",
-				null,
-				new EquatableArray<DiagnosticInfo>([new DiagnosticInfo(ServiceIsNotAnInterface, location, serviceName)]));
-		}
-
-		var className = DecoratorPrefix + StripInterfacePrefix(service.Name);
-		var tagsRequest = NamedFlag(attribute, TagsRequestProperty);
-		var observesResult = NamedFlag(attribute, ObservesResultProperty);
-		var dependencies = attribute.NamedArguments
-			.Where(argument => argument.Key == DependenciesProperty)
-			.SelectMany(argument => argument.Value.Values)
-			.Select(value => value.Value)
-			.OfType<INamedTypeSymbol>()
-			.ToArray();
+			return Refused(serviceName, location, new DiagnosticInfo(ServiceIsNotAnInterface, location, serviceName));
 
 		var members = service.GetMembers()
 			.Concat(service.AllInterfaces.SelectMany(parent => parent.GetMembers()))
 			.ToArray();
+		var entry = new ObservedEntry(
+			service,
+			DecoratorPrefix + StripInterfacePrefix(service.Name),
+			(string?)attribute.ConstructorArguments[1].Value ?? string.Empty,
+			NamedFlag(attribute, TagsRequestProperty),
+			NamedFlag(attribute, ObservesResultProperty),
+			attribute.NamedArguments
+				.Where(argument => argument.Key == DependenciesProperty)
+				.SelectMany(argument => argument.Value.Values)
+				.Select(value => value.Value)
+				.OfType<INamedTypeSymbol>()
+				.ToArray(),
+			members,
+			members.OfType<IMethodSymbol>().Where(method => method.MethodKind == MethodKind.Ordinary).ToArray(),
+			location);
 
-		var methods = members.OfType<IMethodSymbol>().Where(method => method.MethodKind == MethodKind.Ordinary).ToArray();
-		var unsupported = methods.Where(method => ResultOf(method) == null).ToArray();
-		if (unsupported.Length > 0)
-		{
-			return new GenerationResult(
-				$"{className}.g.cs",
-				null,
-				new EquatableArray<DiagnosticInfo>(unsupported
-					.Select(method => new DiagnosticInfo(UnsupportedMember, location, serviceName, method.Name))
-					.ToArray()));
-		}
+		var refusals = RefusalsOf(entry, compilation);
+		if (refusals.Length > 0)
+			return Refused(entry.ClassName, location, refusals);
 
+		var generated = new GenerationResult(
+			$"{entry.ClassName}.g.cs", Render(entry), new EquatableArray<DiagnosticInfo>([]));
+		return new DecoratorResult(entry.ClassName, generated, location);
+	}
+
+	/// <summary>
+	/// What refuses the entry, checked in order and stopping at the first check that finds something, since a later
+	/// check reads what an earlier one guarantees; empty when the decorator can be written.
+	/// </summary>
+	private static DiagnosticInfo[] RefusalsOf(ObservedEntry entry, Compilation compilation)
+		=> new Func<DiagnosticInfo[]>[]
+			{
+				() => MissingAnchors(entry, compilation),
+				() => UnsupportedMembers(entry),
+				() => UnreadableRefusals(entry),
+				() => HooksWithoutOneMethod(entry),
+				() => TakenDependencyNames(entry),
+			}
+			.Select(check => check())
+			.FirstOrDefault(found => found.Length > 0) ?? [];
+
+	private static DiagnosticInfo[] MissingAnchors(ObservedEntry entry, Compilation compilation)
+		=> new[] { ResultTypeName, OidcErrorTypeName, AuthorizationResponseTypeName }
+			.Where(anchor => compilation.GetTypeByMetadataName(anchor) == null)
+			.Select(anchor => new DiagnosticInfo(AnchorNotFound, entry.Location, anchor))
+			.ToArray();
+
+	private static DiagnosticInfo[] UnsupportedMembers(ObservedEntry entry)
+		=> entry.Methods
+			.Where(method => ResultOf(method) == null)
+			.Select(method => new DiagnosticInfo(
+				UnsupportedMember, entry.Location, entry.Service.ToDisplayString(), method.Name))
+			.ToArray();
+
+	private static DiagnosticInfo[] UnreadableRefusals(ObservedEntry entry)
+		=> entry.Methods
+			.Where(method => ErrorOf(ResultOf(method)!) == null)
+			.Select(method => new DiagnosticInfo(
+				UnknownRefusal,
+				entry.Location,
+				entry.Service.ToDisplayString(),
+				method.Name,
+				ResultOf(method)!.ToDisplayString()))
+			.ToArray();
+
+	private static DiagnosticInfo[] HooksWithoutOneMethod(ObservedEntry entry)
+		=> (entry.TagsRequest || entry.ObservesResult) && entry.Methods.Length != 1
+			? [new DiagnosticInfo(HooksNeedOneMethod, entry.Location, entry.Service.ToDisplayString(), entry.Methods.Length)]
+			: [];
+
+	private static DiagnosticInfo[] TakenDependencyNames(ObservedEntry entry)
+		=> entry.Dependencies
+			.Where(dependency => ReservedNames.Contains(DependencyName(dependency)) ||
+			                     entry.Dependencies.Count(other => DependencyName(other) == DependencyName(dependency)) > 1)
+			.Select(dependency => new DiagnosticInfo(
+				DependencyNameTaken,
+				entry.Location,
+				dependency.ToDisplayString(),
+				entry.Service.ToDisplayString(),
+				DependencyName(dependency)))
+			.ToArray();
+
+	private static string Render(ObservedEntry entry)
+	{
 		var source = new StringBuilder()
 			.AppendLine("// <auto-generated/>")
 			.AppendLine("#nullable enable")
@@ -140,27 +255,26 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			.AppendLine($"namespace {TelemetryNamespace};")
 			.AppendLine()
 			.AppendLine("/// <summary>")
-			.AppendLine($"/// Handles a request of <see cref=\"{EscapeXml(service.ToDisplayString())}\"/> in a span of its " +
-			            "endpoint and measures it.")
+			.AppendLine($"/// Handles a request of <see cref=\"{EscapeXml(entry.Service.ToDisplayString())}\"/> in a span of " +
+			            "its endpoint and measures it.")
 			.AppendLine("/// </summary>")
-			.AppendLine($"internal sealed partial class {className} : {service.ToDisplayString(FullyQualifiedWithNullability)}")
+			.AppendLine(
+				$"internal sealed partial class {entry.ClassName} : {entry.Service.ToDisplayString(FullyQualifiedWithNullability)}")
 			.AppendLine("{");
 
-		AppendConstructor(source, service, className, dependencies);
-		foreach (var property in members.OfType<IPropertySymbol>())
+		AppendConstructor(source, entry.Service, entry.ClassName, entry.Dependencies);
+		foreach (var property in entry.Members.OfType<IPropertySymbol>())
 			AppendProperty(source, property);
 
-		var endpointLiteral = SymbolDisplay.FormatLiteral(endpoint, quote: true);
-		foreach (var method in methods)
-			AppendMethod(source, method, endpointLiteral, tagsRequest, observesResult);
+		var endpointLiteral = SymbolDisplay.FormatLiteral(entry.Endpoint, quote: true);
+		foreach (var method in entry.Methods)
+			AppendMethod(source, method, endpointLiteral, entry.TagsRequest, entry.ObservesResult);
 
-		source.AppendLine("}");
-
-		return new GenerationResult(
-			$"{className}.g.cs",
-			source.ToString(),
-			new EquatableArray<DiagnosticInfo>([]));
+		return source.AppendLine("}").ToString();
 	}
+
+	private static DecoratorResult Refused(string className, LocationInfo location, params DiagnosticInfo[] diagnostics)
+		=> new(className, new GenerationResult($"{className}.g.cs", null, new EquatableArray<DiagnosticInfo>(diagnostics)), location);
 
 	private static void AppendConstructor(
 		StringBuilder source,
@@ -185,7 +299,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		foreach (var dependency in dependencies)
 		{
 			source.AppendLine(
-				$"\t\t{dependency.ToDisplayString(FullyQualifiedWithNullability)} {DependencyName(dependency)},");
+				$"\t\t{dependency.ToDisplayString(FullyQualifiedWithNullability)} {Escape(DependencyName(dependency))},");
 		}
 
 		source
@@ -194,7 +308,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			.AppendLine("\t{")
 			.AppendLine("\t\t_inner = inner;");
 		foreach (var dependency in dependencies)
-			source.AppendLine($"\t\t_{DependencyName(dependency)} = {DependencyName(dependency)};");
+			source.AppendLine($"\t\t_{DependencyName(dependency)} = {Escape(DependencyName(dependency))};");
 
 		source
 			.AppendLine("\t\t_instruments = instruments;")
@@ -224,7 +338,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		var parameters = string.Join(", ", method.Parameters.Select(parameter =>
 			$"{parameter.Type.ToDisplayString(FullyQualifiedWithNullability)} {Escape(parameter.Name)}"));
 		var arguments = string.Join(", ", method.Parameters.Select(parameter => Escape(parameter.Name)));
-		var errorOf = ErrorOf(result);
+		var errorOf = ErrorOf(result)!;
 
 		var run = new StringBuilder()
 			.Append($"global::{TelemetryNamespace}.EndpointObservation.RunAsync(")
@@ -244,9 +358,9 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			source
 				.AppendLine("\t{")
-				.AppendLine($"\t\tvar result = await {run};")
-				.AppendLine("\t\tObserve(result);")
-				.AppendLine("\t\treturn result;")
+				.AppendLine($"\t\tvar __result = await {run};")
+				.AppendLine("\t\tObserve(__result);")
+				.AppendLine("\t\treturn __result;")
 				.AppendLine("\t}")
 				.AppendLine()
 				.AppendLine("\t/// <summary>")
@@ -282,15 +396,15 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			: null;
 
 	/// <summary>
-	/// The member of the endpoint observation that tells the error a result refuses its request with.
+	/// The member of the endpoint observation that tells the error a result refuses its request with, or null for a
+	/// result that refuses with an error the observation cannot read.
 	/// </summary>
-	private static string ErrorOf(ITypeSymbol result)
+	private static string? ErrorOf(ITypeSymbol result)
 	{
 		if (result is INamedTypeSymbol { IsGenericType: true } named &&
-		    MetadataName(named.OriginalDefinition) == ResultTypeName &&
-		    MetadataName(named.TypeArguments[1]) == OidcErrorTypeName)
+		    MetadataName(named.OriginalDefinition) == ResultTypeName)
 		{
-			return "ErrorOf";
+			return MetadataName(named.TypeArguments[1]) == OidcErrorTypeName ? "ErrorOf" : null;
 		}
 
 		for (var type = result; type != null; type = type.BaseType)

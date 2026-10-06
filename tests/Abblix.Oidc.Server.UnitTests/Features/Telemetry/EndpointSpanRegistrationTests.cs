@@ -52,6 +52,13 @@ public sealed class EndpointSpanRegistrationTests
             .ToArray();
         Assert.Equal(15, decorators.Length);
 
+        // And no endpoint decorator stands outside the list, where nothing would generate or check it
+        var declared = assembly.GetTypes()
+            .Where(type => type.Namespace == typeof(TelemetryDecoratorsRegistered).Namespace &&
+                           type.Name.StartsWith("Observed", System.StringComparison.Ordinal) &&
+                           type.Name.EndsWith("Handler", System.StringComparison.Ordinal));
+        Assert.Equal(decorators.OrderBy(type => type.Name), declared.OrderBy(type => type.Name));
+
         var services = new ServiceCollection();
         foreach (var handler in decorators.Select(decorator => decorator.GetInterfaces().Single()))
         {
