@@ -9,6 +9,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -42,10 +43,12 @@ public sealed class EndpointSpanRegistrationTests
     [Fact]
     public void EveryEndpointHandler_IsWrappedInItsSpan()
     {
-        var decorators = typeof(TelemetryDecoratorsRegistered).Assembly
-            .GetTypes()
-            .Where(type => type.Namespace == typeof(TelemetryDecoratorsRegistered).Namespace &&
-                           type.Name.StartsWith("Observed", System.StringComparison.Ordinal))
+        // The decorator the build generates for each handler the assembly's list names
+        var assembly = typeof(TelemetryDecoratorsRegistered).Assembly;
+        var decorators = assembly
+            .GetCustomAttributes<ObservedEndpointAttribute>()
+            .Select(observed => assembly.GetType(
+                $"{typeof(TelemetryDecoratorsRegistered).Namespace}.Observed{observed.Service.Name[1..]}", throwOnError: true)!)
             .ToArray();
         Assert.Equal(15, decorators.Length);
 

@@ -51,7 +51,7 @@ public class EveryProjectIsBuiltFirstTests
         // The control, on the LAST reference this project file declares: an attribute written from an item
         // group placed above the references sees none of them, and every project would then read as
         // unreached for the wrong reason.
-        var last = Path.Combine(root, "src", "Abblix.Oidc.Server.SourceGenerators.MinimalApi", "Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj");
+        var last = Path.Combine(root, "src", "Abblix.Oidc.Server.SourceGenerators.Telemetry", "Abblix.Oidc.Server.SourceGenerators.Telemetry.csproj");
         Assert.True(direct.Contains(last, StringComparer.Ordinal),
             $"the references written into this assembly do not include {Path.GetRelativePath(root, last)}");
 

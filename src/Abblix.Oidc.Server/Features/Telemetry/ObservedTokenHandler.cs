@@ -6,41 +6,19 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Token.Grants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
-
-// The tenant a span names is read from the multi-tenancy feature where it is in use
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
-/// Handles a request of the token endpoint in a span of <see cref="TelemetryEndpoints.Token"/> and measures it.
+/// The token endpoint's span names the request's grant type, when the server supports it as spelled.
 /// </summary>
-/// <param name="inner">The handler of the endpoint.</param>
-/// <param name="grants">Tells the grant types the server supports, the only ones a span names.</param>
-/// <param name="instruments">Records the request into the server's metrics.</param>
-/// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
-internal sealed class ObservedTokenHandler(
-    ITokenHandler inner,
-    IAuthorizationGrantHandler grants,
-    OidcInstruments instruments,
-    ITenantAccessor? tenants = null) : ITokenHandler
+internal sealed partial class ObservedTokenHandler
 {
-    /// <inheritdoc />
-    public Task<Result<TokenIssued, OidcError>> HandleAsync(
+    private partial (string Key, string? Value) RequestTagOf(
         TokenRequest tokenRequest,
         ClientRequest clientRequest,
         CancellationToken cancellationToken)
-        => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token,
-            instruments,
-            tenants,
-            () => inner.HandleAsync(tokenRequest, clientRequest, cancellationToken),
-            EndpointObservation.ErrorOf,
-            () => (TelemetryTags.GrantType, EndpointObservation.GrantTypeOf(tokenRequest.GrantType, grants.GrantTypesSupported)));
+        => (TelemetryTags.GrantType,
+            EndpointObservation.GrantTypeOf(tokenRequest.GrantType, _authorizationGrantHandler.GrantTypesSupported));
 }
