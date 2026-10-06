@@ -54,7 +54,7 @@ public sealed class EndpointMetricsTests : IDisposable
     {
         var factory = _services.GetRequiredService<IMeterFactory>();
         _measured = new MeasurementRecorder(factory);
-        _instruments = new OidcInstruments(_logs.CreateLogger<OidcInstruments>(), factory);
+        _instruments = new OidcInstruments(_logs, factory);
     }
 
     public void Dispose()

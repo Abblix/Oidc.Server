@@ -60,7 +60,7 @@ public sealed class EndpointSpanTests : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
         _instruments = new OidcInstruments(
-            NullLogger<OidcInstruments>.Instance, _services.GetRequiredService<IMeterFactory>());
+            NullLoggerFactory.Instance, _services.GetRequiredService<IMeterFactory>());
     }
 
     public void Dispose()

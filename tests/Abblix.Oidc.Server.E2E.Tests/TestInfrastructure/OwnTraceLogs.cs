@@ -20,17 +20,17 @@ namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 /// <param name="trace">The trace whose records are kept.</param>
 public sealed class OwnTraceLogs(ActivityTraceId trace) : BaseProcessor<LogRecord>
 {
-    private readonly ConcurrentQueue<(ActivitySpanId SpanId, Dictionary<string, object?> Attributes)> _records = new();
+    private readonly ConcurrentQueue<(ActivitySpanId SpanId, KeyValuePair<string, object?>[] Attributes)> _records = new();
 
     /// <summary>
     /// The span each record was logged under, and its attributes.
     /// </summary>
-    public IReadOnlyList<(ActivitySpanId SpanId, Dictionary<string, object?> Attributes)> Records => _records.ToArray();
+    public IReadOnlyList<(ActivitySpanId SpanId, KeyValuePair<string, object?>[] Attributes)> Records => _records.ToArray();
 
     /// <inheritdoc />
     public override void OnEnd(LogRecord data)
     {
         if (data.TraceId == trace)
-            _records.Enqueue((data.SpanId, new Dictionary<string, object?>(data.Attributes ?? [])));
+            _records.Enqueue((data.SpanId, data.Attributes?.ToArray() ?? []));
     }
 }

@@ -26,11 +26,12 @@ internal sealed partial class OidcInstruments
     /// <summary>
     /// Creates the server's instruments in a meter named <see cref="OidcTelemetry.SourceName"/>.
     /// </summary>
-    /// <param name="logger">Logs each refused request.</param>
+    /// <param name="loggerFactory">Creates the logger of each refused request, under
+    /// <see cref="OidcTelemetry.LogCategory"/>.</param>
     /// <param name="meterFactory">The host's factory of meters.</param>
-    public OidcInstruments(ILogger<OidcInstruments> logger, IMeterFactory meterFactory)
+    public OidcInstruments(ILoggerFactory loggerFactory, IMeterFactory meterFactory)
     {
-        _logger = logger;
+        _logger = loggerFactory.CreateLogger(OidcTelemetry.LogCategory);
         var meter = meterFactory.Create(OidcTelemetry.SourceName, OidcTelemetry.Version);
 
         _requestDuration = meter.CreateHistogram(

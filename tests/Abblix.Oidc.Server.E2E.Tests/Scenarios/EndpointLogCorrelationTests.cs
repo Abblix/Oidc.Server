@@ -41,7 +41,7 @@ public sealed class EndpointLogCorrelationTests(TestFactory factory) : TestBase(
 
         await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
-            services.AddLogging(logging => logging.AddFilter(typeof(OidcTelemetry).Namespace, LogLevel.Debug));
+            services.AddLogging(logging => logging.AddFilter(OidcTelemetry.LogCategory, LogLevel.Debug));
             services.AddOpenTelemetry()
                 .WithTracing(tracing => tracing.AddSource(OidcTelemetry.SourceName).AddProcessor(spans))
                 .WithLogging(logging => logging.AddProcessor(logs));
@@ -66,10 +66,10 @@ public sealed class EndpointLogCorrelationTests(TestFactory factory) : TestBase(
         var span = Assert.Single(spans.Spans, span => span.OperationName == TelemetryEndpoints.Token);
         var logged = Assert.Single(
             logs.Records,
-            record => Equals(record.Attributes.GetValueOrDefault("Endpoint"), TelemetryEndpoints.Token));
+            record => record.Attributes.Contains(new KeyValuePair<string, object?>("Endpoint", TelemetryEndpoints.Token)));
 
         Assert.Equal(span.SpanId, logged.SpanId);
         Assert.Equal(ErrorCodes.UnauthorizedClient, span.GetTagItem(TelemetryTags.Error));
-        Assert.Equal(span.GetTagItem(TelemetryTags.Error), logged.Attributes["Error"]);
+        Assert.Equal(span.GetTagItem(TelemetryTags.Error), Assert.Single(logged.Attributes, a => a.Key == "Error").Value);
     }
 }
