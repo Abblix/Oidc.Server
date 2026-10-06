@@ -94,4 +94,34 @@ public class RequestObjectFetchAdapterTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
     }
+
+    /// <summary>
+    /// A prompt value the request model does not declare is refused inside a request object as it is in the query.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_UnsupportedPrompt_ReturnsInvalidRequest()
+    {
+        SetupFetcher(CreateRequest() with { Prompt = [Prompts.Login, "unknown"] });
+
+        var result = await _adapter.FetchAsync(CreateRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// A request object both rebinding the response type and carrying an unsupported prompt is refused for the
+    /// rebinding, the graver of the two faults.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_ResponseTypeMismatchAndUnsupportedPrompt_ReturnsTheMismatch()
+    {
+        var outer = CreateRequest(responseType: [ResponseTypes.Code]);
+        SetupFetcher(CreateRequest(responseType: [ResponseTypes.IdToken]) with { Prompt = ["unknown"] });
+
+        var result = await _adapter.FetchAsync(outer);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
 }

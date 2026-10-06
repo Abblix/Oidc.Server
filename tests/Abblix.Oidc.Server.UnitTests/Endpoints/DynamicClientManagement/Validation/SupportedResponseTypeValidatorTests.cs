@@ -135,6 +135,21 @@ public class SupportedResponseTypeValidatorTests
     }
 
     /// <summary>
+    /// An empty string among the response types names none, so it is refused rather than registered as a
+    /// combination no authorization request can match.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_EmptyResponseType_IsRefusedAsInvalidClientMetadata()
+    {
+        var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
+
+        var result = await validator.ValidateAsync(Context([[ResponseTypes.Code], []]));
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
     /// Empty <c>response_types</c> array - nothing to validate against - passes the gate
     /// (other validators handle the «must be specified» rule, this one is purely about
     /// support).

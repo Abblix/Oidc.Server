@@ -27,7 +27,7 @@ public partial class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_WithPendingConsentAndPromptNone_ShouldReturnConsentRequired()
     {
         // Arrange
-        var request = CreateRequest(prompt: Prompts.None);
+        var request = CreateRequest(prompt: [Prompts.None]);
         var session = CreateAuthSession();
         var consents = CreateConsents(pendingScopes: [new ScopeDefinition("email")]);
 

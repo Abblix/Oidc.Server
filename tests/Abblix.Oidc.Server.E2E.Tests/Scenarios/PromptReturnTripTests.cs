@@ -22,6 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -36,6 +37,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 {
     private const string LoginPath = "/login";
     private const string RegistrationPath = "/register";
+    private const string AccountSelectionPath = "/select-account";
     private const string State = "state";
 
     private static readonly IServiceProvider JwtServices = BuildJwtServices();
@@ -160,6 +162,86 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
     }
 
+    /// <summary>
+    /// The parameter is a list whose order and repeats carry no meaning: the pages come in the server's order,
+    /// account creation before authentication before consent, however the client wrote the values.
+    /// </summary>
+    [Theory]
+    [InlineData($"{Prompts.Login} {Prompts.Login}", LoginPath)]
+    [InlineData($"{Prompts.Login} {Prompts.Consent}", LoginPath)]
+    [InlineData($"{Prompts.Consent} {Prompts.Login}", LoginPath)]
+    [InlineData($"{Prompts.Login} {Prompts.Create}", RegistrationPath)]
+    [InlineData($"{Prompts.Consent} {Prompts.Create}", RegistrationPath)]
+    [InlineData($"{Prompts.Login} {Prompts.SelectAccount}", AccountSelectionPath)]
+    public async Task PromptList_SendsToItsFirstPage(string prompt, string page)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)));
+
+        Assert.Equal(page, PathOf(sentTo));
+    }
+
+    [Fact]
+    public async Task PromptLoginRepeated_ReturningAfterSignIn_IssuesCode()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.Login} {Prompts.Login}")));
+        endUser.SignInAgain();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// None with any other value is refused (OpenID Connect Core 1.0, section 3.1.2.1), and the client is told at its
+    /// redirect URI, since the client and the redirect URI are valid.
+    /// </summary>
+    [Theory]
+    [InlineData($"{Prompts.None} {Prompts.Login}")]
+    [InlineData($"{Prompts.Consent} {Prompts.None}")]
+    public async Task PromptNoneWithAnotherValue_IsRefusedAtTheRedirectUri(string prompt)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var location = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+        Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+    }
+
+    /// <summary>
+    /// A value the server does not support, the wrong case of a supported one included, is answered with 400 and
+    /// nothing goes to the redirect URI (Initiating User Registration via OpenID Connect 1.0, section 4.1).
+    /// </summary>
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("Login")]
+    [InlineData($"{Prompts.Login} unknown")]
+    public async Task UnsupportedPromptValue_IsAnsweredWith400(string prompt)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
     [Fact]
     public async Task PromptLogin_ReturningWithoutSigningIn_IsSentToLoginAgain()
     {
@@ -241,6 +323,89 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         endUser.SignInAgain();
 
         AssertCode(await ReturnFromPage(client, discovery, clientId, sentTo));
+    }
+
+    /// <summary>
+    /// A list inside a signed request object is read as the same list in the query is.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptListInRequestObject_SendsToItsFirstPage(bool pushed)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.Consent} {Prompts.Login}");
+
+        var sentTo = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed));
+
+        Assert.Equal(LoginPath, PathOf(sentTo));
+    }
+
+    /// <summary>
+    /// A value the server does not support inside a request object is answered as the same value in the query is:
+    /// with 400, and nothing goes to the redirect URI.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedPromptValueInRequestObject_IsAnsweredWith400()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, "unknown");
+
+        var response = await client.GetAsync(
+            await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A pushed request object carrying a value the server does not support is refused when it is pushed, with 400 and
+    /// invalid_request, so no request_uri is issued for it.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedPromptValueInPushedRequestObject_IsRefusedWhenPushed()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, "unknown");
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.PushedAuthorizationRequestEndpoint!,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientSecret] = clientSecret,
+                [AuthorizationRequest.Parameters.Request] = requestObject,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A trailing space inside a request object separates no value, as in the query: none alone is asked, and the end
+    /// user signed in gets a code without a page.
+    /// </summary>
+    [Fact]
+    public async Task PromptWithTrailingSpaceInRequestObject_IsReadAsItsValueAlone()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, $"{Prompts.None} ");
+
+        AssertCode(await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false)));
     }
 
     /// <summary>

@@ -9,6 +9,7 @@
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -77,7 +78,7 @@ public class AuthorizationRequestStorageTests
             ResponseMode = "form_post",
             Nonce = "nonce_abc",
             Display = "page",
-            Prompt = "consent",
+            Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromHours(2),
             UiLocales = [CultureInfo.GetCultureInfo("en-US"), CultureInfo.GetCultureInfo("fr-FR")],
             IdTokenHint = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
