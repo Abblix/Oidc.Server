@@ -92,6 +92,9 @@
     <ProjectReference Include="..\Abblix.Utils.UnitTests\Abblix.Utils.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.Mvc\Abblix.Oidc.Server.SourceGenerators.Mvc.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.MinimalApi\Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Both an analyzer, so the decorator of a handler this suite lists is generated here as in the library, and
+         an assembly, so the suite drives the generator over sources of its own and reads its diagnostics. -->
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.Telemetry\Abblix.Oidc.Server.SourceGenerators.Telemetry.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
   </ItemGroup>
 
   <!-- The references MSBuild evaluated for this project, conditions applied, and the restore file NuGet

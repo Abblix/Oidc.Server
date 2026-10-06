@@ -270,6 +270,23 @@ public sealed class EndpointMetricsTests : IDisposable
     }
 
     [Fact]
+    public async Task ARefusedAuthorizationRequest_IsMeasuredWithItsErrorCode()
+    {
+        var request = new AuthorizationRequest();
+        var inner = new Mock<IAuthorizationHandler>();
+        inner
+            .Setup(h => h.HandleAsync(request))
+            .ReturnsAsync(new AuthorizationError(request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null));
+        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments);
+
+        await observed.HandleAsync(request);
+
+        var measured = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
+        Assert.Equal(TelemetryOutcomes.Refused, measured[TelemetryTags.Outcome]);
+        Assert.Equal(ErrorCodes.AccessDenied, measured[TelemetryTags.Error]);
+    }
+
+    [Fact]
     public async Task AnAuthorizationResponse_CountsItsTokensUnderTheImplicitGrant()
     {
         var request = new AuthorizationRequest();

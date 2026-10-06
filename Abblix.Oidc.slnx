@@ -26,6 +26,7 @@
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.Mvc/Abblix.Oidc.Server.SourceGenerators.Mvc.csproj" />
     <Project Path="src/Abblix.Oidc.Server.MinimalApi/Abblix.Oidc.Server.MinimalApi.csproj" />
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.MinimalApi/Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.SourceGenerators.Telemetry/Abblix.Oidc.Server.SourceGenerators.Telemetry.csproj" />
     <Project Path="src/Abblix.Jwt.Vault/Abblix.Jwt.Vault.csproj" />
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
