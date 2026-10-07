@@ -22,16 +22,20 @@ namespace Abblix.Oidc.Server.MinimalApi;
 /// </summary>
 internal static class FormValues
 {
-    /// <summary>A single value, or null when absent or empty.</summary>
+    /// <summary>A single value, or null when absent, empty or whitespace alone.</summary>
     /// <remarks>
     /// RFC 6749 section 3.1 puts this in the request direction as a requirement rather than a preference:
     /// "Parameters sent without a value MUST be treated as if they were omitted from the request." A query
     /// string carries no way to say "present and empty" that differs from saying nothing, so binding
     /// "state=" as an empty string invented a value the client never sent - and state is returned only if
-    /// it was present in the request, so the client got back one it never issued.
+    /// it was present in the request, so the client got back one it never issued. Whitespace alone counts as
+    /// no value too, which is how ASP.NET Core's own model binding reads it, so the MVC host and this one
+    /// answer the same request the same way.
     /// </remarks>
     public static string? Value(StringValues values)
-        => values is { Count: > 0 } && values.ToString() is { Length: > 0 } value ? value : null;
+        => values is { Count: > 0 } && values.ToString() is var value && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
 
     /// <summary>A single value read from the form by name.</summary>
     public static string? Value(IFormCollection form, string name) => Value(Get(form, name));
@@ -45,7 +49,8 @@ internal static class FormValues
     /// </remarks>
     public static string[]? Strings(StringValues values)
         => values is { Count: > 0 }
-           && values.OfType<string>().Where(value => value.Length > 0).ToArray() is { Length: > 0 } strings
+           && values.OfType<string>().Where(value => !string.IsNullOrWhiteSpace(value)).ToArray()
+               is { Length: > 0 } strings
             ? strings
             : null;
 
