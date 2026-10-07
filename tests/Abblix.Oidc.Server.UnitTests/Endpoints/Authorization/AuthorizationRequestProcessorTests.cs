@@ -106,7 +106,8 @@ public partial class AuthorizationRequestProcessorTests
         string[]? defaultAcrValues = null,
         string? idTokenHintSubject = null,
         string? clientId = null,
-        DateTimeOffset? promptedAt = null)
+        DateTimeOffset? promptedAt = null,
+        ResourceDefinition[]? resources = null)
     {
         clientId ??= TestConstants.DefaultClientId;
 
@@ -136,7 +137,7 @@ public partial class AuthorizationRequestProcessorTests
             ClientInfo = clientInfo,
             ResponseMode = ResponseModes.Query,
             Scope = scope?.Select(s => new ScopeDefinition(s)).ToArray() ?? [new ScopeDefinition(Scopes.OpenId)],
-            Resources = [],
+            Resources = resources ?? [],
             AuthorizationDetails = authorizationDetails,
             IdTokenHintSubject = idTokenHintSubject,
         };

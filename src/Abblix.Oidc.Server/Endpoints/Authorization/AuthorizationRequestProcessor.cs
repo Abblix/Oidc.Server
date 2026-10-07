@@ -100,10 +100,9 @@ public class AuthorizationRequestProcessor(
 		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
 
-		// A consent the end user gave that grants nothing at all is their refusal, which OpenID Connect Core 1.0,
-		// section 3.1.2.6, tells the client with access_denied ("If the End-User denies the request ...")
-		if (userConsents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
-			userConsents.Granted.AuthorizationDetails is null or { Count: 0 })
+		// A consent the end user gave that grants nothing of what was asked is their refusal, which OpenID Connect
+		// Core 1.0, section 3.1.2.6, tells the client with access_denied ("If the End-User denies the request ...")
+		if (IsRefusal(request, userConsents, requestedDetails))
 		{
 			return new AuthorizationError(
 				model,
@@ -134,6 +133,24 @@ public class AuthorizationRequestProcessor(
 
 		var authContext = await BuildAuthorizationContextAsync(request, userConsents, requestedDetails);
 		return await IssueAsync(request, authSession, authContext, responseType);
+	}
+
+	/// <summary>
+	/// Whether <paramref name="consents"/>, given by the end user, grant nothing of what the request asked for.
+	/// </summary>
+	/// <remarks>
+	/// A request asking for nothing a consent could grant is never refused this way, and authorization details count
+	/// as refused only when the host says so with an empty list: no list is the host having no opinion on them, which
+	/// passes the requested ones through.
+	/// </remarks>
+	private static bool IsRefusal(ValidAuthorizationRequest request, UserConsents consents, JsonArray? requestedDetails)
+	{
+		var askedForDetails = requestedDetails is { Count: > 0 };
+		var askedFor = request.Scope.Length > 0 || request.Resources.Length > 0 || askedForDetails;
+
+		return askedFor &&
+		       consents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
+		       (!askedForDetails || consents.Granted.AuthorizationDetails is { Count: 0 });
 	}
 
 	/// <summary>

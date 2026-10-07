@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -102,35 +103,95 @@ public partial class AuthorizationRequestProcessorTests
         Assert.Equal(stillPending, consentRequired.RequiredUserConsents.Scopes);
     }
 
+    private static readonly Uri RefusalResource = new("https://api.example.com");
+
     /// <summary>
-    /// A consent the end user gave that grants nothing, with nothing left pending, is their refusal: access_denied at
-    /// the redirect URI. Without a moment of giving, the same empty consent is no answer, and the request goes on.
+    /// The error a request gets from consents the host reports, or null when it goes on to a code.
     /// </summary>
-    [Theory]
-    [InlineData(true, ErrorCodes.AccessDenied)]
-    [InlineData(false, null)]
-    public async Task ProcessAsync_ConsentGrantingNothing_IsARefusalOnlyWhenGiven(bool given, string? expectedError)
+    private async Task<string?> ErrorOfAsync(ValidAuthorizationRequest request, UserConsents consents)
     {
-        var request = CreateRequest();
         var session = CreateAuthSession();
-        var refused = new UserConsents
-        {
-            Granted = new ConsentDefinition([], []),
-            GivenAt = given ? _timeProvider.GetUtcNow() : null,
-        };
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
-            .ReturnsAsync(refused);
+            .ReturnsAsync(consents);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
-        var result = await _processor.ProcessAsync(request);
+        return (await _processor.ProcessAsync(request) as AuthorizationError)?.Error;
+    }
 
-        Assert.Equal(expectedError, (result as AuthorizationError)?.Error);
+    private UserConsents Given(ConsentDefinition granted) => new()
+    {
+        Granted = granted,
+        GivenAt = _timeProvider.GetUtcNow(),
+    };
+
+    /// <summary>
+    /// A consent the end user gave that grants none of the scopes asked, with nothing left pending, is their refusal:
+    /// access_denied at the redirect URI.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ConsentGivenGrantingNoScopeAsked_IsARefusal()
+        => Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(CreateRequest(), Given(new ConsentDefinition([], []))));
+
+    /// <summary>
+    /// Without a moment of giving, the same empty consent is no answer, and the request goes on.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_EmptyConsentNotGiven_IsNoRefusal()
+        => Assert.Null(await ErrorOfAsync(CreateRequest(), new UserConsents { Granted = new ConsentDefinition([], []) }));
+
+    [Fact]
+    public async Task ProcessAsync_ConsentGivenGrantingNoResourceAsked_IsARefusal()
+    {
+        var request = CreateRequest(scope: [], resources: [new ResourceDefinition(RefusalResource)]);
+
+        Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(request, Given(new ConsentDefinition([], []))));
+    }
+
+    /// <summary>
+    /// A consent granting a resource asked, though no scope, grants something, so it is no refusal.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ConsentGivenGrantingAResourceAsked_IsNoRefusal()
+    {
+        var resource = new ResourceDefinition(RefusalResource);
+        var request = CreateRequest(scope: [], resources: [resource]);
+
+        Assert.Null(await ErrorOfAsync(request, Given(new ConsentDefinition([], [resource]))));
+    }
+
+    /// <summary>
+    /// A request asking for nothing a consent could grant is never refused by an empty consent, however the host
+    /// reports it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RequestAskingForNothing_IsNoRefusal()
+        => Assert.Null(await ErrorOfAsync(CreateRequest(scope: []), Given(new ConsentDefinition([], []))));
+
+    /// <summary>
+    /// Authorization details the host has no opinion on, by leaving their list out, pass through rather than being
+    /// taken as refused.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_DetailsAskedWithoutAnOpinion_IsNoRefusal()
+    {
+        var request = CreateRequest(scope: [], authorizationDetails: [new JsonObject { ["type"] = "payment_initiation" }]);
+
+        Assert.NotEqual(ErrorCodes.AccessDenied, await ErrorOfAsync(request, Given(new ConsentDefinition([], []))));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DetailsAskedAndAllRefused_IsARefusal()
+    {
+        var request = CreateRequest(scope: [], authorizationDetails: [new JsonObject { ["type"] = "payment_initiation" }]);
+        var consents = Given(new ConsentDefinition([], []) { AuthorizationDetails = [] });
+
+        Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(request, consents));
     }
 
     /// <summary>

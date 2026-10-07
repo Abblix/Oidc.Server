@@ -234,9 +234,17 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     /// The pages a combination of prompt values leads through, each answered as a host's page answers it, and the
     /// request ending in a code.
     /// </summary>
+    private static Task<Uri> WalkPagesAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        Uri sentTo,
+        params (string Page, Action Answer)[] pages)
+        => WalkPagesAsync(client, discovery, TestConstants.ConfidentialClientId, sentTo, pages);
+
     private static async Task<Uri> WalkPagesAsync(
         HttpClient client,
         DiscoveryDocument discovery,
+        string clientId,
         Uri sentTo,
         params (string Page, Action Answer)[] pages)
     {
@@ -244,7 +252,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         {
             Assert.Equal(page, PathOf(sentTo));
             answer();
-            sentTo = await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo);
+            sentTo = await ReturnFromPage(client, discovery, clientId, sentTo);
         }
 
         AssertCode(sentTo);
@@ -729,6 +737,144 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A code challenge method the server does not support is told to the client at its redirect URI, as RFC 7636,
+    /// section 4.4.1, requires of an authorization error response.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedCodeChallengeMethod_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[AuthorizationRequest.Parameters.CodeChallengeMethod] = "S1";
+
+        var location = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    [Fact]
+    public async Task PromptCreate_ReturningWithoutSigningIn_IsSentToCreationAgain()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Create)));
+
+        Assert.Equal(
+            RegistrationPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+    }
+
+    /// <summary>
+    /// The later page of a combination is asked again until it is answered: coming back from the consent page of
+    /// login consent without consenting leads to the consent page, not past it.
+    /// </summary>
+    [Fact]
+    public async Task PromptLoginConsent_ReturningFromConsentWithoutIt_IsSentToConsentAgain()
+    {
+        var (client, endUser, _, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var login = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.Login} {Prompts.Consent}")));
+        endUser.SignInAgain();
+        var consent = await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, login);
+        Assert.Equal(ConsentPath, PathOf(consent));
+
+        Assert.Equal(
+            ConsentPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, consent)));
+    }
+
+    /// <summary>
+    /// A combination inside a signed request object is walked as the same combination in the query is.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptSelectAccountConsent_InRequestObject_ShowsEachPageOnce(bool pushed)
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.SelectAccount} {Prompts.Consent}");
+
+        var sentTo = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed));
+
+        await WalkPagesAsync(
+            client, discovery, clientId, sentTo, (AccountSelectionPath, endUser.PickAgain), (ConsentPath, consents.Give));
+    }
+
+    [Fact]
+    public async Task PromptConsent_InRequestObject_RefusedOnThePage_ReturnsAccessDenied()
+    {
+        var (client, _, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, Prompts.Consent);
+        var sentTo = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+        Assert.Equal(ConsentPath, PathOf(sentTo));
+        consents.Refuse();
+
+        var location = await ReturnFromPage(client, discovery, clientId, sentTo);
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.AccessDenied, QueryValue(location, ResponseParameters.Error));
+    }
+
+    [Fact]
+    public async Task PromptNoneWithAnotherValue_InRequestObject_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.None} {Prompts.Login}");
+
+        var location = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    /// <summary>
+    /// The same request object pushed is refused at the pushed authorization endpoint, which answers the client
+    /// directly (RFC 9126, section 2.3), so no request_uri is issued for it.
+    /// </summary>
+    [Fact]
+    public async Task PromptNoneWithAnotherValue_InPushedRequestObject_IsRefusedWhenPushed()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.None} {Prompts.Login}");
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.PushedAuthorizationRequestEndpoint!,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientSecret] = clientSecret,
+                [AuthorizationRequest.Parameters.Request] = requestObject,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
     [Fact]

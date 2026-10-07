@@ -278,23 +278,21 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts request with custom code challenge method.
-    /// Per RFC 7636, servers may support additional transformation methods.
-    /// Tests extensibility for future PKCE enhancements.
+    /// A transformation the server does not support is refused with invalid_request: RFC 7636, section 4.4.1, "the
+    /// authorization endpoint MUST return the authorization error response with "error" value set to
+    /// "invalid_request"".
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithCustomCodeChallengeMethod_ShouldSucceed()
+    public async Task ValidateAsync_WithUnsupportedCodeChallengeMethod_IsRefused()
     {
-        // Arrange
         var context = CreateContext(
             codeChallenge: CodeChallengeS256,
             codeChallengeMethod: "custom-method");
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -509,25 +507,21 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync treats uppercase PLAIN as different from plain.
-    /// Per RFC 7636, code_challenge_method values are case-sensitive.
-    /// Validator checks for exact match with "plain", so "PLAIN" passes validation.
-    /// This tests that validator correctly enforces case-sensitive method matching.
+    /// code_challenge_method values are case-sensitive (RFC 7636), so PLAIN is not plain: it is a method the server
+    /// does not support, and is refused as one.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithUppercasePlainMethod_ShouldSucceed()
+    public async Task ValidateAsync_WithUppercasePlainMethod_IsRefusedAsUnsupported()
     {
-        // Arrange
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: "PLAIN",
-            plainPkceAllowed: false);
+            plainPkceAllowed: true);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>

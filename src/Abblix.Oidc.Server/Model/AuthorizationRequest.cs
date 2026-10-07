@@ -202,8 +202,13 @@ public record AuthorizationRequest
 	/// derived from the code verifier. <c>S256</c> is required by current best-practice profiles; <c>plain</c>
 	/// is supported only for legacy compatibility.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: RFC 7636, section 4.4.1, requires an unsupported
+	/// method be answered with an authorization error response, which
+	/// <see cref="Endpoints.Authorization.Validation.PkceValidator"/> sends to the client's redirect URI once the client
+	/// and the redirect URI are known.
+	/// </remarks>
 	[JsonPropertyName(Parameters.CodeChallengeMethod)]
-    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512)]
     public string? CodeChallengeMethod { get; init; }
 
 	/// <summary>

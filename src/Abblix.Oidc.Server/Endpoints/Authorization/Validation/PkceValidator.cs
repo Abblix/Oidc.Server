@@ -35,6 +35,13 @@ public class PkceValidator(
 	IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
 	/// <summary>
+	/// The code challenge methods the token endpoint can verify a code verifier against.
+	/// </summary>
+	private static readonly HashSet<string> SupportedMethods = new(
+		[CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512],
+		StringComparer.Ordinal);
+
+	/// <summary>
 	/// Validates the PKCE-related parameters in the authorization request against the client's
 	/// configuration. This method checks for compliance with PKCE specifications as outlined in RFC 7636,
 	/// with particular attention to the guidelines in Section 4.3 of the document.
@@ -62,6 +69,12 @@ public class PkceValidator(
 		SecurityProfileRequirements profile,
 		string codeChallenge)
 	{
+		// RFC 7636 section 4.4.1: "If the server supporting PKCE does not support the requested transformation, the
+		// authorization endpoint MUST return the authorization error response with "error" value set to
+		// "invalid_request"" - an error response, so at the redirect URI rather than a 400 in the browser
+		if (context.Request.CodeChallengeMethod is { } method && !SupportedMethods.Contains(method))
+			return context.InvalidRequest("The PKCE code challenge method is not supported");
+
 		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 		// rejected - including plain and the non-standard S512 - before the per-client plain check,
 		// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
