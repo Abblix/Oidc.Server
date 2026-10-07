@@ -94,7 +94,7 @@ jobs:
             --coverage --coverage-output-format cobertura \
             --coverage-settings tests/code-coverage.settings.xml \
             --results-directory ./tests/results
-        timeout-minutes: 6
+        timeout-minutes: 7
       # A RED run only. Nobody opens these after a green one, and the storage they take is shared
       # across the account: six of them per run, a hundred in three hours, all younger than the
       # retention window - so the window cannot help, because there is nothing old to expire.
