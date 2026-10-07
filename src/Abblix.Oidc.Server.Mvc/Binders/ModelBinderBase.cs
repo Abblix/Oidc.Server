@@ -38,6 +38,14 @@ public abstract class ModelBinderBase : IModelBinder
 			return Task.CompletedTask;
 		}
 
+		// RFC 6749 section 3.1: "Parameters sent without a value MUST be treated as if they were omitted from the
+		// request." A value of whitespace alone is still a value, which the implementation refuses if it cannot
+		// read it
+		if (modelValue.Length == 1 && string.IsNullOrEmpty(modelValue.FirstValue))
+		{
+			return Task.CompletedTask;
+		}
+
 		bindingContext.ModelState.SetModelValue(bindingContext.ModelName, modelValue);
 
 		try

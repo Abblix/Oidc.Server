@@ -40,6 +40,13 @@ internal static class FormValues
     /// <summary>A single value read from the form by name.</summary>
     public static string? Value(IFormCollection form, string name) => Value(Get(form, name));
 
+    /// <summary>
+    /// A single value as sent, whitespace kept, or null when absent or empty: what a typed reader parses, so a value
+    /// of whitespace alone reaches it and is refused as one it cannot read rather than taken as absent.
+    /// </summary>
+    private static string? Sent(StringValues values)
+        => values is { Count: > 0 } && values.ToString() is { Length: > 0 } value ? value : null;
+
     /// <summary>A repeated field as an array (RFC 8707 <c>resource</c>/<c>audience</c>), or null.</summary>
     /// <remarks>
     /// Valueless entries are dropped for the reason given on <see cref="Value(StringValues)"/>, and a field
@@ -107,12 +114,18 @@ internal static class FormValues
     /// <summary>A repeated form field read by name as an array of URIs, or null.</summary>
     public static Uri[]? ParseUris(IFormCollection form, string name) => ParseUris(Get(form, name));
 
-    /// <summary>A single integer-seconds value as a <see cref="TimeSpan"/> (e.g. <c>max_age</c>), or null.</summary>
+    /// <summary>
+    /// A single integer-seconds value as a <see cref="TimeSpan"/> (e.g. <c>max_age</c>), or null when absent. A value
+    /// that is not a number of seconds is refused, as the MVC model binder refuses it.
+    /// </summary>
     public static TimeSpan? Seconds(StringValues values)
     {
-        var value = Value(values);
-        if (value is null || !long.TryParse(value, out var seconds))
+        var value = Sent(values);
+        if (value is null)
             return null;
+
+        if (!long.TryParse(value, out var seconds))
+            throw MalformedValue();
 
         // A syntactically valid but out-of-range seconds value overflows TimeSpan. Shape it as a 400 rather than
         // letting the throw escape BindAsync as a 500 (mirrors the MVC model binder's catch-into-ModelState).
@@ -149,8 +162,8 @@ internal static class FormValues
     /// <summary>Deserializes a single field's JSON value (e.g. <c>claims</c>, <c>authorization_details</c>), or null.</summary>
     public static T? Json<T>(StringValues values)
     {
-        var value = Value(values);
-        if (string.IsNullOrEmpty(value))
+        var value = Sent(values);
+        if (value is null)
             return default;
 
         // Malformed JSON in a single field must be a 400, not a 500 from an uncaught JsonException in BindAsync.
