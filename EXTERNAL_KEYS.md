@@ -2,10 +2,10 @@
 
 How signing and encryption keys that live outside the process - in an HSM, a cloud KMS, or a vault - are used. This document is the shared model. It applies to every custodian package:
 
-| Package | Custodian |
-|---------|-----------|
+| Package                                                                 | Custodian                         |
+|-------------------------------------------------------------------------|-----------------------------------|
 | **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | HashiCorp Vault / OpenBao Transit |
-| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Azure Key Vault |
+| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Azure Key Vault                   |
 
 Each package's README covers what is specific to its backend: how to provision the keys, how to authenticate, which algorithms it maps, and what the published `kid` looks like. Everything below is the same whichever one you pick.
 
