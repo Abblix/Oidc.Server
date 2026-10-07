@@ -13,13 +13,13 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public partial class ConsentConstraintEnforcer
 {
     /// <summary>
-    /// A per-type validator found a granted entry wider than the requested ones, and the client is told
-    /// access_denied. Warning, because somebody outside the server did something wrong, most likely an
-    /// end user who edited the consent form.
+    /// A granted entry was refused against the requested ones, and the client is told access_denied. Warning,
+    /// because somebody outside the server did something wrong, most likely an end user who edited the
+    /// consent form.
     /// </summary>
     [LoggerMessage(
-        EventId = LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsExceedTheRequest,
+        EventId = LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsRefused,
         Level = LogLevel.Warning,
-        Message = "The authorization_details granted to client {ClientId} exceed the ones requested: {Reason}")]
-    private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string? Reason);
+        Message = "The authorization_details granted to client {ClientId} were refused: {Reason}")]
+    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string? Reason);
 }

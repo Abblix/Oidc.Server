@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -178,7 +180,7 @@ public class ConsentConstraintEnforcerTests
         Assert.Equal(ErrorCodes.AccessDenied, enforced.GetFailure().Error);
         var entry = Assert.Single(_log.Entries);
         Assert.Equal(
-            LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsExceedTheRequest,
+            LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsRefused,
             entry.EventId.Id);
         Assert.Equal(LogLevel.Warning, entry.Level);
     }
@@ -462,6 +464,60 @@ public class ConsentConstraintEnforcerTests
             () => enforcer.EnforceAsync(request, granted, CancellationToken.None));
 
         Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// A real dispatch and a validator comparing the granted amount with the requested ones: a consent granting
+    /// more than was asked is answered with access_denied and recorded under its own log event.
+    /// </summary>
+    [Fact]
+    public async Task EnforceAsync_ValidatorFindsTheGrantWiderThanTheRequest_IsAccessDeniedAndLogged()
+    {
+        var services = new ServiceCollection();
+        services.AddRichAuthorizationRequests();
+        services.AddAuthorizationDetailValidator<CeilingValidator>(CeilingValidator.PaymentInitiation);
+        var enforcer = new ConsentConstraintEnforcer(
+            new Logger<ConsentConstraintEnforcer>(_log),
+            services.BuildServiceProvider().GetRequiredService<IAuthorizationDetailsPolicy>());
+
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = CeilingValidator.PaymentInitiation, ["amount"] = "200" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = CeilingValidator.PaymentInitiation, ["amount"] = "300" }));
+
+        var enforced = await enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Equal(ErrorCodes.AccessDenied, enforced.GetFailure().Error);
+        Assert.Equal(
+            LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsRefused,
+            Assert.Single(_log.Entries).EventId.Id);
+    }
+
+    /// <summary>
+    /// Accepts a granted entry whose amount is no higher than that of a requested one.
+    /// </summary>
+    private sealed class CeilingValidator : IAuthorizationDetailValidator
+    {
+        public const string PaymentInitiation = "payment_initiation";
+
+        public string Type => PaymentInitiation;
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => Task.FromResult(
+                requested.Any(asked => AmountOf(detail) <= AmountOf(asked))
+                    ? (Result<AuthorizationDetail, OidcError>)detail
+                    : new OidcError(ErrorCodes.InvalidAuthorizationDetails, "amount exceeds the requested one"));
+
+        private static decimal AmountOf(AuthorizationDetail detail)
+            => decimal.Parse(detail.Json["amount"]!.ToString(), CultureInfo.InvariantCulture);
     }
 
     /// <summary>

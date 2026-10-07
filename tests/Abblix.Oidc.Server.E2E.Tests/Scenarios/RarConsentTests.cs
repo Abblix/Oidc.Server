@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -100,14 +101,19 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             [AuthorizationRequest.Parameters.AuthorizationDetails] = TransferOf200,
         });
 
-        var error = await AuthorizeAndExtractErrorAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [AuthorizationRequest.Parameters.RequestUri] =
-                parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>(),
-        });
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.RequestUri] =
+                    parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>(),
+            }),
+            TestContext.Current.CancellationToken);
+        var callback = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query);
 
-        Assert.Equal(ErrorCodes.AccessDenied, error);
+        Assert.StartsWith(TestConstants.RedirectUri, response.Headers.Location.OriginalString);
+        Assert.Equal(ErrorCodes.AccessDenied, callback[ResponseParameters.Error]);
+        Assert.Null(callback[TokenRequest.Parameters.Code]);
     }
 
     [Fact]

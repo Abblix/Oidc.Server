@@ -26,9 +26,9 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// different places. The server refuses on its own a granted scope, resource or <c>authorization_details</c>
 /// type the request did not carry. Whether a granted entry stays within the requested ones of its type - an
 /// amount no higher, the same account - only the type's <c>IAuthorizationDetailValidator</c> can tell, and the
-/// server asks it with the requested entries in hand; a type registered without that comparison accepts any
-/// content, so a provider that copies a consent form's answer back must compare it itself or register a
-/// validator that does.
+/// server asks it with the requested entries in hand; a type registered without that comparison applies only
+/// the rules it applies to a request, so a provider that copies a consent form's answer back must compare it
+/// itself or register a validator that does.
 /// </para>
 /// </remarks>
 public interface IUserConsentsProvider

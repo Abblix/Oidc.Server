@@ -43,6 +43,7 @@ internal sealed class AuthorizationContextBuilder(IConsentConstraintEnforcer con
         // amount, an account), which RFC 9396 section 6.1 says only the type's definition can decide.
         // A validator refusing one is answered with access_denied. Symmetric with the strictly
         // narrowing-only TokenAuthorizationContextEvaluator at the token endpoint.
+        //
         // What the end user granted, read before the backstop runs. It is a seam of its own and it is
         // handed the granted set to check, so the scopes and resources the token carries are taken from
         // the answer rather than from what the check left behind.
@@ -59,13 +60,16 @@ internal sealed class AuthorizationContextBuilder(IConsentConstraintEnforcer con
         if (!enforcement.TryGetSuccess(out var enforcedAuthorizationDetails))
             return enforcement.GetFailure();
 
-        // C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
-        // one placed on AuthorizationContext travel through System.Text.Json on the way to the
-        // issued JWT. If a host's IUserConsentsProvider impl parents the borrowed array as a
-        // child of its own DTO, the second serialise will throw because the JsonNode is parented
-        // twice. DeepClone defensively on the boundary so the two consumers each see independent
-        // trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
-        var sourceAd = enforcedAuthorizationDetails is { Count: > 0 } ? enforcedAuthorizationDetails : requestedDetails;
+        // The requested entries pass through only when the provider gave no list at all, its way of having no
+        // opinion on them. Read off the provider's answer rather than off what the backstop returned, so a
+        // backstop answering with nothing cannot put back the request the end user narrowed.
+        //
+        // Cloned because the array the consent provider was handed and the one on the context both travel
+        // through System.Text.Json on the way to the issued token: a provider that parents the borrowed array
+        // inside its own object would make the second serialisation throw on a node with two parents.
+        var sourceAd = userConsents.Granted.AuthorizationDetails is null
+            ? requestedDetails
+            : enforcedAuthorizationDetails;
         var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
             ? (JsonArray?)sourceAd.DeepClone()
             : null;

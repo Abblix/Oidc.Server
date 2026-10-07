@@ -81,7 +81,16 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(r => r.GetClientsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
-        _processor = new AuthorizationRequestProcessor(
+        _processor = ProcessorWith(new ConsentConstraintEnforcer(
+            NullLogger<ConsentConstraintEnforcer>.Instance, _authorizationDetailsPolicy.Object));
+    }
+
+    /// <summary>
+    /// The processor over this fixture's collaborators and the consent backstop given.
+    /// </summary>
+    private AuthorizationRequestProcessor ProcessorWith(IConsentConstraintEnforcer consentConstraintEnforcer)
+    {
+        return new AuthorizationRequestProcessor(
             _authSessionService.Object,
             _sessionClients.Object,
             _consentsProvider.Object,
@@ -93,8 +102,7 @@ public partial class AuthorizationRequestProcessorTests
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ],
-            new ConsentConstraintEnforcer(
-                NullLogger<ConsentConstraintEnforcer>.Instance, _authorizationDetailsPolicy.Object));
+            consentConstraintEnforcer);
     }
 
     private static ValidAuthorizationRequest CreateRequest(

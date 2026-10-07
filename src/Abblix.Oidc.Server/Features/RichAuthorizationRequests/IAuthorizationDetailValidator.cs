@@ -92,8 +92,16 @@ public interface IAuthorizationDetailValidator
     /// one partner, because a request may carry several of one type and a consent decision may drop or
     /// reorder them. A granted type the request did not carry is refused before this method is asked, so
     /// the list is empty only where no record of the request survives, as for a back-channel request
-    /// stored before the server recorded one. A refusal here reaches the client as access_denied at the
-    /// authorization endpoint, since the likely cause is an end user who edited the consent form.
+    /// stored before the server recorded one; the type decides whether such an entry stands on the rules
+    /// that hold on their own or is refused.
+    /// </para>
+    /// <para>
+    /// The two ways of saying no mean different things. An entry wider than the requested ones - a higher
+    /// amount, another account - is returned as an <see cref="OidcError"/>, which the authorization endpoint
+    /// answers with access_denied, since the likely cause is an end user who edited the consent form. An
+    /// entry no end user could have produced, one missing a member the consent decision must carry, is a
+    /// defect in the host's consent provider and is thrown, so it fails the host's own tests instead of
+    /// reading as a refusal.
     /// </para>
     /// </remarks>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches

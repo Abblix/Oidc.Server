@@ -20,8 +20,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Default <see cref="IConsentConstraintEnforcer"/>. Asserts <c>granted ⊆ requested</c> for scopes,
-/// resources (including their nested scopes) and RFC 9396 <c>authorization_details</c>, throwing
-/// when the consent provider returned anything outside the request.
+/// resources (including their nested scopes) and RFC 9396 <c>authorization_details</c> types, throwing
+/// when the consent provider returned one outside the request, and answers with access_denied when a
+/// per-type validator refuses a granted entry held to the requested ones.
 /// </summary>
 /// <param name="logger">Records a granted entry a per-type validator found wider than the request.</param>
 /// <param name="authorizationDetailsPolicy">Re-runs granted <c>authorization_details</c> through the
@@ -114,12 +115,12 @@ public partial class ConsentConstraintEnforcer(
 
         if (!revalidation.TryGetSuccess(out var revalidated))
         {
-            LogGrantedAuthorizationDetailsExceedTheRequest(
+            LogGrantedAuthorizationDetailsRefused(
                 request.ClientInfo.ClientId, revalidation.GetFailure().ErrorDescription);
 
             return new OidcError(
                 ErrorCodes.AccessDenied,
-                "The granted authorization_details exceed the ones requested");
+                "The granted authorization_details were refused");
         }
 
         // The call above is guarded on a non-empty granted set, and this request has already decided

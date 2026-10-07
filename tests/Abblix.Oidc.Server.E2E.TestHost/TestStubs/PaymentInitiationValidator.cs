@@ -26,6 +26,8 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 /// </summary>
 public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
 {
+    private const string InstructedAmount = "instructedAmount";
+
     public string Type => "payment_initiation";
 
     public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
@@ -39,7 +41,7 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, "payment_initiation requires non-empty actions."));
         }
 
-        if (detail.Json["instructedAmount"] is null)
+        if (detail.Json[InstructedAmount] is null)
         {
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, "payment_initiation requires instructedAmount."));
@@ -50,7 +52,8 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
 
     /// <summary>
     /// A granted entry stands only if some requested entry covers it, since RFC 9396 section 6.1 leaves that
-    /// comparison to the type.
+    /// comparison to the type. An entry breaking the type's own rules is no end user's answer but a fault in
+    /// the consent provider, so it is thrown rather than returned.
     /// </summary>
     public async Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
         AuthorizationDetail detail,
@@ -59,8 +62,11 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
         CancellationToken token)
     {
         var validated = await ValidateAsync(detail, client, token);
-        if (validated.TryGetFailure(out _))
-            return validated;
+        if (validated.TryGetFailure(out var defect))
+        {
+            throw new InvalidOperationException(
+                $"The consent provider granted a payment_initiation entry no end user could: {defect.ErrorDescription}");
+        }
 
         if (!requested.Any(asked => Covers(asked, detail)))
         {
@@ -77,7 +83,7 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
 
     private static bool SamePayee(AuthorizationDetail asked, AuthorizationDetail granted)
         => JsonNode.DeepEquals(asked.Json["creditorAccount"], granted.Json["creditorAccount"]) &&
-           JsonNode.DeepEquals(asked.Json["instructedAmount"]?["currency"], granted.Json["instructedAmount"]?["currency"]);
+           JsonNode.DeepEquals(asked.Json[InstructedAmount]?["currency"], granted.Json[InstructedAmount]?["currency"]);
 
     private static bool AmountWithin(AuthorizationDetail asked, AuthorizationDetail granted)
         => AmountOf(asked) is { } askedAmount && AmountOf(granted) is { } grantedAmount && grantedAmount <= askedAmount;
@@ -85,7 +91,7 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
     // Compared as numbers: as text, "1000" sorts below "200"
     private static decimal? AmountOf(AuthorizationDetail detail)
         => decimal.TryParse(
-            detail.Json["instructedAmount"]?["amount"]?.ToString(),
+            detail.Json[InstructedAmount]?["amount"]?.ToString(),
             NumberStyles.Number,
             CultureInfo.InvariantCulture,
             out var amount)
