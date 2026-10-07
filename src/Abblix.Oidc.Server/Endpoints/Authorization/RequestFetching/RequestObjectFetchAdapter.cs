@@ -119,7 +119,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
                 "is not supported");
         }
 
-        if (merged.ResponseMode is { } responseMode &&
+        if (merged.ResponseMode is { Length: > 0 } responseMode &&
             !SupportedResponseModes.Contains(responseMode, StringComparer.Ordinal))
         {
             return new OidcError(

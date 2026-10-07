@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// answers it, so the request proceeds to a code rather than to the page again - however the client sent the
 /// request: as query parameters, pushed, or inside a signed request object.
 /// </summary>
-public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
+public partial class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 {
     private const string LoginPath = "/login";
     private const string RegistrationPath = "/register";
@@ -488,50 +488,6 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
-    }
-
-    /// <summary>
-    /// An unsupported value inside a signed request object gets the answer the same value gets in the query: a
-    /// 400 for a response mode, which no error response can be delivered in, and invalid_request at the redirect
-    /// URI for a display value and a code challenge method.
-    /// </summary>
-    [Theory]
-    [InlineData(AuthorizationRequest.Parameters.ResponseMode, "bogus")]
-    [InlineData(AuthorizationRequest.Parameters.Display, "hologram")]
-    [InlineData(AuthorizationRequest.Parameters.CodeChallengeMethod, "S1")]
-    public async Task UnsupportedValue_InRequestObject_IsAnsweredAsInTheQuery(string name, string value)
-    {
-        var (client, _, host) = Start();
-        using var _ = host;
-        var discovery = await FetchDiscoveryAsync(client);
-
-        var query = AuthorizeParameters(Prompts.Login);
-        query[name] = value;
-        using var viaQuery = await client.GetAsync(
-            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query), TestContext.Current.CancellationToken);
-
-        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
-            client, discovery, Prompts.Login, new Dictionary<string, string> { [name] = value });
-        using var viaObject = await client.GetAsync(
-            await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(viaQuery.StatusCode, viaObject.StatusCode);
-        var error = await ErrorOfAsync(viaQuery);
-        Assert.Equal(ErrorCodes.InvalidRequest, error);
-        Assert.Equal(error, await ErrorOfAsync(viaObject));
-    }
-
-    /// <summary>
-    /// The error an authorization response carries: in the redirect it sends, or in the body of a 400.
-    /// </summary>
-    private static async Task<string?> ErrorOfAsync(HttpResponseMessage response)
-    {
-        if (response.Headers.Location is { } location)
-            return QueryValue(location, ResponseParameters.Error);
-
-        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        return body[ResponseParameters.Error]?.GetValue<string>();
     }
 
     [Theory]
@@ -1312,7 +1268,8 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         DiscoveryDocument discovery,
         string? prompt,
         IReadOnlyDictionary<string, string>? overrides = null,
-        bool pkceRequired = true)
+        bool pkceRequired = true,
+        string[]? requestUris = null)
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         var publicKey = new RsaJsonWebKey
@@ -1331,6 +1288,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(new JsonWebKeySet([publicKey])),
             [RegistrationMembers.PkceRequired] = pkceRequired,
+            [RegistrationMembers.RequestUris] = requestUris is null ? null : new JsonArray([.. requestUris.Select(uri => (JsonNode)uri)]),
         });
         var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
         var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
