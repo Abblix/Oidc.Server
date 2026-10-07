@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -99,26 +100,44 @@ public partial class PromptReturnTripTests
         Assert.Equal(error, await ErrorOfAsync(viaObject));
     }
 
-    /// <summary>
-    /// An empty response mode inside a request object is no response mode, as an empty one in the query is: the
-    /// request goes on to the login page rather than being refused.
-    /// </summary>
-    [Fact]
-    public async Task EmptyResponseMode_InRequestObject_IsTakenAsAbsent()
+    public static TheoryData<string, RequestObjectPassing> BlankResponseModesByPassing()
     {
-        var (client, _, host) = Start();
+        var data = new TheoryData<string, RequestObjectPassing>();
+        foreach (var blank in new[] { string.Empty, " " })
+        {
+            foreach (var passing in Enum.GetValues<RequestObjectPassing>())
+                data.Add(blank, passing);
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// A response mode inside a request object that is empty or whitespace alone is no response mode, as the same
+    /// value in the query is: the request is taken, and goes on to the login page.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BlankResponseModesByPassing))]
+    public async Task BlankResponseMode_InRequestObject_IsTakenAsAbsent(string blank, RequestObjectPassing passing)
+    {
+        var served = new RequestObjectServer();
+        var (client, host) = StartServing(served);
         using var _ = host;
         var discovery = await FetchDiscoveryAsync(client);
         var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
             client,
             discovery,
             Prompts.Login,
-            new Dictionary<string, string> { [AuthorizationRequest.Parameters.ResponseMode] = string.Empty });
+            new Dictionary<string, string> { [AuthorizationRequest.Parameters.ResponseMode] = blank },
+            requestUris: [RequestObjectServer.Address]);
 
-        var sentTo = await RedirectOf(client, await FirstLegAsync(
-            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+        using var response = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, passing, served);
 
-        Assert.Equal(LoginPath, PathOf(sentTo));
+        if (passing == RequestObjectPassing.Pushed)
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        else
+            Assert.Equal(LoginPath, PathOf(response.Headers.Location!));
     }
 
     /// <summary>
@@ -141,10 +160,14 @@ public partial class PromptReturnTripTests
                     TestContext.Current.CancellationToken);
 
             case RequestObjectPassing.ByReference:
+            {
                 served.Content = requestObject;
-                return await client.GetAsync(
+                var response = await client.GetAsync(
                     Authorize(discovery, clientId, RequestObjectServer.Address),
                     TestContext.Current.CancellationToken);
+                Assert.Equal(new Uri(RequestObjectServer.Address), served.Fetched);
+                return response;
+            }
 
             case RequestObjectPassing.Pushed:
                 return await FormPostHelpers.PostFormAsync(
@@ -172,8 +195,14 @@ public partial class PromptReturnTripTests
 
         public string? Content { get; set; }
 
+        /// <summary>The address the server last fetched a request object from.</summary>
+        public Uri? Fetched { get; private set; }
+
         public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
-            => Task.FromResult<Result<T, OidcError>>((T)(object)Content!);
+        {
+            Fetched = uri;
+            return Task.FromResult<Result<T, OidcError>>((T)(object)Content!);
+        }
     }
 
     /// <summary>

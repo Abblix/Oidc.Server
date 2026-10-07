@@ -46,13 +46,14 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
 
         // The merge rebuilds the request from its wire form, which leaves out what the server set on the request it
         // stored: carried over, or a pushed request_uri is never consumed and a stored request never learns the end
-        // user was sent to log in
+        // user was sent to log in. A response mode of whitespace alone is none, as the query's binding reads one
         return fetchResult
             .Bind(merged => ValidateMergedParameters(request, merged with
             {
                 PushedRequestUri = request.PushedRequestUri,
                 OriginRequestUri = request.OriginRequestUri,
                 Prompted = request.Prompted,
+                ResponseMode = string.IsNullOrWhiteSpace(merged.ResponseMode) ? null : merged.ResponseMode,
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
@@ -119,7 +120,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
                 "is not supported");
         }
 
-        if (merged.ResponseMode is { Length: > 0 } responseMode &&
+        if (merged.ResponseMode is { } responseMode &&
             !SupportedResponseModes.Contains(responseMode, StringComparer.Ordinal))
         {
             return new OidcError(
