@@ -37,11 +37,13 @@ internal sealed class AuthorizationDetailsPolicy(
 {
     /// <summary>
     /// The per-entry question, which is the only thing the request phase and the granted phase differ
-    /// in: everything around it (object shape, known type, per-client allowlist) binds in both.
+    /// in: everything around it (object shape, known type, per-client allowlist) binds in both. The
+    /// granted phase also hands over the requested entries of the detail's type.
     /// </summary>
     private delegate Task<Result<AuthorizationDetail, OidcError>> AskValidator(
         IAuthorizationDetailValidator validator,
         AuthorizationDetail detail,
+        IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token);
 
@@ -52,23 +54,28 @@ internal sealed class AuthorizationDetailsPolicy(
         CancellationToken token)
         => ApplyCoreAsync(
             raw,
+            [],
             client,
-            static (validator, detail, client, token) => validator.ValidateAsync(detail, client, token),
+            static (validator, detail, _, client, token) => validator.ValidateAsync(detail, client, token),
             token);
 
     /// <inheritdoc/>
     public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
         => ApplyCoreAsync(
             granted,
+            requested?.ToTypedArray() ?? [],
             client,
-            static (validator, detail, client, token) => validator.ValidateGrantedAsync(detail, client, token),
+            static (validator, detail, requested, client, token)
+                => validator.ValidateGrantedAsync(detail, requested, client, token),
             token);
 
     private async Task<Result<JsonArray, OidcError>> ApplyCoreAsync(
         JsonArray? raw,
+        AuthorizationDetail[] requested,
         ClientInfo client,
         AskValidator ask,
         CancellationToken token)
@@ -103,7 +110,7 @@ internal sealed class AuthorizationDetailsPolicy(
                 return Reject($"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}");
         }
 
-        var result = await ValidateAsync(authorizationDetails, client, ask, token);
+        var result = await ValidateAsync(authorizationDetails, requested, client, ask, token);
 
         // Rebuild the raw array from the validated typed list (RFC 9396 section 7.1 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
@@ -117,6 +124,7 @@ internal sealed class AuthorizationDetailsPolicy(
 
     private async Task<Result<IReadOnlyList<AuthorizationDetail>, OidcError>> ValidateAsync(
         IEnumerable<AuthorizationDetail> details,
+        AuthorizationDetail[] requested,
         ClientInfo client,
         AskValidator ask,
         CancellationToken cancellationToken)
@@ -139,7 +147,10 @@ internal sealed class AuthorizationDetailsPolicy(
                     $"unknown authorization_details type: '{detail.Type}'");
             }
 
-            var result = await ask(validator, detail, client, cancellationToken);
+            var requestedOfType = Array.FindAll(
+                requested, entry => string.Equals(entry.Type, detail.Type, StringComparison.Ordinal));
+
+            var result = await ask(validator, detail, requestedOfType, client, cancellationToken);
             if (result.TryGetFailure(out var failure))
             {
                 return failure;

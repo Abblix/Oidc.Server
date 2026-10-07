@@ -74,6 +74,9 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// <summary>How many times the granted-phase question was asked.</summary>
     public int GrantedCalls { get; private set; }
 
+    /// <summary>The requested set the last granted-phase question was handed.</summary>
+    public JsonArray? LastRequested { get; private set; }
+
     public Task<Result<JsonArray, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
@@ -101,10 +104,12 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
 
     public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
     {
         GrantedCalls++;
+        LastRequested = requested;
         if (_honourCancellation)
             token.ThrowIfCancellationRequested();
 

@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
@@ -59,6 +60,27 @@ public class GrantedRevalidationTests
         """;
 
     /// <summary>
+    /// What the client asked for: the worked example itself, so a granted entry equal to it is within it.
+    /// </summary>
+    private static JsonArray RequestedAsInTheExample() => JsonNode.Parse(WorkedExample)!.AsArray();
+
+    /// <summary>
+    /// The out-of-band flows hand the validators what the client asked for, so a type can hold a stored
+    /// grant to it when the grant is spent.
+    /// </summary>
+    [Fact]
+    public async Task TheValidatorsAreHandedTheRequestedEntries()
+    {
+        var policy = PolicyWith<RequiringTheRequestValidator>();
+
+        Assert.Null(await policy.RefuseAsync(
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
+        Assert.NotNull(await policy.RefuseAsync(
+            GrantWith(WorkedExample), null, new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// A validator that changes nothing is not read as changing something.
     /// </summary>
     /// <remarks>
@@ -72,7 +94,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<PassThroughValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -89,7 +111,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<ReorderingValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -106,7 +128,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<CappingValidator>();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
@@ -128,7 +150,7 @@ public class GrantedRevalidationTests
         IAuthorizationDetailsPolicy policy = new InPlaceEditingPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
@@ -149,7 +171,7 @@ public class GrantedRevalidationTests
         IAuthorizationDetailsPolicy policy = new EditingInPlaceAndAnsweringTheOriginalPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
@@ -171,7 +193,7 @@ public class GrantedRevalidationTests
         IAuthorizationDetailsPolicy policy = new EmptyingPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
@@ -201,6 +223,26 @@ public class GrantedRevalidationTests
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+    }
+
+    /// <summary>Accepts a granted entry only when the request carried an entry of its type.</summary>
+    private sealed class RequiringTheRequestValidator : IAuthorizationDetailValidator
+    {
+        public string Type => PaymentType;
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                requested.Count > 0
+                    ? detail
+                    : new OidcError(ErrorCodes.InvalidAuthorizationDetails, "nothing was requested"));
     }
 
     /// <summary>Returns an entry carrying the same members, sorted by name.</summary>

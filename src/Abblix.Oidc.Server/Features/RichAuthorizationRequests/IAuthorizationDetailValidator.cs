@@ -84,15 +84,22 @@ public interface IAuthorizationDetailValidator
     /// input unconditionally hands a tampered consent decision straight to the issued token.
     /// </para>
     /// <para>
-    /// Note what this method is NOT given: the entry the client originally sent, and the end user who
-    /// answered. So an enrichable field can be bounded here only by rules that hold on their own - a
-    /// ceiling, a format, a per-client limit - and not by comparing the value against the request it
-    /// came from. A type whose enrichment needs that comparison has to make it where both sides are in
-    /// hand, which today is the consent provider that produced the decision.
+    /// This is also where a granted entry is held to the request it answers. RFC 9396 section 6.1 says
+    /// "there is no standardized mechanism to compare two arbitrary authorization detail requests" and
+    /// leaves the comparison to the definition of the type, so <paramref name="requested"/> carries the
+    /// entries of this type the client asked for, and an override decides whether the granted one stays
+    /// within them: an amount no higher, the same account. They are every entry of this type rather than
+    /// one partner, because a request may carry several of one type and a consent decision may drop or
+    /// reorder them. A granted type the request did not carry is refused before this method is asked, so
+    /// the list is empty only where no record of the request survives, as for a back-channel request
+    /// stored before the server recorded one. A refusal here reaches the client as access_denied at the
+    /// authorization endpoint, since the likely cause is an end user who edited the consent form.
     /// </para>
     /// </remarks>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
     /// this validator's <see cref="Type"/>.</param>
+    /// <param name="requested">The entries of this validator's <see cref="Type"/> the request carried,
+    /// as the end user was shown them.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or an
@@ -101,6 +108,7 @@ public interface IAuthorizationDetailValidator
     /// error.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
         AuthorizationDetail detail,
+        IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token)
         => ValidateAsync(detail, client, token);

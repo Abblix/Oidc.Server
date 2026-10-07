@@ -201,8 +201,8 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
-                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
+                It.IsAny<JsonArray?>(), It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) =>
                 CapAmount(ad, 800m) ?? new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);

@@ -129,7 +129,10 @@ public partial class PushModeCompletionHandler(
         //
         // No cancellation token, because nothing on the path from the router down carries one.
         if (await authorizationDetailsPolicy.RefuseAsync(
-                request.AuthorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
+                request.AuthorizedGrant,
+                request.RequestedAuthorizationDetails,
+                clientInfo,
+                CancellationToken.None) is { } refusal)
         {
             LogGrantedAuthorizationDetailsRefused(
                 authenticationRequestId, clientInfo.ClientId, refusal.Reason);

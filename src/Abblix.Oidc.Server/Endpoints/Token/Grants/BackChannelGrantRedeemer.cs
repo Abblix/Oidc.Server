@@ -86,7 +86,8 @@ internal sealed partial class BackChannelGrantRedeemer(
         // asks it - on a copy, because the question must not rewrite its own subject. Without the caller's
         // cancellation token, because the request is already taken: giving up here would spend it and issue
         // nothing, where finishing issues tokens a departed client simply never reads.
-        if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, CancellationToken.None)
+        if (await authorizationDetailsPolicy.RefuseAsync(
+                grant, request.RequestedAuthorizationDetails, clientInfo, CancellationToken.None)
             is not { } refusal)
             return grant;
 

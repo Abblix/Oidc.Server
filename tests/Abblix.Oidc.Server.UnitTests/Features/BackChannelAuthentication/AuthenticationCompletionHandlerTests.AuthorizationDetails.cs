@@ -202,6 +202,8 @@ public partial class AuthenticationCompletionHandlerTests
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(1, policy.GrantedCalls);
+        Assert.NotNull(policy.LastRequested);
+        Assert.Same(request.RequestedAuthorizationDetails, policy.LastRequested);
         _tokenRequestProcessor.VerifyNoOtherCalls();
         // The validator's own words are for the operator: the client is sent the fixed description, and
         // nothing of "instructedAmount exceeds the ceiling".

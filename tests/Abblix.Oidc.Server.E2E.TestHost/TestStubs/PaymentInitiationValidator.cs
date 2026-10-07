@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Globalization;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -18,8 +20,9 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 /// <summary>
 /// Test validator for the RFC 9396 <c>payment_initiation</c> authorization-detail type.
 /// Mirrors the PSD2-style payload shape used in the spec examples: requires
-/// <c>actions</c> non-empty and <c>instructedAmount</c> object present.
-/// Anything richer is the host's concern at production time.
+/// <c>actions</c> non-empty and <c>instructedAmount</c> object present, and holds a granted entry
+/// to the requested ones the way a payment type would: the same currency and creditor account, and an
+/// amount no higher. Anything richer is the host's concern at production time.
 /// </summary>
 public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
 {
@@ -44,4 +47,48 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
 
         return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
+
+    /// <summary>
+    /// A granted entry stands only if some requested entry covers it, since RFC 9396 section 6.1 leaves that
+    /// comparison to the type.
+    /// </summary>
+    public async Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+        AuthorizationDetail detail,
+        IReadOnlyList<AuthorizationDetail> requested,
+        ClientInfo client,
+        CancellationToken token)
+    {
+        var validated = await ValidateAsync(detail, client, token);
+        if (validated.TryGetFailure(out _))
+            return validated;
+
+        if (!requested.Any(asked => Covers(asked, detail)))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidAuthorizationDetails,
+                "payment_initiation grants more than was requested.");
+        }
+
+        return validated;
+    }
+
+    private static bool Covers(AuthorizationDetail asked, AuthorizationDetail granted)
+        => SamePayee(asked, granted) && AmountWithin(asked, granted);
+
+    private static bool SamePayee(AuthorizationDetail asked, AuthorizationDetail granted)
+        => JsonNode.DeepEquals(asked.Json["creditorAccount"], granted.Json["creditorAccount"]) &&
+           JsonNode.DeepEquals(asked.Json["instructedAmount"]?["currency"], granted.Json["instructedAmount"]?["currency"]);
+
+    private static bool AmountWithin(AuthorizationDetail asked, AuthorizationDetail granted)
+        => AmountOf(asked) is { } askedAmount && AmountOf(granted) is { } grantedAmount && grantedAmount <= askedAmount;
+
+    // Compared as numbers: as text, "1000" sorts below "200"
+    private static decimal? AmountOf(AuthorizationDetail detail)
+        => decimal.TryParse(
+            detail.Json["instructedAmount"]?["amount"]?.ToString(),
+            NumberStyles.Number,
+            CultureInfo.InvariantCulture,
+            out var amount)
+            ? amount
+            : null;
 }

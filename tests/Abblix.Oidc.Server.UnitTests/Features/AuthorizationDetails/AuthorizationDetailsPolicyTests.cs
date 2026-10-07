@@ -399,7 +399,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyGrantedAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyGrantedAsync(raw, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains(RejectingValidator.Reason, error.ErrorDescription);
@@ -425,7 +425,7 @@ public class AuthorizationDetailsPolicyTests
         var asRequest = await composite.ApplyAsync(
             (JsonArray)enriched.DeepClone(), TestClient, TestContext.Current.CancellationToken);
         var asGranted = await composite.ApplyGrantedAsync(
-            enriched, TestClient, TestContext.Current.CancellationToken);
+            enriched, null, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(asRequest.TryGetFailure(out _));
         Assert.True(asGranted.TryGetSuccess(out var validated));
@@ -473,11 +473,39 @@ public class AuthorizationDetailsPolicyTests
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "unhandled shape"),
         };
 
-        var result = await composite.ApplyGrantedAsync(granted, client, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyGrantedAsync(
+            granted, granted, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
         Assert.Contains(expected, error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Each per-type validator is handed the requested entries of its own type, every one of them, so it
+    /// can hold the granted entry to what was asked: RFC 9396 section 6.1 leaves that comparison to the type.
+    /// </summary>
+    [Fact]
+    public async Task ApplyGrantedAsync_hands_each_validator_the_requested_entries_of_its_type()
+    {
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<RecordingValidator>("payment_initiation")
+            .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var recording = (RecordingValidator)sp.GetRequiredKeyedService<IAuthorizationDetailValidator>(
+            "payment_initiation");
+
+        var requested = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" },
+            new JsonObject { ["type"] = "account_information", ["access"] = new JsonObject() },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "50" });
+        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "100" });
+
+        var result = await composite.ApplyGrantedAsync(
+            granted, requested, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(["200", "50"], recording.Requested.Select(entry => entry.Json["amount"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -490,7 +518,8 @@ public class AuthorizationDetailsPolicyTests
 
         var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await policy.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+        var result = await policy.ApplyGrantedAsync(
+            granted, granted, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(RefusingPolicy.Reason, error.ErrorDescription);
@@ -513,7 +542,8 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var granted = new JsonArray(new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyGrantedAsync(
+            granted, granted, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains("access is required", error.ErrorDescription);
@@ -584,7 +614,10 @@ public class AuthorizationDetailsPolicyTests
         // Only the enrichable field is exempt here. Everything else the type refuses, it refuses in
         // both phases: a consent decision that crossed the browser is not more trusted than a client.
         public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
             => Task.FromResult(SharedRules(detail));
 
         private static Result<AuthorizationDetail, OidcError> SharedRules(AuthorizationDetail detail)
@@ -594,6 +627,30 @@ public class AuthorizationDetailsPolicyTests
 
         private static Result<AuthorizationDetail, OidcError> Refuse(string description)
             => new OidcError(ErrorCodes.InvalidAuthorizationDetails, description);
+    }
+
+    /// <summary>
+    /// Accepts every entry and keeps the requested ones the granted phase handed it.
+    /// </summary>
+    private sealed class RecordingValidator : IAuthorizationDetailValidator
+    {
+        public IReadOnlyList<AuthorizationDetail> Requested { get; private set; } = [];
+
+        public string Type => "payment_initiation";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+        {
+            Requested = requested;
+            return ValidateAsync(detail, client, token);
+        }
     }
 
     /// <summary>
