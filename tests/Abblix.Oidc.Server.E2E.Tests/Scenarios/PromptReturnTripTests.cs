@@ -490,6 +490,50 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         });
     }
 
+    /// <summary>
+    /// An unsupported value inside a signed request object gets the answer the same value gets in the query: a
+    /// 400 for a response mode, which no error response can be delivered in, and invalid_request at the redirect
+    /// URI for a display value and a code challenge method.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationRequest.Parameters.ResponseMode, "bogus")]
+    [InlineData(AuthorizationRequest.Parameters.Display, "hologram")]
+    [InlineData(AuthorizationRequest.Parameters.CodeChallengeMethod, "S1")]
+    public async Task UnsupportedValue_InRequestObject_IsAnsweredAsInTheQuery(string name, string value)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var query = AuthorizeParameters(Prompts.Login);
+        query[name] = value;
+        using var viaQuery = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query), TestContext.Current.CancellationToken);
+
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client, discovery, Prompts.Login, new Dictionary<string, string> { [name] = value });
+        using var viaObject = await client.GetAsync(
+            await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(viaQuery.StatusCode, viaObject.StatusCode);
+        var error = await ErrorOfAsync(viaQuery);
+        Assert.Equal(ErrorCodes.InvalidRequest, error);
+        Assert.Equal(error, await ErrorOfAsync(viaObject));
+    }
+
+    /// <summary>
+    /// The error an authorization response carries: in the redirect it sends, or in the body of a 400.
+    /// </summary>
+    private static async Task<string?> ErrorOfAsync(HttpResponseMessage response)
+    {
+        if (response.Headers.Location is { } location)
+            return QueryValue(location, ResponseParameters.Error);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        return body[ResponseParameters.Error]?.GetValue<string>();
+    }
+
     [Theory]
     [InlineData(Prompts.Login, LoginPath)]
     [InlineData(Prompts.Create, RegistrationPath)]

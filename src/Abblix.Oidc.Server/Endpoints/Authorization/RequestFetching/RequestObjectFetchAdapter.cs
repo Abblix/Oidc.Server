@@ -60,8 +60,19 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// <summary>
     /// The <c>prompt</c> values the request model declares supported.
     /// </summary>
-    private static readonly string[] SupportedPrompts = typeof(AuthorizationRequest)
-        .GetProperty(nameof(AuthorizationRequest.Prompt))!
+    private static readonly string[] SupportedPrompts = DeclaredValuesOf(nameof(AuthorizationRequest.Prompt));
+
+    /// <summary>
+    /// The <c>response_mode</c> values the request model declares supported.
+    /// </summary>
+    private static readonly string[] SupportedResponseModes =
+        DeclaredValuesOf(nameof(AuthorizationRequest.ResponseMode));
+
+    /// <summary>
+    /// The value list the request model declares on a property, which refuses a value outside it in the query.
+    /// </summary>
+    private static string[] DeclaredValuesOf(string property) => typeof(AuthorizationRequest)
+        .GetProperty(property)!
         .GetCustomAttribute<AllowedValuesAttribute>()!
         .AllowedValues;
 
@@ -71,7 +82,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// the request object's values precedence, so a mismatch surfaces as the merged value differing
     /// from the outer one - without this check an attacker-supplied object could silently swap the
     /// flow or the client identity relative to what the plain OAuth parameters declared. A prompt value outside
-    /// <see cref="SupportedPrompts"/> is refused with invalid_request, as the same value is in the query.
+    /// <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>, is
+    /// refused with invalid_request, as the same value is in the query.
     /// </summary>
     private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
         AuthorizationRequest outer,
@@ -105,6 +117,15 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
                 ErrorCodes.InvalidRequest,
                 $"The {AuthorizationRequest.Parameters.Prompt} value '{unsupported}' inside the request object " +
                 "is not supported");
+        }
+
+        if (merged.ResponseMode is { } responseMode &&
+            !SupportedResponseModes.Contains(responseMode, StringComparer.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                $"The {AuthorizationRequest.Parameters.ResponseMode} value '{responseMode}' inside the request " +
+                "object is not supported");
         }
 
         return merged;
