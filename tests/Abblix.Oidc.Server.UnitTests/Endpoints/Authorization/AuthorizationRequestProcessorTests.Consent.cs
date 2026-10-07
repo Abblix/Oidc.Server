@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.Consents;
 using Moq;
 using Xunit;
 
@@ -99,6 +100,37 @@ public partial class AuthorizationRequestProcessorTests
 
         var consentRequired = Assert.IsType<ConsentRequired>(result);
         Assert.Equal(stillPending, consentRequired.RequiredUserConsents.Scopes);
+    }
+
+    /// <summary>
+    /// A consent the end user gave that grants nothing, with nothing left pending, is their refusal: access_denied at
+    /// the redirect URI. Without a moment of giving, the same empty consent is no answer, and the request goes on.
+    /// </summary>
+    [Theory]
+    [InlineData(true, ErrorCodes.AccessDenied)]
+    [InlineData(false, null)]
+    public async Task ProcessAsync_ConsentGrantingNothing_IsARefusalOnlyWhenGiven(bool given, string? expectedError)
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        var refused = new UserConsents
+        {
+            Granted = new ConsentDefinition([], []),
+            GivenAt = given ? _timeProvider.GetUtcNow() : null,
+        };
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(refused);
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
+            .ReturnsAsync("code");
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.Equal(expectedError, (result as AuthorizationError)?.Error);
     }
 
     /// <summary>

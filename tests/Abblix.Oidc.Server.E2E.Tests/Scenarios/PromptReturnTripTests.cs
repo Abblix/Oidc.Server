@@ -107,10 +107,12 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     {
         public DateTimeOffset? GivenAt { get; private set; }
 
+        private bool _refused;
+
         public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
             => Task.FromResult(new UserConsents
             {
-                Granted = new ConsentDefinition(request.Scope, request.Resources),
+                Granted = _refused ? new ConsentDefinition([], []) : new ConsentDefinition(request.Scope, request.Resources),
                 GivenAt = GivenAt,
             });
 
@@ -118,6 +120,15 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         /// The consent page: the end user gives consent, and the host records the moment.
         /// </summary>
         public void Give() => GivenAt = TimeProvider.System.GetUtcNow();
+
+        /// <summary>
+        /// The consent page: the end user refuses, and the host records an answer that grants nothing.
+        /// </summary>
+        public void Refuse()
+        {
+            _refused = true;
+            Give();
+        }
     }
 
     private (HttpClient Client, SignedInEndUser EndUser, IDisposable Host) Start()
@@ -174,9 +185,11 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
-    private static Dictionary<string, string> AuthorizeParameters(string prompt)
+    private static Dictionary<string, string> AuthorizeParameters(string prompt) => AuthorizeParameters(prompt, out _);
+
+    private static Dictionary<string, string> AuthorizeParameters(string prompt, out string verifier)
     {
-        var (_, challenge) = GeneratePkcePair();
+        (verifier, var challenge) = GeneratePkcePair();
         return new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
@@ -197,6 +210,46 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         => RedirectOf(
             client,
             Authorize(discovery, clientId, QueryValue(page, AuthorizationRequest.Parameters.RequestUri)!));
+
+    /// <summary>
+    /// The <c>auth_time</c> of the ID token the code at <paramref name="location"/> is exchanged for.
+    /// </summary>
+    private static async Task<long> AuthTimeOfCodeAsync(
+        HttpClient client, DiscoveryDocument discovery, Uri location, string verifier)
+    {
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = QueryValue(location, TokenRequest.Parameters.Code)!,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        var idToken = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        return idToken[JwtClaimTypes.AuthenticationTime]!.GetValue<long>();
+    }
+
+    /// <summary>
+    /// The pages a combination of prompt values leads through, each answered as a host's page answers it, and the
+    /// request ending in a code.
+    /// </summary>
+    private static async Task<Uri> WalkPagesAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        Uri sentTo,
+        params (string Page, Action Answer)[] pages)
+    {
+        foreach (var (page, answer) in pages)
+        {
+            Assert.Equal(page, PathOf(sentTo));
+            answer();
+            sentTo = await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo);
+        }
+
+        AssertCode(sentTo);
+        return sentTo;
+    }
 
     private static void AssertCode(Uri location)
         => Assert.False(
@@ -474,6 +527,208 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         endUser.SignInAgain();
 
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// prompt=login over a live session sends the end user to log in, and the ID token carries the new authentication
+    /// time, not the session's earlier one.
+    /// </summary>
+    [Fact]
+    public async Task PromptLogin_IssuesAnIdTokenWithTheNewAuthenticationTime()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login, out var verifier)));
+        var code = await WalkPagesAsync(client, discovery, sentTo, (LoginPath, endUser.SignInAgain));
+
+        Assert.Equal(
+            endUser.AuthenticatedAt.ToUnixTimeSeconds(),
+            await AuthTimeOfCodeAsync(client, discovery, code, verifier));
+    }
+
+    /// <summary>
+    /// Picking the live session answers account selection without a new authentication: the ID token carries the
+    /// session's own authentication time.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccount_KeepsTheSessionsAuthenticationTime()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var authenticatedAt = endUser.AuthenticatedAt;
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.SelectAccount, out var verifier)));
+        var code = await WalkPagesAsync(client, discovery, sentTo, (AccountSelectionPath, endUser.PickAgain));
+
+        Assert.Equal(authenticatedAt.ToUnixTimeSeconds(), await AuthTimeOfCodeAsync(client, discovery, code, verifier));
+    }
+
+    [Fact]
+    public async Task PromptLogin_WithoutASession_LogsInOnceThenIssuesCode()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        endUser.HasSession = false;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login)));
+
+        await WalkPagesAsync(client, discovery, sentTo, (LoginPath, endUser.SignInAgain));
+    }
+
+    [Theory]
+    [InlineData($"{Prompts.Login} {Prompts.Consent}")]
+    [InlineData($"{Prompts.Consent} {Prompts.Login}")]
+    public async Task PromptLoginConsent_LogsInThenAsksConsent(string prompt)
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)));
+
+        await WalkPagesAsync(client, discovery, sentTo, (LoginPath, endUser.SignInAgain), (ConsentPath, consents.Give));
+    }
+
+    [Fact]
+    public async Task PromptSelectAccountConsent_SelectsThenAsksConsent()
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Consent}")));
+
+        await WalkPagesAsync(
+            client, discovery, sentTo, (AccountSelectionPath, endUser.PickAgain), (ConsentPath, consents.Give));
+    }
+
+    [Fact]
+    public async Task PromptCreateConsent_CreatesThenAsksConsent()
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.Consent} {Prompts.Create}")));
+
+        await WalkPagesAsync(
+            client, discovery, sentTo, (RegistrationPath, endUser.SignInAgain), (ConsentPath, consents.Give));
+    }
+
+    /// <summary>
+    /// An end user refusing on the consent page, as a host records an answer granting nothing, is told to the client
+    /// as access_denied at its redirect URI.
+    /// </summary>
+    [Fact]
+    public async Task PromptConsent_RefusedOnThePage_ReturnsAccessDenied()
+    {
+        var (client, _, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
+        Assert.Equal(ConsentPath, PathOf(sentTo));
+        consents.Refuse();
+
+        var location = await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo);
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.AccessDenied, QueryValue(location, ResponseParameters.Error));
+        Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+    }
+
+    /// <summary>
+    /// The request_uri a request came back with from the selection page is done with once the request moved on to
+    /// the login page: presenting it again is refused rather than letting the browser come back past a later page.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLogin_SelectionRequestUri_IsRefusedOnceRequestMovedOn()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var selection = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Login}")));
+        endUser.PickAgain();
+        Assert.Equal(
+            LoginPath, PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, selection)));
+
+        var again = await client.GetAsync(
+            Authorize(
+                discovery,
+                TestConstants.ConfidentialClientId,
+                QueryValue(selection, AuthorizationRequest.Parameters.RequestUri)!),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+    }
+
+    [Fact]
+    public async Task PromptSelectAccountConsent_InPushedRequest_ShowsEachPageOnce()
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Consent}");
+        parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
+        var pushed = await PushAuthorizationRequestAsync(client, discovery, parameters);
+
+        var sentTo = await RedirectOf(client, Authorize(
+            discovery,
+            TestConstants.ConfidentialClientId,
+            pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>()));
+
+        await WalkPagesAsync(
+            client, discovery, sentTo, (AccountSelectionPath, endUser.PickAgain), (ConsentPath, consents.Give));
+    }
+
+    /// <summary>
+    /// A display value the server does not support is told to the client at its redirect URI, the delivery every
+    /// authorization error with a valid client and redirect URI gets.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedDisplay_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[AuthorizationRequest.Parameters.Display] = "hologram";
+
+        var location = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    /// <summary>
+    /// A redirect URI the client never registered is not one an error may be sent to: the end user's browser gets
+    /// the error, and nothing is redirected.
+    /// </summary>
+    [Fact]
+    public async Task UnregisteredRedirectUri_ShowsAnErrorAndRedirectsNowhere()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[AuthorizationRequest.Parameters.RedirectUri] = "https://unregistered.example.com/callback";
+
+        var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
     }
 
     [Fact]

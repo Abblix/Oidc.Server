@@ -114,8 +114,12 @@ public record AuthorizationRequest
 	/// The OIDC <c>display</c> parameter (OIDC Core section 3.1.2.1) hinting how the authentication and consent UI
 	/// should be rendered: <c>page</c>, <c>popup</c>, <c>touch</c>, or <c>wap</c>.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: a value outside the set is refused by
+	/// <see cref="Endpoints.Authorization.Validation.DisplayValidator"/> once the client and the redirect URI are known,
+	/// so the client is told at its redirect URI rather than the end user's browser showing a 400.
+	/// </remarks>
 	[JsonPropertyName(Parameters.Display)]
-    [AllowedValues(DisplayModes.Page, DisplayModes.Popup, DisplayModes.Touch, DisplayModes.Wap)]
     public string? Display { get; init; }
 
 	/// <summary>

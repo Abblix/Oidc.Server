@@ -100,6 +100,19 @@ public class AuthorizationRequestProcessor(
 		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
 
+		// A consent the end user gave that grants nothing at all is their refusal, which OpenID Connect Core 1.0,
+		// section 3.1.2.6, tells the client with access_denied ("If the End-User denies the request ...")
+		if (userConsents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
+			userConsents.Granted.AuthorizationDetails is null or { Count: 0 })
+		{
+			return new AuthorizationError(
+				model,
+				ErrorCodes.AccessDenied,
+				"The end-user refused consent.",
+				request.ResponseMode,
+				model.RedirectUri);
+		}
+
 		// RFC 9396 section 7.1: "The authorization details attached to the access token MAY differ from what
 		// the client requests", the user authorizing less than was asked being the named case. section 7 is what
 		// obliges the server to tell the client what it actually got.
