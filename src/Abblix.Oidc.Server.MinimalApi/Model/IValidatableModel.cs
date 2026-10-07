@@ -20,7 +20,13 @@ internal interface IValidatableModel
 {
     /// <summary>
     /// The parameters the model reads one value of that the request carried more than once, which the filter refuses
-    /// as RFC 6749 section 3.1 says: "Request and response parameters MUST NOT be included more than once".
+    /// as RFC 6749 sections 3.1 and 3.2 say: "Request and response parameters MUST NOT be included more than once".
     /// </summary>
     IReadOnlyList<string> RepeatedParameters { get; }
+
+    /// <summary>
+    /// The parameters whose value could not be read as the type the model carries, which the filter refuses as an
+    /// invalid parameter value.
+    /// </summary>
+    IReadOnlyList<string> MalformedParameters { get; }
 }

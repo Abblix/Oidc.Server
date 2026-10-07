@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Validation;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Abblix.Oidc.Server.Mvc.Binders;
@@ -14,9 +15,10 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// Binds a parameter that takes one value, refusing it when the request carries it more than once.
 /// </summary>
 /// <remarks>
-/// RFC 6749 section 3.1: "Request and response parameters MUST NOT be included more than once." The default binding
-/// keeps the first value and drops the rest without a word, so a request saying two things at once would be served
-/// as if it said one.
+/// RFC 6749 sections 3.1 and 3.2: "Request and response parameters MUST NOT be included more than once." The default
+/// binding keeps one value and drops the rest without a word, so a request saying two things at once would be served
+/// as if it said one. The count is taken from the query and the form together, because the value providers answer
+/// with the first source that has the name, and a value sent once in each would otherwise read as sent once.
 /// </remarks>
 /// <param name="inner">The binding the parameter gets when it is sent once.</param>
 internal sealed class SingleValueBinder(IModelBinder inner) : IModelBinder
@@ -24,17 +26,15 @@ internal sealed class SingleValueBinder(IModelBinder inner) : IModelBinder
     /// <inheritdoc />
     public Task BindModelAsync(ModelBindingContext bindingContext)
     {
-        if (bindingContext.ValueProvider.GetValue(bindingContext.ModelName).Length > 1)
+        var name = bindingContext.ModelName;
+        var request = bindingContext.HttpContext.Request;
+        var count = request.Query[name].Count + (request.HasFormContentType ? request.Form[name].Count : 0);
+        if (count > 1)
         {
-            bindingContext.ModelState.TryAddModelError(bindingContext.ModelName, RepeatedMessage(bindingContext.ModelName));
+            bindingContext.ModelState.TryAddModelError(name, ErrorFactory.RepeatedParameter(name));
             return Task.CompletedTask;
         }
 
         return inner.BindModelAsync(bindingContext);
     }
-
-    /// <summary>
-    /// What a request carrying <paramref name="name"/> more than once is told.
-    /// </summary>
-    public static string RepeatedMessage(string name) => $"The parameter '{name}' is included more than once";
 }

@@ -48,12 +48,12 @@ internal static class FormValues
         => values is { Count: 1 } && values.ToString() is { Length: > 0 } value ? value : null;
 
     /// <summary>
-    /// The names among <paramref name="names"/> that <paramref name="source"/> carries more than once. A value read
-    /// above from a repeated parameter is no value, so the reading never joins two values into one, and the
-    /// validation filter refuses the request naming these.
+    /// The names among <paramref name="names"/> that <paramref name="source"/> carries more than once, counting the
+    /// query and the form together. A value read above from a repeated parameter is no value, so the reading never
+    /// joins two values into one, and the validation filter refuses the request naming these.
     /// </summary>
     public static string[] Repeated(RequestValues source, string[] names)
-        => Array.FindAll(names, name => source[name].Count > 1);
+        => Array.FindAll(names, name => source.Count(name) > 1);
 
     /// <inheritdoc cref="Repeated(RequestValues, string[])"/>
     public static string[] Repeated(IFormCollection source, string[] names)
@@ -97,11 +97,29 @@ internal static class FormValues
             : value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
     }
 
-    /// <summary>A single value parsed as a URI, or null when absent or unparseable.</summary>
+    /// <summary>
+    /// The value <paramref name="read"/> produces. A value it cannot read adds the parameter's name to
+    /// <paramref name="malformed"/>, which the validation filter refuses before anything reads the model, so the
+    /// default standing in for it is never seen.
+    /// </summary>
+    public static T Read<T>(Func<T> read, string name, List<string> malformed)
+    {
+        try
+        {
+            return read();
+        }
+        catch (FormatException)
+        {
+            malformed.Add(name);
+            return default!;
+        }
+    }
+
+    /// <summary>A single value parsed as a URI, or null when absent. A value that is not a URI is refused.</summary>
     public static Uri? ParseUri(StringValues values)
     {
         var value = Value(values);
-        return value is not null && Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri) ? uri : null;
+        return value is null ? null : ToUri(value);
     }
 
     /// <summary>A single form value read by name as a URI, or null.</summary>
@@ -109,22 +127,19 @@ internal static class FormValues
 
     /// <summary>
     /// A repeated field as an array of URIs (RFC 8707 <c>resource</c>), or null when no entry is left. An entry that
-    /// is empty or whitespace alone is no entry, as the MVC host reads it.
+    /// is empty or whitespace alone is no entry, as the MVC host reads it, and an entry that is not a URI is refused.
     /// </summary>
     public static Uri[]? ParseUris(StringValues values)
     {
-        var uris = new List<Uri>(values.Count);
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value) && Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri))
-                uris.Add(uri);
-        }
-
-        return uris.Count > 0 ? uris.ToArray() : null;
+        var uris = values.OfType<string>().Where(value => !string.IsNullOrWhiteSpace(value)).Select(ToUri).ToArray();
+        return uris.Length > 0 ? uris : null;
     }
 
     /// <summary>A repeated form field read by name as an array of URIs, or null.</summary>
     public static Uri[]? ParseUris(IFormCollection form, string name) => ParseUris(Get(form, name));
+
+    private static Uri ToUri(string value)
+        => Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri) ? uri : throw MalformedValue();
 
     /// <summary>
     /// A single integer-seconds value as a <see cref="TimeSpan"/> (e.g. <c>max_age</c>), or null when absent. A value
@@ -205,8 +220,7 @@ internal static class FormValues
     private static StringValues Get(IFormCollection form, string name)
         => form.TryGetValue(name, out var values) ? values : StringValues.Empty;
 
-    // A binding-time BadHttpRequestException with a 400 status is rendered by ASP.NET Core as a 400 response, the
-    // Minimal API counterpart of the MVC binder shaping a malformed value into invalid_request.
-    private static BadHttpRequestException MalformedValue()
-        => new("The request contains a malformed parameter value.", StatusCodes.Status400BadRequest);
+    // Caught by Read, which names the parameter for the validation filter: the Minimal API counterpart of the MVC
+    // binder recording a malformed value in the model state
+    private static FormatException MalformedValue() => new("The request contains a malformed parameter value.");
 }

@@ -25,6 +25,19 @@ public static class ErrorFactory
         "includes a parameter more than once, or is otherwise malformed";
 
     /// <summary>
+    /// The validation message for a parameter that takes one value and was sent more than once, which RFC 6749
+    /// sections 3.1 and 3.2 forbid: "Request and response parameters MUST NOT be included more than once."
+    /// </summary>
+    /// <param name="name">The parameter's name as sent.</param>
+    public static string RepeatedParameter(string name) => $"The parameter '{name}' is included more than once";
+
+    /// <summary>
+    /// The validation message for a parameter whose value cannot be read as the type it carries.
+    /// </summary>
+    /// <param name="name">The parameter's name as sent.</param>
+    public static string MalformedParameter(string name) => $"The parameter '{name}' has a value that cannot be read";
+
+    /// <summary>
     /// Maps a flat sequence of model-validation messages onto an <see cref="OidcError"/> carrying the
     /// <see cref="ErrorCodes.InvalidRequest"/> code. The input is a plain message sequence on purpose, so each
     /// transport adapter can feed it the output of

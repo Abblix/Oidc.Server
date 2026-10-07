@@ -79,7 +79,7 @@ public class LocalisedAndTimedAuthorizationTests(TestFactory factory) : TestBase
             [AuthorizationRequest.Parameters.MaxAge] = "not-a-number",
         });
 
-        Assert.Equal(HttpStatusCode.BadRequest, await StatusOfAsync(client, uri));
+        await AssertInvalidRequestAsync(client, uri);
     }
 
     // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same

@@ -25,24 +25,22 @@ internal sealed class ValidationEndpointFilter : IEndpointFilter
     /// <inheritdoc />
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        List<ValidationResult>? failures = null;
-        foreach (var argument in context.Arguments)
-        {
-            if (argument is not IValidatableModel model)
-                continue;
+        var failures = new List<string>();
+        foreach (var model in context.Arguments.OfType<IValidatableModel>())
+            failures.AddRange(await FailuresOf(model));
 
-            foreach (var name in model.RepeatedParameters)
-                (failures ??= []).Add(new ValidationResult($"The parameter '{name}' is included more than once"));
-
-            var results = new List<ValidationResult>();
-            if (!await Validator.TryValidateObjectAsync(argument, new ValidationContext(argument), results, validateAllProperties: true))
-                (failures ??= []).AddRange(results);
-        }
-
-        return failures is { Count: > 0 }
-            ? ErrorFactory
-                .InvalidRequest(failures.Select(result => result.ErrorMessage ?? string.Empty))
-                .Format(StatusCodes.Status400BadRequest)
+        return failures.Count > 0
+            ? ErrorFactory.InvalidRequest(failures).Format(StatusCodes.Status400BadRequest)
             : await next(context);
+    }
+
+    private static async Task<IEnumerable<string>> FailuresOf(IValidatableModel model)
+    {
+        var results = new List<ValidationResult>();
+        await Validator.TryValidateObjectAsync(model, new ValidationContext(model), results, validateAllProperties: true);
+
+        return model.RepeatedParameters.Select(ErrorFactory.RepeatedParameter)
+            .Concat(model.MalformedParameters.Select(ErrorFactory.MalformedParameter))
+            .Concat(results.Select(result => result.ErrorMessage ?? string.Empty));
     }
 }

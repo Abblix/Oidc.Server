@@ -31,20 +31,15 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 public abstract class TestBase(TestFactory factory)
 {
     /// <summary>
-    /// The status a request is answered with. A value the Minimal API host cannot bind is refused by throwing a
-    /// 400, which the in-memory server hands to the caller as the exception rather than as a response.
+    /// Asserts the request is refused with a 400 whose body names invalid_request.
     /// </summary>
-    protected static async Task<HttpStatusCode> StatusOfAsync(HttpClient client, Uri uri)
+    protected static async Task AssertInvalidRequestAsync(HttpClient client, Uri uri)
     {
-        try
-        {
-            using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
-            return response.StatusCode;
-        }
-        catch (BadHttpRequestException exception)
-        {
-            return (HttpStatusCode)exception.StatusCode;
-        }
+        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ResponseParameters.Error]!.GetValue<string>());
     }
 
     /// <summary>

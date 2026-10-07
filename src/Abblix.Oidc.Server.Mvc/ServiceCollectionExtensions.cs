@@ -96,8 +96,8 @@ public static class ServiceCollectionExtensions
 		services.Configure<MvcOptions>(options =>
 		{
 			options.OutputFormatters.Add(new StringOutputFormatter());
-			options.ModelBinderProviders.Insert(0, new CultureInfoBinder());
-			options.ModelBinderProviders.Insert(1, new SingleValueBinderProvider());
+			options.ModelBinderProviders.Insert(0, new SingleValueBinderProvider());
+			options.ModelBinderProviders.Insert(1, new CultureInfoBinder());
 			options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
 		});
 

@@ -22,10 +22,12 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.Binders;
 /// Both halves matter and for opposite reasons - a binder that accepted an unusable value would hand the
 /// endpoint a half-built request to act on, and one that refused a good value would reject conforming clients.
 ///
-/// Three cases live here, and they were easy to conflate. A parameter that arrives more than once - which
-/// RFC 6749 section 3.1 forbids - is refused before the binder's own parsing, with the failure recorded. A
-/// parameter sent without a value is omitted, as the same section requires, so nothing is bound and nothing is
-/// refused. And a value the binder cannot parse is refused by the binder itself.
+/// Two distinct refusals live here, and they were easy to conflate. A parameter that arrives more than once -
+/// which OpenID Connect Core 1.0 section 3.1.2.1 forbids - does NOT reach the binder as an absent value:
+/// StringValues joins multiple entries with a comma, so "en-US" and "fr-FR" arrive as the single string
+/// "en-US,fr-FR" (measured), and the binder refuses it by failing to parse. The absent-value path is reached
+/// only by a value provider holding no entries at all. Asserting the first and claiming to have covered the
+/// second is exactly the mistake these tests were rewritten to stop making.
 /// </remarks>
 public class ModelBinderRefusalTests
 {
@@ -42,18 +44,19 @@ public class ModelBinderRefusalTests
         Assert.True(single.IsModelSet);
         Assert.Equal("en-US", Assert.IsType<CultureInfo>(single.Model).Name);
 
-        var array = await ModelBinderRunner.BindAsync(binder, typeof(CultureInfo[]), "en-US fr-FR");
+        var array = await ModelBinderRunner.BindAsync(binder, typeof(CultureInfo[]), "en-US", "fr-FR");
         Assert.True(array.IsModelSet);
         Assert.Equal(["en-US", "fr-FR"], Assert.IsType<CultureInfo[]>(array.Model).Select(c => c.Name));
 
-        var list = await ModelBinderRunner.BindAsync(binder, typeof(List<CultureInfo>), "en-US fr-FR");
+        var list = await ModelBinderRunner.BindAsync(binder, typeof(List<CultureInfo>), "en-US", "fr-FR");
         Assert.True(list.IsModelSet);
         Assert.Equal(["en-US", "fr-FR"], Assert.IsType<List<CultureInfo>>(list.Model).Select(c => c.Name));
     }
 
     /// <summary>
-    /// The parameter sent twice: the binder records the failure instead of binding one of them. Which one it might
-    /// have picked is the point - a silent choice here decides the language the end user is shown.
+    /// Asking for one culture and receiving two: the two arrive joined, no culture is named "en-US,fr-FR", and
+    /// the binder records the failure instead of binding one of them. Which one it might have picked is the
+    /// point - a silent choice here decides the language the end user is shown.
     /// </summary>
     [Fact]
     public async Task The_locale_binder_records_a_failure_when_one_culture_is_expected_and_two_arrive()

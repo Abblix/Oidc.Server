@@ -25,7 +25,6 @@ using Microsoft.Extensions.Options;
 using Xunit;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
-using RequestParameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -253,41 +252,6 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.NotNull(response.Headers.CacheControl);
         Assert.True(response.Headers.CacheControl!.NoStore,
             $"{path} response is not Cache-Control: no-store; a shared cache may store it.");
-    }
-
-    [Fact]
-    public async Task Post_authorize_prefers_form_over_query_on_a_duplicate_parameter()
-    {
-        var client = ClientOf(factory);
-        var discovery = await client.FetchDiscoveryAsync();
-        var (_, challenge) = OidcFlows.Pkce();
-        const string formState = "STATE_FROM_FORM";
-        const string queryState = "STATE_FROM_QUERY";
-
-        var authorizeEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint);
-        var url = OidcFlows.BuildQuery(authorizeEndpoint, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.State] = queryState,
-        });
-
-        var form = new Dictionary<string, string>
-        {
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-            [AuthorizationRequest.Parameters.State] = formState,
-        };
-
-        using var content = new FormUrlEncodedContent(form);
-        var response = await client.PostAsync(url, content, TestContext.Current.CancellationToken);
-
-        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
-            $"/authorize returned {(int)response.StatusCode}, expected a redirect");
-        var echoedState = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query)[RequestParameters.State];
-        Assert.Equal(formState, echoedState);
     }
 
     [Fact]

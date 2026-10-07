@@ -44,13 +44,15 @@ public partial class PromptReturnTripTests
 
     /// <summary>
     /// A typed parameter whose value is whitespace alone, or does not read as its type, is an invalid value and is
-    /// refused with a 400 (RFC 6749 section 4.1.2.1: invalid_request "includes an invalid parameter value").
+    /// refused with invalid_request (RFC 6749 section 4.1.2.1: "includes an invalid parameter value").
     /// </summary>
     [Theory]
     [InlineData(AuthorizationRequest.Parameters.Claims, " ")]
     [InlineData(AuthorizationRequest.Parameters.Claims, "{not json")]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, " ")]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, "abc")]
+    [InlineData(AuthorizationRequest.Parameters.UiLocales, "!")]
+    [InlineData(AuthorizationRequest.Parameters.Resource, "https://exa mple.com/x")]
     public async Task InvalidTypedParameter_InTheQuery_IsRefused(string name, string value)
     {
         var (client, _, host) = Start();
@@ -59,9 +61,7 @@ public partial class PromptReturnTripTests
         var query = AuthorizeParameters(Prompts.Login);
         query[name] = value;
 
-        Assert.Equal(
-            HttpStatusCode.BadRequest,
-            await StatusOfAsync(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query)));
+        await AssertInvalidRequestAsync(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query));
     }
 
     /// <summary>
@@ -76,6 +76,7 @@ public partial class PromptReturnTripTests
     [InlineData(AuthorizationRequest.Parameters.Scope, Scopes.OpenId, Scopes.Profile)]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, "10", "20")]
     [InlineData(AuthorizationRequest.Parameters.Claims, "{}", "{}")]
+    [InlineData(AuthorizationRequest.Parameters.UiLocales, "en-US", "fr-FR")]
     public async Task SingleValuedParameter_SentTwice_IsRefused(string name, string first, string second)
     {
         var (client, _, host) = Start();
@@ -87,6 +88,29 @@ public partial class PromptReturnTripTests
                           $"&{name}={Uri.EscapeDataString(first)}&{name}={Uri.EscapeDataString(second)}");
 
         using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A parameter sent once in the query and once in the posted form is sent twice, though either source alone
+    /// carries it once.
+    /// </summary>
+    [Fact]
+    public async Task SingleValuedParameter_InTheQueryAndTheForm_IsRefused()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var form = AuthorizeParameters(Prompts.Login);
+        var query = new Dictionary<string, string> { [AuthorizationRequest.Parameters.State] = "second" };
+
+        using var response = await client.PostAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query),
+            new FormUrlEncodedContent(form),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
