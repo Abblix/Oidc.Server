@@ -358,6 +358,10 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         private readonly List<string> _preStatements = [];
         private readonly List<(string Name, string Expression)> _assignments = [];
 
+        // The wire names read as one value, which the request must not carry more than once (RFC 6749 section 3.1).
+        // A repeated parameter such as resource binds to an array without a wire-format marker and may repeat.
+        private readonly List<string> _singleValuedWireNames = [];
+
         public GenerationResult Emit()
         {
             foreach (var property in CollectProperties(coreType))
@@ -382,7 +386,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             // When any property carries a translated validation attribute, the model opts into validation by the
             // group-scoped endpoint filter through this marker.
-            var marker = _properties.Any(property => property.Validations.Count > 0) ? $" : {known.ValidatableModel}" : string.Empty;
+            var validatable = _properties.Any(property => property.Validations.Count > 0) || _singleValuedWireNames.Count > 0;
+            var marker = validatable ? $" : {known.ValidatableModel}" : string.Empty;
             // Nobody writes this file, so counting its lines tells nobody anything: it drags the adapter's
             // coverage denominator down with code that can only be changed by changing the generator, and
             // hides the hand-written shortfall behind it. The attribute travels with the source rather than
@@ -393,6 +398,9 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             _writer.AppendLine("{");
 
             EmitProperties();
+            if (validatable)
+                EmitRepeatedParameters();
+
             EmitBindAsync();
             EmitProjection();
 
@@ -464,6 +472,17 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
             _properties.Add((property.Name, type, GetInitializer(property), CollectValidations(property)));
             _assignments.Add((property.Name, GetBindExpression(property, wireName)));
+
+            if (property.Type is not IArrayTypeSymbol || GetWireFormatMarkerName(property) != null)
+                _singleValuedWireNames.Add(wireName);
+        }
+
+        private void EmitRepeatedParameters()
+        {
+            _writer.AppendLine("\t/// <inheritdoc/>");
+            _writer.AppendLine(
+                "\tpublic global::System.Collections.Generic.IReadOnlyList<string> RepeatedParameters { get; init; } = [];");
+            _writer.AppendLine();
         }
 
         /// <summary>
@@ -585,6 +604,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             foreach (var (name, expression) in _assignments)
                 _writer.AppendLine($"\t\t\t{name} = {expression},");
+
+            if (_singleValuedWireNames.Count > 0)
+            {
+                var names = string.Join(", ", _singleValuedWireNames.Select(Literal));
+                _writer.AppendLine($"\t\t\tRepeatedParameters = {known.FormValues}.Repeated(source, [{names}]),");
+            }
 
             _writer.AppendLine("\t\t};");
             _writer.AppendLine("\t}");

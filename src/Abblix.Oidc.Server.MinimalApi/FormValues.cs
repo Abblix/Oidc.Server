@@ -33,7 +33,7 @@ internal static class FormValues
     /// answer the same request the same way.
     /// </remarks>
     public static string? Value(StringValues values)
-        => values is { Count: > 0 } && values.ToString() is var value && !string.IsNullOrWhiteSpace(value)
+        => values is { Count: 1 } && values.ToString() is var value && !string.IsNullOrWhiteSpace(value)
             ? value
             : null;
 
@@ -45,7 +45,19 @@ internal static class FormValues
     /// of whitespace alone reaches it and is refused as one it cannot read rather than taken as absent.
     /// </summary>
     private static string? Sent(StringValues values)
-        => values is { Count: > 0 } && values.ToString() is { Length: > 0 } value ? value : null;
+        => values is { Count: 1 } && values.ToString() is { Length: > 0 } value ? value : null;
+
+    /// <summary>
+    /// The names among <paramref name="names"/> that <paramref name="source"/> carries more than once. A value read
+    /// above from a repeated parameter is no value, so the reading never joins two values into one, and the
+    /// validation filter refuses the request naming these.
+    /// </summary>
+    public static string[] Repeated(RequestValues source, string[] names)
+        => Array.FindAll(names, name => source[name].Count > 1);
+
+    /// <inheritdoc cref="Repeated(RequestValues, string[])"/>
+    public static string[] Repeated(IFormCollection source, string[] names)
+        => Array.FindAll(names, name => Get(source, name).Count > 1);
 
     /// <summary>A repeated field as an array (RFC 8707 <c>resource</c>/<c>audience</c>), or null.</summary>
     /// <remarks>

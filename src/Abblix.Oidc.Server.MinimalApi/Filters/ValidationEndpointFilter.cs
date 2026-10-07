@@ -28,8 +28,11 @@ internal sealed class ValidationEndpointFilter : IEndpointFilter
         List<ValidationResult>? failures = null;
         foreach (var argument in context.Arguments)
         {
-            if (argument is not IValidatableModel)
+            if (argument is not IValidatableModel model)
                 continue;
+
+            foreach (var name in model.RepeatedParameters)
+                (failures ??= []).Add(new ValidationResult($"The parameter '{name}' is included more than once"));
 
             var results = new List<ValidationResult>();
             if (!await Validator.TryValidateObjectAsync(argument, new ValidationContext(argument), results, validateAllProperties: true))

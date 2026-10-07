@@ -16,4 +16,11 @@ namespace Abblix.Oidc.Server.MinimalApi.Model;
 /// <see cref="System.ComponentModel.DataAnnotations.Validator"/> over it and shape any failure as
 /// <c>invalid_request</c>. A pure marker - the validation logic lives in the individual attributes, not here.
 /// </summary>
-internal interface IValidatableModel;
+internal interface IValidatableModel
+{
+    /// <summary>
+    /// The parameters the model reads one value of that the request carried more than once, which the filter refuses
+    /// as RFC 6749 section 3.1 says: "Request and response parameters MUST NOT be included more than once".
+    /// </summary>
+    IReadOnlyList<string> RepeatedParameters { get; }
+}

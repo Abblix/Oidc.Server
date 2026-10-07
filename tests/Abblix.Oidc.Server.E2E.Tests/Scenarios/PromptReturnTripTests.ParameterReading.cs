@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
@@ -60,6 +62,53 @@ public partial class PromptReturnTripTests
         Assert.Equal(
             HttpStatusCode.BadRequest,
             await StatusOfAsync(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query)));
+    }
+
+    /// <summary>
+    /// A parameter that takes one value, sent twice, is refused with invalid_request: RFC 6749 section 3.1 says
+    /// "Request and response parameters MUST NOT be included more than once", and section 4.1.2.1 names a request
+    /// that "includes a parameter more than once" as invalid_request.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationRequest.Parameters.ResponseMode, ResponseModes.Query, ResponseModes.Fragment)]
+    [InlineData(AuthorizationRequest.Parameters.State, "first", "second")]
+    [InlineData(AuthorizationRequest.Parameters.Nonce, "first", "second")]
+    [InlineData(AuthorizationRequest.Parameters.Scope, Scopes.OpenId, Scopes.Profile)]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, "10", "20")]
+    [InlineData(AuthorizationRequest.Parameters.Claims, "{}", "{}")]
+    public async Task SingleValuedParameter_SentTwice_IsRefused(string name, string first, string second)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var query = AuthorizeParameters(Prompts.Login);
+        query.Remove(name);
+        var uri = new Uri(QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query) +
+                          $"&{name}={Uri.EscapeDataString(first)}&{name}={Uri.EscapeDataString(second)}");
+
+        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A parameter a specification lets repeat (RFC 8707 resource) is taken when repeated.
+    /// </summary>
+    [Fact]
+    public async Task Resource_SentTwice_IsTaken()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var once = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login))
+                   + $"&{AuthorizationRequest.Parameters.Resource}={Uri.EscapeDataString(TestConstants.ApiResource)}";
+
+        var sentTo = await RedirectOf(client, new Uri(
+            once + $"&{AuthorizationRequest.Parameters.Resource}={Uri.EscapeDataString(TestConstants.ApiResource)}"));
+
+        Assert.Equal(PathOf(await RedirectOf(client, new Uri(once))), PathOf(sentTo));
     }
 
     /// <summary>

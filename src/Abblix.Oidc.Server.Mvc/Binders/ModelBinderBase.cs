@@ -38,10 +38,19 @@ public abstract class ModelBinderBase : IModelBinder
 			return Task.CompletedTask;
 		}
 
+		// RFC 6749 section 3.1: "Request and response parameters MUST NOT be included more than once."
+		if (modelValue.Length > 1)
+		{
+			bindingContext.ModelState.TryAddModelError(
+				bindingContext.ModelName,
+				SingleValueBinder.RepeatedMessage(bindingContext.ModelName));
+			return Task.CompletedTask;
+		}
+
 		// RFC 6749 section 3.1: "Parameters sent without a value MUST be treated as if they were omitted from the
 		// request." A value of whitespace alone is still a value, which the implementation refuses if it cannot
 		// read it
-		if (modelValue.Length == 1 && string.IsNullOrEmpty(modelValue.FirstValue))
+		if (string.IsNullOrEmpty(modelValue.FirstValue))
 		{
 			return Task.CompletedTask;
 		}
@@ -90,10 +99,8 @@ public abstract class ModelBinderBase : IModelBinder
 	/// branching on it: an assertion fails loudly if the invariant ever breaks, and reads as a claim about this
 	/// contract instead of as a case the caller is expected to produce.</para>
 	///
-	/// <para>Note also what the single value can be: a parameter sent more than once arrives here as one
-	/// comma-joined string, not as several values and not as none. Refusing that is the implementation's job -
-	/// OpenID Connect Core 1.0 section 3.1.2.1 forbids the repetition, and every implementation here refuses it
-	/// by failing to parse the joined value.</para>
+	/// <para>A parameter sent more than once never reaches an implementation: it is refused before, as RFC 6749
+	/// section 3.1 forbids the repetition, so <paramref name="values"/> holds exactly one entry.</para>
 	/// </remarks>
 	protected abstract bool TryParse(Type type, StringValues values, out object? result);
 }

@@ -97,6 +97,7 @@ public static class ServiceCollectionExtensions
 		{
 			options.OutputFormatters.Add(new StringOutputFormatter());
 			options.ModelBinderProviders.Insert(0, new CultureInfoBinder());
+			options.ModelBinderProviders.Insert(1, new SingleValueBinderProvider());
 			options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
 		});
 
