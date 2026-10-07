@@ -16,8 +16,8 @@ partial class BackChannelGrantRedeemer
     /// The per-type validator's own words, which the client never sees.
     /// </summary>
     /// <remarks>
-    /// A granted-phase rejection names a host-side defect, so the validator writes for whoever has to fix
-    /// it and may name a tenant, a ceiling or a configuration key. The client is told only that the
+    /// A granted-phase rejection is explained to whoever runs the host, so the validator writes for whoever
+    /// has to act on it and may name a tenant, a ceiling or a configuration key. The client is told only that the
     /// deployment will not issue these details; this is where the sentence that explains it lives.
     /// </remarks>
     [LoggerMessage(

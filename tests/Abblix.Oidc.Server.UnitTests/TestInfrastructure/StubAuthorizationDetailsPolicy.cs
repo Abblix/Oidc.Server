@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -62,7 +63,14 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// </summary>
     public static StubAuthorizationDetailsPolicy HonouringCancellation => new() { _honourCancellation = true };
 
+    /// <summary>
+    /// Throws from the granted-phase question, the way a validator answers an entry no end user could have
+    /// produced.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy Throwing(string reason) => new() { _fault = reason };
+
     private string? _refusal;
+    private string? _fault;
     private bool _honourCancellation;
     private (string Member, string Value)? _cap;
     private bool _empty;
@@ -110,6 +118,9 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     {
         GrantedCalls++;
         LastRequested = requested;
+        if (_fault is not null)
+            throw new InvalidOperationException(_fault);
+
         if (_honourCancellation)
             token.ThrowIfCancellationRequested();
 

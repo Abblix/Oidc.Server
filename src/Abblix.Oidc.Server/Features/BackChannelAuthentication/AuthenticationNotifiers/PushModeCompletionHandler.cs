@@ -128,14 +128,29 @@ public partial class PushModeCompletionHandler(
         // validator's reason is written for whoever fixes the host, so it goes to the log.
         //
         // No cancellation token, because nothing on the path from the router down carries one.
-        if (await authorizationDetailsPolicy.RefuseAsync(
+        GrantRefusal? refusal;
+        try
+        {
+            refusal = await authorizationDetailsPolicy.RefuseAsync(
                 request.AuthorizedGrant,
                 request.RequestedAuthorizationDetails,
                 clientInfo,
-                CancellationToken.None) is { } refusal)
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            // A validator throws for an entry no end user could have produced, a fault in the host's code.
+            // The request is already taken and a push client never polls, so it is told the transaction
+            // failed before the fault goes on to the host that completed the request.
+            LogGrantedAuthorizationDetailsFaulted(exception, authenticationRequestId, clientInfo.ClientId);
+            await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
+            throw;
+        }
+
+        if (refusal is { } refused)
         {
             LogGrantedAuthorizationDetailsRefused(
-                authenticationRequestId, clientInfo.ClientId, refusal.Reason);
+                authenticationRequestId, clientInfo.ClientId, refused.Reason);
 
             await SendErrorAsync(authenticationRequestId, request, RefusedGrant);
             return;

@@ -53,7 +53,7 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
     /// <summary>
     /// A granted entry stands only if some requested entry covers it, since RFC 9396 section 6.1 leaves that
     /// comparison to the type. An entry breaking the type's own rules is no end user's answer but a fault in
-    /// the consent provider, so it is thrown rather than returned.
+    /// the host's code that made the decision, so it is thrown rather than returned.
     /// </summary>
     public async Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
         AuthorizationDetail detail,
@@ -65,7 +65,7 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
         if (validated.TryGetFailure(out var defect))
         {
             throw new InvalidOperationException(
-                $"The consent provider granted a payment_initiation entry no end user could: {defect.ErrorDescription}");
+                $"The host granted a payment_initiation entry no end user could: {defect.ErrorDescription}");
         }
 
         if (!requested.Any(asked => Covers(asked, detail)))

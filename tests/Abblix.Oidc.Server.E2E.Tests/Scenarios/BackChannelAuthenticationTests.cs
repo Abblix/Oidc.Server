@@ -326,6 +326,29 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.Null(await storage.TryGetAsync(authRequestId));
     }
 
+    [Fact]
+    public async Task A_push_grant_no_end_user_could_produce_tells_the_client_the_transaction_failed()
+    {
+        // An entry without its amount is no end user's answer but a fault in the host's code, which the
+        // validator throws. The request is already taken by then and a push client never polls, so it is
+        // told the transaction failed, and the fault reaches the host that completed the request.
+        var deliveries = new NotificationRecorder();
+        await using var host = CreateCibaHost(deliveries);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterPushCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
+        await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CompleteAsync(host, authRequestId, DetailWithoutAmount));
+
+        var delivered = Assert.Single(deliveries.Received);
+        Assert.Equal(ErrorCodes.TransactionFailed, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]!.GetValue<string>());
+        Assert.False(delivered.Payload.ContainsKey(BackChannelPushNotificationRequest.Parameters.AccessToken));
+    }
+
     /// <summary>The identifier the client passes to name the end-user to be contacted.</summary>
     private const string LoginHint = "e2e-subject";
 
@@ -352,6 +375,13 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// <see cref="RequestedDetails"/> with the amount raised, which <c>PaymentInitiationValidator</c> refuses as
     /// wider than what was requested.
     /// </summary>
+    /// <summary>
+    /// <see cref="RequestedDetails"/> without its amount, which no end user could produce and
+    /// <c>PaymentInitiationValidator</c> throws for.
+    /// </summary>
+    private const string DetailWithoutAmount =
+        """[{"type":"payment_initiation","actions":["initiate"]}]""";
+
     private const string DetailWithAHigherAmount =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"900.00"}}]""";
 

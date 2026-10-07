@@ -96,12 +96,13 @@ public interface IAuthorizationDetailValidator
     /// that hold on their own or is refused.
     /// </para>
     /// <para>
-    /// The two ways of saying no mean different things. An entry wider than the requested ones - a higher
-    /// amount, another account - is returned as an <see cref="OidcError"/>, which the authorization endpoint
-    /// answers with access_denied, since the likely cause is an end user who edited the consent form. An
-    /// entry no end user could have produced, one missing a member the consent decision must carry, is a
-    /// defect in the host's consent provider and is thrown, so it fails the host's own tests instead of
-    /// reading as a refusal.
+    /// An override says no in two ways that mean different things. An entry wider than the requested ones - a
+    /// higher amount, another account - is returned as an <see cref="OidcError"/>, which the authorization
+    /// endpoint answers with access_denied, since the likely cause is an end user who edited the consent form.
+    /// An entry no end user could have produced, one missing a member the type requires, is a fault in the
+    /// host's code that made the decision and is thrown, so it fails the host's own tests instead of reading
+    /// as a refusal. Without an override, every entry this type's request-phase rules refuse comes back as an
+    /// <see cref="OidcError"/>, the first of the two.
     /// </para>
     /// </remarks>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
@@ -111,9 +112,8 @@ public interface IAuthorizationDetailValidator
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or an
-    /// <see cref="OidcError"/> describing the rejection. A rejection here means the consent decision
-    /// escalated beyond what this type permits, which is a host-side defect rather than a client
-    /// error.</returns>
+    /// <see cref="OidcError"/> describing why the granted entry is refused, most likely for being wider than
+    /// the requested ones.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
         AuthorizationDetail detail,
         IReadOnlyList<AuthorizationDetail> requested,

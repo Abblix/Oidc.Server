@@ -42,10 +42,10 @@ partial class PushModeCompletionHandler
     /// The validator's own words, which the client never sees.
     /// </summary>
     /// <remarks>
-    /// A refusal here names a HOST-side defect: the end user approved something the deployment will not
-    /// issue, so whoever has to fix it is an operator rather than the client. The client is sent
-    /// access_denied with a fixed description, never these words - which is why this record is the only
-    /// account of the reason anybody gets.
+    /// The grant holds an entry wider than the request or one the deployment will not issue, and whoever has
+    /// to act on it is an operator rather than the client. The client is sent access_denied with a fixed
+    /// description, never these words - which is why this record is the only account of the reason anybody
+    /// gets.
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.GrantedAuthorizationDetailsRefused,
@@ -54,4 +54,16 @@ partial class PushModeCompletionHandler
                   "auth_req_id {AuthReqId}, so it is refused. ClientId: {ClientId}, reason: {Reason}")]
     private partial void LogGrantedAuthorizationDetailsRefused(
         string AuthReqId, string ClientId, string Reason);
+
+    /// <summary>
+    /// The check of the granted authorization_details failed with an exception, a fault in the host's code,
+    /// and the client was told the transaction failed.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.GrantedAuthorizationDetailsFaulted,
+        Level = LogLevel.Error,
+        Message = "Checking the authorization_details completing auth_req_id {AuthReqId} failed, so the " +
+                  "client was told the transaction failed. ClientId: {ClientId}")]
+    private partial void LogGrantedAuthorizationDetailsFaulted(
+        Exception exception, string AuthReqId, string ClientId);
 }

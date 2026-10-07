@@ -91,8 +91,8 @@ internal sealed partial class BackChannelGrantRedeemer(
             is not { } refusal)
             return grant;
 
-        // The reason goes to the log and a fixed string to the client: a granted-phase rejection names
-        // a host-side defect, and its text is written for whoever has to fix it.
+        // The reason goes to the log and a fixed string to the client: a granted-phase rejection's text is
+        // written for whoever runs the host, not for the client.
         LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
         return refusal.Error;
     }

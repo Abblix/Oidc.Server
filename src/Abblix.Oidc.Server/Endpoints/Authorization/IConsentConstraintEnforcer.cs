@@ -51,7 +51,8 @@ public interface IConsentConstraintEnforcer
     /// <returns>The granted <c>authorization_details</c> as re-validated, an empty array when the
     /// consent decision carried none, or an <c>access_denied</c> error when a per-type validator refused
     /// a granted entry. A re-validation that removes every entry throws instead, so an empty array never
-    /// means "the validators emptied it".</returns>
+    /// means "the validators emptied it". When the consent decision carries no authorization_details list
+    /// at all, the requested entries are issued and this answer is not used for them.</returns>
     /// <remarks>
     /// What this bounds is TYPES and shapes, and deliberately not cardinality: a per-type validator
     /// answering with several entries of a type the user did grant is accepted, because RFC 9396 offers
@@ -66,12 +67,13 @@ public interface IConsentConstraintEnforcer
     /// itself, and the caller emits it; emitting what went in instead would put content in the token
     /// that no validator approved.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">Thrown when the granted set contains a scope,
-    /// resource, resource scope or <c>authorization_details</c> entry absent from - or broader than -
-    /// the request; and equally when the array leaving the per-type re-validation does, since that is
-    /// the one the grant is built from. Also thrown when an entry cannot be read as a JSON object,
-    /// when one carries no <c>type</c>, and when the re-validation answers with an empty set, which
-    /// says every entry was removed and leaves nothing to issue a grant for.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the granted set contains a scope, resource
+    /// or resource scope the request did not carry, or an <c>authorization_details</c> type it did not
+    /// carry; and equally when the array leaving the per-type re-validation does, since that is the one the
+    /// grant is built from. Also thrown when an entry cannot be read as a JSON object, when one carries no
+    /// <c>type</c>, and when the re-validation answers with an empty set, which says every entry was removed
+    /// and leaves nothing to issue a grant for. Content within a requested type that is wider than the
+    /// request is answered with access_denied instead.</exception>
     Task<Result<JsonArray, OidcError>> EnforceAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
