@@ -33,7 +33,8 @@ public record UserConsents
     /// When the end user last gave the consent the host records, or null when the host records no such moment, as for
     /// a consent the server grants on its own. A consent given after the server sent the end user to the consent page
     /// is the one <c>prompt=consent</c> asked for; any other leaves every scope pending again. A consent given that
-    /// grants nothing, with nothing left pending, is the end user's refusal, and the client is told access_denied.
+    /// grants nothing of what the request asked for, with nothing left pending, is the end user's refusal, and the
+    /// client is told access_denied; a grant leaving the authorization details list out grants none of them.
     /// </summary>
     public DateTimeOffset? GivenAt { get; init; }
 };

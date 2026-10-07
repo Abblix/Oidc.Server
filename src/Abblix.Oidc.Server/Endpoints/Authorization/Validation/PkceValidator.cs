@@ -53,6 +53,14 @@ public class PkceValidator(
 	/// </returns>
 	public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
 	{
+		// RFC 7636 section 4.4.1: "If the server supporting PKCE does not support the requested transformation, the
+		// authorization endpoint MUST return the authorization error response with "error" value set to
+		// "invalid_request"" - an error response, so at the redirect URI rather than a 400 in the browser. Checked
+		// whatever the code_challenge holds, since a stored method the token endpoint cannot compute fails the
+		// code exchange instead
+		if (context.Request.CodeChallengeMethod is { } method && !SupportedMethods.Contains(method))
+			return context.InvalidRequest("The PKCE code challenge method is not supported");
+
 		var profile = SecurityProfileRequirements.For(context.ClientInfo, issuerSettings.DefaultSecurityProfile);
 
 		return context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue()
@@ -69,12 +77,6 @@ public class PkceValidator(
 		SecurityProfileRequirements profile,
 		string codeChallenge)
 	{
-		// RFC 7636 section 4.4.1: "If the server supporting PKCE does not support the requested transformation, the
-		// authorization endpoint MUST return the authorization error response with "error" value set to
-		// "invalid_request"" - an error response, so at the redirect URI rather than a 400 in the browser
-		if (context.Request.CodeChallengeMethod is { } method && !SupportedMethods.Contains(method))
-			return context.InvalidRequest("The PKCE code challenge method is not supported");
-
 		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 		// rejected - including plain and the non-standard S512 - before the per-client plain check,
 		// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method

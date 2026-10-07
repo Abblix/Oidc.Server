@@ -139,9 +139,8 @@ public class AuthorizationRequestProcessor(
 	/// Whether <paramref name="consents"/>, given by the end user, grant nothing of what the request asked for.
 	/// </summary>
 	/// <remarks>
-	/// A request asking for nothing a consent could grant is never refused this way, and authorization details count
-	/// as refused only when the host says so with an empty list: no list is the host having no opinion on them, which
-	/// passes the requested ones through.
+	/// A request asking for nothing a consent could grant is never refused this way. A consent marked as given whose
+	/// grant carries no authorization details, either as no list or as an empty one, grants none of those requested.
 	/// </remarks>
 	private static bool IsRefusal(ValidAuthorizationRequest request, UserConsents consents, JsonArray? requestedDetails)
 	{
@@ -150,7 +149,7 @@ public class AuthorizationRequestProcessor(
 
 		return askedFor &&
 		       consents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
-		       (!askedForDetails || consents.Granted.AuthorizationDetails is { Count: 0 });
+		       consents.Granted.AuthorizationDetails is null or { Count: 0 };
 	}
 
 	/// <summary>

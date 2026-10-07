@@ -507,6 +507,26 @@ public class PkceValidatorTests
     }
 
     /// <summary>
+    /// An unsupported method is refused without a code_challenge beside it too, since the method alone is what the
+    /// token endpoint would fail to compute.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task ValidateAsync_WithUnsupportedMethodAndNoChallenge_IsRefused(string? codeChallenge)
+    {
+        var context = CreateContext(
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: "custom-method",
+            pkceRequired: false);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
     /// code_challenge_method values are case-sensitive (RFC 7636), so PLAIN is not plain: it is a method the server
     /// does not support, and is refused as one.
     /// </summary>

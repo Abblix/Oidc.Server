@@ -174,15 +174,26 @@ public partial class AuthorizationRequestProcessorTests
         => Assert.Null(await ErrorOfAsync(CreateRequest(scope: []), Given(new ConsentDefinition([], []))));
 
     /// <summary>
-    /// Authorization details the host has no opinion on, by leaving their list out, pass through rather than being
-    /// taken as refused.
+    /// A consent marked as given that leaves the authorization details list out grants none of the details asked,
+    /// so it is a refusal rather than passing them through.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_DetailsAskedWithoutAnOpinion_IsNoRefusal()
+    public async Task ProcessAsync_DetailsAskedAndGivenConsentWithoutAList_IsARefusal()
     {
         var request = CreateRequest(scope: [], authorizationDetails: [new JsonObject { ["type"] = "payment_initiation" }]);
 
-        Assert.NotEqual(ErrorCodes.AccessDenied, await ErrorOfAsync(request, Given(new ConsentDefinition([], []))));
+        Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(request, Given(new ConsentDefinition([], []))));
+    }
+
+    /// <summary>
+    /// A request asking for a scope and for authorization details is refused by a given consent granting neither.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ScopeAndDetailsAskedAndNothingGranted_IsARefusal()
+    {
+        var request = CreateRequest(authorizationDetails: [new JsonObject { ["type"] = "payment_initiation" }]);
+
+        Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(request, Given(new ConsentDefinition([], []))));
     }
 
     [Fact]

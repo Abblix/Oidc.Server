@@ -758,6 +758,35 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
     }
 
+    /// <summary>
+    /// An unsupported code challenge method is refused even beside an empty code_challenge, which a request object
+    /// carries as written, so no code is issued whose exchange the token endpoint could not verify. The client is one
+    /// PKCE is optional for, so the method is the only thing the request can be refused for.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedCodeChallengeMethodBesideAnEmptyChallenge_InRequestObject_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            Prompts.Login,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.CodeChallenge] = string.Empty,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S1",
+            },
+            pkceRequired: false);
+
+        var location = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
     [Fact]
     public async Task PromptCreate_ReturningWithoutSigningIn_IsSentToCreationAgain()
     {
@@ -1231,7 +1260,9 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     private static async Task<(string ClientId, string ClientSecret, string RequestObject)> SignedRequestAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        string? prompt)
+        string? prompt,
+        IReadOnlyDictionary<string, string>? overrides = null,
+        bool pkceRequired = true)
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         var publicKey = new RsaJsonWebKey
@@ -1249,6 +1280,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(new JsonWebKeySet([publicKey])),
+            [RegistrationMembers.PkceRequired] = pkceRequired,
         });
         var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
         var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
@@ -1266,6 +1298,9 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             },
         };
         foreach (var (name, value) in AuthorizeParameters(prompt ?? Prompts.Login))
+            token.Payload.Json[name] = value;
+
+        foreach (var (name, value) in overrides ?? new Dictionary<string, string>())
             token.Payload.Json[name] = value;
 
         token.Payload.Json[AuthorizationRequest.Parameters.ClientId] = clientId;
