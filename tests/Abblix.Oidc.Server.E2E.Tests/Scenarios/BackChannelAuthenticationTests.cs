@@ -372,16 +372,16 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         """[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
 
     /// <summary>
-    /// <see cref="RequestedDetails"/> with the amount raised, which <c>PaymentInitiationValidator</c> refuses as
-    /// wider than what was requested.
-    /// </summary>
-    /// <summary>
     /// <see cref="RequestedDetails"/> without its amount, which no end user could produce and
     /// <c>PaymentInitiationValidator</c> throws for.
     /// </summary>
     private const string DetailWithoutAmount =
         """[{"type":"payment_initiation","actions":["initiate"]}]""";
 
+    /// <summary>
+    /// <see cref="RequestedDetails"/> with the amount raised, which <c>PaymentInitiationValidator</c> refuses as
+    /// wider than what was requested.
+    /// </summary>
     private const string DetailWithAHigherAmount =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"900.00"}}]""";
 
