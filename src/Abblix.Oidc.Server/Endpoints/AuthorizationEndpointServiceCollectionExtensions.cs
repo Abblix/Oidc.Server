@@ -65,8 +65,7 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // and the authorization endpoint rejects them per OAuth 2.1 (draft) deprecation guidance.
         services.AddAuthorizationResponseProcessor<AuthorizationCodeBuilder>();
 
-        // AuthorizationHandler is no longer aliased as IGrantTypeInformer: each registered
-        // IAuthorizationResponseBuilder now contributes its own grant types directly to the
+        // Each registered IAuthorizationResponseBuilder now contributes its own grant types directly to the
         // IGrantTypeInformer set, so the IGrantTypeInformer chain stays Singleton-friendly
         // (every contributor is Singleton - no captive-dep risk for Singleton consumers).
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
