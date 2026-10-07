@@ -153,21 +153,12 @@ internal sealed class AuthSessionSelector(
 	/// session authenticated since is not sent there again.
 	/// </summary>
 	/// <remarks>
-	/// An account selection the request also asks for, not yet shown, is stamped too: the session the end user signs in
-	/// to here is the account they chose, as an authentication on the selection page answers a login.
+	/// An account selection the request also asks for is not stamped here: a login page may sign the end user in
+	/// without asking anything, as a request not asking for login lets it, and the account it signs in to is not one
+	/// the end user chose. The selection page follows.
 	/// </remarks>
 	private LoginRequired SendToLogin(Model.AuthorizationRequest model)
-	{
-		var now = clock.GetUtcNow();
-		var stamped = model;
-		if (PromptPages.Asks(model, Prompts.Login))
-			stamped = PromptPages.Stamped(stamped, Prompts.Login, now);
-
-		if (PromptPages.Asks(model, Prompts.SelectAccount) && model.Prompted?.ContainsKey(Prompts.SelectAccount) is not true)
-			stamped = PromptPages.Stamped(stamped, Prompts.SelectAccount, now);
-
-		return new LoginRequired(stamped);
-	}
+		=> new(PromptPages.Asks(model, Prompts.Login) ? PromptPages.Stamped(model, Prompts.Login, clock.GetUtcNow()) : model);
 
 	/// <summary>
 	/// The prompt the request still asks this selection for, and the sessions that may answer the request.
@@ -224,9 +215,9 @@ internal sealed class AuthSessionSelector(
 	/// <param name="request">The validated request: its model supplies max age and ACR values, its client
 	/// the default_max_age and default_acr_values fallbacks, and it carries the end user an
 	/// <c>id_token_hint</c> named.</param>
-	/// <returns>The sessions matching the request's criteria, and whether an authentication level the
-	/// request required is what left none of them - which is a different answer to the client than having
-	/// nobody signed in.</returns>
+	/// <returns>The sessions matching the request's criteria; whether an authentication level the request required is
+	/// what left none of them, which is a different answer to the client than having nobody signed in; and whether the
+	/// host held any session before the filters, which tells a session the filters left out from none at all.</returns>
 	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet, bool HostHoldsAny)>
 		GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
 	{

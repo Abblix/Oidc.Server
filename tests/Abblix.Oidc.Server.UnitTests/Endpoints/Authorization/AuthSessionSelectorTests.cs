@@ -40,7 +40,7 @@ public class AuthSessionSelectorTests
 
     private Task<Abblix.Utils.Result<AuthSession, Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse>> SelectAsync(
         string[] prompt,
-        IDictionary<string, DateTimeOffset>? prompted,
+        IReadOnlyDictionary<string, DateTimeOffset>? prompted,
         TimeSpan? maxAge,
         params AuthSession[] sessions)
     {
@@ -172,42 +172,42 @@ public class AuthSessionSelectorTests
     }
 
     /// <summary>
-    /// The login page a filtered-out session leads to stamps both the login and the account selection asked, so the
-    /// one authentication done there answers both.
+    /// The login page a filtered-out session leads to stamps the login asked and leaves the account selection
+    /// unstamped: a login page may sign the end user in without asking anything, so it does not answer a selection.
     /// </summary>
-    [Fact]
-    public async Task ASessionTheFiltersLeftOut_StampsTheLoginAndTheSelectionOnTheLoginPage()
+    [Theory]
+    [InlineData(Prompts.SelectAccount, Prompts.Login)]
+    [InlineData(Prompts.SelectAccount)]
+    public async Task ASessionTheFiltersLeftOut_LeavesTheSelectionUnstampedOnTheLoginPage(params string[] prompt)
     {
         var tooOld = Session("old", Now.AddHours(-2), Now.AddHours(-2));
 
-        var result = await SelectAsync(
-            [Prompts.SelectAccount, Prompts.Login], null, TimeSpan.FromMinutes(5), tooOld);
+        var result = await SelectAsync(prompt, null, TimeSpan.FromMinutes(5), tooOld);
 
         Assert.True(result.TryGetFailure(out var response));
         var login = Assert.IsType<LoginRequired>(response);
-        Assert.Equal(Now, login.Model.Prompted![Prompts.Login]);
-        Assert.Equal(Now, login.Model.Prompted![Prompts.SelectAccount]);
+        Assert.False(login.Model.Prompted?.ContainsKey(Prompts.SelectAccount) ?? false);
     }
 
     /// <summary>
-    /// The account the end user signs in to on the login page answers the account selection the page was stamped
-    /// for, so the request goes on with that session rather than to the selection page.
+    /// After the login page, the account the end user signed in to there is offered on the selection page rather
+    /// than taken as chosen, whatever the login page did to sign them in.
     /// </summary>
-    [Fact]
-    public async Task SigningInOnTheLoginPage_AnswersTheSelectionStampedThere()
+    [Theory]
+    [InlineData(Prompts.SelectAccount, Prompts.Login)]
+    [InlineData(Prompts.SelectAccount)]
+    public async Task ASessionSignedInOnTheLoginPage_IsOfferedOnTheSelectionPage(params string[] prompt)
     {
-        var signedIn = Session("fresh", PageShownAt.AddSeconds(10), PageShownAt.AddSeconds(10));
+        var tooOld = Session("old", Now.AddHours(-2), Now.AddHours(-2));
+        var first = await SelectAsync(prompt, null, TimeSpan.FromMinutes(5), tooOld);
+        Assert.True(first.TryGetFailure(out var toLogin));
+        var signedIn = Session("fresh", Now.AddSeconds(10), Now.AddSeconds(10));
 
         var result = await SelectAsync(
-            [Prompts.SelectAccount, Prompts.Login],
-            new Dictionary<string, DateTimeOffset>
-            {
-                [Prompts.Login] = PageShownAt,
-                [Prompts.SelectAccount] = PageShownAt,
-            },
-            TimeSpan.FromMinutes(5), signedIn);
+            prompt, Assert.IsType<LoginRequired>(toLogin).Model.Prompted, TimeSpan.FromMinutes(5), signedIn);
 
-        Assert.True(result.TryGetSuccess(out var session));
-        Assert.Equal(signedIn.SessionId, session.SessionId);
+        Assert.True(result.TryGetFailure(out var response));
+        var selection = Assert.IsType<AccountSelectionRequired>(response);
+        Assert.Equal([signedIn.SessionId], selection.Users.Select(user => user.SessionId));
     }
 }
