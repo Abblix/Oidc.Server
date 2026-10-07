@@ -9,7 +9,9 @@
 using System.Net;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -58,5 +60,28 @@ public partial class PromptReturnTripTests
         Assert.Equal(
             HttpStatusCode.BadRequest,
             await StatusOfAsync(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query)));
+    }
+
+    /// <summary>
+    /// An entry of a repeated parameter that is empty or whitespace alone is no entry: the request is answered as
+    /// the same request without it, alone or beside a resource that is there.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData(TestConstants.ApiResource)]
+    public async Task BlankResourceEntry_IsTakenAsAbsent(string resource)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var withoutBlank = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login))
+                           + (resource.Length > 0 ? $"&{AuthorizationRequest.Parameters.Resource}={Uri.EscapeDataString(resource)}" : "");
+
+        var expected = await RedirectOf(client, new Uri(withoutBlank));
+        var withBlank = await RedirectOf(
+            client, new Uri(withoutBlank + $"&{AuthorizationRequest.Parameters.Resource}=%20"));
+
+        Assert.Equal(PathOf(expected), PathOf(withBlank));
+        Assert.Equal(QueryValue(expected, ResponseParameters.Error), QueryValue(withBlank, ResponseParameters.Error));
     }
 }

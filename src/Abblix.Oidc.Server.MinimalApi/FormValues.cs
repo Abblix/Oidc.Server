@@ -95,20 +95,20 @@ internal static class FormValues
     /// <summary>A single form value read by name as a URI, or null.</summary>
     public static Uri? ParseUri(IFormCollection form, string name) => ParseUri(Get(form, name));
 
-    /// <summary>A repeated field as an array of URIs (RFC 8707 <c>resource</c>), or null.</summary>
+    /// <summary>
+    /// A repeated field as an array of URIs (RFC 8707 <c>resource</c>), or null when no entry is left. An entry that
+    /// is empty or whitespace alone is no entry, as the MVC host reads it.
+    /// </summary>
     public static Uri[]? ParseUris(StringValues values)
     {
-        if (values.Count == 0)
-            return null;
-
         var uris = new List<Uri>(values.Count);
         foreach (var value in values)
         {
-            if (value is not null && Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri))
+            if (!string.IsNullOrWhiteSpace(value) && Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out var uri))
                 uris.Add(uri);
         }
 
-        return uris.ToArray();
+        return uris.Count > 0 ? uris.ToArray() : null;
     }
 
     /// <summary>A repeated form field read by name as an array of URIs, or null.</summary>
