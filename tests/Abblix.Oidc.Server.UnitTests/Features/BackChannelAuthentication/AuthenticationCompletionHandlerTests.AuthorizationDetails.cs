@@ -202,12 +202,40 @@ public partial class AuthenticationCompletionHandlerTests
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(1, policy.GrantedCalls);
+        Assert.NotNull(policy.LastRequested);
+        Assert.Same(request.RequestedAuthorizationDetails, policy.LastRequested);
         _tokenRequestProcessor.VerifyNoOtherCalls();
         // The validator's own words are for the operator: the client is sent the fixed description, and
         // nothing of "instructedAmount exceeds the ceiling".
         VerifyPushErrorSent(ErrorCodes.AccessDenied, "The grant carries authorization_details that were refused");
         _notificationService.VerifyNoOtherCalls();
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// A validator throwing for an entry no end user could have produced leaves the push client told the
+    /// transaction failed, since it never polls, and the fault still reaches the host that completed the
+    /// request.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorThrows_SendsTransactionFailedAndRethrows()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+
+        var policy = StubAuthorizationDetailsPolicy.Throwing("the entry lost its amount");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(policy)
+            .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
+        _notificationService.VerifyNoOtherCalls();
     }
 
     /// <summary>

@@ -21,6 +21,15 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// tenant asks the same one, and a consent the host records without the tenant counts at every tenant serving a
 /// client under the same id. A host keeps each consent under the tenant of the request, read from
 /// <c>ITenantAccessor</c>, and answers only with the consents given at that tenant.
+/// <para>
+/// What the provider grants must stay within what the request asked for, and the two halves of that are kept in
+/// different places. The server refuses on its own a granted scope, resource or <c>authorization_details</c>
+/// type the request did not carry. Whether a granted entry stays within the requested ones of its type - an
+/// amount no higher, the same account - only the type's <c>IAuthorizationDetailValidator</c> can tell, and the
+/// server asks it with the requested entries in hand; a type registered without that comparison applies only
+/// the rules it applies to a request, so a provider that copies a consent form's answer back must compare it
+/// itself or register a validator that does.
+/// </para>
 /// </remarks>
 public interface IUserConsentsProvider
 {

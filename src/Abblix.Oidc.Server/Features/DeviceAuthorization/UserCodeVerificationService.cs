@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
@@ -93,7 +94,14 @@ public partial class UserCodeVerificationService(
 
         // Valid user code found and pending - record success to reset counters
         await rateLimiter.RecordSuccessAsync(userCode, clientIp);
-        return new ValidUserCode(request.ClientId, request.Scope, request.Resources, request.AuthorizationDetails);
+        // A copy, because the stored entries are the baseline the granted ones are held to when the code is
+        // redeemed: a host narrowing what it was handed in place, over a store keeping objects in memory, would
+        // move the baseline along with the grant and the comparison would see nothing.
+        return new ValidUserCode(
+            request.ClientId,
+            request.Scope,
+            request.Resources,
+            (JsonArray?)request.AuthorizationDetails?.DeepClone());
     }
 
     /// <inheritdoc />

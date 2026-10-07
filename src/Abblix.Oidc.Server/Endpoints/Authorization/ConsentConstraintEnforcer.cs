@@ -8,25 +8,32 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Default <see cref="IConsentConstraintEnforcer"/>. Asserts <c>granted ⊆ requested</c> for scopes,
-/// resources (including their nested scopes) and RFC 9396 <c>authorization_details</c>, throwing
-/// when the consent provider returned anything outside the request.
+/// resources (including their nested scopes) and RFC 9396 <c>authorization_details</c> types, throwing
+/// when the consent provider returned one outside the request, and answers with access_denied when a
+/// per-type validator refuses a granted entry held to the requested ones.
 /// </summary>
+/// <param name="logger">Records a granted entry a per-type validator found wider than the request.</param>
 /// <param name="authorizationDetailsPolicy">Re-runs granted <c>authorization_details</c> through the
 /// per-type validators and per-client allowlist; the per-type validator owns the "is B a narrowing
 /// of A" decision for intra-entry content (RFC 9396 section 6.1 has no universal comparator).</param>
-public class ConsentConstraintEnforcer(
+public partial class ConsentConstraintEnforcer(
+    ILogger<ConsentConstraintEnforcer> logger,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy) : IConsentConstraintEnforcer
 {
     /// <inheritdoc />
-    public async Task<JsonArray?> EnforceAsync(
+    public async Task<Result<JsonArray, OidcError>> EnforceAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
@@ -81,13 +88,13 @@ public class ConsentConstraintEnforcer(
         }
     }
 
-    private async Task<JsonArray?> EnforceAuthorizationDetailsAsync(
+    private async Task<Result<JsonArray, OidcError>> EnforceAuthorizationDetailsAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
     {
         if (granted.AuthorizationDetails is not { Count: > 0 } grantedAuthorizationDetails)
-            return null;
+            return new JsonArray();
 
         // Type-level subset: every granted entry's type must appear among the requested types. The
         // per-client allowlist (re-checked below) is not enough on its own - a client allowed types
@@ -99,19 +106,21 @@ public class ConsentConstraintEnforcer(
 
         // Intra-entry narrowing: RFC 9396 section 6.1 defines no universal comparator for "is B a narrowing of
         // A" (an amount, a locations list within one entry), so re-run the granted entries through
-        // the per-type validators and per-client allowlist and let the per-type validator own that
-        // decision. A rejection means a granted entry's content escalated beyond what the validator
-        // permits for this client.
+        // the per-type validators, handed the requested entries of their type, and let each own that
+        // decision. The types are known and requested by now, so a rejection is the validator finding a
+        // granted entry wider than what was asked: with both in hand, most likely an edited consent form,
+        // which the client is told as a denial rather than the end user shown a server error.
         var revalidation = await authorizationDetailsPolicy.ApplyGrantedAsync(
-            grantedAuthorizationDetails, request.ClientInfo, cancellationToken);
+            grantedAuthorizationDetails, request.AuthorizationDetails, request.ClientInfo, cancellationToken);
 
         if (!revalidation.TryGetSuccess(out var revalidated))
         {
-            throw new InvalidOperationException(
-                "The IUserConsentsProvider granted authorization_details that fail per-type re-validation, " +
-                "so the granted set is not a valid narrowing of the request " +
-                "(the consent provider violated the granted ⊆ requested contract): " +
-                revalidation.GetFailure().ErrorDescription);
+            LogGrantedAuthorizationDetailsRefused(
+                request.ClientInfo.ClientId, revalidation.GetFailure().ErrorDescription);
+
+            return new OidcError(
+                ErrorCodes.AccessDenied,
+                "The granted authorization_details were refused");
         }
 
         // The call above is guarded on a non-empty granted set, and this request has already decided

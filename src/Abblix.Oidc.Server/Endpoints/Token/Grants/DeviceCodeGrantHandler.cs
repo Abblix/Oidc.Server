@@ -183,11 +183,14 @@ public partial class DeviceCodeGrantHandler(
                 // token, because the code is already claimed: giving up here would spend it and issue
                 // nothing, where finishing issues tokens a departed client simply never reads.
                 if (await authorizationDetailsPolicy.RefuseAsync(
-                        authorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
+                        authorizedGrant,
+                        deviceRequest.AuthorizationDetails,
+                        clientInfo,
+                        CancellationToken.None) is { } refusal)
                 {
                     // The reason goes to the log and a fixed string to the client, matching the gate
-                    // above: a granted-phase rejection names a host-side defect, and its text is
-                    // written for whoever fixes it.
+                    // above: a granted-phase rejection's text is written for whoever runs the host, not
+                    // for the client.
                     LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
                     return refusal.Error;
                 }

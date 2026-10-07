@@ -46,6 +46,8 @@ public class AuthorizationRequestProcessor(
 	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
 	private readonly UserConsentsReader _consentsReader = new(consentsProvider);
 
+	private readonly AuthorizationContextBuilder _contextBuilder = new(consentConstraintEnforcer);
+
 	private readonly AuthSessionSelector _sessionSelector =
 		new(authSessionService, cutoffChecker, subjectTypeConverter, clock);
 
@@ -131,8 +133,18 @@ public class AuthorizationRequestProcessor(
 				model.RedirectUri);
 		}
 
-		var authContext = await BuildAuthorizationContextAsync(request, userConsents, requestedDetails);
-		return await IssueAsync(request, authSession, authContext, responseType);
+		var authContext = await _contextBuilder.BuildAsync(request, userConsents, requestedDetails);
+		if (authContext.TryGetFailure(out var refusal))
+		{
+			return new AuthorizationError(
+				model,
+				refusal.Error,
+				refusal.ErrorDescription,
+				request.ResponseMode,
+				model.RedirectUri);
+		}
+
+		return await IssueAsync(request, authSession, authContext.GetSuccess(), responseType);
 	}
 
 	/// <summary>
@@ -189,66 +201,6 @@ public class AuthorizationRequestProcessor(
 		}
 
 		return null;
-	}
-
-	/// <summary>
-	/// Builds the context the issued codes and tokens carry, from what the end user granted.
-	/// </summary>
-	private async Task<AuthorizationContext> BuildAuthorizationContextAsync(
-		ValidAuthorizationRequest request,
-		UserConsents userConsents,
-		JsonArray? requestedDetails)
-	{
-		var model = request.Model;
-
-		// Defense-in-depth backstop: the IUserConsentsProvider contract permits a NARROWER grant
-		// than the request, never a broader one. Assert that invariant before the granted set
-		// reaches the issued token. A violation is a host-side defect (a buggy consent provider, or
-		// browser tampering it failed to intersect against the request), so it surfaces as an
-		// exception rather than an escalated grant. Symmetric with the strictly narrowing-only
-		// TokenAuthorizationContextEvaluator at the token endpoint.
-		// What the end user granted, read before the backstop runs. It is a seam of its own and it is
-		// handed the granted set to check, so the scopes and resources the token carries are taken from
-		// the answer rather than from what the check left behind.
-		ScopeDefinition[] grantedScopes = [..userConsents.Granted.Scopes];
-		ResourceDefinition[] grantedResources = [..userConsents.Granted.Resources];
-
-		// Handed what was asked for rather than what the provider left behind: the backstop measures the
-		// granted set against the request, and the provider it is policing can reach that array.
-		var enforcedAuthorizationDetails = await consentConstraintEnforcer.EnforceAsync(
-			request with { AuthorizationDetails = requestedDetails },
-			userConsents.Granted,
-			CancellationToken.None);
-
-		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
-		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
-		// issued JWT. If a host's IUserConsentsProvider impl parents the borrowed array as a
-		// child of its own DTO, the second serialise will throw because the JsonNode is parented
-		// twice. DeepClone defensively on the boundary so the two consumers each see independent
-		// trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
-		var sourceAd = enforcedAuthorizationDetails ?? requestedDetails;
-		var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
-			? (JsonArray?)sourceAd.DeepClone()
-			: null;
-
-		// Build an authorization context containing necessary data like client ID, scopes, and claims.
-		// The authorization context is used to carry the granted scopes, resources and other key details through
-		// the flow.
-		return new AuthorizationContext(
-			request.ClientInfo.ClientId,
-			grantedScopes,
-			grantedResources,
-			model.Claims)
-		{
-			RedirectUri = model.RedirectUri,
-			Nonce = model.Nonce,
-			// An empty code_challenge, which a request object carries as written, is no challenge: PkceValidator
-			// treats it as absent, and so does the code exchange
-			CodeChallenge = model.CodeChallenge.HasValue() ? model.CodeChallenge : null,
-			CodeChallengeMethod = model.CodeChallengeMethod,
-			ProofKeyThumbprint = model.ProofKeyThumbprint,
-			AuthorizationDetails = emittedAuthorizationDetails,
-		};
 	}
 
 	/// <summary>

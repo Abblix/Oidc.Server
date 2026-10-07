@@ -38,7 +38,9 @@ public record ConsentDefinition(ScopeDefinition[] Scopes, ResourceDefinition[] R
     /// what was requested, in either direction: dropping an entry keeps it out of the issued token, editing
     /// one inside (an amount narrowed by a slider) is carried through as edited, and the section's own example
     /// is the opposite case, the server filling in the accounts a user picked. What is refused is a granted
-    /// entry of a <c>type</c> the request did not carry; within an entry, the per-type validator decides.
+    /// entry of a <c>type</c> the request did not carry; within an entry, the per-type validator decides,
+    /// handed the requested entries of its type, and an entry it finds wider than them is answered with
+    /// access_denied.
     /// </para>
     /// <para>
     /// Only the authorization endpoint consults this. A backchannel authentication request has no consent seam

@@ -22,10 +22,11 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// specific.</param>
 /// <param name="Reason">The validator's own words, for the log.</param>
 /// <remarks>
-/// Two strings because they have two audiences. A granted-phase rejection names a HOST-side defect, so the
-/// validator writes for whoever has to fix it and may name a tenant, a ceiling or a configuration key. That
-/// is not a sentence a client asking for a token should receive, and no other granted-phase refusal in this
-/// library reaches one - the authorization endpoint wraps its own in an exception.
+/// Two strings because they have two audiences. A granted-phase rejection is explained to whoever runs the
+/// host, so the validator writes for whoever has to act on it and may name a tenant, a ceiling or a
+/// configuration key. That is not a sentence a client asking for a token should receive, and no other
+/// granted-phase refusal in this library reaches one - the authorization endpoint answers its own with a
+/// fixed access_denied.
 ///
 /// One caller sends neither: the CIBA push mode answers its client with the error payload of CIBA Core 1.0
 /// section 12, which allows only access_denied, expired_token and transaction_failed, so a refused grant is
@@ -65,11 +66,14 @@ internal static class GrantedRevalidation
     /// </summary>
     /// <param name="policy">The per-type validator dispatch.</param>
     /// <param name="grant">The grant about to be spent.</param>
+    /// <param name="requested">The <c>authorization_details</c> the request carried, which the validators
+    /// hold each granted entry to.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="cancellationToken">Cancellation token forwarded to the validators.</param>
     public static async Task<GrantRefusal?> RefuseAsync(
         this IAuthorizationDetailsPolicy policy,
         AuthorizedGrant grant,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken cancellationToken)
     {
@@ -83,7 +87,7 @@ internal static class GrantedRevalidation
         var asStored = (JsonArray)granted.DeepClone();
         var probe = (JsonArray)granted.DeepClone();
 
-        var result = await policy.ApplyGrantedAsync(probe, client, cancellationToken);
+        var result = await policy.ApplyGrantedAsync(probe, requested, client, cancellationToken);
         if (result.TryGetFailure(out var error))
             return Refusal(error.ErrorDescription);
 

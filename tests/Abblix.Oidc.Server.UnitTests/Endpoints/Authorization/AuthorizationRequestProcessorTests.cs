@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 
@@ -63,8 +64,8 @@ public partial class AuthorizationRequestProcessorTests
         // covered in ConsentConstraintEnforcerTests against the real enforcer.
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
-                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad ?? new JsonArray());
+                It.IsAny<JsonArray?>(), It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) => ad ?? new JsonArray());
 
         _timeProvider = new FakeTimeProvider();
 
@@ -80,7 +81,16 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(r => r.GetClientsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
-        _processor = new AuthorizationRequestProcessor(
+        _processor = ProcessorWith(new ConsentConstraintEnforcer(
+            NullLogger<ConsentConstraintEnforcer>.Instance, _authorizationDetailsPolicy.Object));
+    }
+
+    /// <summary>
+    /// The processor over this fixture's collaborators and the consent backstop given.
+    /// </summary>
+    private AuthorizationRequestProcessor ProcessorWith(IConsentConstraintEnforcer consentConstraintEnforcer)
+    {
+        return new AuthorizationRequestProcessor(
             _authSessionService.Object,
             _sessionClients.Object,
             _consentsProvider.Object,
@@ -92,7 +102,7 @@ public partial class AuthorizationRequestProcessorTests
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ],
-            new ConsentConstraintEnforcer(_authorizationDetailsPolicy.Object));
+            consentConstraintEnforcer);
     }
 
     private static ValidAuthorizationRequest CreateRequest(

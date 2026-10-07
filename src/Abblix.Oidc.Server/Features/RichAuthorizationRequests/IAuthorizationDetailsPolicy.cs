@@ -83,12 +83,15 @@ public interface IAuthorizationDetailsPolicy
     /// </para>
     /// </remarks>
     /// <param name="granted">The <c>authorization_details</c> the consent decision granted.</param>
+    /// <param name="requested">The <c>authorization_details</c> the request carried, which each per-type
+    /// validator is handed, filtered to its own type, to hold the granted entry to.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>The same shape as <see cref="ApplyAsync"/>: the post-validation array on success, or
     /// an <see cref="OidcError"/> naming the entry that was refused.</returns>
     Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
         => ApplyAsync(granted, client, token);

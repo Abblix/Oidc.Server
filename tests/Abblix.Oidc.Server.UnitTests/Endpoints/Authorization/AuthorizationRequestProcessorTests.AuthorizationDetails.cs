@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Utils;
 using Moq;
 using Xunit;
 
@@ -201,8 +202,8 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
-                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
+                It.IsAny<JsonArray?>(), It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) =>
                 CapAmount(ad, 800m) ?? new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
@@ -317,5 +318,34 @@ public partial class AuthorizationRequestProcessorTests
         Assert.NotNull(capture.Grant);
         // Defensive DeepClone at the boundary (C2): value-equality, not reference.
         Assert.Equal(requestedAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
+    }
+
+    /// <summary>
+    /// The requested entries pass through only when the consent provider gave no list. A backstop a host put in
+    /// place that answers with nothing cannot bring them back over the entries the end user narrowed.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ReplacedBackstopAnsweringEmpty_DoesNotEmitTheRequest()
+    {
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" });
+        var grantedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "100" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: grantedAd);
+
+        var backstop = new Mock<IConsentConstraintEnforcer>(MockBehavior.Strict);
+        backstop
+            .Setup(b => b.EnforceAsync(
+                It.IsAny<ValidAuthorizationRequest>(), It.IsAny<ConsentDefinition>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Result<JsonArray, OidcError>)new JsonArray());
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await ProcessorWith(backstop.Object).ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        Assert.Null(capture.Grant.Context.AuthorizationDetails);
     }
 }

@@ -84,23 +84,39 @@ public interface IAuthorizationDetailValidator
     /// input unconditionally hands a tampered consent decision straight to the issued token.
     /// </para>
     /// <para>
-    /// Note what this method is NOT given: the entry the client originally sent, and the end user who
-    /// answered. So an enrichable field can be bounded here only by rules that hold on their own - a
-    /// ceiling, a format, a per-client limit - and not by comparing the value against the request it
-    /// came from. A type whose enrichment needs that comparison has to make it where both sides are in
-    /// hand, which today is the consent provider that produced the decision.
+    /// This is also where a granted entry is held to the request it answers. RFC 9396 section 6.1 says
+    /// "there is no standardized mechanism to compare two arbitrary authorization detail requests" and
+    /// leaves the comparison to the definition of the type, so <paramref name="requested"/> carries the
+    /// entries of this type the client asked for, and an override decides whether the granted one stays
+    /// within them: an amount no higher, the same account. They are every entry of this type rather than
+    /// one partner, because a request may carry several of one type and a consent decision may drop or
+    /// reorder them. A granted type the request did not carry is refused before this method is asked, so
+    /// the list is empty only where no record of the request survives, as for a back-channel request
+    /// stored before the server recorded one; the type decides whether such an entry stands on the rules
+    /// that hold on their own or is refused.
+    /// </para>
+    /// <para>
+    /// An override says no in two ways that mean different things. An entry wider than the requested ones - a
+    /// higher amount, another account - is returned as an <see cref="OidcError"/>, which the authorization
+    /// endpoint answers with access_denied, since the likely cause is an end user who edited the consent form.
+    /// An entry no end user could have produced, one missing a member the type requires, is a fault in the
+    /// host's code that made the decision and is thrown, so it fails the host's own tests instead of reading
+    /// as a refusal. Without an override, every entry this type's request-phase rules refuse comes back as an
+    /// <see cref="OidcError"/>, the first of the two.
     /// </para>
     /// </remarks>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
     /// this validator's <see cref="Type"/>.</param>
+    /// <param name="requested">The entries of this validator's <see cref="Type"/> the request carried,
+    /// as the end user was shown them.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or an
-    /// <see cref="OidcError"/> describing the rejection. A rejection here means the consent decision
-    /// escalated beyond what this type permits, which is a host-side defect rather than a client
-    /// error.</returns>
+    /// <see cref="OidcError"/> describing why the granted entry is refused, most likely for being wider than
+    /// the requested ones.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
         AuthorizationDetail detail,
+        IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token)
         => ValidateAsync(detail, client, token);

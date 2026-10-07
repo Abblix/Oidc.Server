@@ -291,9 +291,9 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // CIBA Core 1.0 section 12 has a push client told, so it is not left waiting for the request to
         // expire.
         //
-        // The narrowing is one a host got WRONG rather than a malicious one: the entry keeps the type it
-        // asked for and loses the amount, which is the shape the type comparison structurally cannot see
-        // and the reason the per-type validator is asked at all.
+        // The grant keeps the type the request asked for and raises the amount, which is the shape the type
+        // comparison structurally cannot see and the reason the per-type validator is asked at all, handed the
+        // requested entries to hold it to.
         var deliveries = new NotificationRecorder();
         await using var host = CreateCibaHost(deliveries);
         var client = CreateClientFor(host);
@@ -312,7 +312,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // has no reason to fire - but that is an argument, not a measurement.
         await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
 
-        await CompleteAsync(host, authRequestId, DetailWithoutAmount);
+        await CompleteAsync(host, authRequestId, DetailWithAHigherAmount);
 
         var delivered = Assert.Single(deliveries.Received);
         Assert.Equal(ErrorCodes.AccessDenied, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]!.GetValue<string>());
@@ -324,6 +324,29 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
         Assert.Null(await storage.TryGetAsync(authRequestId));
+    }
+
+    [Fact]
+    public async Task A_push_grant_no_end_user_could_produce_tells_the_client_the_transaction_failed()
+    {
+        // An entry without its amount is no end user's answer but a fault in the host's code, which the
+        // validator throws. The request is already taken by then and a push client never polls, so it is
+        // told the transaction failed, and the fault reaches the host that completed the request.
+        var deliveries = new NotificationRecorder();
+        await using var host = CreateCibaHost(deliveries);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterPushCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
+        await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CompleteAsync(host, authRequestId, DetailWithoutAmount));
+
+        var delivered = Assert.Single(deliveries.Received);
+        Assert.Equal(ErrorCodes.TransactionFailed, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]!.GetValue<string>());
+        Assert.False(delivered.Payload.ContainsKey(BackChannelPushNotificationRequest.Parameters.AccessToken));
     }
 
     /// <summary>The identifier the client passes to name the end-user to be contacted.</summary>
@@ -349,11 +372,18 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         """[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
 
     /// <summary>
-    /// A narrowing of <see cref="RequestedDetails"/> that keeps the type and drops the amount, which is what
-    /// <c>PaymentInitiationValidator</c> refuses.
+    /// <see cref="RequestedDetails"/> without its amount, which no end user could produce and
+    /// <c>PaymentInitiationValidator</c> throws for.
     /// </summary>
     private const string DetailWithoutAmount =
         """[{"type":"payment_initiation","actions":["initiate"]}]""";
+
+    /// <summary>
+    /// <see cref="RequestedDetails"/> with the amount raised, which <c>PaymentInitiationValidator</c> refuses as
+    /// wider than what was requested.
+    /// </summary>
+    private const string DetailWithAHigherAmount =
+        """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"900.00"}}]""";
 
     private sealed record CibaClient(string ClientId, string ClientSecret);
 

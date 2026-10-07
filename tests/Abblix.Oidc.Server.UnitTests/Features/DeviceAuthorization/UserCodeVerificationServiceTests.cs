@@ -41,6 +41,7 @@ public class UserCodeVerificationServiceTests
     private static readonly DateTimeOffset Now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private readonly CapturingLogger<UserCodeVerificationService> _logs = new();
+    private readonly DeviceAuthorizationRequest _request;
     private readonly UserCodeVerificationService _service;
 
     public UserCodeVerificationServiceTests()
@@ -50,9 +51,10 @@ public class UserCodeVerificationServiceTests
         // checked, because verification then answers InvalidUserCode. They are not vacuous - they
         // measure canonicalization exactly as named - so an expired fixture would break them for a
         // reason having nothing to do with what they are for.
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = _request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" }),
         };
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
@@ -99,6 +101,20 @@ public class UserCodeVerificationServiceTests
 
         var valid = Assert.IsType<ValidUserCode>(result);
         Assert.Equal(ClientId, valid.ClientId);
+    }
+
+    /// <summary>
+    /// The verification page is handed a copy of the requested entries: they are the baseline the granted ones
+    /// are held to at redemption, so a host narrowing what it was handed must not move it.
+    /// </summary>
+    [Fact]
+    public async Task Verify_HandsACopyOfTheRequestedAuthorizationDetails()
+    {
+        var valid = Assert.IsType<ValidUserCode>(await _service.VerifyAsync(CanonicalUserCode));
+
+        valid.AuthorizationDetails![0]!["amount"] = "1";
+
+        Assert.Equal("200", _request.AuthorizationDetails![0]!["amount"]!.GetValue<string>());
     }
 
     [Fact]

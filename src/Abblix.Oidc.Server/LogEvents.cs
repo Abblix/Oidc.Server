@@ -591,6 +591,7 @@ internal static class LogEvents
             public const int TokenGenerationFailed = Base + 3;
             public const int PushDeliveryFailed = Base + 4;
             public const int GrantedAuthorizationDetailsRefused = Base + 5;
+            public const int GrantedAuthorizationDetailsFaulted = Base + 6;
         }
 
         /// <summary>
@@ -1003,6 +1004,24 @@ internal static class LogEvents
             private const int Base = 10900;
 
             public const int RequestRefused = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 11000-11099: <c>Endpoints/Authorization</c>, a second window, because 2000-2099 is fully
+    /// allocated.
+    /// </summary>
+    public static class AuthorizationConsent
+    {
+        /// <summary>
+        /// <c>Endpoints/Authorization/ConsentConstraintEnforcer.cs</c> - what the consent backstop refuses as
+        /// a protocol answer rather than a host defect (sub-range 11000-11009).
+        /// </summary>
+        public static class ConsentConstraintEnforcer
+        {
+            private const int Base = 11000;
+
+            public const int GrantedAuthorizationDetailsRefused = Base;
         }
     }
 }

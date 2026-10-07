@@ -1,0 +1,25 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Microsoft.Extensions.Logging;
+
+namespace Abblix.Oidc.Server.Endpoints.Authorization;
+
+public partial class ConsentConstraintEnforcer
+{
+    /// <summary>
+    /// A granted entry was refused against the requested ones, and the client is told access_denied. Warning,
+    /// because somebody outside the server did something wrong, most likely an end user who edited the
+    /// consent form.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsRefused,
+        Level = LogLevel.Warning,
+        Message = "The authorization_details granted to client {ClientId} were refused: {Reason}")]
+    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string? Reason);
+}

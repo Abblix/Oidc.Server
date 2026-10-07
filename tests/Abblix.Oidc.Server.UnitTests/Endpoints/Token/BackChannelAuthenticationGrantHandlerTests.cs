@@ -420,6 +420,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
+        Assert.Same(authRequest.RequestedAuthorizationDetails, policy.LastRequested);
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
 
