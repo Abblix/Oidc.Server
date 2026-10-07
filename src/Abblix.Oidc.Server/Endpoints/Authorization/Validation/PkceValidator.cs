@@ -57,9 +57,13 @@ public class PkceValidator(
 		// authorization endpoint MUST return the authorization error response with "error" value set to
 		// "invalid_request"" - an error response, so at the redirect URI rather than a 400 in the browser. Checked
 		// whatever the code_challenge holds, since a stored method the token endpoint cannot compute fails the
-		// code exchange instead
-		if (context.Request.CodeChallengeMethod is { } method && !SupportedMethods.Contains(method))
+		// code exchange instead, and only where a code is issued, the one thing PKCE protects
+		if (context.Request.ResponseType.HasFlag(ResponseTypes.Code) &&
+		    context.Request.CodeChallengeMethod is { } method &&
+		    !SupportedMethods.Contains(method))
+		{
 			return context.InvalidRequest("The PKCE code challenge method is not supported");
+		}
 
 		var profile = SecurityProfileRequirements.For(context.ClientInfo, issuerSettings.DefaultSecurityProfile);
 

@@ -232,28 +232,33 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 
     /// <summary>
     /// The pages a combination of prompt values leads through, each answered as a host's page answers it, and the
-    /// request ending in a code. Before each answer the end user returns once without giving it, and is sent to the
-    /// same page again rather than back to the client.
+    /// request ending in a code. Unless told to answer at once, before each answer the end user returns once without
+    /// giving it, and is sent to the same page again rather than back to the client.
     /// </summary>
     private static Task<Uri> WalkPagesAsync(
         HttpClient client,
         DiscoveryDocument discovery,
         Uri sentTo,
         params (string Page, Action Answer)[] pages)
-        => WalkPagesAsync(client, discovery, TestConstants.ConfidentialClientId, sentTo, pages);
+        => WalkPagesAsync(client, discovery, TestConstants.ConfidentialClientId, sentTo, true, pages);
 
     private static async Task<Uri> WalkPagesAsync(
         HttpClient client,
         DiscoveryDocument discovery,
         string clientId,
         Uri sentTo,
+        bool returnWithoutAnswerFirst,
         params (string Page, Action Answer)[] pages)
     {
         foreach (var (page, answer) in pages)
         {
             Assert.Equal(page, PathOf(sentTo));
-            sentTo = await ReturnFromPage(client, discovery, clientId, sentTo);
-            Assert.Equal(page, PathOf(sentTo));
+            if (returnWithoutAnswerFirst)
+            {
+                sentTo = await ReturnFromPage(client, discovery, clientId, sentTo);
+                Assert.Equal(page, PathOf(sentTo));
+            }
+
             answer();
             sentTo = await ReturnFromPage(client, discovery, clientId, sentTo);
         }
@@ -294,16 +299,25 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         ($"{Prompts.SelectAccount} {Prompts.Consent}", [AccountSelectionPath, ConsentPath]),
         ($"{Prompts.SelectAccount} {Prompts.Login} {Prompts.Consent}", [AccountSelectionPath, LoginPath, ConsentPath]),
         ($"{Prompts.Create} {Prompts.Consent}", [RegistrationPath, ConsentPath]),
+        ($"{Prompts.Consent} {Prompts.Create}", [RegistrationPath, ConsentPath]),
         ($"{Prompts.Create} {Prompts.SelectAccount}", [RegistrationPath]),
         ($"{Prompts.Login} {Prompts.Login}", [LoginPath]),
     ];
 
-    public static TheoryData<string, string[], RequestTransport> PromptWalksByTransport()
+    /// <summary>
+    /// Every walk by every way of sending the request. Half of them answer each page on the end user's first visit
+    /// and half return once without answering first, alternating along both the walks and the ways of sending, so
+    /// each way meets both on every page.
+    /// </summary>
+    public static TheoryData<string, string[], RequestTransport, bool> PromptWalksByTransport()
     {
-        var data = new TheoryData<string, string[], RequestTransport>();
-        foreach (var (prompt, pages) in PromptWalks)
-        foreach (var transport in Enum.GetValues<RequestTransport>())
-            data.Add(prompt, pages, transport);
+        var data = new TheoryData<string, string[], RequestTransport, bool>();
+        var transports = Enum.GetValues<RequestTransport>();
+        for (var walk = 0; walk < PromptWalks.Length; walk++)
+        {
+            for (var way = 0; way < transports.Length; way++)
+                data.Add(PromptWalks[walk].Prompt, PromptWalks[walk].Pages, transports[way], (walk + way) % 2 == 0);
+        }
 
         return data;
     }
@@ -368,12 +382,17 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     };
 
     /// <summary>
-    /// Each value and combination of the prompt leads through its pages in order, each shown again to an end user
-    /// returning without answering it, and ends in a code, however the client sends the request.
+    /// Each value and combination of the prompt leads through its pages in order, each answered on the first visit
+    /// or shown again to an end user returning without answering it, and ends in a code, however the client sends
+    /// the request.
     /// </summary>
     [Theory]
     [MemberData(nameof(PromptWalksByTransport))]
-    public async Task Prompt_WalksItsPagesInOrder(string prompt, string[] pages, RequestTransport transport)
+    public async Task Prompt_WalksItsPagesInOrder(
+        string prompt,
+        string[] pages,
+        RequestTransport transport,
+        bool returnWithoutAnswerFirst)
     {
         var (client, endUser, consents, host) = StartWithConsents();
         using var _ = host;
@@ -386,6 +405,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             discovery,
             clientId,
             sentTo,
+            returnWithoutAnswerFirst,
             [.. pages.Select(page => (page, AnswerOn(page, endUser, consents)))]);
     }
 
@@ -433,6 +453,41 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
         Assert.Equal(ErrorCodes.AccessDenied, QueryValue(location, ResponseParameters.Error));
         Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+    }
+
+    /// <summary>
+    /// An empty code_challenge inside a request object, from a client PKCE is optional for, is no challenge: the code
+    /// it ends in is exchanged without a code_verifier.
+    /// </summary>
+    [Fact]
+    public async Task EmptyCodeChallenge_InRequestObject_IssuesACodeExchangedWithoutAVerifier()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            prompt: null,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.CodeChallenge] = string.Empty,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            },
+            pkceRequired: false);
+
+        var location = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+        AssertCode(location);
+
+        await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = QueryValue(location, TokenRequest.Parameters.Code)!,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = clientSecret,
+        });
     }
 
     [Theory]
@@ -530,6 +585,53 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A prompt value refused at the authorization endpoint is refused the same way when pushed, at the pushed
+    /// authorization endpoint, which answers the client directly (RFC 9126, section 2.3).
+    /// </summary>
+    [Theory]
+    [InlineData($"{Prompts.None} {Prompts.Login}")]
+    [InlineData($"{Prompts.Consent} {Prompts.None}")]
+    [InlineData("unknown")]
+    [InlineData("Login")]
+    public async Task RefusedPromptValue_InPushedRequest_IsRefusedWhenPushed(string prompt)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(prompt);
+        parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client, discovery.PushedAuthorizationRequestEndpoint!, parameters);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Account selection then login ends in a code whose ID token carries the new authentication time.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLogin_IssuesAnIdTokenWithTheNewAuthenticationTime()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var authenticatedBefore = endUser.AuthenticatedAt;
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint,
+            AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Login}", out var verifier)));
+        var code = await WalkPagesAsync(
+            client, discovery, sentTo, (AccountSelectionPath, endUser.PickAgain), (LoginPath, endUser.SignInAgain));
+
+        var authTime = await AuthTimeOfCodeAsync(client, discovery, code, verifier);
+        Assert.Equal(endUser.AuthenticatedAt.ToUnixTimeSeconds(), authTime);
+        Assert.NotEqual(authenticatedBefore.ToUnixTimeSeconds(), authTime);
     }
 
     /// <summary>

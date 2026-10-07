@@ -196,6 +196,21 @@ public partial class AuthorizationRequestProcessorTests
         Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(request, Given(new ConsentDefinition([], []))));
     }
 
+    /// <summary>
+    /// Authorization details the request never asked for grant nothing it asked for, so a consent granting only those
+    /// is still a refusal.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ScopeAskedAndOnlyUnaskedDetailsGranted_IsARefusal()
+    {
+        var consents = Given(new ConsentDefinition([], [])
+        {
+            AuthorizationDetails = [new JsonObject { ["type"] = "payment_initiation" }],
+        });
+
+        Assert.Equal(ErrorCodes.AccessDenied, await ErrorOfAsync(CreateRequest(), consents));
+    }
+
     [Fact]
     public async Task ProcessAsync_DetailsAskedAndAllRefused_IsARefusal()
     {

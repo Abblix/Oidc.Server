@@ -139,8 +139,10 @@ public class AuthorizationRequestProcessor(
 	/// Whether <paramref name="consents"/>, given by the end user, grant nothing of what the request asked for.
 	/// </summary>
 	/// <remarks>
-	/// A request asking for nothing a consent could grant is never refused this way. A consent marked as given whose
-	/// grant carries no authorization details, either as no list or as an empty one, grants none of those requested.
+	/// A request asking for nothing a consent could grant is never refused this way. Authorization details count only
+	/// when the request asked for some: then a grant carrying none of them, as no list or as an empty one, grants
+	/// nothing of them either. A grant holding a scope or a resource is no refusal, and its missing list passes the
+	/// requested details through as the host having no opinion on them.
 	/// </remarks>
 	private static bool IsRefusal(ValidAuthorizationRequest request, UserConsents consents, JsonArray? requestedDetails)
 	{
@@ -149,7 +151,7 @@ public class AuthorizationRequestProcessor(
 
 		return askedFor &&
 		       consents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
-		       consents.Granted.AuthorizationDetails is null or { Count: 0 };
+		       (!askedForDetails || consents.Granted.AuthorizationDetails is null or { Count: 0 });
 	}
 
 	/// <summary>
@@ -240,7 +242,9 @@ public class AuthorizationRequestProcessor(
 		{
 			RedirectUri = model.RedirectUri,
 			Nonce = model.Nonce,
-			CodeChallenge = model.CodeChallenge,
+			// An empty code_challenge, which a request object carries as written, is no challenge: PkceValidator
+			// treats it as absent, and so does the code exchange
+			CodeChallenge = model.CodeChallenge.HasValue() ? model.CodeChallenge : null,
 			CodeChallengeMethod = model.CodeChallengeMethod,
 			ProofKeyThumbprint = model.ProofKeyThumbprint,
 			AuthorizationDetails = emittedAuthorizationDetails,

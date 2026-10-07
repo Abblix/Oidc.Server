@@ -527,6 +527,19 @@ public class PkceValidatorTests
     }
 
     /// <summary>
+    /// A request issuing no code has nothing for PKCE to protect, so its code_challenge_method is not judged.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUnsupportedMethodAndNoCodeIssued_Succeeds()
+    {
+        var context = CreateContext(
+            codeChallengeMethod: "custom-method",
+            responseType: [ResponseTypes.IdToken]);
+
+        Assert.Null(await _validator.ValidateAsync(context));
+    }
+
+    /// <summary>
     /// code_challenge_method values are case-sensitive (RFC 7636), so PLAIN is not plain: it is a method the server
     /// does not support, and is refused as one.
     /// </summary>
