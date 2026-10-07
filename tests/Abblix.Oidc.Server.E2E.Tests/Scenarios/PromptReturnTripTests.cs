@@ -787,10 +787,11 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         var parameters = AuthorizeParameters(Prompts.Login);
         // A session authenticated an hour ago would answer a login page shown in 2000, in each shape a binder reads a
         // dictionary entry from
-        parameters[$"{nameof(AuthorizationRequest.Prompted)}[{Prompts.Login}]"] = "2000-01-01T00:00:00Z";
-        parameters[$"prompted[{Prompts.Login}]"] = "2000-01-01T00:00:00Z";
-        parameters[$"{nameof(AuthorizationRequest.Prompted)}.{Prompts.Login}"] = "2000-01-01T00:00:00Z";
-        parameters["prompted_at"] = "2000-01-01T00:00:00Z";
+        const string longAgo = "2000-01-01T00:00:00Z";
+        parameters[$"{nameof(AuthorizationRequest.Prompted)}[{Prompts.Login}]"] = longAgo;
+        parameters[$"prompted[{Prompts.Login}]"] = longAgo;
+        parameters[$"{nameof(AuthorizationRequest.Prompted)}.{Prompts.Login}"] = longAgo;
+        parameters["prompted_at"] = longAgo;
 
         var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
 

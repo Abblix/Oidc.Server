@@ -170,4 +170,44 @@ public class AuthSessionSelectorTests
         Assert.True(result.TryGetFailure(out var response));
         Assert.IsType<LoginRequired>(response);
     }
+
+    /// <summary>
+    /// The login page a filtered-out session leads to stamps both the login and the account selection asked, so the
+    /// one authentication done there answers both.
+    /// </summary>
+    [Fact]
+    public async Task ASessionTheFiltersLeftOut_StampsTheLoginAndTheSelectionOnTheLoginPage()
+    {
+        var tooOld = Session("old", Now.AddHours(-2), Now.AddHours(-2));
+
+        var result = await SelectAsync(
+            [Prompts.SelectAccount, Prompts.Login], null, TimeSpan.FromMinutes(5), tooOld);
+
+        Assert.True(result.TryGetFailure(out var response));
+        var login = Assert.IsType<LoginRequired>(response);
+        Assert.Equal(Now, login.Model.Prompted![Prompts.Login]);
+        Assert.Equal(Now, login.Model.Prompted![Prompts.SelectAccount]);
+    }
+
+    /// <summary>
+    /// The account the end user signs in to on the login page answers the account selection the page was stamped
+    /// for, so the request goes on with that session rather than to the selection page.
+    /// </summary>
+    [Fact]
+    public async Task SigningInOnTheLoginPage_AnswersTheSelectionStampedThere()
+    {
+        var signedIn = Session("fresh", PageShownAt.AddSeconds(10), PageShownAt.AddSeconds(10));
+
+        var result = await SelectAsync(
+            [Prompts.SelectAccount, Prompts.Login],
+            new Dictionary<string, DateTimeOffset>
+            {
+                [Prompts.Login] = PageShownAt,
+                [Prompts.SelectAccount] = PageShownAt,
+            },
+            TimeSpan.FromMinutes(5), signedIn);
+
+        Assert.True(result.TryGetSuccess(out var session));
+        Assert.Equal(signedIn.SessionId, session.SessionId);
+    }
 }

@@ -41,25 +41,10 @@ internal sealed class AuthSessionSelector(
 	public async Task<Result<AuthSession, AuthorizationResponse>> SelectAsync(ValidAuthorizationRequest request)
 	{
 		// Retrieves any available user authentication sessions, filtered by the request's parameters.
-		var (authSessions, authenticationLevelUnmet) = await GetAvailableAuthSessionsAsync(request);
+		var (authSessions, authenticationLevelUnmet, hostHoldsAny) = await GetAvailableAuthSessionsAsync(request);
 
 		var (prompt, sessionsAnswering) = PromptStillAsked(request.Model, authSessions);
-
-		// Asked only when it decides something: a request asking to choose an account with no usable session
-		var hostHoldsNone = prompt == Prompts.SelectAccount &&
-		                    sessionsAnswering.Count == 0 &&
-		                    !await HostHoldsAnySessionAsync();
-
-		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet, hostHoldsNone);
-	}
-
-	/// <summary>
-	/// Whether the host holds any session at all, before the request's filters.
-	/// </summary>
-	private async Task<bool> HostHoldsAnySessionAsync()
-	{
-		await using var sessions = authSessionService.GetAvailableAuthSessions().GetAsyncEnumerator();
-		return await sessions.MoveNextAsync();
+		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet, hostHoldsNone: !hostHoldsAny);
 	}
 
 	/// <summary>
@@ -147,8 +132,8 @@ internal sealed class AuthSessionSelector(
 	}
 
 	/// <summary>
-	/// Sends the end user to log in, stamping the request with the moment when the client asked for that login,
-	/// so the request coming back with a session opened since is not sent there again.
+	/// Sends the end user to choose an account, stamping the request with the moment, so the request coming back with
+	/// a session signed in since is not sent there again.
 	/// </summary>
 	private AccountSelectionRequired SendToAccountSelection(Model.AuthorizationRequest model, List<AuthSession> authSessions)
 	{
@@ -163,8 +148,26 @@ internal sealed class AuthSessionSelector(
 		return new AccountSelectionRequired(stamped, authSessions.ToArray());
 	}
 
+	/// <summary>
+	/// Sends the end user to log in, stamping the request for the login it asks, so the request coming back with a
+	/// session authenticated since is not sent there again.
+	/// </summary>
+	/// <remarks>
+	/// An account selection the request also asks for, not yet shown, is stamped too: the session the end user signs in
+	/// to here is the account they chose, as an authentication on the selection page answers a login.
+	/// </remarks>
 	private LoginRequired SendToLogin(Model.AuthorizationRequest model)
-		=> new(PromptPages.Asks(model, Prompts.Login) ? PromptPages.Stamped(model, Prompts.Login, clock.GetUtcNow()) : model);
+	{
+		var now = clock.GetUtcNow();
+		var stamped = model;
+		if (PromptPages.Asks(model, Prompts.Login))
+			stamped = PromptPages.Stamped(stamped, Prompts.Login, now);
+
+		if (PromptPages.Asks(model, Prompts.SelectAccount) && model.Prompted?.ContainsKey(Prompts.SelectAccount) is not true)
+			stamped = PromptPages.Stamped(stamped, Prompts.SelectAccount, now);
+
+		return new LoginRequired(stamped);
+	}
 
 	/// <summary>
 	/// The prompt the request still asks this selection for, and the sessions that may answer the request.
@@ -224,13 +227,18 @@ internal sealed class AuthSessionSelector(
 	/// <returns>The sessions matching the request's criteria, and whether an authentication level the
 	/// request required is what left none of them - which is a different answer to the client than having
 	/// nobody signed in.</returns>
-	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet)>
+	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet, bool HostHoldsAny)>
 		GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
 	{
 		var model = request.Model;
 		var clientInfo = request.ClientInfo;
 
-		var authSessions = authSessionService.GetAvailableAuthSessions();
+		// Read once, so whether the host held any session before the filters below is known without asking it again
+		var heldByHost = new List<AuthSession>();
+		await foreach (var session in authSessionService.GetAvailableAuthSessions())
+			heldByHost.Add(session);
+
+		IEnumerable<AuthSession> authSessions = heldByHost;
 
 		// Filter by maximum authentication age. When the request omits max_age, fall back to the
 		// client's registered default_max_age (OIDC Core section 2 / section 3.1.2.1).
@@ -304,12 +312,12 @@ internal sealed class AuthSessionSelector(
 		// those, interaction is what changes the answer, which is what login_required tells the client to
 		// try.
 		if (request.RequiredAuthContextClassRefs is not { Length: > 0 } requiredAcrValues)
-			return (candidates, false);
+			return (candidates, false, heldByHost.Count > 0);
 
 		var atRequiredLevel = candidates.FindAll(
 			session => AuthenticationLevels.Accept(requiredAcrValues, session.AuthContextClassRef));
 
-		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0);
+		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0, heldByHost.Count > 0);
 	}
 
 	/// <summary>
@@ -334,10 +342,10 @@ internal sealed class AuthSessionSelector(
 	/// polling check_session sees no change and does not learn the session ended. It corrects itself on the
 	/// next successful sign-in, which rewrites the cookie; until then the two views disagree.
 	/// </remarks>
-	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IAsyncEnumerable<AuthSession> sessions)
+	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IEnumerable<AuthSession> sessions)
 	{
 		var kept = new List<AuthSession>();
-		await foreach (var session in sessions)
+		foreach (var session in sessions)
 		{
 			if (!await cutoffChecker.IsSessionRefusedAsync(session))
 				kept.Add(session);

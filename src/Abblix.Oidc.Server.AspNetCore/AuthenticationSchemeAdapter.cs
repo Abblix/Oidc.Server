@@ -58,14 +58,14 @@ public class AuthenticationSchemeAdapter(
 	];
 
 	/// <summary>
-	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
-	/// </summary>
-	/// <summary>
 	/// The claim the cookie keeps the moment a session was signed in under. It is the adapter's own, so it is reserved
 	/// and never read back as an additional claim a token would carry.
 	/// </summary>
 	private const string SignedInAtClaimType = "abblix_signed_in_at";
 
+	/// <summary>
+	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
+	/// </summary>
 	private (Type, string) WrittenInThisRequest => (typeof(AuthenticationSchemeAdapter), authenticationScheme);
 
 	/// <summary>
