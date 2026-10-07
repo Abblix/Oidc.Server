@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// answers it, so the request proceeds to a code rather than to the page again - however the client sent the
 /// request: as query parameters, pushed, or inside a signed request object.
 /// </summary>
-public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
+public partial class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 {
     private const string LoginPath = "/login";
     private const string RegistrationPath = "/register";
@@ -1268,7 +1268,8 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         DiscoveryDocument discovery,
         string? prompt,
         IReadOnlyDictionary<string, string>? overrides = null,
-        bool pkceRequired = true)
+        bool pkceRequired = true,
+        string[]? requestUris = null)
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         var publicKey = new RsaJsonWebKey
@@ -1287,6 +1288,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(new JsonWebKeySet([publicKey])),
             [RegistrationMembers.PkceRequired] = pkceRequired,
+            [RegistrationMembers.RequestUris] = requestUris is null ? null : new JsonArray([.. requestUris.Select(uri => (JsonNode)uri)]),
         });
         var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
         var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
