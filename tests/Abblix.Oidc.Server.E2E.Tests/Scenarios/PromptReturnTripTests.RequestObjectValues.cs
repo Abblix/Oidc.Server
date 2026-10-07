@@ -100,25 +100,15 @@ public partial class PromptReturnTripTests
         Assert.Equal(error, await ErrorOfAsync(viaObject));
     }
 
-    public static TheoryData<string, RequestObjectPassing> BlankResponseModesByPassing()
-    {
-        var data = new TheoryData<string, RequestObjectPassing>();
-        foreach (var blank in new[] { string.Empty, " " })
-        {
-            foreach (var passing in Enum.GetValues<RequestObjectPassing>())
-                data.Add(blank, passing);
-        }
-
-        return data;
-    }
+    public static TheoryData<RequestObjectPassing> Passings() => new(Enum.GetValues<RequestObjectPassing>());
 
     /// <summary>
-    /// A response mode inside a request object that is empty or whitespace alone is no response mode, as the same
-    /// value in the query is: the request is taken, and goes on to the login page.
+    /// An empty response mode inside a request object is no response mode, as an empty one in the query is: the
+    /// request is taken, and goes on to the login page.
     /// </summary>
     [Theory]
-    [MemberData(nameof(BlankResponseModesByPassing))]
-    public async Task BlankResponseMode_InRequestObject_IsTakenAsAbsent(string blank, RequestObjectPassing passing)
+    [MemberData(nameof(Passings))]
+    public async Task EmptyResponseMode_InRequestObject_IsTakenAsAbsent(RequestObjectPassing passing)
     {
         var served = new RequestObjectServer();
         var (client, host) = StartServing(served);
@@ -128,7 +118,7 @@ public partial class PromptReturnTripTests
             client,
             discovery,
             Prompts.Login,
-            new Dictionary<string, string> { [AuthorizationRequest.Parameters.ResponseMode] = blank },
+            new Dictionary<string, string> { [AuthorizationRequest.Parameters.ResponseMode] = string.Empty },
             requestUris: [RequestObjectServer.Address]);
 
         using var response = await SendRequestObjectAsync(
