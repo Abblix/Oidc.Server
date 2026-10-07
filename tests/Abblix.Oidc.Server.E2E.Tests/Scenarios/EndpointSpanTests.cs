@@ -103,6 +103,13 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             }.OrderBy(stage => firstStarts[stage]));
         Assert.Contains(TelemetryStages.Signing, firstStarts.Keys);
         Assert.Contains(TelemetryStages.Storage, firstStarts.Keys);
+
+        // The test host replaced its consent provider, and reading the consents still runs as a stage of the request
+        var authorizeSpans = endpointSpans
+            .Where(span => Equals(span.GetTagItem(TelemetryTags.Endpoint), TelemetryEndpoints.Authorize))
+            .ToArray();
+        Assert.Contains(stageSpans, span => Equals(span.GetTagItem(TelemetryTags.Stage), TelemetryStages.Consent) &&
+                                            authorizeSpans.Any(authorize => IsUnder(span, authorize)));
     }
 
     private static bool IsUnder(Activity span, Activity ancestor)

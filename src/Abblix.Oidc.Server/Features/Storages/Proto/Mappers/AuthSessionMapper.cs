@@ -39,6 +39,9 @@ internal static class AuthSessionMapper
         if (source.EmailVerified.HasValue)
             proto.EmailVerified = source.EmailVerified.Value;
 
+        if (source.SignedInAt.HasValue)
+            proto.SignedInAt = source.SignedInAt.Value.ToTimestamp();
+
         proto.AdditionalClaims = source.AdditionalClaims.ToStruct();
 
         return proto;
@@ -61,6 +64,7 @@ internal static class AuthSessionMapper
                 : null,
             Email = ProtoMapper.GetString(source.Email, source.HasEmail),
             EmailVerified = source.HasEmailVerified ? source.EmailVerified : null,
+            SignedInAt = source.SignedInAt?.ToDateTimeOffset(),
             AdditionalClaims = source.AdditionalClaims.ToJsonObject(),
         };
     }

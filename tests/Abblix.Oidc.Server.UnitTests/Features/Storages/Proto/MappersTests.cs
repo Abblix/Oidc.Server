@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
@@ -156,6 +157,7 @@ public class MappersTests
             AuthenticationMethodReferences = ["pwd", "mfa", "face"],
             Email = "user@example.com",
             EmailVerified = true,
+            SignedInAt = new DateTimeOffset(2026, 10, 6, 12, 0, 0, TimeSpan.Zero),
             AdditionalClaims = new JsonObject
             {
                 ["tenant"] = "tenant-123",
@@ -181,6 +183,7 @@ public class MappersTests
         Assert.Equal(session.Subject, result.Subject);
         Assert.Equal(session.Email, result.Email);
         Assert.Equal(session.EmailVerified, result.EmailVerified);
+        Assert.Equal(session.SignedInAt, result.SignedInAt);
         Assert.NotNull(result.AdditionalClaims);
         Assert.Equal(42, result.AdditionalClaims["count"]!.GetValue<int>());
     }
@@ -600,12 +603,17 @@ public class MappersTests
     /// login page would be sent there again.
     /// </summary>
     [Fact]
-    public void AuthorizationRequestMapper_RoundTrips_PromptedAt()
+    public void AuthorizationRequestMapper_RoundTrips_Prompted()
     {
-        var promptedAt = new DateTimeOffset(2026, 10, 1, 12, 30, 45, 500, TimeSpan.Zero);
-        var request = new AuthorizationRequest { Scope = [TestConstants.DefaultScope], PromptedAt = promptedAt };
+        var shownAt = new DateTimeOffset(2026, 10, 1, 12, 30, 45, 500, TimeSpan.Zero);
+        var prompted = new Dictionary<string, DateTimeOffset>
+        {
+            [Prompts.SelectAccount] = shownAt,
+            [Prompts.Login] = shownAt.AddMinutes(1),
+        };
+        var request = new AuthorizationRequest { Scope = [TestConstants.DefaultScope], Prompted = prompted };
 
-        Assert.Equal(promptedAt, request.ToProto().FromProto().PromptedAt);
+        Assert.Equal(prompted, request.ToProto().FromProto().Prompted);
     }
 
     /// <summary>

@@ -40,7 +40,7 @@ public class PushedAuthorizationRequestProcessorDecorator(
     /// <summary>
     /// Delegates to the wrapped processor and consumes the <c>request_uri</c> values the request is done with: on a
     /// successful authentication the one it came by and the one it was first fetched under, and on any answer the
-    /// one it came back with from the login or account-creation page.
+    /// one it came back with from a page its prompt sent the end user to.
     /// </summary>
     /// <param name="request">The validated authorization request to process.</param>
     /// <returns>The inner processor's <see cref="AuthorizationResponse"/>, unchanged.</returns>
@@ -50,11 +50,11 @@ public class PushedAuthorizationRequestProcessorDecorator(
 
         // PushedRequestFetcher carries the URN forward onto the resolved request (surfaced as
         // ValidAuthorizationRequest.RequestUri) and deliberately does not consume on fetch, so multi-step UI re-reads
-        // the same URN until a code or token is issued here. A request coming back from the login or
-        // account-creation page is done with the request_uri it came back with whatever it is answered: a next page
+        // the same URN until a code or token is issued here. A request coming back from a page its prompt sent the
+        // end user to is done with the request_uri it came back with whatever it is answered: a next page
         // gets a request_uri of its own, and this one would let the end user's browser come back past signing in
         // until it expires.
-        if ((response is SuccessfullyAuthenticated || request.Model.PromptedAt.HasValue) &&
+        if ((response is SuccessfullyAuthenticated || request.Model.Prompted is { Count: > 0 }) &&
             request.RequestUri is { } requestUri &&
             requestUri.OriginalString.StartsWith(RequestUrn.Prefix))
         {

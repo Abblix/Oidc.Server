@@ -230,13 +230,15 @@ public record AuthorizationRequest
 	public Uri? PushedRequestUri { get; init; }
 
 	/// <summary>
-	/// When the server last sent the end user to log in or to create an account for this request, set by the
-	/// server and kept with the request it stores for that page. A session authenticated since then is the one
-	/// <c>prompt=login</c> or <c>prompt=create</c> asked for, so the request coming back with it proceeds rather
-	/// than sending the end user to the page again. Kept off the wire, so no client can claim it.
+	/// When the server last sent the end user to the page of each <c>prompt</c> value the request asks for, set by the
+	/// server and kept with the request it stores for that page. The page is answered by what the host wrote since:
+	/// a session authenticated since then for <c>login</c> and <c>create</c>, a session signed in since then for
+	/// <c>select_account</c>, and a consent given since then for <c>consent</c>. So the request coming back from a
+	/// page proceeds rather than sending the end user there again, and an answer given before the page was shown
+	/// never counts. Kept off the wire, so no client can claim it.
 	/// </summary>
 	[JsonIgnore]
-	public DateTimeOffset? PromptedAt { get; init; }
+	public IReadOnlyDictionary<string, DateTimeOffset>? Prompted { get; init; }
 
 	/// <summary>
 	/// The request URN this request was first fetched under - the one the client pushed it under (RFC 9126), or that

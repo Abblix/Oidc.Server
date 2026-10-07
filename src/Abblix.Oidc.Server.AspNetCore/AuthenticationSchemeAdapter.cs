@@ -29,11 +29,13 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
 /// allowing operations on the HTTP context of the current request.</param>
 /// <param name="authSessionTerminator">Ends the session a sign-in replaces, for its tokens and its clients.</param>
+/// <param name="clock">Tells when a session is signed in.</param>
 /// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
 /// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
 public class AuthenticationSchemeAdapter(
 	IHttpContextAccessor httpContextAccessor,
 	IAuthSessionTerminator authSessionTerminator,
+	TimeProvider clock,
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
 	/// <summary>
@@ -45,6 +47,7 @@ public class AuthenticationSchemeAdapter(
 	/// </summary>
 	private static readonly HashSet<string> ReservedClaimTypes =
 	[
+		SignedInAtClaimType,
 		JwtClaimTypes.Subject,
 		JwtClaimTypes.SessionId,
 		JwtClaimTypes.AuthenticationTime,
@@ -53,6 +56,12 @@ public class AuthenticationSchemeAdapter(
 		JwtClaimTypes.EmailVerified,
 		JwtClaimTypes.AuthenticationMethodReferences,
 	];
+
+	/// <summary>
+	/// The claim the cookie keeps the moment a session was signed in under. It is the adapter's own, so it is reserved
+	/// and never read back as an additional claim a token would carry.
+	/// </summary>
+	private const string SignedInAtClaimType = "abblix_signed_in_at";
 
 	/// <summary>
 	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
@@ -173,6 +182,25 @@ public class AuthenticationSchemeAdapter(
 	}
 
 	/// <summary>
+	/// The moment the session was signed in, or null when the cookie carries none or one out of range, read as the
+	/// authentication time is.
+	/// </summary>
+	private static DateTimeOffset? SignedInAtOf(ClaimsPrincipal principal)
+	{
+		if (!long.TryParse(principal.FindFirstValue(SignedInAtClaimType), Integer, InvariantCulture, out var seconds))
+			return null;
+
+		try
+		{
+			return DateTimeOffset.FromUnixTimeSeconds(seconds);
+		}
+		catch (ArgumentOutOfRangeException)
+		{
+			return null;
+		}
+	}
+
+	/// <summary>
 	/// Adds to a session the claims it may carry.
 	/// </summary>
 	private static AuthSession WithOptionalClaims(AuthSession authSession, ClaimsPrincipal principal)
@@ -184,6 +212,7 @@ public class AuthenticationSchemeAdapter(
 			EmailVerified = bool.TryParse(principal.FindFirstValue(JwtClaimTypes.EmailVerified), out var emailVerified)
 				? emailVerified
 				: null,
+			SignedInAt = SignedInAtOf(principal),
 		};
 
 		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
@@ -221,7 +250,7 @@ public class AuthenticationSchemeAdapter(
 		else if (replaced != null)
 			endedSessions = [replaced];
 
-		var principal = BuildPrincipal(authSession);
+		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() });
 
 		await HttpContext.SignInAsync(authenticationScheme, principal);
 
@@ -291,6 +320,9 @@ public class AuthenticationSchemeAdapter(
 		// EmailVerified claim from AuthSession
 		if (authSession.EmailVerified.HasValue)
 			claims.Add(new (JwtClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
+
+		if (authSession.SignedInAt.HasValue)
+			claims.Add(new (SignedInAtClaimType, authSession.SignedInAt.Value.ToUnixTimeSeconds().ToString(InvariantCulture)));
 
 		if (authSession.AdditionalClaims != null)
 			AddAdditionalClaims(claims, authSession.AdditionalClaims);

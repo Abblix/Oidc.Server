@@ -28,11 +28,10 @@ internal sealed class AuthSessionSelector(
 	TimeProvider clock)
 {
 	/// <summary>
-	/// The values of <c>prompt</c> this selection answers, in the order it answers them: none, which allows no page
-	/// at all, then the pages in the order they come - account creation or account selection, then authentication.
-	/// Consent is asked after a session is chosen.
+	/// The values of <c>prompt</c> whose pages a session answers, in the order the pages come: account creation or
+	/// account selection, then authentication. Consent is asked after a session is chosen.
 	/// </summary>
-	private static readonly string[] SessionPrompts = [Prompts.None, Prompts.Create, Prompts.SelectAccount, Prompts.Login];
+	private static readonly string[] SessionPrompts = [Prompts.Create, Prompts.SelectAccount, Prompts.Login];
 
 	/// <summary>
 	/// Selects the session the request proceeds with.
@@ -42,10 +41,10 @@ internal sealed class AuthSessionSelector(
 	public async Task<Result<AuthSession, AuthorizationResponse>> SelectAsync(ValidAuthorizationRequest request)
 	{
 		// Retrieves any available user authentication sessions, filtered by the request's parameters.
-		var (authSessions, authenticationLevelUnmet) = await GetAvailableAuthSessionsAsync(request);
+		var (authSessions, authenticationLevelUnmet, hostHoldsAny) = await GetAvailableAuthSessionsAsync(request);
 
 		var (prompt, sessionsAnswering) = PromptStillAsked(request.Model, authSessions);
-		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet);
+		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet, hostHoldsNone: !hostHoldsAny);
 	}
 
 	/// <summary>
@@ -55,7 +54,8 @@ internal sealed class AuthSessionSelector(
 		ValidAuthorizationRequest request,
 		List<AuthSession> authSessions,
 		string? prompt,
-		bool authenticationLevelUnmet)
+		bool authenticationLevelUnmet,
+		bool hostHoldsNone)
 	{
 		var model = request.Model;
 		switch (authSessions.Count, prompt)
@@ -65,7 +65,7 @@ internal sealed class AuthSessionSelector(
 			// advertises create in prompt_values_supported must act on it. Without its own arm the
 			// value falls through to the generic branches and the registration intent is lost.
 			case (_, Prompts.Create):
-				return new RegistrationRequired(model with { PromptedAt = clock.GetUtcNow() });
+				return new RegistrationRequired(PromptPages.Stamped(model, Prompts.Create, clock.GetUtcNow()));
 
 			// A request requiring an authentication level, forbidding interaction and left with no session is
 			// the failed authentication attempt section 5.5.1.1 demands, and the OpenID Foundation gives it a
@@ -101,14 +101,23 @@ internal sealed class AuthSessionSelector(
 					request.ResponseMode,
 					model.RedirectUri);
 
+			// The request asks the end user to choose an account. With no session at all, the page is where they reach
+			// an account they are not signed in to yet; a session the request's filters left out goes to the login
+			// page below instead, since choosing it again could not get it past them.
+			case (> 0, Prompts.SelectAccount):
+			case (0, Prompts.SelectAccount) when hostHoldsNone:
+				return SendToAccountSelection(model, authSessions);
+
 			// If no sessions exist, or the request explicitly asks for a login, prompt the user for login.
 			case (0, _) or (_, Prompts.Login):
-				return SendToLogin(model, prompt);
+				return SendToLogin(model);
 
-			// If multiple sessions exist, or the request requires account selection,
-			// prompt the user to select an account.
-			case (> 1, _) or (_, Prompts.SelectAccount):
-				return new AccountSelectionRequired(model, authSessions.ToArray());
+			// If multiple sessions exist, prompt the user to select an account. Sessions that all answered an earlier
+			// selection page are asked again under a new stamp, so the next pick narrows them.
+			case (> 1, _):
+				return PromptPages.Asks(model, Prompts.SelectAccount)
+					? SendToAccountSelection(model, authSessions)
+					: new AccountSelectionRequired(model, authSessions.ToArray());
 
 			// If a single session exists, proceed with that session for further processing.
 			case (1, _):
@@ -123,45 +132,80 @@ internal sealed class AuthSessionSelector(
 	}
 
 	/// <summary>
-	/// Sends the end user to log in, stamping the request with the moment when the client asked for that login,
-	/// so the request coming back with a session opened since is not sent there again.
+	/// Sends the end user to choose an account, stamping the request with the moment, so the request coming back with
+	/// a session signed in since is not sent there again.
 	/// </summary>
-	private LoginRequired SendToLogin(Model.AuthorizationRequest model, string? prompt)
-		=> new(prompt == Prompts.Login ? model with { PromptedAt = clock.GetUtcNow() } : model);
+	private AccountSelectionRequired SendToAccountSelection(Model.AuthorizationRequest model, List<AuthSession> authSessions)
+	{
+		var now = clock.GetUtcNow();
+		var stamped = PromptPages.Stamped(model, Prompts.SelectAccount, now);
+
+		// An end user authenticating on the selection page answers a login the request also asks for, so they are not
+		// sent to authenticate twice; picking a session authenticated earlier still leaves the login page to come
+		if (PromptPages.Asks(model, Prompts.Login) && model.Prompted?.ContainsKey(Prompts.Login) is not true)
+			stamped = PromptPages.Stamped(stamped, Prompts.Login, now);
+
+		return new AccountSelectionRequired(stamped, authSessions.ToArray());
+	}
 
 	/// <summary>
-	/// The prompt the request still asks for, and the sessions that may answer it.
+	/// Sends the end user to log in, stamping the request for the login it asks, so the request coming back with a
+	/// session authenticated since is not sent there again.
 	/// </summary>
 	/// <remarks>
-	/// The request comes back from the login or account-creation page still carrying prompt=login or
-	/// prompt=create, and asking again would send the end user round in a loop. A session authenticated
-	/// since the server sent the end user there is the one the client asked for, so the request proceeds
-	/// with it alone. A session's authentication time is kept to the second, so the comparison is too.
+	/// An account selection the request also asks for is not stamped here: a login page may sign the end user in
+	/// without asking anything, as a request not asking for login lets it, and the account it signs in to is not one
+	/// the end user chose. The selection page follows.
+	/// </remarks>
+	private LoginRequired SendToLogin(Model.AuthorizationRequest model)
+		=> new(PromptPages.Asks(model, Prompts.Login) ? PromptPages.Stamped(model, Prompts.Login, clock.GetUtcNow()) : model);
+
+	/// <summary>
+	/// The prompt the request still asks this selection for, and the sessions that may answer the request.
+	/// </summary>
+	/// <remarks>
+	/// The request comes back from each page still carrying its prompt, and asking again would send the end user round
+	/// in a loop. The pages come in the server's order whatever order the client wrote: account creation or selection,
+	/// then authentication; consent is asked after a session is chosen. Each is answered by a session the host wrote
+	/// since the server sent the end user there, and the request proceeds with those sessions alone. A new account
+	/// answers selection and authentication alike, so nothing after it is asked.
 	/// </remarks>
 	private static (string? Prompt, List<AuthSession> Sessions) PromptStillAsked(
 		Model.AuthorizationRequest model,
 		List<AuthSession> authSessions)
 	{
-		var prompt = SessionPromptOf(model.Prompt);
-		if (prompt is not (Prompts.Login or Prompts.Create) || model.PromptedAt is not { } promptedAt)
-			return (prompt, authSessions);
+		if (PromptPages.Asks(model, Prompts.None))
+			return (Prompts.None, authSessions);
 
-		var openedSince = authSessions
-			.Where(session => promptedAt.ToUnixTimeSeconds() <= session.AuthenticationTime.ToUnixTimeSeconds())
-			.ToList();
+		foreach (var prompt in SessionPrompts)
+		{
+			if (!PromptPages.Asks(model, prompt))
+				continue;
 
-		return openedSince.Count > 0 ? (null, openedSince) : (prompt, authSessions);
+			var answering = authSessions
+				.Where(session => PromptPages.AnsweredBy(model, prompt, AnswerOf(prompt, session)))
+				.ToList();
+			if (answering.Count == 0)
+				return (prompt, authSessions);
+
+			authSessions = answering;
+			if (prompt == Prompts.Create)
+				break;
+		}
+
+		return (null, authSessions);
 	}
 
 	/// <summary>
-	/// The value of <paramref name="prompt"/> this selection answers first, or null when it asks for none of them.
+	/// The moment <paramref name="session"/> was written in a way that answers the page of <paramref name="prompt"/>:
+	/// authenticated for an account created or a login, signed in for an account chosen.
 	/// </summary>
-	/// <remarks>
-	/// The parameter is a list whose order carries no meaning, so the order of the pages is the server's, the same
-	/// for every way a client may write the same values.
-	/// </remarks>
-	private static string? SessionPromptOf(string[]? prompt)
-		=> prompt is null ? null : SessionPrompts.FirstOrDefault(value => prompt.Contains(value, StringComparer.Ordinal));
+	private static DateTimeOffset? AnswerOf(string prompt, AuthSession session) => prompt switch
+	{
+		Prompts.Create or Prompts.Login => session.AuthenticationTime,
+		Prompts.SelectAccount => session.SignedInAt,
+		_ => throw new ArgumentOutOfRangeException(nameof(prompt), prompt, "No session answers this prompt"),
+	};
 
 	/// <summary>
 	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).
@@ -171,16 +215,21 @@ internal sealed class AuthSessionSelector(
 	/// <param name="request">The validated request: its model supplies max age and ACR values, its client
 	/// the default_max_age and default_acr_values fallbacks, and it carries the end user an
 	/// <c>id_token_hint</c> named.</param>
-	/// <returns>The sessions matching the request's criteria, and whether an authentication level the
-	/// request required is what left none of them - which is a different answer to the client than having
-	/// nobody signed in.</returns>
-	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet)>
+	/// <returns>The sessions matching the request's criteria; whether an authentication level the request required is
+	/// what left none of them, which is a different answer to the client than having nobody signed in; and whether the
+	/// host held any session before the filters, which tells a session the filters left out from none at all.</returns>
+	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet, bool HostHoldsAny)>
 		GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
 	{
 		var model = request.Model;
 		var clientInfo = request.ClientInfo;
 
-		var authSessions = authSessionService.GetAvailableAuthSessions();
+		// Read once, so whether the host held any session before the filters below is known without asking it again
+		var heldByHost = new List<AuthSession>();
+		await foreach (var session in authSessionService.GetAvailableAuthSessions())
+			heldByHost.Add(session);
+
+		IEnumerable<AuthSession> authSessions = heldByHost;
 
 		// Filter by maximum authentication age. When the request omits max_age, fall back to the
 		// client's registered default_max_age (OIDC Core section 2 / section 3.1.2.1).
@@ -254,12 +303,12 @@ internal sealed class AuthSessionSelector(
 		// those, interaction is what changes the answer, which is what login_required tells the client to
 		// try.
 		if (request.RequiredAuthContextClassRefs is not { Length: > 0 } requiredAcrValues)
-			return (candidates, false);
+			return (candidates, false, heldByHost.Count > 0);
 
 		var atRequiredLevel = candidates.FindAll(
 			session => AuthenticationLevels.Accept(requiredAcrValues, session.AuthContextClassRef));
 
-		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0);
+		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0, heldByHost.Count > 0);
 	}
 
 	/// <summary>
@@ -284,10 +333,10 @@ internal sealed class AuthSessionSelector(
 	/// polling check_session sees no change and does not learn the session ended. It corrects itself on the
 	/// next successful sign-in, which rewrites the cookie; until then the two views disagree.
 	/// </remarks>
-	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IAsyncEnumerable<AuthSession> sessions)
+	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IEnumerable<AuthSession> sessions)
 	{
 		var kept = new List<AuthSession>();
-		await foreach (var session in sessions)
+		foreach (var session in sessions)
 		{
 			if (!await cutoffChecker.IsSessionRefusedAsync(session))
 				kept.Add(session);

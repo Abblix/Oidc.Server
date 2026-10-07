@@ -44,6 +44,8 @@ public class AuthorizationRequestProcessor(
 {
 	// Extracted collaborator: which session answers the request is one question with its own dependencies,
 	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
+	private readonly UserConsentsReader _consentsReader = new(consentsProvider);
+
 	private readonly AuthSessionSelector _sessionSelector =
 		new(authSessionService, cutoffChecker, subjectTypeConverter, clock);
 
@@ -92,9 +94,8 @@ public class AuthorizationRequestProcessor(
 			: null;
 
 		// Retrieve user consents (i.e., permissions granted for requested
-		// scopes/resources/authorization_details). The 'prompt=consent' case is not forgotten but
-		// processed inside this call.
-		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
+		// scopes/resources/authorization_details), as prompt=consent leaves them
+		var userConsents = await _consentsReader.ReadAsync(request, authSession);
 
 		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
@@ -125,7 +126,7 @@ public class AuthorizationRequestProcessor(
 	/// <summary>
 	/// The answer a request gets while consent for some of what it asks is still pending, or null when none is.
 	/// </summary>
-	private static AuthorizationResponse? ConsentStillOwed(
+	private AuthorizationResponse? ConsentStillOwed(
 		ValidAuthorizationRequest request,
 		AuthSession authSession,
 		UserConsents userConsents)
@@ -138,7 +139,7 @@ public class AuthorizationRequestProcessor(
 			or { AuthorizationDetails.Count: > 0 })
 		{
 			// If user interaction is disallowed but consent is necessary, return an error.
-			if (model.Prompt?.Contains(Prompts.None, StringComparer.Ordinal) is true)
+			if (PromptPages.Asks(model, Prompts.None))
 			{
 				return new AuthorizationError(
 					model,
@@ -149,7 +150,11 @@ public class AuthorizationRequestProcessor(
 			}
 
 			// Prompt for consent if necessary permissions are not yet granted.
-			return new ConsentRequired(model, authSession, userConsents.Pending);
+			// A request asking for consent is stamped, so the consent the host records on that page answers it
+			var consentPage = PromptPages.Asks(model, Prompts.Consent)
+				? PromptPages.Stamped(model, Prompts.Consent, clock.GetUtcNow())
+				: model;
+			return new ConsentRequired(consentPage, authSession, userConsents.Pending);
 		}
 
 		return null;

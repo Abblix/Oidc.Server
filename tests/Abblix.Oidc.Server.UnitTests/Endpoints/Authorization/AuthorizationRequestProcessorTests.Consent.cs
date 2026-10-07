@@ -48,6 +48,60 @@ public partial class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// A request asking for consent leaves every scope pending, consent granted before included, and stamps the
+    /// consent page it sends the end user to.
+    /// </summary>
+    [Theory]
+    [InlineData(-60)]
+    [InlineData(null)]
+    public async Task ProcessAsync_PromptConsentNotGivenOnItsPage_AsksForEveryScope(int? givenSecondsBeforeNow)
+    {
+        var request = CreateRequest(prompt: [Prompts.Consent], scope: [Scopes.OpenId, Scopes.Email]);
+        var session = CreateAuthSession();
+        var granted = CreateConsents(grantedScopes: [.. request.Scope]) with
+        {
+            GivenAt = givenSecondsBeforeNow is { } seconds ? _timeProvider.GetUtcNow().AddSeconds(seconds) : null,
+        };
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(granted);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var consentRequired = Assert.IsType<ConsentRequired>(result);
+        Assert.Equal(request.Scope, consentRequired.RequiredUserConsents.Scopes);
+        Assert.Equal(_timeProvider.GetUtcNow(), consentRequired.Model.Prompted![Prompts.Consent]);
+    }
+
+    /// <summary>
+    /// Consent given on the request's consent page answers the prompt, so the request goes on with the host's
+    /// consents: only what the host still holds pending is asked for.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_PromptConsentGivenOnItsPage_TakesTheHostsConsents()
+    {
+        var shownAt = _timeProvider.GetUtcNow();
+        var request = CreateRequest(prompt: [Prompts.Consent], scope: [Scopes.OpenId, Scopes.Email], promptedAt: shownAt);
+        var session = CreateAuthSession();
+        var stillPending = new[] { new ScopeDefinition(Scopes.Email) };
+        var consents = CreateConsents(pendingScopes: stillPending) with { GivenAt = shownAt.AddSeconds(5) };
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var consentRequired = Assert.IsType<ConsentRequired>(result);
+        Assert.Equal(stillPending, consentRequired.RequiredUserConsents.Scopes);
+    }
+
+    /// <summary>
     /// Verifies ConsentRequired when scopes pending consent.
     /// User must grant permission for requested scopes.
     /// </summary>

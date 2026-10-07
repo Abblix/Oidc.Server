@@ -41,4 +41,6 @@ message AuthSession {
   // arrays, and primitive values (string, number, boolean, null).
   // Maps directly to C# JsonObject without intermediate JSON string encoding.
   optional google.protobuf.Struct additional_claims = 10;
+  // When the session was last signed in: on authentication, or when the end user picked it
+  optional google.protobuf.Timestamp signed_in_at = 11;
 }

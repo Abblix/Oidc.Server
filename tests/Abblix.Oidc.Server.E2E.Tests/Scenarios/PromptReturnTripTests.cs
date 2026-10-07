@@ -14,6 +14,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -38,6 +40,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     private const string LoginPath = "/login";
     private const string RegistrationPath = "/register";
     private const string AccountSelectionPath = "/select-account";
+    private const string ConsentPath = "/consent";
     private const string State = "state";
 
     private static readonly IServiceProvider JwtServices = BuildJwtServices();
@@ -52,41 +55,96 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// One end user signed in, at a moment the test sets: an hour ago until the test signs them in again.
+    /// One end user, signed in an hour ago until the test does what a host's page does: signs them in again, has them
+    /// pick their live session, or starts them with no session at all.
     /// </summary>
     private sealed class SignedInEndUser : IAuthSessionService
     {
-        public DateTimeOffset AuthenticatedAt { get; set; } = TimeProvider.System.GetUtcNow().AddHours(-1);
+        public DateTimeOffset AuthenticatedAt { get; private set; } = TimeProvider.System.GetUtcNow().AddHours(-1);
 
-        private AuthSession Session => new("subject", "session", AuthenticatedAt, "local");
+        public DateTimeOffset? SignedInAt { get; private set; }
+
+        public bool HasSession { get; set; } = true;
+
+        private AuthSession Session => new("subject", "session", AuthenticatedAt, "local") { SignedInAt = SignedInAt };
 
         public async IAsyncEnumerable<AuthSession> GetAvailableAuthSessions()
         {
-            yield return Session;
+            if (HasSession)
+                yield return Session;
+
             await Task.CompletedTask;
         }
 
-        public Task<AuthSession?> AuthenticateAsync() => Task.FromResult<AuthSession?>(Session);
+        public Task<AuthSession?> AuthenticateAsync() => Task.FromResult(HasSession ? Session : null);
 
         public Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
             => Task.FromResult(new AuthSessionSignInResult(authSession, []));
 
         public Task SignOutAsync() => Task.CompletedTask;
 
-        public void SignInAgain() => AuthenticatedAt = TimeProvider.System.GetUtcNow();
+        /// <summary>
+        /// The login page: the end user authenticates, and the host signs the session in.
+        /// </summary>
+        public void SignInAgain()
+        {
+            HasSession = true;
+            AuthenticatedAt = TimeProvider.System.GetUtcNow();
+            SignedInAt = AuthenticatedAt;
+        }
+
+        /// <summary>
+        /// The account selection page: the end user picks the session they have, and the host signs it in again
+        /// without authenticating them.
+        /// </summary>
+        public void PickAgain() => SignedInAt = TimeProvider.System.GetUtcNow();
+    }
+
+    /// <summary>
+    /// The consent the host keeps: everything the request asks, given at the moment the test sets.
+    /// </summary>
+    private sealed class RecordedConsents : IUserConsentsProvider
+    {
+        public DateTimeOffset? GivenAt { get; private set; }
+
+        public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
+            => Task.FromResult(new UserConsents
+            {
+                Granted = new ConsentDefinition(request.Scope, request.Resources),
+                GivenAt = GivenAt,
+            });
+
+        /// <summary>
+        /// The consent page: the end user gives consent, and the host records the moment.
+        /// </summary>
+        public void Give() => GivenAt = TimeProvider.System.GetUtcNow();
     }
 
     private (HttpClient Client, SignedInEndUser EndUser, IDisposable Host) Start()
     {
+        var (client, endUser, _, host) = StartWithConsents();
+        return (client, endUser, host);
+    }
+
+    /// <summary>
+    /// The server over the test's end user and the consent it records, each replacing what the host registered, as a
+    /// host replacing its own provider does: prompt=consent keeps working over it.
+    /// </summary>
+    private (HttpClient Client, SignedInEndUser EndUser, RecordedConsents Consents, IDisposable Host) StartWithConsents()
+    {
         var endUser = new SignedInEndUser();
+        var consents = new RecordedConsents();
         var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-            services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser))));
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser));
+            services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider>(consents));
+        }));
         var client = host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
             BaseAddress = TestServerAddress.BaseAddress,
         });
-        return (client, endUser, host);
+        return (client, endUser, consents, host);
     }
 
     private static async Task<Uri> RedirectOf(HttpClient client, Uri uri)
@@ -240,6 +298,182 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// Picking the live session answers account selection without a new authentication, and the request proceeds
+    /// to a code rather than to the page again.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccount_PickingTheLiveSession_IssuesCode()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.SelectAccount)));
+        Assert.Equal(AccountSelectionPath, PathOf(sentTo));
+        endUser.PickAgain();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    [Fact]
+    public async Task PromptSelectAccount_ReturningWithoutPicking_IsSentToSelectionAgain()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.SelectAccount)));
+
+        Assert.Equal(
+            AccountSelectionPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+    }
+
+    /// <summary>
+    /// Without any session the end user is still sent to choose an account, which is where they reach one they are
+    /// not signed in to; signing in there answers the selection.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccount_WithoutASession_SendsToSelectionThenIssuesCode()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        endUser.HasSession = false;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.SelectAccount)));
+        Assert.Equal(AccountSelectionPath, PathOf(sentTo));
+        endUser.SignInAgain();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// Consent already granted does not answer prompt=consent: the consent page is shown once, and the consent given
+    /// there does.
+    /// </summary>
+    [Fact]
+    public async Task PromptConsent_GivingConsentOnThePage_IssuesCode()
+    {
+        var (client, _, consents, host) = StartWithConsents();
+        using var _ = host;
+        consents.Give();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
+        Assert.Equal(ConsentPath, PathOf(sentTo));
+        consents.Give();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    /// <summary>
+    /// A consent given before the consent page was shown does not answer it: coming back without giving consent there
+    /// leads to the page again.
+    /// </summary>
+    [Fact]
+    public async Task PromptConsent_ConsentGivenBeforeThePage_DoesNotAnswerIt()
+    {
+        var (client, _, consents, host) = StartWithConsents();
+        using var _ = host;
+        consents.Give();
+
+        // Moments are compared to the second, so the page is shown in a later one than the consent
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        var discovery = await FetchDiscoveryAsync(client);
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
+
+        Assert.Equal(
+            ConsentPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+    }
+
+    /// <summary>
+    /// With no session, an end user who signs in on the account selection page has answered a login asked beside
+    /// it, and gets a code without authenticating a second time.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLogin_SigningInOnTheSelectionPage_AuthenticatesOnce()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        endUser.HasSession = false;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Login}")));
+        Assert.Equal(AccountSelectionPath, PathOf(sentTo));
+        endUser.SignInAgain();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
+    }
+
+    [Fact]
+    public async Task PromptConsent_ReturningWithoutConsent_IsSentToConsentAgain()
+    {
+        var (client, _, _, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(
+            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
+
+        Assert.Equal(
+            ConsentPath,
+            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+    }
+
+    /// <summary>
+    /// Every page of a combination is shown once, in the server's order, and the request ends in a code.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLoginConsent_ShowsEachPageOnceInOrder()
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var selection = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint,
+            AuthorizeParameters($"{Prompts.Consent} {Prompts.Login} {Prompts.SelectAccount}")));
+        Assert.Equal(AccountSelectionPath, PathOf(selection));
+        endUser.PickAgain();
+
+        var login = await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, selection);
+        Assert.Equal(LoginPath, PathOf(login));
+        endUser.SignInAgain();
+
+        var consent = await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, login);
+        Assert.Equal(ConsentPath, PathOf(consent));
+        consents.Give();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, consent));
+    }
+
+    /// <summary>
+    /// A new account is the one the end user picked, so account creation answers account selection too.
+    /// </summary>
+    [Fact]
+    public async Task PromptCreateSelectAccount_IsAnsweredByCreation()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Create}")));
+        Assert.Equal(RegistrationPath, PathOf(sentTo));
+        endUser.SignInAgain();
+
+        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
     }
 
     [Fact]
@@ -545,14 +779,19 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     }
 
     [Fact]
-    public async Task PromptLogin_ClaimingPromptedAtInQuery_IsSentToLogin()
+    public async Task PromptLogin_ClaimingPromptedInQuery_IsSentToLogin()
     {
         var (client, _, host) = Start();
         using var _ = host;
         var discovery = await FetchDiscoveryAsync(client);
         var parameters = AuthorizeParameters(Prompts.Login);
-        parameters[nameof(AuthorizationRequest.PromptedAt)] = "2000-01-01T00:00:00Z";
-        parameters["prompted_at"] = "2000-01-01T00:00:00Z";
+        // A session authenticated an hour ago would answer a login page shown in 2000, in each shape a binder reads a
+        // dictionary entry from
+        const string longAgo = "2000-01-01T00:00:00Z";
+        parameters[$"{nameof(AuthorizationRequest.Prompted)}[{Prompts.Login}]"] = longAgo;
+        parameters[$"prompted[{Prompts.Login}]"] = longAgo;
+        parameters[$"{nameof(AuthorizationRequest.Prompted)}.{Prompts.Login}"] = longAgo;
+        parameters["prompted_at"] = longAgo;
 
         var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
 

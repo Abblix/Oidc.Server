@@ -86,11 +86,17 @@ message AuthorizationRequest {
   // /authorize endpoint redeems the request_uri.
   optional string authorization_details_json = 23;
 
-  // When the server last sent the end user to log in or to create an account for this request,
-  // so the request coming back with a session authenticated since then proceeds
-  optional google.protobuf.Timestamp prompted_at = 24;
+  // Held a single moment the end user was sent to log in or to create an account in earlier releases,
+  // which prompted now records for each page. Reserved so the number and the name are never given to
+  // another field.
+  reserved 24;
+  reserved "prompted_at";
 
   // The request URN this request was first fetched under, so it is consumed with the URN of
   // the page the request comes back from once a code or token is issued
   optional string origin_request_uri = 25;
+
+  // When the server sent the end user to the page of each prompt value the request asks for, so the
+  // request coming back with an answer given since then proceeds
+  map<string, google.protobuf.Timestamp> prompted = 26;
 }

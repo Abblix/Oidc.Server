@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests;
@@ -25,6 +26,7 @@ public class AuthenticationSchemeAdapterTests
 
 	private readonly Mock<IHttpContextAccessor> _httpContextAccessor;
 	private readonly DefaultHttpContext _httpContext;
+	private readonly FakeTimeProvider _clock = new(DateTimeOffset.UnixEpoch.AddYears(56));
 	private readonly AuthenticationSchemeAdapter _adapter;
 	private readonly List<string> _calls = [];
 
@@ -40,7 +42,7 @@ public class AuthenticationSchemeAdapterTests
 			.Callback((string sessionId, string subject) => _calls.Add($"terminate {sessionId} {subject}"))
 			.ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
 
-		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, Scheme);
+		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, _clock, Scheme);
 	}
 
 	private static AuthSession Session(JsonObject? additionalClaims = null, string identityProvider = "TestProvider") => new(
@@ -325,6 +327,24 @@ public class AuthenticationSchemeAdapterTests
 		Assert.Equal(["tenant"], result.Session.AdditionalClaims!.Select(claim => claim.Key));
 	}
 
+	/// <summary>
+	/// A sign-in stamps the session with its moment, which a read gives back, and the cookie's own claim for it never
+	/// reads back as an additional claim a token would carry.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_StampsTheMomentTheSessionWasSignedIn()
+	{
+		SetupSignIn();
+		var signedInAt = _clock.GetUtcNow();
+
+		var result = await _adapter.SignInAsync(Session(new JsonObject { ["tenant"] = JsonValue.Create("acme") }));
+		var read = await _adapter.AuthenticateAsync();
+
+		Assert.Equal(signedInAt.ToUnixTimeSeconds(), result.Session.SignedInAt?.ToUnixTimeSeconds());
+		Assert.Equal(result.Session.SignedInAt, read!.SignedInAt);
+		Assert.Equal(["tenant"], read.AdditionalClaims!.Select(claim => claim.Key));
+	}
+
 	[Theory]
 	[InlineData("", "session456")]
 	[InlineData("user123", "")]
@@ -399,7 +419,7 @@ public class AuthenticationSchemeAdapterTests
 			.ReturnsAsync(AuthenticateResult.NoResult());
 		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
 		var other = new AuthenticationSchemeAdapter(
-			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), otherScheme);
+			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, otherScheme);
 
 		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
 		var result = await other.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });

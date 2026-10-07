@@ -52,7 +52,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
             {
                 PushedRequestUri = request.PushedRequestUri,
                 OriginRequestUri = request.OriginRequestUri,
-                PromptedAt = request.PromptedAt,
+                Prompted = request.Prompted,
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
