@@ -114,8 +114,12 @@ public record AuthorizationRequest
 	/// The OIDC <c>display</c> parameter (OIDC Core section 3.1.2.1) hinting how the authentication and consent UI
 	/// should be rendered: <c>page</c>, <c>popup</c>, <c>touch</c>, or <c>wap</c>.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: a value outside the set is refused by
+	/// <see cref="Endpoints.Authorization.Validation.DisplayValidator"/> once the client and the redirect URI are known,
+	/// so the client is told at its redirect URI rather than the end user's browser showing a 400.
+	/// </remarks>
 	[JsonPropertyName(Parameters.Display)]
-    [AllowedValues(DisplayModes.Page, DisplayModes.Popup, DisplayModes.Touch, DisplayModes.Wap)]
     public string? Display { get; init; }
 
 	/// <summary>
@@ -198,8 +202,13 @@ public record AuthorizationRequest
 	/// derived from the code verifier. <c>S256</c> is required by current best-practice profiles; <c>plain</c>
 	/// is supported only for legacy compatibility.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: RFC 7636, section 4.4.1, requires an unsupported
+	/// method be answered with an authorization error response, which
+	/// <see cref="Endpoints.Authorization.Validation.PkceValidator"/> sends to the client's redirect URI once the client
+	/// and the redirect URI are known.
+	/// </remarks>
 	[JsonPropertyName(Parameters.CodeChallengeMethod)]
-    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512)]
     public string? CodeChallengeMethod { get; init; }
 
 	/// <summary>

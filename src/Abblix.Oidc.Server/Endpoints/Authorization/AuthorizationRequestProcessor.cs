@@ -100,6 +100,18 @@ public class AuthorizationRequestProcessor(
 		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
 
+		// A consent the end user gave that grants nothing of what was asked is their refusal, which OpenID Connect
+		// Core 1.0, section 3.1.2.6, tells the client with access_denied ("If the End-User denies the request ...")
+		if (IsRefusal(request, userConsents, requestedDetails))
+		{
+			return new AuthorizationError(
+				model,
+				ErrorCodes.AccessDenied,
+				"The end-user refused consent.",
+				request.ResponseMode,
+				model.RedirectUri);
+		}
+
 		// RFC 9396 section 7.1: "The authorization details attached to the access token MAY differ from what
 		// the client requests", the user authorizing less than was asked being the named case. section 7 is what
 		// obliges the server to tell the client what it actually got.
@@ -121,6 +133,25 @@ public class AuthorizationRequestProcessor(
 
 		var authContext = await BuildAuthorizationContextAsync(request, userConsents, requestedDetails);
 		return await IssueAsync(request, authSession, authContext, responseType);
+	}
+
+	/// <summary>
+	/// Whether <paramref name="consents"/>, given by the end user, grant nothing of what the request asked for.
+	/// </summary>
+	/// <remarks>
+	/// A request asking for nothing a consent could grant is never refused this way. Authorization details count only
+	/// when the request asked for some: then a grant carrying none of them, as no list or as an empty one, grants
+	/// nothing of them either. A grant holding a scope or a resource is no refusal, and its missing list passes the
+	/// requested details through as the host having no opinion on them.
+	/// </remarks>
+	private static bool IsRefusal(ValidAuthorizationRequest request, UserConsents consents, JsonArray? requestedDetails)
+	{
+		var askedForDetails = requestedDetails is { Count: > 0 };
+		var askedFor = request.Scope.Length > 0 || request.Resources.Length > 0 || askedForDetails;
+
+		return askedFor &&
+		       consents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
+		       (!askedForDetails || consents.Granted.AuthorizationDetails is null or { Count: 0 });
 	}
 
 	/// <summary>
@@ -211,7 +242,9 @@ public class AuthorizationRequestProcessor(
 		{
 			RedirectUri = model.RedirectUri,
 			Nonce = model.Nonce,
-			CodeChallenge = model.CodeChallenge,
+			// An empty code_challenge, which a request object carries as written, is no challenge: PkceValidator
+			// treats it as absent, and so does the code exchange
+			CodeChallenge = model.CodeChallenge.HasValue() ? model.CodeChallenge : null,
 			CodeChallengeMethod = model.CodeChallengeMethod,
 			ProofKeyThumbprint = model.ProofKeyThumbprint,
 			AuthorizationDetails = emittedAuthorizationDetails,

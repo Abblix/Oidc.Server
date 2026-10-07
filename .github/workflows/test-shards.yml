@@ -26,9 +26,10 @@ jobs:
     needs: discover
     name: Tests (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # 5 minutes per shard: the slowest runs a little over three, so this leaves room while still
-    # catching a runaway sooner than a single whole-suite wall would.
-    timeout-minutes: 5
+    # 8 minutes per shard: the two server E2E shards build their dependency closure and then run
+    # the prompt walks by every way of sending a request, which takes them past five; this leaves
+    # room while still catching a runaway sooner than a single whole-suite wall would.
+    timeout-minutes: 8
     permissions:
       contents: read
     strategy:
@@ -93,7 +94,7 @@ jobs:
             --coverage --coverage-output-format cobertura \
             --coverage-settings tests/code-coverage.settings.xml \
             --results-directory ./tests/results
-        timeout-minutes: 5
+        timeout-minutes: 7
       # A RED run only. Nobody opens these after a green one, and the storage they take is shared
       # across the account: six of them per run, a hundred in three hours, all younger than the
       # retention window - so the window cannot help, because there is nothing old to expire.

@@ -107,10 +107,12 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     {
         public DateTimeOffset? GivenAt { get; private set; }
 
+        private bool _refused;
+
         public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
             => Task.FromResult(new UserConsents
             {
-                Granted = new ConsentDefinition(request.Scope, request.Resources),
+                Granted = _refused ? new ConsentDefinition([], []) : new ConsentDefinition(request.Scope, request.Resources),
                 GivenAt = GivenAt,
             });
 
@@ -118,6 +120,15 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         /// The consent page: the end user gives consent, and the host records the moment.
         /// </summary>
         public void Give() => GivenAt = TimeProvider.System.GetUtcNow();
+
+        /// <summary>
+        /// The consent page: the end user refuses, and the host records an answer that grants nothing.
+        /// </summary>
+        public void Refuse()
+        {
+            _refused = true;
+            Give();
+        }
     }
 
     private (HttpClient Client, SignedInEndUser EndUser, IDisposable Host) Start()
@@ -174,9 +185,11 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
-    private static Dictionary<string, string> AuthorizeParameters(string prompt)
+    private static Dictionary<string, string> AuthorizeParameters(string prompt) => AuthorizeParameters(prompt, out _);
+
+    private static Dictionary<string, string> AuthorizeParameters(string prompt, out string verifier)
     {
-        var (_, challenge) = GeneratePkcePair();
+        (verifier, var challenge) = GeneratePkcePair();
         return new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
@@ -198,10 +211,284 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             client,
             Authorize(discovery, clientId, QueryValue(page, AuthorizationRequest.Parameters.RequestUri)!));
 
+    /// <summary>
+    /// The <c>auth_time</c> of the ID token the code at <paramref name="location"/> is exchanged for.
+    /// </summary>
+    private static async Task<long> AuthTimeOfCodeAsync(
+        HttpClient client, DiscoveryDocument discovery, Uri location, string verifier)
+    {
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = QueryValue(location, TokenRequest.Parameters.Code)!,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        var idToken = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        return idToken[JwtClaimTypes.AuthenticationTime]!.GetValue<long>();
+    }
+
+    /// <summary>
+    /// The pages a combination of prompt values leads through, each answered as a host's page answers it, and the
+    /// request ending in a code. Unless told to answer at once, before each answer the end user returns once without
+    /// giving it, and is sent to the same page again rather than back to the client.
+    /// </summary>
+    private static Task<Uri> WalkPagesAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        Uri sentTo,
+        params (string Page, Action Answer)[] pages)
+        => WalkPagesAsync(client, discovery, TestConstants.ConfidentialClientId, sentTo, true, pages);
+
+    private static async Task<Uri> WalkPagesAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string clientId,
+        Uri sentTo,
+        bool returnWithoutAnswerFirst,
+        params (string Page, Action Answer)[] pages)
+    {
+        foreach (var (page, answer) in pages)
+        {
+            Assert.Equal(page, PathOf(sentTo));
+            if (returnWithoutAnswerFirst)
+            {
+                sentTo = await ReturnFromPage(client, discovery, clientId, sentTo);
+                Assert.Equal(page, PathOf(sentTo));
+            }
+
+            answer();
+            sentTo = await ReturnFromPage(client, discovery, clientId, sentTo);
+        }
+
+        AssertCode(sentTo);
+        return sentTo;
+    }
+
     private static void AssertCode(Uri location)
         => Assert.False(
             string.IsNullOrEmpty(QueryValue(location, TokenRequest.Parameters.Code)),
             $"the request went to {location} rather than back to the client with a code");
+
+    /// <summary>
+    /// How the client sends its authorization request.
+    /// </summary>
+    public enum RequestTransport
+    {
+        Query,
+        Pushed,
+        RequestObject,
+        PushedRequestObject,
+    }
+
+    /// <summary>
+    /// Each value and combination of the prompt, with the pages it leads through in the order they are shown.
+    /// </summary>
+    private static readonly (string Prompt, string[] Pages)[] PromptWalks =
+    [
+        (Prompts.None, []),
+        (Prompts.Login, [LoginPath]),
+        (Prompts.Consent, [ConsentPath]),
+        (Prompts.SelectAccount, [AccountSelectionPath]),
+        (Prompts.Create, [RegistrationPath]),
+        ($"{Prompts.Login} {Prompts.Consent}", [LoginPath, ConsentPath]),
+        ($"{Prompts.Consent} {Prompts.Login}", [LoginPath, ConsentPath]),
+        ($"{Prompts.SelectAccount} {Prompts.Login}", [AccountSelectionPath, LoginPath]),
+        ($"{Prompts.SelectAccount} {Prompts.Consent}", [AccountSelectionPath, ConsentPath]),
+        ($"{Prompts.SelectAccount} {Prompts.Login} {Prompts.Consent}", [AccountSelectionPath, LoginPath, ConsentPath]),
+        ($"{Prompts.Create} {Prompts.Consent}", [RegistrationPath, ConsentPath]),
+        ($"{Prompts.Consent} {Prompts.Create}", [RegistrationPath, ConsentPath]),
+        ($"{Prompts.Create} {Prompts.SelectAccount}", [RegistrationPath]),
+        ($"{Prompts.Login} {Prompts.Login}", [LoginPath]),
+    ];
+
+    /// <summary>
+    /// Every walk by every way of sending the request. Half of them answer each page on the end user's first visit
+    /// and half return once without answering first, alternating along both the walks and the ways of sending, so
+    /// each way meets both on every page.
+    /// </summary>
+    public static TheoryData<string, string[], RequestTransport, bool> PromptWalksByTransport()
+    {
+        var data = new TheoryData<string, string[], RequestTransport, bool>();
+        var transports = Enum.GetValues<RequestTransport>();
+        for (var walk = 0; walk < PromptWalks.Length; walk++)
+        {
+            for (var way = 0; way < transports.Length; way++)
+                data.Add(PromptWalks[walk].Prompt, PromptWalks[walk].Pages, transports[way], (walk + way) % 2 == 0);
+        }
+
+        return data;
+    }
+
+    public static TheoryData<RequestTransport> Transports() => new(Enum.GetValues<RequestTransport>());
+
+    /// <summary>
+    /// Sends the authorization request carrying <paramref name="prompt"/> the way <paramref name="transport"/> names,
+    /// and returns the client it was sent for and where the authorization endpoint sent the browser.
+    /// </summary>
+    private static async Task<(string ClientId, Uri SentTo)> SendAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string prompt,
+        RequestTransport transport)
+    {
+        switch (transport)
+        {
+            case RequestTransport.Query:
+                return (TestConstants.ConfidentialClientId, await RedirectOf(
+                    client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt))));
+
+            case RequestTransport.Pushed:
+            {
+                var parameters = AuthorizeParameters(prompt);
+                parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
+                var pushed = await PushAuthorizationRequestAsync(client, discovery, parameters);
+                return (TestConstants.ConfidentialClientId, await RedirectOf(client, Authorize(
+                    discovery,
+                    TestConstants.ConfidentialClientId,
+                    pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>())));
+            }
+
+            case RequestTransport.RequestObject:
+            {
+                var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, prompt);
+                return (clientId, await RedirectOf(client, await FirstLegAsync(
+                    client, discovery, clientId, clientSecret, requestObject, pushed: false)));
+            }
+
+            case RequestTransport.PushedRequestObject:
+            {
+                var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, prompt);
+                return (clientId, await RedirectOf(client, await FirstLegAsync(
+                    client, discovery, clientId, clientSecret, requestObject, pushed: true)));
+            }
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(transport), transport, null);
+        }
+    }
+
+    /// <summary>
+    /// What a host's page does when the end user answers it.
+    /// </summary>
+    private static Action AnswerOn(string page, SignedInEndUser endUser, RecordedConsents consents) => page switch
+    {
+        LoginPath or RegistrationPath => endUser.SignInAgain,
+        AccountSelectionPath => endUser.PickAgain,
+        ConsentPath => consents.Give,
+        _ => throw new ArgumentOutOfRangeException(nameof(page), page, null),
+    };
+
+    /// <summary>
+    /// Each value and combination of the prompt leads through its pages in order, each answered on the first visit
+    /// or shown again to an end user returning without answering it, and ends in a code, however the client sends
+    /// the request.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(PromptWalksByTransport))]
+    public async Task Prompt_WalksItsPagesInOrder(
+        string prompt,
+        string[] pages,
+        RequestTransport transport,
+        bool returnWithoutAnswerFirst)
+    {
+        var (client, endUser, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var (clientId, sentTo) = await SendAsync(client, discovery, prompt, transport);
+
+        await WalkPagesAsync(
+            client,
+            discovery,
+            clientId,
+            sentTo,
+            returnWithoutAnswerFirst,
+            [.. pages.Select(page => (page, AnswerOn(page, endUser, consents)))]);
+    }
+
+    /// <summary>
+    /// The discovery document lists every prompt value this server implements, and each value it lists is one the
+    /// authorization endpoint takes rather than answering with a 400.
+    /// </summary>
+    [Fact]
+    public async Task PromptValuesSupported_ListsTheValuesTheEndpointTakes()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = JsonNode.Parse(await client.GetStringAsync(
+            "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+        var listed = metadata[Abblix.Oidc.Server.Model.ConfigurationResponse.Parameters.PromptValuesSupported]!
+            .AsArray()
+            .Select(value => value!.GetValue<string>())
+            .ToArray();
+
+        Assert.Superset(
+            new HashSet<string>([Prompts.None, Prompts.Login, Prompts.Consent, Prompts.SelectAccount, Prompts.Create]),
+            new HashSet<string>(listed));
+        foreach (var prompt in listed)
+            await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(prompt)));
+    }
+
+    /// <summary>
+    /// An end user refusing on the consent page, as a host records an answer granting nothing, is told to the client
+    /// as access_denied at its redirect URI, however the client sent the request.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Transports))]
+    public async Task PromptConsent_RefusedOnThePage_ReturnsAccessDenied(RequestTransport transport)
+    {
+        var (client, _, consents, host) = StartWithConsents();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var (clientId, sentTo) = await SendAsync(client, discovery, Prompts.Consent, transport);
+        Assert.Equal(ConsentPath, PathOf(sentTo));
+        consents.Refuse();
+
+        var location = await ReturnFromPage(client, discovery, clientId, sentTo);
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.AccessDenied, QueryValue(location, ResponseParameters.Error));
+        Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+    }
+
+    /// <summary>
+    /// An empty code_challenge inside a request object, from a client PKCE is optional for, is no challenge: the code
+    /// it ends in is exchanged without a code_verifier.
+    /// </summary>
+    [Fact]
+    public async Task EmptyCodeChallenge_InRequestObject_IssuesACodeExchangedWithoutAVerifier()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            prompt: null,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.CodeChallenge] = string.Empty,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            },
+            pkceRequired: false);
+
+        var location = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+        AssertCode(location);
+
+        await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = QueryValue(location, TokenRequest.Parameters.Code)!,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = clientSecret,
+        });
+    }
 
     [Theory]
     [InlineData(Prompts.Login, LoginPath)]
@@ -301,6 +588,53 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A prompt value refused at the authorization endpoint is refused the same way when pushed, at the pushed
+    /// authorization endpoint, which answers the client directly (RFC 9126, section 2.3).
+    /// </summary>
+    [Theory]
+    [InlineData($"{Prompts.None} {Prompts.Login}")]
+    [InlineData($"{Prompts.Consent} {Prompts.None}")]
+    [InlineData("unknown")]
+    [InlineData("Login")]
+    public async Task RefusedPromptValue_InPushedRequest_IsRefusedWhenPushed(string prompt)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(prompt);
+        parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client, discovery.PushedAuthorizationRequestEndpoint!, parameters);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Account selection then login ends in a code whose ID token carries the new authentication time.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLogin_IssuesAnIdTokenWithTheNewAuthenticationTime()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var authenticatedBefore = endUser.AuthenticatedAt;
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint,
+            AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Login}", out var verifier)));
+        var code = await WalkPagesAsync(
+            client, discovery, sentTo, (AccountSelectionPath, endUser.PickAgain), (LoginPath, endUser.SignInAgain));
+
+        var authTime = await AuthTimeOfCodeAsync(client, discovery, code, verifier);
+        Assert.Equal(endUser.AuthenticatedAt.ToUnixTimeSeconds(), authTime);
+        Assert.NotEqual(authenticatedBefore.ToUnixTimeSeconds(), authTime);
+    }
+
+    /// <summary>
     /// Picking the live session answers account selection without a new authentication, and the request proceeds
     /// to a code rather than to the page again.
     /// </summary>
@@ -317,21 +651,6 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         endUser.PickAgain();
 
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
-    }
-
-    [Fact]
-    public async Task PromptSelectAccount_ReturningWithoutPicking_IsSentToSelectionAgain()
-    {
-        var (client, _, host) = Start();
-        using var _ = host;
-        var discovery = await FetchDiscoveryAsync(client);
-
-        var sentTo = await RedirectOf(
-            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.SelectAccount)));
-
-        Assert.Equal(
-            AccountSelectionPath,
-            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
     }
 
     /// <summary>
@@ -416,21 +735,6 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
     }
 
-    [Fact]
-    public async Task PromptConsent_ReturningWithoutConsent_IsSentToConsentAgain()
-    {
-        var (client, _, _, host) = StartWithConsents();
-        using var _ = host;
-        var discovery = await FetchDiscoveryAsync(client);
-
-        var sentTo = await RedirectOf(
-            client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Consent)));
-
-        Assert.Equal(
-            ConsentPath,
-            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
-    }
-
     /// <summary>
     /// Every page of a combination is shown once, in the server's order, and the request ends in a code.
     /// </summary>
@@ -476,19 +780,214 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
         AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
     }
 
+    /// <summary>
+    /// prompt=login over a live session sends the end user to log in, and the ID token carries the new authentication
+    /// time, not the session's earlier one.
+    /// </summary>
     [Fact]
-    public async Task PromptLogin_ReturningWithoutSigningIn_IsSentToLoginAgain()
+    public async Task PromptLogin_IssuesAnIdTokenWithTheNewAuthenticationTime()
     {
-        var (client, _, host) = Start();
+        var (client, endUser, host) = Start();
         using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login, out var verifier)));
+        var code = await WalkPagesAsync(client, discovery, sentTo, (LoginPath, endUser.SignInAgain));
+
+        Assert.Equal(
+            endUser.AuthenticatedAt.ToUnixTimeSeconds(),
+            await AuthTimeOfCodeAsync(client, discovery, code, verifier));
+    }
+
+    /// <summary>
+    /// Picking the live session answers account selection without a new authentication: the ID token carries the
+    /// session's own authentication time.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccount_KeepsTheSessionsAuthenticationTime()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var authenticatedAt = endUser.AuthenticatedAt;
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.SelectAccount, out var verifier)));
+        var code = await WalkPagesAsync(client, discovery, sentTo, (AccountSelectionPath, endUser.PickAgain));
+
+        Assert.Equal(authenticatedAt.ToUnixTimeSeconds(), await AuthTimeOfCodeAsync(client, discovery, code, verifier));
+    }
+
+    [Fact]
+    public async Task PromptLogin_WithoutASession_LogsInOnceThenIssuesCode()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        endUser.HasSession = false;
         var discovery = await FetchDiscoveryAsync(client);
 
         var sentTo = await RedirectOf(
             client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, AuthorizeParameters(Prompts.Login)));
 
+        await WalkPagesAsync(client, discovery, sentTo, (LoginPath, endUser.SignInAgain));
+    }
+
+    /// <summary>
+    /// The request_uri a request came back with from the selection page is done with once the request moved on to
+    /// the login page: presenting it again is refused rather than letting the browser come back past a later page.
+    /// </summary>
+    [Fact]
+    public async Task PromptSelectAccountLogin_SelectionRequestUri_IsRefusedOnceRequestMovedOn()
+    {
+        var (client, endUser, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var selection = await RedirectOf(client, QueryHelpers.BuildUri(
+            discovery.AuthorizationEndpoint, AuthorizeParameters($"{Prompts.SelectAccount} {Prompts.Login}")));
+        endUser.PickAgain();
         Assert.Equal(
-            LoginPath,
-            PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo)));
+            LoginPath, PathOf(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, selection)));
+
+        var again = await client.GetAsync(
+            Authorize(
+                discovery,
+                TestConstants.ConfidentialClientId,
+                QueryValue(selection, AuthorizationRequest.Parameters.RequestUri)!),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+    }
+
+    /// <summary>
+    /// A display value the server does not support is told to the client at its redirect URI, the delivery every
+    /// authorization error with a valid client and redirect URI gets.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedDisplay_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[AuthorizationRequest.Parameters.Display] = "hologram";
+
+        var location = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    /// <summary>
+    /// A redirect URI the client never registered is not one an error may be sent to: the end user's browser gets
+    /// the error, and nothing is redirected.
+    /// </summary>
+    [Fact]
+    public async Task UnregisteredRedirectUri_ShowsAnErrorAndRedirectsNowhere()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[AuthorizationRequest.Parameters.RedirectUri] = "https://unregistered.example.com/callback";
+
+        var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A code challenge method the server does not support is told to the client at its redirect URI, as RFC 7636,
+    /// section 4.4.1, requires of an authorization error response.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedCodeChallengeMethod_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = AuthorizeParameters(Prompts.Login);
+        parameters[AuthorizationRequest.Parameters.CodeChallengeMethod] = "S1";
+
+        var location = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    /// <summary>
+    /// An unsupported code challenge method is refused even beside an empty code_challenge, which a request object
+    /// carries as written, so no code is issued whose exchange the token endpoint could not verify. The client is one
+    /// PKCE is optional for, so the method is the only thing the request can be refused for.
+    /// </summary>
+    [Fact]
+    public async Task UnsupportedCodeChallengeMethodBesideAnEmptyChallenge_InRequestObject_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            Prompts.Login,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.CodeChallenge] = string.Empty,
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S1",
+            },
+            pkceRequired: false);
+
+        var location = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    [Fact]
+    public async Task PromptNoneWithAnotherValue_InRequestObject_IsRefusedAtTheRedirectUri()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.None} {Prompts.Login}");
+
+        var location = await RedirectOf(client, await FirstLegAsync(
+            client, discovery, clientId, clientSecret, requestObject, pushed: false));
+
+        Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
+        Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
+    }
+
+    /// <summary>
+    /// The same request object pushed is refused at the pushed authorization endpoint, which answers the client
+    /// directly (RFC 9126, section 2.3), so no request_uri is issued for it.
+    /// </summary>
+    [Fact]
+    public async Task PromptNoneWithAnotherValue_InPushedRequestObject_IsRefusedWhenPushed()
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) =
+            await SignedRequestAsync(client, discovery, $"{Prompts.None} {Prompts.Login}");
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.PushedAuthorizationRequestEndpoint!,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientSecret] = clientSecret,
+                [AuthorizationRequest.Parameters.Request] = requestObject,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -514,69 +1013,6 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
-    }
-
-    [Fact]
-    public async Task PromptLogin_InPushedRequest_ReturningAfterSignIn_IssuesCode()
-    {
-        var (client, endUser, host) = Start();
-        using var _ = host;
-        var discovery = await FetchDiscoveryAsync(client);
-        var parameters = AuthorizeParameters(Prompts.Login);
-        parameters[ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret;
-        var pushed = await PushAuthorizationRequestAsync(client, discovery, parameters);
-
-        var sentTo = await RedirectOf(client, Authorize(
-            discovery,
-            TestConstants.ConfidentialClientId,
-            pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>()));
-        Assert.Equal(LoginPath, PathOf(sentTo));
-        endUser.SignInAgain();
-
-        AssertCode(await ReturnFromPage(client, discovery, TestConstants.ConfidentialClientId, sentTo));
-    }
-
-    /// <summary>
-    /// A client sending its request as a signed request object - the shape FAPI 2.0 and JAR clients use - is not
-    /// sent round in a loop either: the object is merged again on the way back, and what the server set on the
-    /// stored request survives that.
-    /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task PromptLogin_InRequestObject_ReturningAfterSignIn_IssuesCode(bool pushed)
-    {
-        var (client, endUser, host) = Start();
-        using var _ = host;
-        var discovery = await FetchDiscoveryAsync(client);
-        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(client, discovery, Prompts.Login);
-
-        var sentTo = await RedirectOf(client, await FirstLegAsync(
-            client, discovery, clientId, clientSecret, requestObject, pushed));
-        Assert.Equal(LoginPath, PathOf(sentTo));
-        endUser.SignInAgain();
-
-        AssertCode(await ReturnFromPage(client, discovery, clientId, sentTo));
-    }
-
-    /// <summary>
-    /// A list inside a signed request object is read as the same list in the query is.
-    /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task PromptListInRequestObject_SendsToItsFirstPage(bool pushed)
-    {
-        var (client, _, host) = Start();
-        using var _ = host;
-        var discovery = await FetchDiscoveryAsync(client);
-        var (clientId, clientSecret, requestObject) =
-            await SignedRequestAsync(client, discovery, $"{Prompts.Consent} {Prompts.Login}");
-
-        var sentTo = await RedirectOf(client, await FirstLegAsync(
-            client, discovery, clientId, clientSecret, requestObject, pushed));
-
-        Assert.Equal(LoginPath, PathOf(sentTo));
     }
 
     /// <summary>
@@ -830,7 +1266,9 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
     private static async Task<(string ClientId, string ClientSecret, string RequestObject)> SignedRequestAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        string? prompt)
+        string? prompt,
+        IReadOnlyDictionary<string, string>? overrides = null,
+        bool pkceRequired = true)
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         var publicKey = new RsaJsonWebKey
@@ -848,6 +1286,7 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(new JsonWebKeySet([publicKey])),
+            [RegistrationMembers.PkceRequired] = pkceRequired,
         });
         var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
         var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
@@ -865,6 +1304,9 @@ public class PromptReturnTripTests(TestFactory factory) : TestBase(factory)
             },
         };
         foreach (var (name, value) in AuthorizeParameters(prompt ?? Prompts.Login))
+            token.Payload.Json[name] = value;
+
+        foreach (var (name, value) in overrides ?? new Dictionary<string, string>())
             token.Payload.Json[name] = value;
 
         token.Payload.Json[AuthorizationRequest.Parameters.ClientId] = clientId;

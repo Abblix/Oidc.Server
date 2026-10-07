@@ -278,23 +278,21 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts request with custom code challenge method.
-    /// Per RFC 7636, servers may support additional transformation methods.
-    /// Tests extensibility for future PKCE enhancements.
+    /// A transformation the server does not support is refused with invalid_request: RFC 7636, section 4.4.1, "the
+    /// authorization endpoint MUST return the authorization error response with "error" value set to
+    /// "invalid_request"".
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithCustomCodeChallengeMethod_ShouldSucceed()
+    public async Task ValidateAsync_WithUnsupportedCodeChallengeMethod_IsRefused()
     {
-        // Arrange
         var context = CreateContext(
             codeChallenge: CodeChallengeS256,
             codeChallengeMethod: "custom-method");
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -509,25 +507,54 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync treats uppercase PLAIN as different from plain.
-    /// Per RFC 7636, code_challenge_method values are case-sensitive.
-    /// Validator checks for exact match with "plain", so "PLAIN" passes validation.
-    /// This tests that validator correctly enforces case-sensitive method matching.
+    /// An unsupported method is refused without a code_challenge beside it too, since the method alone is what the
+    /// token endpoint would fail to compute.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task ValidateAsync_WithUnsupportedMethodAndNoChallenge_IsRefused(string? codeChallenge)
+    {
+        var context = CreateContext(
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: "custom-method",
+            pkceRequired: false);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// A request issuing no code has nothing for PKCE to protect, so its code_challenge_method is not judged.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithUppercasePlainMethod_ShouldSucceed()
+    public async Task ValidateAsync_WithUnsupportedMethodAndNoCodeIssued_Succeeds()
     {
-        // Arrange
+        var context = CreateContext(
+            codeChallengeMethod: "custom-method",
+            responseType: [ResponseTypes.IdToken]);
+
+        Assert.Null(await _validator.ValidateAsync(context));
+    }
+
+    /// <summary>
+    /// code_challenge_method values are case-sensitive (RFC 7636), so PLAIN is not plain: it is a method the server
+    /// does not support, and is refused as one.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUppercasePlainMethod_IsRefusedAsUnsupported()
+    {
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: "PLAIN",
-            plainPkceAllowed: false);
+            plainPkceAllowed: true);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
