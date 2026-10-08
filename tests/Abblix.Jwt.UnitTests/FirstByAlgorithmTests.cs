@@ -25,18 +25,20 @@ public class FirstByAlgorithmTests
     }
 
     /// <summary>
-    /// A key declaring another algorithm is passed over, and an undeclared key qualifies by what its material can do,
-    /// in the order the keys arrive rather than by whether they declare an algorithm.
+    /// A key declaring another algorithm is passed over even when its material could perform the requested one, and
+    /// an undeclared key qualifies by what its material can do, in the order the keys arrive rather than by whether
+    /// they declare an algorithm.
     /// </summary>
     [Fact]
     public async Task TheFirstKeyAbleToPerformTheAlgorithm_IsChosen()
     {
-        var ecdsa = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        var rsaDeclaringAnother = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS384);
         var undeclaredRsa = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         undeclaredRsa.Algorithm = null;
         var declaredRsa = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
-        var chosen = await Sequence(ecdsa, undeclaredRsa, declaredRsa).FirstByAlgorithmAsync(SigningAlgorithms.RS256);
+        var chosen = await Sequence(rsaDeclaringAnother, undeclaredRsa, declaredRsa)
+            .FirstByAlgorithmAsync(SigningAlgorithms.RS256);
 
         Assert.Same(undeclaredRsa, chosen);
     }
@@ -63,6 +65,33 @@ public class FirstByAlgorithmTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => Sequence(key).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "retired"));
+    }
+
+    /// <summary>
+    /// A pinned key that cannot perform the required algorithm is refused at selection rather than at signing.
+    /// </summary>
+    [Fact]
+    public async Task APinnedKeyIdOfAKeyUnableToPerformTheAlgorithm_Throws()
+    {
+        var ecdsa = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        ecdsa.KeyId = "k";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Sequence(ecdsa).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "k"));
+    }
+
+    /// <summary>
+    /// A pinned key id matching no key fails even with no algorithm to satisfy, so an encryption pinned to a key
+    /// that is gone never falls back to issuing the token unencrypted.
+    /// </summary>
+    [Fact]
+    public async Task APinnedKeyIdMatchingNoKeyWithoutAnAlgorithm_Throws()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        key.KeyId = "current";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Sequence(key).FirstByAlgorithmAsync(algorithm: null, keyId: "retired"));
     }
 
     [Fact]
@@ -95,5 +124,16 @@ public class FirstByAlgorithmTests
     public async Task NoFilterOverNoKeys_ChoosesNoKey()
     {
         Assert.Null(await Sequence().FirstByAlgorithmAsync(algorithm: null, keyId: null));
+    }
+
+    /// <summary>
+    /// Without an algorithm to sign with there is nothing to select, whatever the keys.
+    /// </summary>
+    [Fact]
+    public async Task NoAlgorithm_ChoosesNoKey()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+
+        Assert.Null(await Sequence(key).FirstByAlgorithmAsync(algorithm: null));
     }
 }

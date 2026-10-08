@@ -69,7 +69,6 @@ public class PackageIdTests
             ArgumentList = { "msbuild", projectPath, "-getProperty:IsPackable", "-getProperty:PackageId" },
             WorkingDirectory = root,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
         };
         using var process = Process.Start(start);
         Assert.NotNull(process);
