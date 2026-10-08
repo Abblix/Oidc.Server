@@ -43,10 +43,15 @@ public interface IKeyRings
     void Close(string partition);
 
     /// <summary>
-    /// Removes the entries of <paramref name="partition"/> from the store. Call it once its ring is closed and nothing
-    /// will verify a token its keys signed, since the keys are gone for every instance sharing the store.
+    /// Removes the entries of <paramref name="partitions"/> from the store, each partition on its own. Call it once
+    /// their rings are closed and nothing will verify a token their keys signed, since the keys are gone for every
+    /// instance sharing the store. One read of the store serves them all.
     /// </summary>
-    /// <param name="partition">The partition whose entries to remove.</param>
+    /// <param name="partitions">The partitions whose entries to remove.</param>
     /// <param name="cancellationToken">Cancels the removal; the entries not removed yet stay.</param>
-    Task DeleteAsync(string partition, CancellationToken cancellationToken);
+    /// <returns>Why each partition whose entries could not all be removed was not, by its name; the others are
+    /// gone.</returns>
+    Task<IReadOnlyDictionary<string, Exception>> DeleteAsync(
+        IReadOnlyCollection<string> partitions,
+        CancellationToken cancellationToken);
 }

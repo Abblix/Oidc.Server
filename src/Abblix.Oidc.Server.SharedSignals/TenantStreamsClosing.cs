@@ -33,11 +33,35 @@ public sealed partial class TenantStreamsClosing(
     IServiceProvider serviceProvider) : ITenantClosing
 {
     /// <inheritdoc />
-    public async Task CloseAsync(TenantDefinition tenant, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+        IReadOnlyCollection<TenantDefinition> tenants,
+        CancellationToken cancellationToken)
     {
         var streams = serviceProvider.GetRequiredService<IStreamStore>();
         var management = serviceProvider.GetRequiredService<StreamManagementService>();
 
+        var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
+        foreach (var tenant in tenants)
+        {
+            try
+            {
+                await CloseAsync(tenant, streams, management, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                failures[tenant.Id] = exception;
+            }
+        }
+
+        return failures;
+    }
+
+    private async Task CloseAsync(
+        TenantDefinition tenant,
+        IStreamStore streams,
+        StreamManagementService management,
+        CancellationToken cancellationToken)
+    {
         using var scope = TenantScope.Enter(tenant);
         foreach (var stream in await streams.ListAllAsync(cancellationToken))
         {

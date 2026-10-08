@@ -15,24 +15,28 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// transmitter stored for it.
 /// </summary>
 /// <remarks>
-/// The catalog of this instance hands over each tenant it releases, at the first reading at least one refresh period
+/// The catalog of this instance hands over the tenants one reading releases, all at once, so a closing reads a store
+/// the tenants share once for all of them. Each tenant is released at the first reading at least one refresh period
 /// after a reading first found it gone from the store, in the definition last served for that creation, or the one it
-/// was first listed in when it was never served. Each call is given a token canceled one refresh period after it
-/// begins, and the reading waits for the call to end, so a closing heeds that token: one that does not holds the
-/// reading, and every reading after it, for as long as it runs. A closing that fails, runs out of time or is stopped
-/// is logged with the tenant's id and is not handed over again; the other tenants and closings still run. A tenant
-/// gone from the store
-/// while no instance served it, as during a restart, is never listed by the new instance and so is never released or
-/// closed. A tenant created again under the same id is a different creation, so closing the one released leaves what
-/// the new one keeps alone.
+/// was first listed in when it was never served. Each closing is called once per reading, with a token canceled one
+/// refresh period after the call begins, and the reading waits for the call to end, so a closing heeds that token:
+/// one that does not holds the reading, and every reading after it, for as long as it runs. A tenant a closing
+/// reports, and every tenant of a call that throws, runs out of time or is stopped, is logged with its id and is not
+/// handed over again; the other closings still run. A tenant gone from the store while no instance served it, as
+/// during a restart, is never listed by the new instance and so is never released or closed. A tenant created again
+/// under the same id is a different creation, so closing the one released leaves what the new one keeps alone.
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantClosing
 {
     /// <summary>
-    /// Lets go of what <paramref name="tenant"/> kept.
+    /// Lets go of what each of <paramref name="tenants"/> kept, each one on its own, so one that fails leaves the
+    /// others closed.
     /// </summary>
-    /// <param name="tenant">The released tenant, in the creation that was served.</param>
+    /// <param name="tenants">The tenants released, each in the creation that was served.</param>
     /// <param name="cancellationToken">Cancels the closing.</param>
-    Task CloseAsync(TenantDefinition tenant, CancellationToken cancellationToken);
+    /// <returns>Why each tenant that could not be closed was not, by its id; the others are closed.</returns>
+    Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+        IReadOnlyCollection<TenantDefinition> tenants,
+        CancellationToken cancellationToken);
 }

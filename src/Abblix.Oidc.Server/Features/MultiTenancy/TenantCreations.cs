@@ -153,31 +153,42 @@ internal sealed partial class TenantCreations(
     }
 
     /// <summary>
-    /// Hands each creation <see cref="Track"/> released to every closing, each call with a token canceled after
-    /// <paramref name="limit"/> of its own, so a closing that heeds it and does not answer costs its own tenant and no
-    /// other. A closing that fails, runs out of time or is stopped is logged with the tenant's id, and every tenant
-    /// after it is still handed over, since a released creation is not handed over again.
+    /// Hands the creations <see cref="Track"/> released to every closing at once, each call with a token canceled
+    /// after <paramref name="limit"/> of its own, so a closing that heeds it and does not answer costs its own call and
+    /// no other closing. Each tenant a closing reports, and every tenant of a call that fails, runs out of time or is
+    /// stopped, is logged with its id, since a released creation is not handed over again.
     /// </summary>
     public async Task CloseAsync(
         IReadOnlyCollection<TenantDefinition> released,
         TimeSpan limit,
         CancellationToken cancellationToken)
     {
-        foreach (var tenant in released)
+        if (released.Count == 0)
+            return;
+
+        foreach (var closing in closings)
         {
-            foreach (var closing in closings)
-            {
-                using var deadline = new CancellationTokenSource(limit, timeProvider);
-                using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
-                try
-                {
-                    await closing.CloseAsync(tenant, bounded.Token);
-                }
-                catch (Exception exception)
-                {
-                    LogTenantNotClosed(exception, tenant.Id);
-                }
-            }
+            foreach (var (tenantId, failure) in await FailuresOfAsync(closing, released, limit, cancellationToken))
+                LogTenantNotClosed(failure, tenantId);
+        }
+    }
+
+    private async Task<IEnumerable<(string TenantId, Exception Failure)>> FailuresOfAsync(
+        ITenantClosing closing,
+        IReadOnlyCollection<TenantDefinition> released,
+        TimeSpan limit,
+        CancellationToken cancellationToken)
+    {
+        using var deadline = new CancellationTokenSource(limit, timeProvider);
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        try
+        {
+            var failures = await closing.CloseAsync(released, bounded.Token);
+            return failures.Select(failure => (failure.Key, failure.Value));
+        }
+        catch (Exception exception)
+        {
+            return released.Select(tenant => (tenant.Id, exception));
         }
     }
 

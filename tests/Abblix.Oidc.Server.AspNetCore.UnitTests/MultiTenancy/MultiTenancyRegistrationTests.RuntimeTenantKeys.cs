@@ -36,10 +36,16 @@ public partial class MultiTenancyRegistrationTests
         private readonly Lock _entriesLock = new();
         private readonly List<StoredKey> _entries = [];
 
+        /// <summary>How many times the store was read.</summary>
+        public int Loads { get; private set; }
+
         public Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
         {
             lock (_entriesLock)
+            {
+                Loads++;
                 return Task.FromResult<IReadOnlyList<StoredKey>>([.._entries]);
+            }
         }
 
         public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
@@ -258,6 +264,30 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
+    }
+
+    /// <summary>
+    /// The tenants one reading releases are deleted from the key ring's store with one read of it, however many they
+    /// are.
+    /// </summary>
+    [Fact]
+    public async Task TheTenantsOfOneReading_AreDeletedWithOneReadOfTheStore()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = (MemoryKeyRingStore)provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        var loadsBefore = keyStore.Loads;
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, keyStore.Loads - loadsBefore);
+        Assert.Empty(await keyStore.LoadAsync(TestContext.Current.CancellationToken));
     }
 
     private static Predicate<StoredKey> IsOf(string partition)

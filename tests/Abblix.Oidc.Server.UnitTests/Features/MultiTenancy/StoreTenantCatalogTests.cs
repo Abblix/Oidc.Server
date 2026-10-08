@@ -575,11 +575,12 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
-    /// A closing that does not answer is cut off one refresh period into its call and logged with its tenant, and the
-    /// calls after it get a period of their own, so a closing that heeds its token still closes every tenant.
+    /// A closing that does not answer is cut off one refresh period into its call and every tenant of the call is
+    /// logged, and the closings after it get a period of their own, so a closing that heeds its token still closes
+    /// every tenant.
     /// </summary>
     [Fact]
-    public async Task AClosingThatDoesNotAnswer_IsCutOffAndCostsNoOtherTenant()
+    public async Task AClosingThatDoesNotAnswer_IsCutOffAndCostsNoOtherClosing()
     {
         var ct = TestContext.Current.CancellationToken;
         var hanging = new FakeClosing { Hanging = { "acme" } };
@@ -601,8 +602,11 @@ public class StoreTenantCatalogTests
 
         Assert.Equal(["acme/g1", "globex/g1"], heeding.Closed.Order());
         Assert.Equal(
-            [(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")],
-            _logger.ErrorEvents.Distinct());
+            ["acme", "globex"],
+            _logger.ErrorEvents
+                .Where(entry => entry.EventId == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
+                .Select(entry => (string)entry.TenantId!)
+                .Order());
     }
 
     /// <summary>
@@ -893,7 +897,8 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
-    /// A closing that records each tenant it closed, by id and generation, and fails for the tenants named.
+    /// A closing that records each tenant it closed, by id and generation, reports the tenants named as failing, and
+    /// does not answer once it reaches a tenant named as hanging.
     /// </summary>
     private sealed class FakeClosing : ITenantClosing
     {
@@ -907,19 +912,30 @@ public class StoreTenantCatalogTests
 
         public List<string> Issuers { get; } = [];
 
-        public async Task CloseAsync(TenantDefinition tenant, CancellationToken cancellationToken)
+        public async Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
         {
-            if (Failing.Contains(tenant.Id))
-                throw new InvalidOperationException("the tenant's streams could not be deleted");
+            var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
+            foreach (var tenant in tenants)
+            {
+                if (Failing.Contains(tenant.Id))
+                {
+                    failures[tenant.Id] = new InvalidOperationException("the tenant's streams could not be deleted");
+                    continue;
+                }
 
-            if (Hanging.Contains(tenant.Id))
-                await Task.Delay(Timeout.Infinite, cancellationToken);
+                if (Hanging.Contains(tenant.Id))
+                    await Task.Delay(Timeout.Infinite, cancellationToken);
 
-            if (HeedsItsToken)
-                cancellationToken.ThrowIfCancellationRequested();
+                if (HeedsItsToken)
+                    cancellationToken.ThrowIfCancellationRequested();
 
-            Closed.Add($"{tenant.Id}/{tenant.Generation}");
-            Issuers.Add(tenant.Issuer);
+                Closed.Add($"{tenant.Id}/{tenant.Generation}");
+                Issuers.Add(tenant.Issuer);
+            }
+
+            return failures;
         }
     }
 }

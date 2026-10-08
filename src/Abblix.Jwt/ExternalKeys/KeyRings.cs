@@ -43,11 +43,27 @@ internal sealed class KeyRings(
     }
 
     /// <inheritdoc />
-    public async Task DeleteAsync(string partition, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<string, Exception>> DeleteAsync(
+        IReadOnlyCollection<string> partitions,
+        CancellationToken cancellationToken)
     {
-        var entries = new PartitionedKeyRingStore(store, partition);
-        foreach (var entry in await entries.LoadAsync(cancellationToken))
-            await entries.RemoveAsync(entry.Id, cancellationToken);
+        var round = new KeyRingStoreRound(store);
+        var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
+        foreach (var partition in partitions)
+        {
+            try
+            {
+                var entries = new PartitionedKeyRingStore(round, partition);
+                foreach (var entry in await entries.LoadAsync(cancellationToken))
+                    await entries.RemoveAsync(entry.Id, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                failures[partition] = exception;
+            }
+        }
+
+        return failures;
     }
 
     /// <inheritdoc />
