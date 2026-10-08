@@ -31,7 +31,9 @@ public record struct RefreshTokenOptions()
 	/// </summary>
 	/// <remarks>
 	/// A security profile that forbids rotation, as FAPI 2.0 does, decides over this policy, so a client held to such
-	/// a profile reuses its refresh tokens even with <see cref="RefreshTokenReusePolicy.Rotate"/>.
+	/// a profile reuses its refresh tokens even with <see cref="RefreshTokenReusePolicy.Rotate"/> - unless it is
+	/// registered for CIBA push delivery or for a response type that returns an access token from the authorization
+	/// endpoint, whose tokens no request binds and which therefore keeps rotating.
 	/// </remarks>
 	public RefreshTokenReusePolicy ReusePolicy { get; init; }
 }

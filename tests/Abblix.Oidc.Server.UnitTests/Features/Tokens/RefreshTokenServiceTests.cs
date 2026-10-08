@@ -245,8 +245,7 @@ public class RefreshTokenServiceTests
     /// <summary>
     /// FAPI 2.0 section 5.3.2.1: a server held to the profile "shall not use refresh token rotation
     /// except in extraordinary circumstances". The client below asks for rotation the ordinary way,
-    /// by leaving reuse off, and the profile decides over it - the one place a profile removes a
-    /// control instead of adding one. The proof is that the previous token is never marked, so a
+    /// by setting Rotate, and the profile decides over it. The proof is that the previous token is never marked, so a
     /// client presenting it again is not treated as a replay.
     /// </summary>
     [Fact]
@@ -792,6 +791,88 @@ public class RefreshTokenServiceTests
         _tokenRegistry.Verify(
             registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
+    /// A certificate client keeps reusing its refresh tokens when every access token it can receive still comes from
+    /// the token endpoint: one using CIBA ping or poll delivery, and one whose response types return no access token
+    /// from the authorization endpoint.
+    /// </summary>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, false)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, false)]
+    [InlineData(null, true)]
+    public async Task CreateRefreshToken_ByDefault_KeepsReusingWhenEveryAccessTokenComesFromTheTokenEndpoint(
+        string? deliveryMode,
+        bool codeAndIdToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth;
+        clientInfo.BackChannelTokenDeliveryMode = deliveryMode;
+        if (codeAndIdToken)
+            clientInfo.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]];
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
+
+        _tokenRegistry.Verify(
+            registry => registry.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A client held to FAPI 2.0 and registered for CIBA push delivery rotates: the profile forbids rotation only
+    /// because it binds every token, and a token delivered by push is bound by no request.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_UnderFapi2WithPushDelivery_Rotates()
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth;
+        clientInfo.SecurityProfile = ClientSecurityProfile.Fapi2;
+        clientInfo.BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push;
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
+
+        _tokenRegistry.Verify(
+            registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            Times.Once());
     }
 
     /// <summary>

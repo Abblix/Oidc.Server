@@ -83,15 +83,10 @@ public class RefreshTokenService(
 		if (expiresAt < now)
 			return null;
 
-		// FAPI 2.0 section 5.3.2.1 forbids rotation for a client held to it, because a confidential
-		// client with a sender-constrained token gains nothing from rotating while losing its session
-		// whenever it fails to store the token it was handed. The profile decides over the client's own
-		// policy. The profile and the default policy drop rotation only for a confidential client whose
-		// tokens are sender-constrained, the two controls that replace it; an explicit Reuse is the host's own
-		// decision and drops it for whatever client the host sets it on.
-		var rotates =
-            !ReusesRefreshTokens(clientInfo) &&
-            !SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation;
+		// The profile and the default policy drop rotation only for a confidential client whose tokens are
+		// sender-constrained, the two controls that replace it; an explicit Reuse is the host's own decision and
+		// drops it for whatever client the host sets it on.
+		var rotates = !ReusesRefreshTokens(clientInfo) && !ProfileForbidsRotation(clientInfo);
 
 		if (rotates &&
 		    refreshToken is { Payload: { JwtId: { } previousJwtId, ExpiresAt: { } previousExpiresAt } })
@@ -172,6 +167,20 @@ public class RefreshTokenService(
 		var policy => throw new InvalidOperationException(
 			$"Unknown {nameof(RefreshTokenOptions.ReusePolicy)} value {policy} for the client {clientInfo.ClientId}."),
 	};
+
+	/// <summary>
+	/// Whether the security profile <paramref name="clientInfo"/> is held to forbids rotating its refresh tokens.
+	/// </summary>
+	/// <remarks>
+	/// FAPI 2.0 section 5.3.2.1 forbids rotation for a client held to it, because a confidential client with a
+	/// sender-constrained token gains nothing from rotating while losing its session whenever it fails to store the
+	/// token it was handed. The profile decides over the client's own policy, except for a client registered to
+	/// receive tokens outside the token endpoint: the profile checks the binding only there, so such a client's
+	/// tokens are not sender-constrained and the reason for dropping rotation does not hold.
+	/// </remarks>
+	private bool ProfileForbidsRotation(ClientInfo clientInfo)
+		=> SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation &&
+		   !ReceivesTokensOutsideTheTokenEndpoint(clientInfo);
 
 	/// <summary>
 	/// Whether every access token of <paramref name="clientInfo"/> is bound to a key the client proves, as

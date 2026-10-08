@@ -8,7 +8,10 @@
 
 using System;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
@@ -32,6 +35,29 @@ public class RefreshTokenReusePolicyValidatorTests
         };
 
         Assert.True(new RefreshTokenReusePolicyValidator().Validate(null, options).Failed);
+    }
+
+    /// <summary>
+    /// The shipped composition refuses it too, which a check nobody registers would not.
+    /// </summary>
+    [Fact]
+    public void TheComposition_RefusesAnUndefinedPolicy()
+    {
+        var services = new ServiceCollection();
+        services.AddOidcCore(options => options.Clients =
+        [
+            new ClientInfo("web")
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+                RefreshToken = new RefreshTokenOptions { ReusePolicy = (RefreshTokenReusePolicy)42 },
+            },
+        ]);
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+
+        Assert.Contains(refusal.Failures, failure => failure.Contains(nameof(RefreshTokenOptions.ReusePolicy)));
     }
 
     [Theory]
