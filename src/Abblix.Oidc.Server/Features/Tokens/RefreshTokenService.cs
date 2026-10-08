@@ -89,7 +89,7 @@ public class RefreshTokenService(
 		// setting here, which is the one place a profile removes a control rather than adding one; the
 		// two controls that make the removal sound are required by the same profile.
 		var rotates =
-            !clientInfo.RefreshToken.AllowReuse &&
+            !ReusesRefreshTokens(clientInfo) &&
             !SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation;
 
 		if (rotates &&
@@ -158,6 +158,24 @@ public class RefreshTokenService(
 			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
 	}
+
+	/// <summary>
+	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens: as it says, or, left unset, when it
+	/// authenticates with a key, as <see cref="RefreshTokenOptions.AllowReuse"/> explains.
+	/// </summary>
+	private static bool ReusesRefreshTokens(ClientInfo clientInfo)
+		=> clientInfo.RefreshToken.AllowReuse ?? AuthenticatesWithAKey(clientInfo.TokenEndpointAuthMethod);
+
+	// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
+	// is the rule rather than a fallback: a method this library cannot name is not known to rest on a key, and keeps
+	// rotating
+	private static bool AuthenticatesWithAKey(string tokenEndpointAuthMethod) => tokenEndpointAuthMethod switch
+	{
+		ClientAuthenticationMethods.PrivateKeyJwt
+			or ClientAuthenticationMethods.TlsClientAuth
+			or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
+		_ => false,
+	};
 
 	private static DateTimeOffset CalculateExpiresAt(
 		DateTimeOffset issuedAt,

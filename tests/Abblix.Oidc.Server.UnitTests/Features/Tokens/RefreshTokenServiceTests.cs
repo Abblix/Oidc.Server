@@ -743,14 +743,92 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies the secure-by-default policy: an unconfigured <see cref="RefreshTokenOptions"/> rotates
-    /// (AllowReuse=false). A host that does not explicitly opt a client into multi-use refresh tokens gets
-    /// rotation with family revocation out of the box, satisfying RFC 9700 Section 2.2.2 for public clients.
+    /// Left unset, reuse follows the client's authentication: a client authenticating with a key reuses its refresh
+    /// tokens, so the previous one is not superseded, and every other client rotates them.
     /// </summary>
-    [Fact]
-    public void RefreshTokenOptions_DefaultAllowReuse_ShouldBeFalse()
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, true)]
+    [InlineData(ClientAuthenticationMethods.None, true)]
+    [InlineData("urn:example:host-defined", true)]
+    public async Task CreateRefreshToken_WithReuseUnset_RotatesUnlessTheClientAuthenticatesWithAKey(
+        string tokenEndpointAuthMethod,
+        bool supersedesTheOldToken)
     {
-        Assert.False(new RefreshTokenOptions().AllowReuse);
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
+
+        _tokenRegistry.Verify(
+            registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
+    /// Set explicitly, the client's own choice wins over its authentication method in both directions.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true, false)]
+    public async Task CreateRefreshToken_WithReuseSet_FollowsTheClientsChoice(
+        string tokenEndpointAuthMethod,
+        bool allowReuse,
+        bool supersedesTheOldToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AllowReuse = allowReuse,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
+
+        _tokenRegistry.Verify(
+            registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
     }
 
     private static AuthSession CreateAuthSession() => new(

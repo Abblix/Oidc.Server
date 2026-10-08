@@ -27,11 +27,19 @@ public record struct RefreshTokenOptions()
 	public TimeSpan? SlidingExpiresIn { get; init; } = TimeSpan.FromHours(1);
 
 	/// <summary>
-	/// When <c>false</c> (the secure default), each refresh rotates the token: the previous value is marked
-	/// superseded as soon as a new one is issued, and later reuse of a superseded token revokes the whole
-	/// token family (RFC 9700 Section 4.14.2). Set to <c>true</c> to opt a client into multi-use refresh
-	/// tokens that may be redeemed repeatedly until they expire - appropriate only for confidential clients
-	/// whose client authentication already binds the token to its identity (RFC 6749).
+	/// Whether a refresh token may be redeemed repeatedly until it expires, rather than rotated on each refresh.
 	/// </summary>
-	public bool AllowReuse { get; init; } = false;
+	/// <remarks>
+	/// <para>When <c>false</c>, each refresh rotates the token: the previous value is marked superseded as soon as a
+	/// new one is issued, and later reuse of a superseded token revokes the whole grant (RFC 9700 section 4.14.2).
+	/// When <c>true</c>, the client keeps redeeming its tokens, bound to it by its client authentication alone
+	/// (RFC 6749 section 6).</para>
+	/// <para>Left unset, a client that authenticates with a key (<c>private_key_jwt</c>, <c>tls_client_auth</c>,
+	/// <c>self_signed_tls_client_auth</c>) reuses its refresh tokens and every other client rotates them. A key is a
+	/// second thing to steal besides the token, so rotation adds nothing there and costs a client that fails to store
+	/// a rotated token its session (FAPI 2.0 Security Profile section 5.3.2.1, note 1). A shared secret is the
+	/// whole binding of a refresh token to its client, so a client using one keeps rotation, which detects a
+	/// token leaked together with the secret.</para>
+	/// </remarks>
+	public bool? AllowReuse { get; init; }
 }
