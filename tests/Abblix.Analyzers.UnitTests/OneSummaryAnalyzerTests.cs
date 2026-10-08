@@ -24,6 +24,8 @@ public class OneSummaryAnalyzerTests
     [InlineData("enum E\n{\n    /// <summary>First.</summary>\n    /// <summary>Second.</summary>\n    Value,\n}", 2)]
     [InlineData("class A\n{\n    /// <summary>First.</summary>\n    /// <summary>Second.</summary>\n    int x, y;\n}", 2)]
     [InlineData("class A\n{\n    /// <summary>First.</summary>\n    /// <summary>Second.</summary>\n    int P { get; set; }\n}", 2)]
+    [InlineData("/// <summary>First.</summary>\n/// <summary>Second.</summary>\nrecord R(int X);", 2)]
+    [InlineData("/// <summary>First.</summary>\n/// <summary>Second.</summary>\nclass C(int x) { public int X => x; }", 2)]
     public async Task EverySummaryOfADeclarationWithMoreThanOneIsReported(string source, int expected)
     {
         var diagnostics = await AnalyzerRun.DiagnosticsOf(new OneSummaryAnalyzer(), source);
@@ -86,6 +88,7 @@ public class OneSummaryAnalyzerTests
     [InlineData("class A\n{\n    // <summary>Not documentation.</summary>\n    /// <summary>One.</summary>\n    void M() { }\n}")]
     [InlineData("class A\n{\n    /// <summary>One.</summary>\n    /// <x:summary xmlns:x=\"urn:x\">Not a summary.</x:summary>\n    void M() { }\n}")]
     [InlineData("class A\n{\n    /// <summary>One.</summary>\n    /// <remarks><para><summary>Nested.</summary></para></remarks>\n    void M() { }\n}")]
+    [InlineData("partial class A\n{\n    /// <summary>Declared.</summary>\n    partial void M();\n\n    /// <summary>Implemented.</summary>\n    partial void M() { }\n}")]
     public async Task OneSummaryIsNotReported(string source)
         => Assert.Empty(await AnalyzerRun.DiagnosticsOf(new OneSummaryAnalyzer(), source));
 

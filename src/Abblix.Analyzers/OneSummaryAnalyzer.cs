@@ -59,7 +59,7 @@ public sealed class OneSummaryAnalyzer : DiagnosticAnalyzer
     private static void Analyze(SymbolAnalysisContext context)
     {
         var summaries = context.Symbol.DeclaringSyntaxReferences
-            .Select(reference => DocumentedDeclarationOf(reference.GetSyntax(context.CancellationToken)))
+            .Select(reference => DocumentedDeclarationOf(context.Symbol, reference.GetSyntax(context.CancellationToken)))
             .OfType<SyntaxNode>()
             .SelectMany(SummariesOf)
             .ToArray();
@@ -70,16 +70,18 @@ public sealed class OneSummaryAnalyzer : DiagnosticAnalyzer
         foreach (var summary in summaries)
         {
             context.ReportDiagnostic(
-                Diagnostic.Create(Rule, summary.GetLocation(), context.Symbol.Name, summaries.Length));
+                Diagnostic.Create(Rule, summary.GetLocation(), context.Symbol.ToDisplayString(), summaries.Length));
         }
     }
 
     // A field or an event field shares its declaration, and the documentation on it, with the other variables it
-    // declares, so the declaration is read for the first of them alone
-    private static SyntaxNode? DocumentedDeclarationOf(SyntaxNode node) => node switch
+    // declares, so the declaration is read for the first of them alone; a primary constructor is declared by its type,
+    // whose own symbol reads that documentation already
+    private static SyntaxNode? DocumentedDeclarationOf(ISymbol symbol, SyntaxNode node) => node switch
     {
         VariableDeclaratorSyntax { Parent: VariableDeclarationSyntax { Parent: BaseFieldDeclarationSyntax field } } declarator
             => field.Declaration.Variables[0] == declarator ? field : null,
+        TypeDeclarationSyntax when symbol is IMethodSymbol => null,
         _ => node,
     };
 
