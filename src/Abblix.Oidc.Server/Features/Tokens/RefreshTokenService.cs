@@ -86,8 +86,8 @@ public class RefreshTokenService(
 		// FAPI 2.0 section 5.3.2.1 forbids rotation for a client held to it, because a confidential
 		// client with a sender-constrained token gains nothing from rotating while losing its session
 		// whenever it fails to store the token it was handed. The profile decides over the client's own
-		// setting here, which is the one place a profile removes a control rather than adding one; the
-		// two controls that make the removal sound are required by the same profile.
+		// policy. Both places that drop rotation, the profile and the default policy, do so only for a
+		// confidential client whose tokens are sender-constrained, the two controls that replace it.
 		var rotates =
             !ReusesRefreshTokens(clientInfo) &&
             !SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation;
@@ -160,20 +160,31 @@ public class RefreshTokenService(
 	}
 
 	/// <summary>
-	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens: as it says, or, left unset, when it
-	/// authenticates with a key, as <see cref="RefreshTokenOptions.AllowReuse"/> explains.
+	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens under its
+	/// <see cref="RefreshTokenOptions.ReusePolicy"/>.
 	/// </summary>
-	private static bool ReusesRefreshTokens(ClientInfo clientInfo)
-		=> clientInfo.RefreshToken.AllowReuse ?? AuthenticatesWithAKey(clientInfo.TokenEndpointAuthMethod);
-
-	// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
-	// is the rule rather than a fallback: a method this library cannot name is not known to rest on a key, and keeps
-	// rotating
-	private static bool AuthenticatesWithAKey(string tokenEndpointAuthMethod) => tokenEndpointAuthMethod switch
+	private static bool ReusesRefreshTokens(ClientInfo clientInfo) => clientInfo.RefreshToken.ReusePolicy switch
 	{
-		ClientAuthenticationMethods.PrivateKeyJwt
-			or ClientAuthenticationMethods.TlsClientAuth
-			or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
+		RefreshTokenReusePolicy.WhenSenderConstrained => IsAlwaysSenderConstrained(clientInfo),
+		RefreshTokenReusePolicy.Reuse => true,
+		RefreshTokenReusePolicy.Rotate => false,
+		var policy => throw new InvalidOperationException(
+			$"Unknown {nameof(RefreshTokenOptions.ReusePolicy)} value {policy} for the client {clientInfo.ClientId}."),
+	};
+
+	/// <summary>
+	/// Whether every access token of <paramref name="clientInfo"/> is bound to a key the client proves, on every
+	/// request, as <see cref="RefreshTokenReusePolicy.WhenSenderConstrained"/> explains.
+	/// </summary>
+	/// <remarks>
+	/// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
+	/// is the rule rather than a fallback: a method this library cannot name is not known to bind its tokens, and
+	/// keeps rotating.
+	/// </remarks>
+	private static bool IsAlwaysSenderConstrained(ClientInfo clientInfo) => clientInfo.TokenEndpointAuthMethod switch
+	{
+		ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
+		ClientAuthenticationMethods.PrivateKeyJwt => clientInfo.RequireDPoP,
 		_ => false,
 	};
 

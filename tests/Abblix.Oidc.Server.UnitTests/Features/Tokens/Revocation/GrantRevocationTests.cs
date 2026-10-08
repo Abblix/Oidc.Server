@@ -112,17 +112,17 @@ public class GrantRevocationTests
         _decorator = new TokenStatusValidatorDecorator(_registry, cutoff.Object, grants, inner.Object);
     }
 
-    private ClientInfo _client = ClientWith(allowReuse: false);
+    private ClientInfo _client = ClientWith(RefreshTokenReusePolicy.Rotate);
     private bool _knownClient = true;
 
-    private static ClientInfo ClientWith(bool allowReuse) => new(ClientId)
+    private static ClientInfo ClientWith(RefreshTokenReusePolicy reusePolicy) => new(ClientId)
     {
         AccessTokenExpiresIn = TimeSpan.FromHours(1),
         RefreshToken = new RefreshTokenOptions
         {
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
             SlidingExpiresIn = TimeSpan.FromHours(1),
-            AllowReuse = allowReuse,
+            ReusePolicy = reusePolicy,
         },
     };
 
@@ -165,7 +165,7 @@ public class GrantRevocationTests
     [Fact]
     public async Task RevokingOneRefreshTokenOfAReusedGrant_RefusesItsSiblings()
     {
-        _client = ClientWith(allowReuse: true);
+        _client = ClientWith(RefreshTokenReusePolicy.Reuse);
         var first = await RefreshAsync(null);
         _clock.Advance(TimeSpan.FromMinutes(10));
         var second = await RefreshAsync(first);
@@ -235,7 +235,7 @@ public class GrantRevocationTests
     [Fact]
     public async Task AnAccessTokenIssuedNearTheGrantsEnd_IsRefused_AfterItsRefreshTokensExpire()
     {
-        _client = ClientWith(allowReuse: true);
+        _client = ClientWith(RefreshTokenReusePolicy.Reuse);
         var refreshToken = await RefreshAsync(null);
         while (_clock.GetUtcNow() < Start + TimeSpan.FromHours(7.5))
         {
@@ -284,7 +284,7 @@ public class GrantRevocationTests
     [Fact]
     public async Task AGrantRevokedAtTheEndpoint_StaysRevoked_PastThePresentedTokensExpiry()
     {
-        _client = ClientWith(allowReuse: true);
+        _client = ClientWith(RefreshTokenReusePolicy.Reuse);
         var first = await RefreshAsync(null);
         _clock.Advance(TimeSpan.FromMinutes(50));
         var later = await RefreshAsync(first);

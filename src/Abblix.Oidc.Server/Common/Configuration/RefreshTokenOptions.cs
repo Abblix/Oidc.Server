@@ -27,19 +27,11 @@ public record struct RefreshTokenOptions()
 	public TimeSpan? SlidingExpiresIn { get; init; } = TimeSpan.FromHours(1);
 
 	/// <summary>
-	/// Whether a refresh token may be redeemed repeatedly until it expires, rather than rotated on each refresh.
+	/// When a refresh token may be redeemed repeatedly until it expires, rather than rotated on each refresh.
 	/// </summary>
 	/// <remarks>
-	/// <para>When <c>false</c>, each refresh rotates the token: the previous value is marked superseded as soon as a
-	/// new one is issued, and later reuse of a superseded token revokes the whole grant (RFC 9700 section 4.14.2).
-	/// When <c>true</c>, the client keeps redeeming its tokens, bound to it by its client authentication alone
-	/// (RFC 6749 section 6).</para>
-	/// <para>Left unset, a client that authenticates with a key (<c>private_key_jwt</c>, <c>tls_client_auth</c>,
-	/// <c>self_signed_tls_client_auth</c>) reuses its refresh tokens and every other client rotates them. A key is a
-	/// second thing to steal besides the token, so rotation adds nothing there and costs a client that fails to store
-	/// a rotated token its session (FAPI 2.0 Security Profile section 5.3.2.1, note 1). A shared secret is the
-	/// whole binding of a refresh token to its client, so a client using one keeps rotation, which detects a
-	/// token leaked together with the secret.</para>
+	/// A security profile that forbids rotation, as FAPI 2.0 does, decides over this policy, so a client held to such
+	/// a profile reuses its refresh tokens even with <see cref="RefreshTokenReusePolicy.Rotate"/>.
 	/// </remarks>
-	public bool? AllowReuse { get; init; }
+	public RefreshTokenReusePolicy ReusePolicy { get; init; }
 }

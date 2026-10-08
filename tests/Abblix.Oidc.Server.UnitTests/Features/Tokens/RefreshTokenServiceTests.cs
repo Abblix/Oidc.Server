@@ -256,7 +256,7 @@ public class RefreshTokenServiceTests
         var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = false,
+            ReusePolicy = RefreshTokenReusePolicy.Rotate,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
         clientInfo.SecurityProfile = ClientSecurityProfile.Fapi2;
@@ -283,7 +283,7 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that when rotating a token (AllowReuse=false), the previous refresh token is marked
+    /// Verifies that when rotating a token (ReusePolicy Rotate), the previous refresh token is marked
     /// <see cref="JsonWebTokenStatus.Used"/> - superseded, not killed. Per the RFC 9700 Section 4.14.2
     /// rotation model, a later replay of a superseded token is the breach signal that
     /// <see cref="TokenStatusValidatorDecorator"/> escalates into a whole-family revocation. Marking it
@@ -297,7 +297,7 @@ public class RefreshTokenServiceTests
         var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = false,
+            ReusePolicy = RefreshTokenReusePolicy.Rotate,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
 
@@ -357,19 +357,19 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that when renewing a token with AllowReuse=true, the old refresh token is NOT revoked.
+    /// Verifies that when renewing a token with ReusePolicy Reuse, the old refresh token is NOT revoked.
     /// Some OAuth 2.0 implementations allow refresh token reuse for better user experience,
     /// though this is less secure than token rotation.
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_WithRenewalAndAllowReuse_ShouldNotRevokeOldToken()
+    public async Task CreateRefreshToken_WithRenewalAndReuse_ShouldNotRevokeOldToken()
     {
         // Arrange
         var authSession = CreateAuthSession();
         var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = true,
+            ReusePolicy = RefreshTokenReusePolicy.Reuse,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
 
@@ -412,7 +412,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = TimeSpan.FromHours(10),  // Long enough that -2h + 10h > now
             SlidingExpiresIn = null,
-            AllowReuse = true,
+            ReusePolicy = RefreshTokenReusePolicy.Reuse,
         });
 
         var originalIssuedAt = _currentTime.AddHours(-2);
@@ -494,7 +494,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = absoluteExpiry,
             SlidingExpiresIn = slidingExpiry,
-            AllowReuse = true, // this test isolates expiry math from the rotation status write
+            ReusePolicy = RefreshTokenReusePolicy.Reuse, // this test isolates expiry math from the rotation status write
         });
 
         var oldToken = new JsonWebToken
@@ -546,7 +546,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = absoluteExpiry,  // 8 hours from IssuedAt
             SlidingExpiresIn = slidingExpiry,    // 10 hours from IssuedAt
-            AllowReuse = true, // this test isolates expiry math from the rotation status write
+            ReusePolicy = RefreshTokenReusePolicy.Reuse, // this test isolates expiry math from the rotation status write
         });
 
         var oldToken = new JsonWebToken
@@ -743,24 +743,71 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Left unset, reuse follows the client's authentication: a client authenticating with a key reuses its refresh
-    /// tokens, so the previous one is not superseded, and every other client rotates them.
+    /// By default a refresh token is reused only by a client whose every access token is bound to a key it proves:
+    /// one authenticating by certificate, or with private_key_jwt while requiring DPoP. Every other client rotates,
+    /// a shared-secret client requiring DPoP included.
     /// </summary>
     [Theory]
-    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false)]
-    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false)]
-    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretPost, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, true)]
-    [InlineData(ClientAuthenticationMethods.None, true)]
-    [InlineData("urn:example:host-defined", true)]
-    public async Task CreateRefreshToken_WithReuseUnset_RotatesUnlessTheClientAuthenticatesWithAKey(
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, false, true)]
+    [InlineData(ClientAuthenticationMethods.None, false, true)]
+    [InlineData("urn:example:host-defined", true, true)]
+    public async Task CreateRefreshToken_ByDefault_RotatesUnlessTheClientIsAlwaysSenderConstrained(
         string tokenEndpointAuthMethod,
+        bool requireDPoP,
         bool supersedesTheOldToken)
     {
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        clientInfo.RequireDPoP = requireDPoP;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
+
+        _tokenRegistry.Verify(
+            registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
+    /// An explicit policy wins over the client's authentication method and its token binding, in both directions.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, RefreshTokenReusePolicy.Rotate, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, RefreshTokenReusePolicy.Reuse, false)]
+    public async Task CreateRefreshToken_WithAnExplicitPolicy_FollowsIt(
+        string tokenEndpointAuthMethod,
+        RefreshTokenReusePolicy reusePolicy,
+        bool supersedesTheOldToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            ReusePolicy = reusePolicy,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
         clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
@@ -790,45 +837,20 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Set explicitly, the client's own choice wins over its authentication method in both directions.
+    /// A policy value the enum does not define, as a configuration binder or a host's client store can hand over, is
+    /// refused rather than read as one of the three.
     /// </summary>
-    [Theory]
-    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true, false)]
-    public async Task CreateRefreshToken_WithReuseSet_FollowsTheClientsChoice(
-        string tokenEndpointAuthMethod,
-        bool allowReuse,
-        bool supersedesTheOldToken)
+    [Fact]
+    public async Task CreateRefreshToken_WithAnUndefinedPolicy_Throws()
     {
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = allowReuse,
+            ReusePolicy = (RefreshTokenReusePolicy)42,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
-        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
-        var oldToken = new JsonWebToken
-        {
-            Payload =
-            {
-                JwtId = OldTokenId,
-                IssuedAt = _currentTime.AddHours(-1),
-                ExpiresAt = _currentTime.AddHours(7),
-            },
-        };
 
-        _tokenRegistry
-            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
-            .Returns(Task.CompletedTask);
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .ReturnsAsync(EncodedToken);
-
-        await _service.CreateRefreshTokenAsync(
-            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
-
-        _tokenRegistry.Verify(
-            registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
-            supersedesTheOldToken ? Times.Once() : Times.Never());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, null, GrantId));
     }
 
     private static AuthSession CreateAuthSession() => new(
@@ -848,7 +870,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
             SlidingExpiresIn = TimeSpan.FromHours(1),
-            AllowReuse = true,
+            ReusePolicy = RefreshTokenReusePolicy.Reuse,
         }
     };
 }
