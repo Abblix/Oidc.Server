@@ -73,7 +73,7 @@ public sealed class ExpressionComplexityAnalyzer : DiagnosticAnalyzer
     // An expression nested in another belongs to it; a lambda body and each member an initializer sets stand alone
     private static bool StartsAnExpression(SyntaxNode node)
         => node is ExpressionSyntax &&
-           node.Parent is not ExpressionSyntax or AnonymousFunctionExpressionSyntax or InitializerExpressionSyntax;
+           node.Parent is (not ExpressionSyntax) or AnonymousFunctionExpressionSyntax or InitializerExpressionSyntax;
 
     private static bool IsConditionalOperator(SyntaxNode node)
         => node.IsKind(SyntaxKind.LogicalAndExpression) ||
