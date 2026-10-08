@@ -6,8 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Security.Cryptography;
-using System.Text;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -16,7 +14,6 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
-using System.Buffers.Text;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -102,7 +99,7 @@ public class AuthorizationCodeGrantHandler(
             // so the comparison is ordinal - case folding would widen the accepted set and weaken the plain method.
             if (!string.Equals(
                     grant.Context.CodeChallenge,
-                    CalculateChallenge(grant.Context.CodeChallengeMethod, request.CodeVerifier),
+                    CodeChallenge.Calculate(grant.Context.CodeChallengeMethod, request.CodeVerifier),
                     StringComparison.Ordinal))
             {
                 return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
@@ -120,30 +117,4 @@ public class AuthorizationCodeGrantHandler(
 
         return grant;
     }
-
-    /// <summary>
-    /// Calculates the code challenge from the provided code verifier and method.
-    /// PKCE involves transforming the code verifier into a code challenge, which the authorization server verifies when
-    /// exchanging the authorization code for a token. This method ensures that the correct transformation is applied.
-    /// It supports both 'plain' and 'S256' methods, with 'S256' being the recommended approach for stronger security.
-    /// </summary>
-    /// <param name="method">The PKCE challenge method, either 'plain', 'S256' or 'S512'.</param>
-    /// <param name="codeVerifier">The code verifier submitted by the client during the token request.</param>
-    /// <returns>The transformed code challenge based on the specified method.</returns>
-    private static string CalculateChallenge(string method, string codeVerifier) => method switch
-    {
-        // Encodes the code verifier using SHA256 and URL-safe base64 encoding for 'S256' method.
-        CodeChallengeMethods.S256 => Base64Url.EncodeToString(
-            SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
-
-        // Encodes the code verifier using SHA512 and URL-safe base64 encoding for 'S512' method.
-        CodeChallengeMethods.S512 => Base64Url.EncodeToString(
-            SHA512.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
-
-        // Returns the code verifier as-is for the 'plain' method.
-        CodeChallengeMethods.Plain => codeVerifier,
-
-        // Throws an exception if an unsupported method is encountered.
-        _ => throw new ArgumentOutOfRangeException(nameof(method), $"Unknown code challenge method: {method}"),
-    };
 }
