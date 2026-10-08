@@ -66,4 +66,14 @@ partial class PushModeCompletionHandler
                   "client was told the transaction failed. ClientId: {ClientId}")]
     private partial void LogGrantedAuthorizationDetailsFaulted(
         Exception exception, string AuthReqId, string ClientId);
+
+    /// <summary>
+    /// Issuing the tokens of a taken push request threw, and the client was told the transaction failed.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.TokenIssuanceFaulted,
+        Level = LogLevel.Error,
+        Message = "Issuing the tokens of auth_req_id {AuthReqId} failed, so the client was told the transaction " +
+                  "failed. ClientId: {ClientId}")]
+    private partial void LogTokenIssuanceFaulted(Exception exception, string AuthReqId, string ClientId);
 }

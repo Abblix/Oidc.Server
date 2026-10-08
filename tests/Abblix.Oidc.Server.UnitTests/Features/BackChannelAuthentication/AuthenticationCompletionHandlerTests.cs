@@ -499,6 +499,41 @@ public partial class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
+    /// Issuing the tokens of a taken push request throwing - a host's access token service, a signing key that is
+    /// gone - leaves the client told the transaction failed, since it never polls, and the fault still reaches the
+    /// host that completed the request.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenIssuingTokensThrows_SendsTransactionFailedAndRethrows()
+    {
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+            ClientNotificationEndpoint = _notificationEndpoint,
+            ClientNotificationToken = NotificationToken,
+        };
+        StoredRecordIs(request);
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .ThrowsAsync(new InvalidOperationException("The signing key is unavailable"));
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler()
+            .CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn));
+
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
     /// Push REMOVES a misconfigured request rather than marking it Denied, and this holds the ENDPOINT
     /// clause of the check.
     /// </summary>
