@@ -8,8 +8,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
@@ -23,6 +26,11 @@ namespace Abblix.Oidc.Server.UnitTests.Architecture;
 /// id spells it the way people search for it (<c>Abblix.OIDC.Server.MVC</c>), so every project overrides its
 /// <c>PackageId</c> by hand. Nothing builds or packs differently when one spelling is missed, and an id cannot be
 /// renamed once a version is published under it, so the mismatch is caught here, before the first push.
+/// <para>
+/// Whether a project packs and under which id is asked of MSBuild rather than read from the project file: the SDK
+/// packs a class library that never mentions <c>IsPackable</c>, and a property can come from a condition or an
+/// imported file, none of which the text of the project shows.
+/// </para>
 /// </remarks>
 public class PackageIdTests
 {
@@ -52,27 +60,47 @@ public class PackageIdTests
         return directory.FullName;
     }
 
-    /// <summary>
-    /// Whether the project can be packed: one that never sets <c>IsPackable</c> to anything but <c>false</c> is not.
-    /// </summary>
-    private static bool IsPackable(XDocument project)
-        => project.Descendants("IsPackable").Any(element => element.Value != "false");
+    private sealed record PackageProperties(string Project, bool IsPackable, string PackageId);
+
+    private static async Task<PackageProperties> EvaluateAsync(string root, string projectPath)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            ArgumentList = { "msbuild", projectPath, "-getProperty:IsPackable", "-getProperty:PackageId" },
+            WorkingDirectory = root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        using var process = Process.Start(start);
+        Assert.NotNull(process);
+        var output = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        Assert.True(process.ExitCode == 0, $"MSBuild could not evaluate {projectPath}: {output}");
+
+        var properties = JsonDocument.Parse(output).RootElement.GetProperty("Properties");
+        return new PackageProperties(
+            Path.GetFileNameWithoutExtension(projectPath),
+            properties.GetProperty("IsPackable").GetString() == "true",
+            properties.GetProperty("PackageId").GetString() ?? string.Empty);
+    }
 
     [Fact]
-    public void EveryPackableProject_DeclaresThePackageIdItsNameYields()
+    public async Task EveryPackableProject_DeclaresThePackageIdItsNameYields()
     {
-        var projects = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.csproj", SearchOption.AllDirectories)
-            .Select(path => (Name: Path.GetFileNameWithoutExtension(path), Document: XDocument.Load(path)))
+        var root = RepositoryRoot();
+        var projectPaths = XDocument.Load(Path.Combine(root, "Abblix.Oidc.slnx"))
+            .Descendants("Project")
+            .Select(project => (string?)project.Attribute("Path"))
+            .OfType<string>()
             .ToList();
-        Assert.Contains(projects, project => project.Name == "Abblix.Oidc.Server" && IsPackable(project.Document));
+
+        var projects = await Task.WhenAll(projectPaths.Select(path => EvaluateAsync(root, path)));
+        Assert.Contains(projects, project => project is { Project: "Abblix.Oidc.Server", IsPackable: true });
 
         var problems = projects
-            .Select(project => (project.Name, Declared: project.Document.Descendants("PackageId").SingleOrDefault()?.Value,
-                Packable: IsPackable(project.Document)))
-            .Where(project => project.Declared is not null || project.Packable)
-            .Where(project => project.Declared != ExpectedPackageId(project.Name))
-            .Select(project => $"{project.Name}: declares '{project.Declared}', expected '{ExpectedPackageId(project.Name)}'")
+            .Where(project => project.IsPackable && project.PackageId != ExpectedPackageId(project.Project))
+            .Select(project =>
+                $"{project.Project}: packs as '{project.PackageId}', expected '{ExpectedPackageId(project.Project)}'")
             .ToList();
 
         Assert.Empty(problems);
