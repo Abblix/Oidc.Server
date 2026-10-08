@@ -678,6 +678,63 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// A token minted already expired, as one exchanged at the very end of its subject token's life is, is refused
+    /// with invalid_grant instead of being handed to the client.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ProcessAsync_TokenMintedAlreadyExpired_RefusesTheGrant(int lifetimeSeconds)
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromSeconds(lifetimeSeconds)));
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// An access token service that leaves the issue time or the expiry unset breaks its contract, and the request
+    /// fails rather than reporting a lifetime nobody computed.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task ProcessAsync_TokenWithoutIssueTimeOrExpiry_Throws(bool withIssuedAt, bool withExpiresAt)
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        var accessToken = CreateAccessToken();
+        if (!withIssuedAt)
+            accessToken.Token.Payload.IssuedAt = null;
+        if (!withExpiresAt)
+            accessToken.Token.Payload.ExpiresAt = null;
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(accessToken);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+    }
+
+    /// <summary>
     /// Verifies context evaluator is called to build authorization context.
     /// Tests processor delegates context evaluation to specialized service.
     /// </summary>

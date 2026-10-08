@@ -89,7 +89,18 @@ public class TokenRequestProcessor(
 			grantId,
 			request.AuthorizedGrant.ExpiresNoLaterThan);
 
-		var response = CreateResponse(accessToken, authContext);
+		// A token exchanged at the very end of its subject token's life is minted already expired, because the
+		// subject token was valid when it was checked and its expiry caps the new token. Such a token is refused
+		// rather than handed over, since every resource server would refuse it and the client could not tell why.
+		var lifetime = LifetimeOf(accessToken.Token);
+		if (lifetime <= TimeSpan.Zero)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				"The grant expired before a token could be issued under it.");
+		}
+
+		var response = CreateResponse(accessToken, lifetime, authContext);
 
 		if (issuesRefreshToken)
 			await AddRefreshTokenAsync(response, request, authContext, presentedRefreshToken, grantId);
@@ -171,6 +182,7 @@ public class TokenRequestProcessor(
 	/// </summary>
 	private static TokenIssued CreateResponse(
 		EncodedJsonWebToken accessToken,
+		TimeSpan lifetime,
 		AuthorizationContext authContext)
 	{
 		// RFC 9449 section 7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
@@ -182,7 +194,7 @@ public class TokenRequestProcessor(
 		return new TokenIssued(
 			accessToken,
 			tokenType,
-			LifetimeOf(accessToken.Token),
+			lifetime,
 			TokenTypeIdentifiers.AccessToken)
 		{
 			// RFC 9396 section 7: the AS MUST return the authorization_details "as granted by the resource owner

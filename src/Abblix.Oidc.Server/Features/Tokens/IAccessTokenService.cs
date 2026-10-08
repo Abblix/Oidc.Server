@@ -35,7 +35,9 @@ public interface IAccessTokenService
 	/// <param name="expiresNoLaterThan">The latest moment the token may expire, or <c>null</c> when only the client's
 	/// access token lifetime bounds it.</param>
 	/// <returns>A task that represents the asynchronous create operation.
-	/// The task result contains the newly created <see cref="JsonWebToken"/>.</returns>
+	/// The task result contains the newly created <see cref="JsonWebToken"/>, which must carry its issue time and
+	/// its expiry: the token endpoint reports the lifetime between them as <c>expires_in</c>, and fails the request
+	/// when either is missing.</returns>
 	Task<EncodedJsonWebToken> CreateAccessTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
