@@ -26,10 +26,10 @@ using Moq;
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
-/// <summary>
+/// <remarks>
 /// A multi-tenant server signs security event tokens with each tenant's own key, and refuses at startup a signer that
 /// would sign every tenant's alike.
-/// </summary>
+/// </remarks>
 public partial class MultiTenancyRegistrationTests
 {
     private static TenantDefinition TenantSigning(string id) => new()

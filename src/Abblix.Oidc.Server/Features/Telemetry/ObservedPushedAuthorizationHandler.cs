@@ -10,10 +10,10 @@ using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
-/// <summary>
+/// <remarks>
 /// The pushed authorization endpoint's span names the request's response type, when the protocol defines each of its
 /// values.
-/// </summary>
+/// </remarks>
 internal sealed partial class ObservedPushedAuthorizationHandler
 {
     private partial (string Key, string? Value) RequestTagOf(

@@ -18,10 +18,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
-/// <summary>
+/// <remarks>
 /// A host keeping the registrations of dynamic client registration in a store of its own, told the tenant of each
 /// call.
-/// </summary>
+/// </remarks>
 public partial class MultiTenancyRegistrationTests
 {
     private const string GlobexIssuer = "https://auth.example.com/tenants/globex";

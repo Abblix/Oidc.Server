@@ -10,3 +10,4 @@ ABX1002 | Abblix.Conventions | Error | A type declares its own TimeProvider
 ABX1003 | Abblix.Conventions | Error | A conditional expression picks by one member of an enum
 ABX1004 | Abblix.Conventions | Error | A switch on an enum leaves members to the default
 ABX1005 | Abblix.Conventions | Error | An expression joins too many conditions
+ABX1006 | Abblix.Conventions | Error | A declaration has more than one summary
