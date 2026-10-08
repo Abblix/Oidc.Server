@@ -44,10 +44,12 @@ internal sealed class ReturnsOidcInvalidRequestAttribute : Attribute, IActionFil
 		if (context.ModelState.IsValid)
 			return;
 
+		// The first failure on a parameter is its cause: a refused repetition leaves the parameter unbound, and a
+		// required one then also reports its value missing, which says nothing the first message did not
 		var messages =
 			from entry in context.ModelState
-			from error in entry.Value.Errors
-			select error.ErrorMessage;
+			where entry.Value.Errors.Count > 0
+			select entry.Value.Errors[0].ErrorMessage;
 
 		context.Result = ErrorFactory.InvalidRequest(messages).Format(StatusCodes.Status400BadRequest);
 	}

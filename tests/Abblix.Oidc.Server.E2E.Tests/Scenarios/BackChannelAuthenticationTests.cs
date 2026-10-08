@@ -55,7 +55,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// host with a handler that accepts the user - so the request lands in storage as Pending, exactly the state
 /// a real deployment sits in while it waits for the user to answer their phone.
 /// </remarks>
-public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(factory)
+public partial class BackChannelAuthenticationTests(TestFactory factory) : TestBase(factory)
 {
     [Fact]
     public async Task An_auth_req_id_is_not_redeemable_before_the_user_authenticates()

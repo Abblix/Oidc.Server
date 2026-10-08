@@ -210,7 +210,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	{
 		private readonly StringBuilder _writer = new();
 		private readonly List<DiagnosticInfo> _diagnostics = [];
-		private readonly List<string> _mappedProperties = [];
+		private readonly List<IPropertySymbol> _mappedProperties = [];
 		private readonly Dictionary<string, INamedTypeSymbol> _binderMap = BuildBinderMap(compilation);
 
 		// The namespace the executable validation attributes live in, derived from the anchor type rather than
@@ -316,7 +316,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
 			_writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
 
-			_mappedProperties.Add(property.Name);
+			_mappedProperties.Add(property);
 		}
 
 		private void EmitProperty(IPropertySymbol property)
@@ -346,7 +346,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
 			_writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
 
-			_mappedProperties.Add(property.Name);
+			_mappedProperties.Add(property);
 		}
 
 		private void EmitPropertyAttribute(AttributeData attribute, IPropertySymbol property)
@@ -411,9 +411,18 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_writer.AppendLine($"\tpublic {coreTypeName} Map() => new()");
 			_writer.AppendLine("\t{");
 
-			foreach (var name in _mappedProperties)
+			foreach (var property in _mappedProperties)
 			{
-				_writer.AppendLine($"\t\t{name} = {name},");
+				// An entry of a repeated parameter that is empty or whitespace alone binds to null, and the core
+				// models hold no null entries: the Minimal API host drops those entries, so this side does too
+				_writer.AppendLine(property.Type switch
+				{
+					IArrayTypeSymbol { ElementType.IsReferenceType: true, NullableAnnotation: NullableAnnotation.Annotated } =>
+						$"\t\t{property.Name} = global::Abblix.Oidc.Server.Mvc.Binders.BoundValues.WithoutEmptyEntries({property.Name}),",
+					IArrayTypeSymbol { ElementType.IsReferenceType: true } =>
+						$"\t\t{property.Name} = global::Abblix.Oidc.Server.Mvc.Binders.BoundValues.WithoutEmptyEntries({property.Name}) ?? [],",
+					_ => $"\t\t{property.Name} = {property.Name},",
+				});
 			}
 
 			_writer.AppendLine("\t};");

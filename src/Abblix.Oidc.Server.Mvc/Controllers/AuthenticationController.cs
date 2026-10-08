@@ -97,7 +97,7 @@ public sealed class AuthenticationController : ControllerBase
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
         [FromQueryOrForm] UserInfoRequest userInfoRequest,
-        [FromQueryOrForm] ClientRequest clientRequest)
+        [FromForm] ClientRequest clientRequest)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
         var response = await handler.HandleAsync(coreUserInfoRequest, clientRequest);

@@ -57,7 +57,7 @@ internal static class BackChannelEndpoints
     /// from the posted form.
     /// </summary>
     private static async Task<IResult> PushedAuthorizationAsync(
-        AuthorizationRequest authorizationRequest,
+        PushedAuthorizationRequest authorizationRequest,
         ClientRequest clientRequest,
         IPushedAuthorizationHandler handler,
         IPushedAuthorizationResponseFormatter formatter)
