@@ -58,6 +58,7 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         // of failing every request that builds it, without naming what it could not hold.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RefreshTokenReusePolicyValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, PairwiseClientsOptionsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
         ]);

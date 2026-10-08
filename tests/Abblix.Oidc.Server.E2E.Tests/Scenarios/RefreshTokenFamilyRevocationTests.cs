@@ -36,7 +36,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         var discovery = await FetchDiscoveryAsync(client);
 
         // A legitimate auth-code flow with offline_access issues the first refresh token of a new family
-        // (rt1). The test client does not set AllowReuse, so it rotates by default (the secure default).
+        // (rt1). The test client authenticates with client_secret_post, so the default policy rotates its tokens.
         var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
         var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
