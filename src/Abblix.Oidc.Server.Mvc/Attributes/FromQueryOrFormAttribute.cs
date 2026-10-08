@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Mvc.Attributes;
 /// <remarks>
 /// <para>The model's parameters are read under their own names, never under a prefix naming the action parameter, so
 /// <c>client_id</c> binds and <c>request.client_id</c> does not. The Minimal API host reads the same request through
-/// <c>RequestValues</c>, and the two must keep answering it the same way.</para>
+/// <c>RequestValues</c>; the end-to-end scenarios compiled for both hosts send each request to both.</para>
 /// <para>The order of the two sources here decides nothing: MVC asks the form before the query, as its value provider
 /// factories are registered. A parameter that takes one value and arrives in both is refused as a repetition, while
 /// the entries of one that may repeat, such as <c>resource</c>, are read from the form alone when the form carries
