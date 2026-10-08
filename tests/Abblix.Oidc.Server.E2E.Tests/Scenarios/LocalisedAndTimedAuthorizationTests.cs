@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -58,9 +59,9 @@ public class LocalisedAndTimedAuthorizationTests(TestFactory factory) : TestBase
     }
 
     /// <summary>
-    /// A <c>max_age</c> that is not a number is the caller's protocol error, so the endpoint owes an OAuth
-    /// error rather than a server fault. This is also what proves the binder is in the path at all: were it
-    /// absent, the value would fail to bind quietly and the request would succeed with no max_age.
+    /// A <c>max_age</c> that is not a number is the caller's protocol error, so the endpoint refuses it with a 400
+    /// rather than a server fault. This is also what proves the binder is in the path at all: were it absent, the
+    /// value would fail to bind quietly and the request would succeed with no max_age.
     /// </summary>
     [Fact]
     public async Task Authorize_WithAMaxAgeThatIsNotANumber_IsRefusedAsACallerError()
@@ -78,13 +79,7 @@ public class LocalisedAndTimedAuthorizationTests(TestFactory factory) : TestBase
             [AuthorizationRequest.Parameters.MaxAge] = "not-a-number",
         });
 
-        var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
-
-        Assert.True(
-            (int)response.StatusCode < 500,
-            $"/authorize answered {(int)response.StatusCode} for a malformed max_age; a value the caller got " +
-            "wrong must not surface as a server fault. Body: " +
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        await AssertInvalidRequestAsync(client, uri);
     }
 
     // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same

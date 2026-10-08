@@ -14,6 +14,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
@@ -29,6 +30,18 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// </summary>
 public abstract class TestBase(TestFactory factory)
 {
+    /// <summary>
+    /// Asserts the request is refused with a 400 whose body names invalid_request.
+    /// </summary>
+    protected static async Task AssertInvalidRequestAsync(HttpClient client, Uri uri)
+    {
+        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ResponseParameters.Error]!.GetValue<string>());
+    }
+
     /// <summary>
     /// The shared test host factory, exposed for tests that need to build an isolated host variant
     /// (for example to turn on an opt-in option) via <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/>.

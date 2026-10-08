@@ -38,6 +38,14 @@ public abstract class ModelBinderBase : IModelBinder
 			return Task.CompletedTask;
 		}
 
+		// RFC 6749 section 3.1: "Parameters sent without a value MUST be treated as if they were omitted from the
+		// request." A value of whitespace alone is still a value, which the implementation refuses if it cannot
+		// read it
+		if (string.IsNullOrEmpty(modelValue.FirstValue))
+		{
+			return Task.CompletedTask;
+		}
+
 		bindingContext.ModelState.SetModelValue(bindingContext.ModelName, modelValue);
 
 		try
@@ -81,11 +89,6 @@ public abstract class ModelBinderBase : IModelBinder
 	/// <para>An implementation that wants the guarantee stated in code asserts it (<c>NotNull</c>) rather than
 	/// branching on it: an assertion fails loudly if the invariant ever breaks, and reads as a claim about this
 	/// contract instead of as a case the caller is expected to produce.</para>
-	///
-	/// <para>Note also what the single value can be: a parameter sent more than once arrives here as one
-	/// comma-joined string, not as several values and not as none. Refusing that is the implementation's job -
-	/// OpenID Connect Core 1.0 section 3.1.2.1 forbids the repetition, and every implementation here refuses it
-	/// by failing to parse the joined value.</para>
 	/// </remarks>
 	protected abstract bool TryParse(Type type, StringValues values, out object? result);
 }

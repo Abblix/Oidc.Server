@@ -235,13 +235,12 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var url = OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), query);
 
-        // Under TestServer a BindAsync throw does not translate to an HTTP status - it propagates out of the awaited
-        // call. Pre-fix the converter throws JsonException / CultureNotFoundException / TimeSpan overflow; post-fix
-        // FormValues shapes every one into a BadHttpRequestException carrying the 400 the MVC binder would have
-        // produced. Asserting the thrown type is the genuine red (wrong exception) to green (BadHttpRequestException).
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
-            () => client.GetAsync(url, TestContext.Current.CancellationToken));
-        Assert.Equal(StatusCodes.Status400BadRequest, ex.StatusCode);
+        // The value is recorded as malformed while binding and refused by the validation filter, so the client gets
+        // the OAuth error body rather than an exception escaping the binding
+        var response = await client.GetAsync(url, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ResponseParameters.Error]!.GetValue<string>());
     }
 
     private static async Task<(JsonObject Body, HttpResponseMessage Response)> PostJsonAsync(

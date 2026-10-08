@@ -85,6 +85,28 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// A post-logout redirect target that is not a URI is an invalid value, refused rather than dropped, which would
+    /// end the session as if no target had been named.
+    /// </summary>
+    [Fact]
+    public async Task A_post_logout_redirect_uri_that_is_not_a_uri_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = "https://[",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task A_registered_post_logout_redirect_uri_is_honoured()
     {

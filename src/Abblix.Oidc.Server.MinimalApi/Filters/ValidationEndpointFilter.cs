@@ -25,21 +25,36 @@ internal sealed class ValidationEndpointFilter : IEndpointFilter
     /// <inheritdoc />
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        List<ValidationResult>? failures = null;
-        foreach (var argument in context.Arguments)
-        {
-            if (argument is not IValidatableModel)
-                continue;
+        var models = context.Arguments.OfType<IValidatableModel>().ToArray();
 
-            var results = new List<ValidationResult>();
-            if (!await Validator.TryValidateObjectAsync(argument, new ValidationContext(argument), results, validateAllProperties: true))
-                (failures ??= []).AddRange(results);
-        }
+        // The form belongs to the request, and every model bound from it records that it could not be read
+        if (models.Any(model => model.FormUnreadable))
+            return Refuse([ErrorFactory.UnreadableForm]);
 
-        return failures is { Count: > 0 }
-            ? ErrorFactory
-                .InvalidRequest(failures.Select(result => result.ErrorMessage ?? string.Empty))
-                .Format(StatusCodes.Status400BadRequest)
-            : await next(context);
+        var failures = new List<string>();
+        foreach (var model in models)
+            failures.AddRange(await FailuresOf(model));
+
+        // Two models of one request may bind the same parameter, such as client_id, and refuse it alike
+        return failures.Count > 0 ? Refuse(failures.Distinct()) : await next(context);
+    }
+
+    private static IResult Refuse(IEnumerable<string> failures)
+        => ErrorFactory.InvalidRequest(failures).Format(StatusCodes.Status400BadRequest);
+
+    private static async Task<IEnumerable<string>> FailuresOf(IValidatableModel model)
+    {
+        var refusals = model.RepeatedParameters.Select(ErrorFactory.RepeatedParameter)
+            .Concat(model.MalformedParameters.Select(ErrorFactory.MalformedParameter));
+
+        // A refused parameter is left unbound, so validating it would also report it missing, which says nothing the
+        // refusal did not; every other parameter is validated as usual
+        var refused = model.RepeatedParameters.Concat(model.MalformedParameters).Select(model.MemberOf).ToHashSet();
+        var results = new List<ValidationResult>();
+        await Validator.TryValidateObjectAsync(model, new ValidationContext(model), results, validateAllProperties: true);
+
+        return refusals.Concat(results
+            .Where(result => !result.MemberNames.Any(refused.Contains))
+            .Select(result => result.ErrorMessage ?? string.Empty));
     }
 }
