@@ -48,6 +48,7 @@ public sealed class SharedSignalsTenantReleaseTests
 
     // The event a stream of a released tenant that could not be deleted is logged under, as the package numbers it
     private const int StreamNotDeleted = 10801;
+    private const int TenantNotClosed = 10703;
 
     [Fact]
     public async Task AReleasedTenantsStreamsAndQueues_AreDeleted()
@@ -86,7 +87,8 @@ public sealed class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// A stream whose deletion fails stays and is logged, and the released tenant's other streams are deleted.
+    /// A stream whose deletion fails stays and is logged, the released tenant's other streams are deleted, and the
+    /// tenant is logged as not closed.
     /// </summary>
     [Fact]
     public async Task AStreamThatCannotBeDeleted_LeavesTheOthersDeleted()
@@ -120,6 +122,31 @@ public sealed class SharedSignalsTenantReleaseTests
         Assert.Equal(2, streams.Deletions);
         Assert.Single(await StreamsOfAsync(app, acme, ct));
         Assert.Single(logs.EventIds, StreamNotDeleted);
+        Assert.Single(logs.EventIds, TenantNotClosed);
+    }
+
+    /// <summary>
+    /// A closing stopped before it began deletes no stream and reports the tenant not closed.
+    /// </summary>
+    [Fact]
+    public async Task AClosingAlreadyStopped_DeletesNothing_AndReportsTheTenant()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(store, new FakeTimeProvider());
+        using var created = await ClientOf(app, "acme").PostAsJsonAsync(
+            "/tenants/acme" + StreamPath,
+            new CreateStreamRequest { EventsRequested = [MembershipChanged] },
+            ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var acme = (await app.Services.GetRequiredService<StoreTenantCatalog>().FindByIdAsync("acme", ct))!;
+        var closing = app.Services.GetServices<ITenantClosing>().OfType<TenantStreamsClosing>().Single();
+
+        var failures = await closing.CloseAsync([acme], new CancellationToken(canceled: true));
+
+        Assert.IsType<OperationCanceledException>(Assert.Single(failures).Value);
+        Assert.Single(await StreamsOfAsync(app, acme, ct));
     }
 
     private static async Task<IReadOnlyList<StreamState>> StreamsOfAsync(

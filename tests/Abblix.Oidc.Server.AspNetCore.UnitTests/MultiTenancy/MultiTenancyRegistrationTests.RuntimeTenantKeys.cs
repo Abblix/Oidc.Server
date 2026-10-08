@@ -36,10 +36,19 @@ public partial class MultiTenancyRegistrationTests
         private readonly Lock _entriesLock = new();
         private readonly List<StoredKey> _entries = [];
 
+        /// <summary>How many times the store was read.</summary>
+        public int Loads { get; private set; }
+
+        /// <summary>The prefix of the entries whose removal fails, as a store losing them mid-way.</summary>
+        public string? FailingRemovals { get; set; }
+
         public Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
         {
             lock (_entriesLock)
+            {
+                Loads++;
                 return Task.FromResult<IReadOnlyList<StoredKey>>([.._entries]);
+            }
         }
 
         public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
@@ -56,6 +65,9 @@ public partial class MultiTenancyRegistrationTests
 
         public Task RemoveAsync(string id, CancellationToken cancellationToken)
         {
+            if (FailingRemovals is { } prefix && id.StartsWith(prefix, StringComparison.Ordinal))
+                throw new InvalidOperationException("the store refused the removal");
+
             lock (_entriesLock)
                 _entries.RemoveAll(entry => entry.Id == id);
 
@@ -258,6 +270,76 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
+    }
+
+    /// <summary>
+    /// The tenants one reading releases are deleted from the key ring's store with one read of it, however many they
+    /// are.
+    /// </summary>
+    [Fact]
+    public async Task TheTenantsOfOneReading_AreDeletedWithOneReadOfTheStore()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = (MemoryKeyRingStore)provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        var loadsBefore = keyStore.Loads;
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, keyStore.Loads - loadsBefore);
+        Assert.Empty(await keyStore.LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A partition whose entries cannot be removed is reported for its own tenant, and the other tenants' entries are
+    /// removed all the same.
+    /// </summary>
+    [Fact]
+    public async Task APartitionThatCannotBeDeleted_IsReportedForItsTenant_AndTheOthersDeleted()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
+        var keyStore = (MemoryKeyRingStore)provider.GetRequiredService<IKeyRingStore>();
+        keyStore.FailingRemovals = "globex.";
+        var closing = provider.GetServices<ITenantClosing>().OfType<TenantKeyRingClosing>().Single();
+
+        var failures = await closing.CloseAsync([Acme, globex], TestContext.Current.CancellationToken);
+
+        Assert.Same(globex, Assert.Single(failures).Key);
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(left, IsOf("globex"));
+        Assert.DoesNotContain(left, IsOf("acme"));
+    }
+
+    /// <summary>
+    /// A deletion stopped before it began asks the store nothing, so a store that ignores the token keeps every
+    /// partition, and each tenant is reported not closed.
+    /// </summary>
+    [Fact]
+    public async Task ADeletionAlreadyStopped_RemovesNothing_AndReportsEveryTenant()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        var closing = provider.GetServices<ITenantClosing>().OfType<TenantKeyRingClosing>().Single();
+
+        var failures = await closing.CloseAsync([Acme, globex], new CancellationToken(canceled: true));
+
+        Assert.Equal(2, failures.Count);
+        Assert.All(failures.Values, failure => Assert.IsType<OperationCanceledException>(failure));
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(left, IsOf("acme"));
+        Assert.Contains(left, IsOf("globex"));
     }
 
     private static Predicate<StoredKey> IsOf(string partition)
