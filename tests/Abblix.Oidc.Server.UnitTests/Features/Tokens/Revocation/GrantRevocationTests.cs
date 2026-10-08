@@ -229,14 +229,21 @@ public class GrantRevocationTests
 
     /// <summary>
     /// An access token issued from the last refresh token of a grant, close to the grant's absolute expiry, outlives
-    /// every refresh token of the grant, and is still refused once their last moment has passed.
+    /// every refresh token of the grant, and is still refused once their last moment has passed. The client keeps
+    /// its grant alive by refreshing before each sliding expiry, as a real one does.
     /// </summary>
     [Fact]
     public async Task AnAccessTokenIssuedNearTheGrantsEnd_IsRefused_AfterItsRefreshTokensExpire()
     {
         _client = ClientWith(allowReuse: true);
         var refreshToken = await RefreshAsync(null);
-        _clock.Advance(TimeSpan.FromHours(7.5));
+        while (_clock.GetUtcNow() < Start + TimeSpan.FromHours(7.5))
+        {
+            _clock.Advance(TimeSpan.FromMinutes(50));
+            refreshToken = await RefreshAsync(refreshToken);
+        }
+
+        Assert.True(await AcceptedAsync(refreshToken));
         var accessToken = AccessTokenOfTheGrant();
         _clock.Advance(TimeSpan.FromMinutes(15));
 

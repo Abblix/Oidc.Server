@@ -89,7 +89,7 @@ public class TokenRequestProcessor(
 			grantId,
 			request.AuthorizedGrant.ExpiresNoLaterThan);
 
-		var response = CreateResponse(accessToken, authContext, clientInfo);
+		var response = CreateResponse(accessToken, authContext);
 
 		if (issuesRefreshToken)
 			await AddRefreshTokenAsync(response, request, authContext, presentedRefreshToken, grantId);
@@ -171,8 +171,7 @@ public class TokenRequestProcessor(
 	/// </summary>
 	private static TokenIssued CreateResponse(
 		EncodedJsonWebToken accessToken,
-		AuthorizationContext authContext,
-		ClientInfo clientInfo)
+		AuthorizationContext authContext)
 	{
 		// RFC 9449 section 7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
 		// from the proof key) advertises token_type "DPoP"; otherwise "Bearer".
@@ -183,7 +182,7 @@ public class TokenRequestProcessor(
 		return new TokenIssued(
 			accessToken,
 			tokenType,
-			clientInfo.AccessTokenExpiresIn,
+			LifetimeOf(accessToken.Token),
 			TokenTypeIdentifiers.AccessToken)
 		{
 			// RFC 9396 section 7: the AS MUST return the authorization_details "as granted by the resource owner
@@ -207,6 +206,20 @@ public class TokenRequestProcessor(
 					: null,
 		};
 	}
+
+	/// <summary>
+	/// The lifetime the minted access token carries, which is what <c>expires_in</c> reports.
+	/// </summary>
+	/// <remarks>
+	/// Read from the token rather than from the client's configured lifetime, because a token exchanged within a
+	/// refresh token family is cut short to its subject token's expiry, and a client told the full lifetime would
+	/// keep presenting a token its resource server already refuses.
+	/// </remarks>
+	private static TimeSpan LifetimeOf(JsonWebToken accessToken)
+		=> accessToken.Payload is { IssuedAt: { } issuedAt, ExpiresAt: { } expiresAt }
+			? expiresAt - issuedAt
+			: throw new InvalidOperationException(
+				$"The access token service issued a token without {nameof(JsonWebTokenPayload.IssuedAt)} or {nameof(JsonWebTokenPayload.ExpiresAt)}.");
 
 	private async Task AddRefreshTokenAsync(
 		TokenIssued response,

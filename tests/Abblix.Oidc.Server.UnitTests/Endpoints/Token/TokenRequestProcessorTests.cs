@@ -84,8 +84,15 @@ public class TokenRequestProcessorTests
             []);
     }
 
-    private static EncodedJsonWebToken CreateAccessToken() => new(
-        new Jwt.JsonWebToken(),
+    private static readonly DateTimeOffset AccessTokenIssuedAt = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
+
+    private static EncodedJsonWebToken CreateAccessToken() => CreateAccessToken(TimeSpan.FromMinutes(10));
+
+    private static EncodedJsonWebToken CreateAccessToken(TimeSpan lifetime) => new(
+        new Jwt.JsonWebToken
+        {
+            Payload = { IssuedAt = AccessTokenIssuedAt, ExpiresAt = AccessTokenIssuedAt + lifetime },
+        },
         "access_token_jwt");
 
     private static EncodedJsonWebToken CreateRefreshToken() => new(
@@ -638,15 +645,17 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies expires_in is set from client configuration.
-    /// Per OAuth 2.0 Section 5.1, expires_in indicates token lifetime.
+    /// expires_in (RFC 6749 section 5.1) reports the lifetime of the token actually issued, which is shorter than
+    /// the client's configured lifetime when the token was cut short to the expiry of the token it came from.
     /// </summary>
-    [Fact]
-    public async Task ProcessAsync_ShouldSetExpiresInFromClientInfo()
+    [Theory]
+    [InlineData(600)]
+    [InlineData(30)]
+    public async Task ProcessAsync_ShouldSetExpiresInFromTheIssuedToken(int lifetimeSeconds)
     {
         // Arrange
         var request = CreateValidTokenRequest([]);
-        var accessToken = CreateAccessToken();
+        var accessToken = CreateAccessToken(TimeSpan.FromSeconds(lifetimeSeconds));
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
@@ -665,7 +674,7 @@ public class TokenRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
-        Assert.Equal(request.ClientInfo.AccessTokenExpiresIn, tokenIssued.ExpiresIn);
+        Assert.Equal(TimeSpan.FromSeconds(lifetimeSeconds), tokenIssued.ExpiresIn);
     }
 
     /// <summary>
@@ -1085,7 +1094,7 @@ public class TokenRequestProcessorTests
         var request = CreateValidTokenRequest([]);
 
         var issued = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
-        var accessToken = new EncodedJsonWebToken(new Jwt.JsonWebToken(), "access_token_jwt");
+        var accessToken = CreateAccessToken();
         accessToken.Token.Payload.Json[Jwt.IanaClaimTypes.AuthorizationDetails] = issued;
 
         var granted = new JsonArray(

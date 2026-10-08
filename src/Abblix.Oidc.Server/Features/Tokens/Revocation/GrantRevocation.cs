@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// token outliving the mark; the presented token's own expiry is the floor.
 /// </remarks>
 /// <param name="tokenRegistry">Records the grant as revoked.</param>
-/// <param name="clientInfoProvider">Finds the client whose absolute refresh token lifetime bounds the grant.</param>
+/// <param name="clientInfoProvider">Finds the client whose refresh and access token lifetimes bound the grant.</param>
 public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoProvider clientInfoProvider)
 {
     /// <summary>
@@ -46,8 +46,9 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
     }
 
     /// <summary>
-    /// The last moment a refresh token of the grant could still be valid, or null when the grant's first issuance
-    /// or its client cannot be found, in which case the presented token's own expiry is the best known bound.
+    /// The last moment any token of the grant, refresh or access, could still be valid, or null when the grant's
+    /// first issuance or its client cannot be found, in which case the presented token's own expiry is the best
+    /// known bound.
     /// </summary>
     private async Task<DateTimeOffset?> LastValidMomentAsync(JsonWebTokenPayload refreshToken)
     {

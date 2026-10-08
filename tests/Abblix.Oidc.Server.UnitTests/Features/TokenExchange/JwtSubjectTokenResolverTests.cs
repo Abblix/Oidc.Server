@@ -93,6 +93,25 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal(grantId, ctx.GrantId);
     }
 
+    /// <summary>
+    /// The presented token's expiry reaches the context, because a token exchanged within its family must not
+    /// outlive it.
+    /// </summary>
+    [Fact]
+    public async Task ExpiryOfThePresentedToken_ReachesTheContext()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.NotNull(jwt.Payload.ExpiresAt);
+        Assert.Equal(jwt.Payload.ExpiresAt, ctx.ExpiresAt);
+    }
+
     [Fact]
     public async Task AuthorizationDetailsClaim_DeepClonedIntoContext()
     {

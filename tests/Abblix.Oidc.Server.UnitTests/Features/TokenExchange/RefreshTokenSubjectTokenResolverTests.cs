@@ -103,6 +103,31 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.Equal(grantId, ctx.GrantId);
     }
 
+    /// <summary>
+    /// The refresh token's expiry reaches the context, because a token exchanged within its family must not
+    /// outlive it.
+    /// </summary>
+    [Fact]
+    public async Task ExpiryOfTheRefreshToken_ReachesTheContext()
+    {
+        var jwt = NewRefreshJwt();
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .ReturnsAsync(jwt);
+
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
+                new AuthorizationContext("client-1", ["openid"], null)));
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.NotNull(jwt.Payload.ExpiresAt);
+        Assert.Equal(jwt.Payload.ExpiresAt, ctx.ExpiresAt);
+    }
+
     [Fact]
     public async Task GrantWithAuthorizationDetails_DeepClonedIntoContext()
     {
