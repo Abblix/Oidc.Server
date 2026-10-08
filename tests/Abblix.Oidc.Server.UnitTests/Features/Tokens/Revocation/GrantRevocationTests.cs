@@ -65,6 +65,8 @@ public class GrantRevocationTests
             _entries[jwtId] = (status, expiresAt);
             return Task.CompletedTask;
         }
+
+        public DateTimeOffset ExpiryOf(string jwtId) => _entries[jwtId].ExpiresAt;
     }
 
     private readonly FakeTimeProvider _clock = new(Start);
@@ -97,7 +99,7 @@ public class GrantRevocationTests
             options, SingleIssuer.SettingsOf(options));
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(provider => provider.TryFindClientAsync(ClientId)).ReturnsAsync(() => _client);
+        clients.Setup(provider => provider.TryFindClientAsync(ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
         var grants = new GrantRevocation(_registry, clients.Object);
         _processor = new RevocationRequestProcessor(_registry, grants, _clock);
 
@@ -111,9 +113,11 @@ public class GrantRevocationTests
     }
 
     private ClientInfo _client = ClientWith(allowReuse: false);
+    private bool _knownClient = true;
 
     private static ClientInfo ClientWith(bool allowReuse) => new(ClientId)
     {
+        AccessTokenExpiresIn = TimeSpan.FromHours(1),
         RefreshToken = new RefreshTokenOptions
         {
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
@@ -221,6 +225,49 @@ public class GrantRevocationTests
         Assert.True(_clock.GetUtcNow() < active.Payload.ExpiresAt);
 
         Assert.False(await AcceptedAsync(active));
+    }
+
+    /// <summary>
+    /// An access token issued from the last refresh token of a grant, close to the grant's absolute expiry, outlives
+    /// every refresh token of the grant, and is still refused once their last moment has passed.
+    /// </summary>
+    [Fact]
+    public async Task AnAccessTokenIssuedNearTheGrantsEnd_IsRefused_AfterItsRefreshTokensExpire()
+    {
+        _client = ClientWith(allowReuse: true);
+        var refreshToken = await RefreshAsync(null);
+        _clock.Advance(TimeSpan.FromHours(7.5));
+        var accessToken = AccessTokenOfTheGrant();
+        _clock.Advance(TimeSpan.FromMinutes(15));
+
+        await RevokeAsync(refreshToken);
+        _clock.Advance(TimeSpan.FromMinutes(20));
+        Assert.True(_clock.GetUtcNow() > Start + TimeSpan.FromHours(8));
+        Assert.True(_clock.GetUtcNow() < accessToken.Payload.ExpiresAt);
+
+        Assert.False(await AcceptedAsync(accessToken));
+    }
+
+    /// <summary>
+    /// Without the client or the grant's first issuance there is no ceiling to compute, and the grant stays revoked
+    /// until the presented token's own expiry.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task WithoutTheClientOrTheFirstIssuance_TheGrantIsRevokedUntilThePresentedTokensExpiry(
+        bool knownClient,
+        bool withIssueTime)
+    {
+        var refreshToken = await RefreshAsync(null);
+        if (!withIssueTime)
+            refreshToken.Payload.IssuedAt = null;
+
+        _knownClient = knownClient;
+
+        await RevokeAsync(refreshToken);
+
+        Assert.Equal(refreshToken.Payload.ExpiresAt, _registry.ExpiryOf(GrantId));
     }
 
     /// <summary>

@@ -20,7 +20,10 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// The mark lasts until the last moment any token of the grant could still be valid, not until the expiry of the
 /// token that revoked it: a refresh token issued later under the same grant expires later, and would be accepted
 /// again once a shorter mark was forgotten. Every refresh token of a grant carries the grant's first issuance as its
-/// issue time, and none outlives that by more than its client's absolute refresh token lifetime.
+/// issue time, and none outlives that by more than its client's absolute refresh token lifetime; an access token
+/// issued from the last of them lives one access token lifetime longer, and one exchanged from a token of the grant
+/// expires no later than that token. A client whose lifetimes were shortened after tokens were issued can leave a
+/// token outliving the mark; the presented token's own expiry is the floor.
 /// </remarks>
 /// <param name="tokenRegistry">Records the grant as revoked.</param>
 /// <param name="clientInfoProvider">Finds the client whose absolute refresh token lifetime bounds the grant.</param>
@@ -52,7 +55,7 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
             return null;
 
         return await clientInfoProvider.TryFindClientAsync(clientId) is { } client
-            ? issuedAt + client.RefreshToken.AbsoluteExpiresIn
+            ? issuedAt + client.RefreshToken.AbsoluteExpiresIn + client.AccessTokenExpiresIn
             : null;
     }
 }

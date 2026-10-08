@@ -102,7 +102,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -133,7 +133,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -160,7 +160,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         await _service.CreateAccessTokenAsync(
-            CreateAuthSession(), CreateAuthorizationContext(), CreateClientInfo(), grantId);
+            CreateAuthSession(), CreateAuthorizationContext(), CreateClientInfo(), grantId, null);
 
         Assert.NotNull(capturedToken);
         Assert.Equal(grantId, capturedToken!.Payload.GrantId);
@@ -195,7 +195,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -231,7 +231,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -261,7 +261,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -300,7 +300,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -330,7 +330,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        var result = await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(result);
@@ -470,6 +470,29 @@ public class AccessTokenServiceTests
     }
 
     /// <summary>
+    /// A bound on the expiry shortens the token when it falls within the client's lifetime, and is no extension
+    /// when it falls beyond it.
+    /// </summary>
+    [Theory]
+    [InlineData(30, 30)]
+    [InlineData(300, 60)]
+    public async Task CreateAccessToken_WithALatestExpiry_ExpiresNoLaterThanIt(int boundMinutes, int expectedMinutes)
+    {
+        var clientInfo = CreateClientInfo(accessTokenExpiresIn: TimeSpan.FromMinutes(60));
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, grantId: null,
+            _currentTime.AddMinutes(boundMinutes));
+
+        Assert.Equal(_currentTime.AddMinutes(expectedMinutes), capturedToken!.Payload.ExpiresAt);
+    }
+
+    /// <summary>
     /// Verifies that AccessTokenService respects different token expiration times
     /// based on client configuration.
     /// </summary>
@@ -489,7 +512,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -565,7 +588,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null);
+        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()), Times.Once);
@@ -653,7 +676,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         await service.CreateAccessTokenAsync(
-            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null);
+            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedPolicy);
         Assert.Same(resourceKey, capturedPolicy!.Key);
@@ -676,7 +699,7 @@ public class AccessTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         await service.CreateAccessTokenAsync(
-            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null);
+            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedPolicy);
         Assert.Null(capturedPolicy!.Key);
@@ -698,7 +721,7 @@ public class AccessTokenServiceTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await service.CreateAccessTokenAsync(
-                CreateAuthSession(), ContextFor(OrdersApi, BillingApi), CreateClientInfo(), grantId: null));
+                CreateAuthSession(), ContextFor(OrdersApi, BillingApi), CreateClientInfo(), grantId: null, null));
 
         Assert.Contains(OrdersApi.OriginalString, exception.Message);
         Assert.Contains(BillingApi.OriginalString, exception.Message);
@@ -729,7 +752,7 @@ public class AccessTokenServiceTests
             .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => captured = jwt)
             .ReturnsAsync(EncodedToken);
 
-        await service.CreateAccessTokenAsync(CreateAuthSession(), context, CreateClientInfo(), grantId: null);
+        await service.CreateAccessTokenAsync(CreateAuthSession(), context, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(captured);
         return captured!;

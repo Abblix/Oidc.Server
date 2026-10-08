@@ -86,7 +86,8 @@ public class TokenRequestProcessor(
 			request.AuthorizedGrant.AuthSession,
 			authContext,
 			clientInfo,
-			grantId);
+			grantId,
+			request.AuthorizedGrant.ExpiresNoLaterThan);
 
 		var response = CreateResponse(accessToken, authContext, clientInfo);
 

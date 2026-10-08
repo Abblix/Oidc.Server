@@ -32,13 +32,16 @@ public interface IAccessTokenService
 	/// <param name="grantId">The refresh token family this access token belongs to, or <c>null</c> when the grant
 	/// has none. Written into the token so that revoking the family refuses the access tokens minted from it as
 	/// well as its refresh tokens.</param>
+	/// <param name="expiresNoLaterThan">The latest moment the token may expire, or <c>null</c> when only the client's
+	/// access token lifetime bounds it.</param>
 	/// <returns>A task that represents the asynchronous create operation.
 	/// The task result contains the newly created <see cref="JsonWebToken"/>.</returns>
 	Task<EncodedJsonWebToken> CreateAccessTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
-		string? grantId);
+		string? grantId,
+		DateTimeOffset? expiresNoLaterThan);
 
 	/// <summary>
 	/// Asynchronously authenticates a user based on a provided access token.
