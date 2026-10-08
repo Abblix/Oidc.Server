@@ -99,7 +99,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
         {
             [EndSessionParameters.ClientId] = clientId,
-            [EndSessionParameters.PostLogoutRedirectUri] = "http://[",
+            [EndSessionParameters.PostLogoutRedirectUri] = "https://[",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

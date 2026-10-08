@@ -53,8 +53,8 @@ public partial class PromptReturnTripTests
     [InlineData(AuthorizationRequest.Parameters.MaxAge, "abc")]
     [InlineData(AuthorizationRequest.Parameters.UiLocales, "!")]
     [InlineData(AuthorizationRequest.Parameters.Resource, "https://exa mple.com/x")]
-    [InlineData(AuthorizationRequest.Parameters.RedirectUri, "http://[")]
-    [InlineData(AuthorizationRequest.Parameters.RequestUri, "http://[")]
+    [InlineData(AuthorizationRequest.Parameters.RedirectUri, "https://[")]
+    [InlineData(AuthorizationRequest.Parameters.RequestUri, "https://[")]
     public async Task InvalidTypedParameter_InTheQuery_IsRefused(string name, string value)
     {
         var (client, _, host) = Start();
