@@ -46,6 +46,7 @@
     <Project Path="tests/Abblix.DocSamples/Abblix.DocSamples.csproj" />
     <Project Path="tests/Abblix.DocSamples.WebTemplate/Abblix.DocSamples.WebTemplate.csproj" />
     <Project Path="tests/Abblix.Jwt.UnitTests/Abblix.Jwt.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.UnitTests/Abblix.Oidc.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.AspNetCore.UnitTests/Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />

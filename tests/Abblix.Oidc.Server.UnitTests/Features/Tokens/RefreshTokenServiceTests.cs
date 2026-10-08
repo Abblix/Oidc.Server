@@ -330,7 +330,7 @@ public class RefreshTokenServiceTests
 
     /// <summary>
     /// Verifies that the token joins the family its caller decided: the <c>grant_id</c> claim
-    /// (<see cref="JsonWebTokenPayload.GrantId"/>) is what ties every token of one grant into a lineage a
+    /// (<c>grant_id</c>) is what ties every token of one grant into a lineage a
     /// detected replay can revoke whole (RFC 9700 Section 4.14.2).
     /// </summary>
     [Fact]

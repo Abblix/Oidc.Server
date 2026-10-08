@@ -66,7 +66,7 @@ public sealed record LogoutNotification(
 
         var issuerMatches = Equal(Issuer, payload.Issuer);
         var subjectMatches = Subject is null || Equal(Subject, payload.Subject);
-        var sessionMatches = SessionId is null || Equal(SessionId, payload.SessionId);
+        var sessionMatches = SessionId is null || Equal(SessionId, payload.Json.GetProperty<string>(IanaClaimTypes.Sid));
 
         return issuerMatches && subjectMatches && sessionMatches;
     }

@@ -49,12 +49,12 @@ public class AuthenticationSchemeAdapter(
 	[
 		SignedInAtClaimType,
 		JwtClaimTypes.Subject,
-		JwtClaimTypes.SessionId,
-		JwtClaimTypes.AuthenticationTime,
-		JwtClaimTypes.AuthContextClassRef,
-		JwtClaimTypes.Email,
-		JwtClaimTypes.EmailVerified,
-		JwtClaimTypes.AuthenticationMethodReferences,
+		IanaClaimTypes.Sid,
+		IanaClaimTypes.AuthTime,
+		IanaClaimTypes.Acr,
+		IanaClaimTypes.Email,
+		IanaClaimTypes.EmailVerified,
+		IanaClaimTypes.Amr,
 	];
 
 	/// <summary>
@@ -149,11 +149,11 @@ public class AuthenticationSchemeAdapter(
 		if (string.IsNullOrEmpty(subject))
 			return null;
 
-		var sessionId = principal.FindFirstValue(JwtClaimTypes.SessionId);
+		var sessionId = principal.FindFirstValue(IanaClaimTypes.Sid);
 		if (string.IsNullOrEmpty(sessionId))
 			return null;
 
-		var authenticationTime = principal.FindFirstValue(JwtClaimTypes.AuthenticationTime);
+		var authenticationTime = principal.FindFirstValue(IanaClaimTypes.AuthTime);
 		if (string.IsNullOrEmpty(authenticationTime) ||
 		    !long.TryParse(authenticationTime, Integer, InvariantCulture, out var authenticationTimeSeconds))
 			return null;
@@ -207,15 +207,15 @@ public class AuthenticationSchemeAdapter(
 	{
 		authSession = authSession with
 		{
-			AuthContextClassRef = principal.FindFirstValue(JwtClaimTypes.AuthContextClassRef),
-			Email = principal.FindFirstValue(JwtClaimTypes.Email),
-			EmailVerified = bool.TryParse(principal.FindFirstValue(JwtClaimTypes.EmailVerified), out var emailVerified)
+			AuthContextClassRef = principal.FindFirstValue(IanaClaimTypes.Acr),
+			Email = principal.FindFirstValue(IanaClaimTypes.Email),
+			EmailVerified = bool.TryParse(principal.FindFirstValue(IanaClaimTypes.EmailVerified), out var emailVerified)
 				? emailVerified
 				: null,
 			SignedInAt = SignedInAtOf(principal),
 		};
 
-		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
+		if (principal.TryGetStringList(IanaClaimTypes.Amr, out var authenticationMethodReferences))
 			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
 
 		// Extract additional claims (exclude standard claims)
@@ -301,25 +301,25 @@ public class AuthenticationSchemeAdapter(
 		var claims = new List<Claim>
 		{
 			new(JwtClaimTypes.Subject, authSession.Subject),
-			new(JwtClaimTypes.SessionId, authSession.SessionId),
-			new(JwtClaimTypes.AuthenticationTime, authSession.AuthenticationTime.ToUnixTimeSeconds().ToString(InvariantCulture)),
+			new(IanaClaimTypes.Sid, authSession.SessionId),
+			new(IanaClaimTypes.AuthTime, authSession.AuthenticationTime.ToUnixTimeSeconds().ToString(InvariantCulture)),
 		};
 
 		// Add optional claims if present
 		if (!string.IsNullOrEmpty(authSession.AuthContextClassRef))
-			claims.Add(new (JwtClaimTypes.AuthContextClassRef, authSession.AuthContextClassRef));
+			claims.Add(new (IanaClaimTypes.Acr, authSession.AuthContextClassRef));
 
 		// AuthenticationMethodReferences in claims (needed for session validation)
 		if (authSession is { AuthenticationMethodReferences.Count: > 0 })
-			claims.Add(new (JwtClaimTypes.AuthenticationMethodReferences, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences)));
+			claims.Add(new (IanaClaimTypes.Amr, JsonSerializer.Serialize(authSession.AuthenticationMethodReferences)));
 
 		// Email claim from AuthSession (preserves external provider email or challenge email)
 		if (!string.IsNullOrEmpty(authSession.Email))
-			claims.Add(new (JwtClaimTypes.Email, authSession.Email));
+			claims.Add(new (IanaClaimTypes.Email, authSession.Email));
 
 		// EmailVerified claim from AuthSession
 		if (authSession.EmailVerified.HasValue)
-			claims.Add(new (JwtClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
+			claims.Add(new (IanaClaimTypes.EmailVerified, authSession.EmailVerified.Value.ToString().ToLowerInvariant()));
 
 		if (authSession.SignedInAt.HasValue)
 			claims.Add(new (SignedInAtClaimType, authSession.SignedInAt.Value.ToUnixTimeSeconds().ToString(InvariantCulture)));

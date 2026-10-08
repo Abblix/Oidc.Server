@@ -154,11 +154,11 @@ public class IdentityTokenServiceTests
 
         Assert.Equal(
             authenticationRequestId,
-            capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]!.GetValue<string>());
+            capturedToken!.Payload[OidcClaimTypes.AuthenticationRequestId]!.GetValue<string>());
 
         Assert.Equal(
             refreshTokenHash,
-            capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]!.GetValue<string>());
+            capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]!.GetValue<string>());
     }
 
     /// <summary>
@@ -193,8 +193,8 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.NotNull(capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]);
-        Assert.Null(capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]);
+        Assert.NotNull(capturedToken!.Payload[OidcClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]);
     }
 
     /// <summary>
@@ -232,8 +232,8 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]);
-        Assert.Null(capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]);
+        Assert.Null(capturedToken!.Payload[OidcClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]);
     }
 
     /// <summary>
@@ -519,7 +519,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash];
+        var cHash = capturedToken!.Payload[IanaClaimTypes.CHash];
         Assert.NotNull(cHash);
         Assert.IsType<string>(cHash?.GetValue<string>());
         Assert.NotEmpty(cHash!.GetValue<string>());
@@ -554,7 +554,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var atHash = capturedToken!.Payload[JwtClaimTypes.AccessTokenHash];
+        var atHash = capturedToken!.Payload[IanaClaimTypes.AtHash];
         Assert.NotNull(atHash);
         Assert.IsType<string>(atHash?.GetValue<string>());
         Assert.NotEmpty(atHash!.GetValue<string>());
@@ -588,8 +588,8 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash];
-        var atHash = capturedToken.Payload[JwtClaimTypes.AccessTokenHash];
+        var cHash = capturedToken!.Payload[IanaClaimTypes.CHash];
+        var atHash = capturedToken.Payload[IanaClaimTypes.AtHash];
 
         Assert.NotNull(cHash);
         Assert.NotNull(atHash);
@@ -633,8 +633,8 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash]?.GetValue<string>();
-        var atHash = capturedToken.Payload[JwtClaimTypes.AccessTokenHash]?.GetValue<string>();
+        var cHash = capturedToken!.Payload[IanaClaimTypes.CHash]?.GetValue<string>();
+        var atHash = capturedToken.Payload[IanaClaimTypes.AtHash]?.GetValue<string>();
         Assert.NotNull(cHash);
         Assert.NotNull(atHash);
         Assert.Equal(expectedHalfDigestBytes, Base64Url.DecodeFromChars(cHash).Length);
@@ -668,8 +668,8 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.False(capturedToken!.Payload.Json.ContainsKey(JwtClaimTypes.CodeHash));
-        Assert.False(capturedToken.Payload.Json.ContainsKey(JwtClaimTypes.AccessTokenHash));
+        Assert.False(capturedToken!.Payload.Json.ContainsKey(IanaClaimTypes.CHash));
+        Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.AtHash));
     }
 
     /// <summary>
@@ -892,7 +892,7 @@ public class IdentityTokenServiceTests
             {
                 UserInfo = new Dictionary<string, RequestedClaimDetails>
                 {
-                    [JwtClaimTypes.AuthContextClassRef] =
+                    [IanaClaimTypes.Acr] =
                         new() { Essential = true, Values = ["urn:example:loa3"] },
                 },
             },
@@ -1129,7 +1129,7 @@ public class IdentityTokenServiceTests
             {
                 IdToken = new Dictionary<string, RequestedClaimDetails>
                 {
-                    [JwtClaimTypes.AuthContextClassRef] = acr,
+                    [IanaClaimTypes.Acr] = acr,
                 },
             },
         };

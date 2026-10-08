@@ -595,6 +595,6 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
         var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
         Assert.Equal(AcmeOrdersResource, payload[IanaClaimTypes.Aud]!.GetValue<string>());
-        Assert.Contains(AcmeOrdersScope, payload[JwtClaimTypes.Scope]!.GetValue<string>().Split(' '));
+        Assert.Contains(AcmeOrdersScope, payload[IanaClaimTypes.Scope]!.GetValue<string>().Split(' '));
     }
 }

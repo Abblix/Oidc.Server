@@ -73,6 +73,7 @@
     <ProjectReference Include="..\Abblix.DocSamples\Abblix.DocSamples.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Jwt.Azure.UnitTests\Abblix.Jwt.Azure.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Jwt.UnitTests\Abblix.Jwt.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.UnitTests\Abblix.Oidc.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Jwt.Vault.UnitTests\Abblix.Jwt.Vault.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore.UnitTests\Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.E2E.TestHost\Abblix.Oidc.Server.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />

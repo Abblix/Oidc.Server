@@ -186,7 +186,7 @@ public class BackChannelLogoutProfileTests
     [Fact]
     public async Task ANonce_IsRefused()
     {
-        var compact = LogoutCompact(token => token.Payload.Nonce = "n-0S6_WzA2Mj");
+        var compact = LogoutCompact(token => token.Payload[IanaClaimTypes.Nonce] = "n-0S6_WzA2Mj");
 
         var result = await LogoutProfileValidator().ValidateAsync(
             compact, ReceiverOptions(), TestContext.Current.CancellationToken);
@@ -201,7 +201,7 @@ public class BackChannelLogoutProfileTests
         var compact = LogoutCompact(token =>
         {
             token.Payload.Json.Remove(JwtClaimTypes.Subject);
-            token.Payload.Json.Remove(JwtClaimTypes.SessionId);
+            token.Payload.Json.Remove(IanaClaimTypes.Sid);
         });
 
         var result = await LogoutProfileValidator().ValidateAsync(
@@ -216,7 +216,7 @@ public class BackChannelLogoutProfileTests
     {
         var compact = LogoutCompact(token =>
         {
-            token.Payload.Json[JwtClaimTypes.Events] = new JsonObject
+            token.Payload.Json[IanaClaimTypes.Events] = new JsonObject
             {
                 ["https://example.com/events/something-else"] = new JsonObject(),
             };

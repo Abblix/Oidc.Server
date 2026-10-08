@@ -5,10 +5,11 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using System.Text.Json.Nodes;
 using Xunit;
 
-namespace Abblix.Jwt.UnitTests;
+namespace Abblix.Oidc.UnitTests;
 
 /// <summary>
 /// Tests the accessors for the claims that bind an ID token to what was issued alongside it.

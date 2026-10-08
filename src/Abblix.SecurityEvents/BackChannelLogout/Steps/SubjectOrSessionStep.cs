@@ -34,7 +34,7 @@ public sealed class SubjectOrSessionStep : ISecurityEventTokenValidator
         context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
         var payload = context.Token!.Token.Payload;
-        var error = payload.Subject is not null || payload.SessionId is not null
+        var error = payload.Subject is not null || payload.Json.GetProperty<string>(IanaClaimTypes.Sid) is not null
             ? null
             : new SecurityEventTokenValidationError(
                 SecurityEventTokenErrorCode.Custom,

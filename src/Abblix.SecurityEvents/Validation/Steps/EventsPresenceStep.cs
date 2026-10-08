@@ -26,14 +26,14 @@ public sealed class EventsPresenceStep : ISecurityEventTokenValidator
     {
         context.Require(SecurityEventTokenValidationStates.Parsed);
 
-        var description = context.UnverifiedPayload!.Json[JwtClaimTypes.Events] switch
+        var description = context.UnverifiedPayload!.Json[IanaClaimTypes.Events] switch
         {
-            null => $"The claims carry no '{JwtClaimTypes.Events}' member (RFC 8417 Section 2.2).",
+            null => $"The claims carry no '{IanaClaimTypes.Events}' member (RFC 8417 Section 2.2).",
             JsonObject { Count: 0 } =>
-                $"The '{JwtClaimTypes.Events}' claim is empty; it must contain at least one member "
+                $"The '{IanaClaimTypes.Events}' claim is empty; it must contain at least one member "
                 + "(RFC 8417 Section 2).",
             JsonObject => null,
-            _ => $"The '{JwtClaimTypes.Events}' claim is not a JSON object (RFC 8417 Section 2.2).",
+            _ => $"The '{IanaClaimTypes.Events}' claim is not a JSON object (RFC 8417 Section 2.2).",
         };
 
         SecurityEventTokenValidationError? error;

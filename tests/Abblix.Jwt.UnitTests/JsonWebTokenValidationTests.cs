@@ -716,22 +716,19 @@ public partial class JsonWebTokenValidationTests
     }
 
     /// <summary>
-    /// Verifies that JWTs with all optional OIDC claims validate correctly.
-    /// Tests validation with: scope, client_id, sid, auth_time, nonce, amr, idp claims.
-    /// Ensures optional claims are properly preserved and accessible after validation.
-    /// Per OIDC Core spec, these claims are optional but commonly used in identity tokens.
+    /// Verifies that registered claims the validator gives no meaning to validate and survive validation unchanged:
+    /// scope, client_id, sid, auth_time, nonce and amr, which the protocols built on JWT read.
     /// </summary>
     [Fact]
     public async Task TokenWithAllOptionalClaims_Validates()
     {
         var token = CreateValidToken();
-        token.Payload.Scope = ["openid", "profile"];
-        token.Payload.ClientId = "client123";
-        token.Payload.SessionId = "session456";
-        token.Payload.AuthenticationTime = TimeProvider.System.GetUtcNow().AddMinutes(-5);
-        token.Payload.Nonce = "nonce789";
-        token.Payload.AuthenticationMethodReferences = ["pwd", "mfa"];
-        token.Payload.IdentityProvider = "https://idp.example.com";
+        token.Payload[IanaClaimTypes.Scope] = "openid profile";
+        token.Payload[IanaClaimTypes.ClientId] = "client123";
+        token.Payload[IanaClaimTypes.Sid] = "session456";
+        token.Payload.Json.SetUnixTimeSeconds(IanaClaimTypes.AuthTime, TimeProvider.System.GetUtcNow().AddMinutes(-5));
+        token.Payload[IanaClaimTypes.Nonce] = "nonce789";
+        token.Payload.Json.SetArrayOrStringOrNull(IanaClaimTypes.Amr, ["pwd", "mfa"]);
 
         var jwt = await IssueToken(token, SigningKey);
 
@@ -741,8 +738,8 @@ public partial class JsonWebTokenValidationTests
         var result = await validator.ValidateAsync(jwt, parameters);
 
         Assert.True(result.TryGetSuccess(out var validToken));
-        Assert.Equal(token.Payload.ClientId, validToken.Payload.ClientId);
-        Assert.Equal(token.Payload.Nonce, validToken.Payload.Nonce);
+        Assert.Equal("client123", validToken.Payload.Json.GetProperty<string>(IanaClaimTypes.ClientId));
+        Assert.Equal("nonce789", validToken.Payload.Json.GetProperty<string>(IanaClaimTypes.Nonce));
     }
 
     /// <summary>

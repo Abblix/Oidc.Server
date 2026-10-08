@@ -54,8 +54,8 @@ public class AuthSessionExtensionsTests
         Session(new JsonObject
         {
             [JwtClaimTypes.Subject] = "mallory",
-            [JwtClaimTypes.SessionId] = "forged-session",
-            [JwtClaimTypes.AuthenticationTime] = 1,
+            [IanaClaimTypes.Sid] = "forged-session",
+            [IanaClaimTypes.AuthTime] = 1,
         }).ApplyTo(payload);
 
         Assert.Equal(("alice", "alice-session", AuthenticatedAt),
@@ -87,7 +87,7 @@ public class AuthSessionExtensionsTests
     {
         var payload = IssuedPayload();
 
-        Session(new JsonObject { [JwtClaimTypes.Email] = "mallory@example.com" }).ApplyTo(payload);
+        Session(new JsonObject { [IanaClaimTypes.Email] = "mallory@example.com" }).ApplyTo(payload);
 
         Assert.Null(payload.Email);
     }
@@ -140,7 +140,7 @@ public class AuthSessionExtensionsTests
     {
         var payload = IssuedPayload();
         Session(new JsonObject { ["tenant"] = "acme" }).ApplyTo(payload);
-        payload.Json[JwtClaimTypes.GrantId] = "grant";
+        payload.Json[OidcClaimTypes.GrantId] = "grant";
         payload.Json[IanaClaimTypes.MayAct] = new JsonObject { [JwtClaimTypes.Subject] = "service" };
         new AuthorizationContext("client", [Scopes.OpenId], new RequestedClaims())
         {

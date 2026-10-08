@@ -299,7 +299,7 @@ public class AuthenticationSchemeAdapterTests
 		await _adapter.SignInAsync(Session(new JsonObject
 		{
 			[JwtClaimTypes.Subject] = JsonValue.Create("attacker"),
-			[JwtClaimTypes.SessionId] = JsonValue.Create("forged-session"),
+			[IanaClaimTypes.Sid] = JsonValue.Create("forged-session"),
 			["tenant"] = JsonValue.Create("acme"),
 		}));
 
@@ -573,8 +573,8 @@ public class AuthenticationSchemeAdapterTests
 
 	private static ClaimsPrincipal PrincipalWith(Claim extra) => new(new ClaimsIdentity([
 		new Claim(JwtClaimTypes.Subject, "user"),
-		new Claim(JwtClaimTypes.SessionId, "s"),
-		new Claim(JwtClaimTypes.AuthenticationTime, "1700000000"),
+		new Claim(IanaClaimTypes.Sid, "s"),
+		new Claim(IanaClaimTypes.AuthTime, "1700000000"),
 		extra,
 	], Scheme));
 
@@ -641,8 +641,8 @@ public class AuthenticationSchemeAdapterTests
 	{
 		var identity = new ClaimsIdentity([
 			new Claim(JwtClaimTypes.Subject, "user"),
-			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, "1700000000")
+			new Claim(IanaClaimTypes.Sid, "s"),
+			new Claim(IanaClaimTypes.AuthTime, "1700000000")
 		], "TestProvider");
 
 		var properties = new AuthenticationProperties();
@@ -689,8 +689,8 @@ public class AuthenticationSchemeAdapterTests
 	public async Task AuthenticateAsync_CookieWithoutSubject_ReturnsNull()
 	{
 		var identity = new ClaimsIdentity([
-			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, "1700000000")
+			new Claim(IanaClaimTypes.Sid, "s"),
+			new Claim(IanaClaimTypes.AuthTime, "1700000000")
 		], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 
@@ -702,8 +702,8 @@ public class AuthenticationSchemeAdapterTests
 	{
 		var identity = new ClaimsIdentity([
 			new Claim(JwtClaimTypes.Subject, "user"),
-			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, "not-a-number")
+			new Claim(IanaClaimTypes.Sid, "s"),
+			new Claim(IanaClaimTypes.AuthTime, "not-a-number")
 		], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 
@@ -715,8 +715,8 @@ public class AuthenticationSchemeAdapterTests
 	{
 		var identity = new ClaimsIdentity([
 			new Claim(JwtClaimTypes.Subject, "user"),
-			new Claim(JwtClaimTypes.SessionId, "s"),
-			new Claim(JwtClaimTypes.AuthenticationTime, long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture))
+			new Claim(IanaClaimTypes.Sid, "s"),
+			new Claim(IanaClaimTypes.AuthTime, long.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture))
 		], Scheme);
 		SetupAuthenticate(new ClaimsPrincipal(identity));
 

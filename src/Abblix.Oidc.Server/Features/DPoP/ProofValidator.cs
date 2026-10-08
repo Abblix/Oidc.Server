@@ -6,9 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Buffers.Text;
-using System.Security.Cryptography;
-using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -87,7 +84,7 @@ internal sealed class ProofValidator(
 
         var error = ValidateJwkShape(jwt.Header, out var jwk) ??
                     ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
-                    ValidateAccessTokenBinding(jwt.Payload, accessToken) ??
+                    ProofBindingClaims.AccessToken(jwt.Payload, accessToken) ??
                     TryGetJti(jwt.Payload, out jwtId);
 
         if (error != null)
@@ -147,8 +144,8 @@ internal sealed class ProofValidator(
     {
         issuedAt = default;
 
-        var error = ValidateHttpMethod(payload, httpMethod) ??
-                    ValidateHttpUri(payload, requestUri) ??
+        var error = ProofBindingClaims.HttpMethod(payload, httpMethod) ??
+                    ProofBindingClaims.HttpUri(payload, requestUri) ??
                     TryGetIat(payload, out issuedAt);
 
         if (error != null)
@@ -161,54 +158,6 @@ internal sealed class ProofValidator(
             return new ProofError(
                 ProofErrorReasons.IssuedAtOutOfWindow,
                 $"iat is outside the {tolerance.TotalSeconds:0}-second tolerance window.");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Compares the proof's <c>htm</c> claim against the current request method
-    /// byte-exact (RFC 9449 section 4.3).
-    /// </summary>
-    private static ProofError? ValidateHttpMethod(JsonWebTokenPayload payload, string httpMethod)
-    {
-        var actualHttpMethod = payload.DPoPHttpMethod;
-        if (actualHttpMethod != httpMethod)
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpMethodMismatch,
-                $"{JwtClaimTypes.DPoPHttpMethod} '{actualHttpMethod ?? "<missing>"}' does not match request method '{httpMethod}'.");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Compares the proof's <c>htu</c> claim against the current request URI after
-    /// RFC 3986 section 6.2 canonicalisation.
-    /// </summary>
-    private static ProofError? ValidateHttpUri(JsonWebTokenPayload payload, Uri requestUri)
-    {
-        var httpUri = payload.DPoPHttpUri;
-        if (httpUri is null)
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpUriMissing,
-                $"{JwtClaimTypes.DPoPHttpUri} claim is required.");
-        }
-
-        if (!Uri.TryCreate(httpUri, UriKind.Absolute, out var uri))
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpUriInvalid,
-                $"{JwtClaimTypes.DPoPHttpUri} is not a valid absolute URI.");
-        }
-
-        if (uri.Normalize() != requestUri.Normalize())
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpUriMismatch,
-                $"{JwtClaimTypes.DPoPHttpUri} does not match the request URI after canonicalisation.");
         }
 
         return null;
@@ -236,34 +185,6 @@ internal sealed class ProofValidator(
             return new ProofError(ProofErrorReasons.IssuedAtMissing, "iat claim is required.");
 
         issuedAt = iatNullable.Value;
-        return null;
-    }
-
-    /// <summary>
-    /// When the proof accompanies an access token, verifies the <c>ath</c> claim equals
-    /// <c>Base64Url(SHA-256(access_token))</c> per RFC 9449 section 4.2.
-    /// </summary>
-    private static ProofError? ValidateAccessTokenBinding(JsonWebTokenPayload payload, string? accessToken)
-    {
-        if (accessToken is null)
-            return null;
-
-        var accessTokenHash = payload.DPoPAccessTokenHash;
-        if (accessTokenHash is null)
-        {
-            return new ProofError(
-                ProofErrorReasons.AccessTokenHashMissing,
-                $"{JwtClaimTypes.DPoPAccessTokenHash} claim is required when an access token is presented.");
-        }
-
-        var expected = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(accessToken)));
-        if (accessTokenHash != expected)
-        {
-            return new ProofError(
-                ProofErrorReasons.AccessTokenHashMismatch,
-                $"{JwtClaimTypes.DPoPAccessTokenHash} does not match the access-token hash.");
-        }
-
         return null;
     }
 

@@ -92,7 +92,7 @@ public static class AuthorizationContextExtensions
             ? audienceParts.ToArray()
             : [payload.Issuer.NotNull(nameof(payload.Issuer))];
 
-        payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
+        payload[OidcClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
             context.RequestedClaims,
             JsonSerializerOptions);
 
@@ -158,9 +158,9 @@ public static class AuthorizationContextExtensions
         var cnf = payload.Confirmation;
 
         return new AuthorizationContext(
-            payload.ClientId.NotNull(nameof(payload.ClientId)),
-            payload.Scope.NotNull(nameof(payload.Scope)).ToArray(),
-            payload[JwtClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions),
+            payload.ClientId.NotNull(IanaClaimTypes.ClientId),
+            payload.Scope.NotNull(IanaClaimTypes.Scope).ToArray(),
+            payload[OidcClaimTypes.RequestedClaims].Deserialize<RequestedClaims>(JsonSerializerOptions),
             resources)
         {
             Nonce = payload.Nonce,

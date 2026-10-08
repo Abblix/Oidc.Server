@@ -823,4 +823,23 @@ public static class IanaClaimTypes
     /// for a transaction, enabling fine-grained access control and tailored authorization experiences.
     /// </remarks>
     public const string AuthorizationDetails = "authorization_details";
+
+    // RFC9449, Section 12.7 - JSON Web Token Claims Registration
+
+    /// <summary>
+    /// The HTTP method of the request a DPoP proof is bound to (RFC 9449 section 4.2).
+    /// </summary>
+    public const string Htm = "htm";
+
+    /// <summary>
+    /// The HTTP target URI, without query and fragment, of the request a DPoP proof is bound to
+    /// (RFC 9449 section 4.2).
+    /// </summary>
+    public const string Htu = "htu";
+
+    /// <summary>
+    /// The hash of the access token a DPoP proof accompanies (RFC 9449 section 4.2): the base64url encoding of the
+    /// SHA-256 hash of the ASCII encoding of the access token's value.
+    /// </summary>
+    public const string Ath = "ath";
 }

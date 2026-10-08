@@ -213,7 +213,7 @@ public class TransmitterToReceiverScenarioTests
                 .PadRight((payloadSegment.Length + 3) & ~3, '=')));
 
         var statement = claims.RootElement
-            .GetProperty(JwtClaimTypes.Events)
+            .GetProperty(IanaClaimTypes.Events)
             .GetProperty(MembershipChanged);
 
         Assert.Equal("iss_sub", statement.GetProperty("subject").GetProperty("format").GetString());
