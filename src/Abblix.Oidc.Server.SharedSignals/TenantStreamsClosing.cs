@@ -20,10 +20,11 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <remarks>
 /// Runs inside the released tenant, in the definition last served for that creation, so it reaches that creation's
 /// streams in the store they were kept in and no other's: a tenant created again under the same id keeps its own.
-/// Each stream is deleted on its own, so one that fails is logged and the others are still deleted. The store and the
-/// management of streams are resolved when a tenant is closed rather than when the catalog of tenants is built: signing
-/// a tenant's events depends on that catalog, and a store of declared streams cannot be built outside a tenant, which
-/// would hide the startup check that refuses it.
+/// Each stream is deleted on its own, so one that fails is logged, the others are still deleted and the tenant is
+/// reported not closed; once the token is canceled, the streams and tenants not reached are left and reported. The
+/// store and the management of streams are resolved when a tenant is closed rather than when the catalog of tenants
+/// is built: signing a tenant's events depends on that catalog, and a store of declared streams cannot be built
+/// outside a tenant, which would hide the startup check that refuses it.
 /// </remarks>
 /// <param name="logger">Records a stream that could not be deleted.</param>
 /// <param name="serviceProvider">Resolves the stream store and the management of streams.</param>

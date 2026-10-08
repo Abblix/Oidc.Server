@@ -125,6 +125,30 @@ public sealed class SharedSignalsTenantReleaseTests
         Assert.Single(logs.EventIds, TenantNotClosed);
     }
 
+    /// <summary>
+    /// A closing stopped before it began deletes no stream and reports the tenant not closed.
+    /// </summary>
+    [Fact]
+    public async Task AClosingAlreadyStopped_DeletesNothing_AndReportsTheTenant()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(store, new FakeTimeProvider());
+        using var created = await ClientOf(app, "acme").PostAsJsonAsync(
+            "/tenants/acme" + StreamPath,
+            new CreateStreamRequest { EventsRequested = [MembershipChanged] },
+            ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var acme = (await app.Services.GetRequiredService<StoreTenantCatalog>().FindByIdAsync("acme", ct))!;
+        var closing = app.Services.GetServices<ITenantClosing>().OfType<TenantStreamsClosing>().Single();
+
+        var failures = await closing.CloseAsync([acme], new CancellationToken(canceled: true));
+
+        Assert.IsType<OperationCanceledException>(Assert.Single(failures).Value);
+        Assert.Single(await StreamsOfAsync(app, acme, ct));
+    }
+
     private static async Task<IReadOnlyList<StreamState>> StreamsOfAsync(
         WebApplication app,
         TenantDefinition tenant,

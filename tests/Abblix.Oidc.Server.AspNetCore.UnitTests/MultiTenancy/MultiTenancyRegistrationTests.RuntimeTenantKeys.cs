@@ -308,15 +308,38 @@ public partial class MultiTenancyRegistrationTests
         using var provider = MintingRealKeys(store);
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
         var keyStore = (MemoryKeyRingStore)provider.GetRequiredService<IKeyRingStore>();
-        keyStore.FailingRemovals = "acme.";
+        keyStore.FailingRemovals = "globex.";
         var closing = provider.GetServices<ITenantClosing>().OfType<TenantKeyRingClosing>().Single();
 
         var failures = await closing.CloseAsync([Acme, globex], TestContext.Current.CancellationToken);
 
-        Assert.Same(Acme, Assert.Single(failures).Key);
+        Assert.Same(globex, Assert.Single(failures).Key);
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(left, IsOf("globex"));
+        Assert.DoesNotContain(left, IsOf("acme"));
+    }
+
+    /// <summary>
+    /// A deletion stopped before it began asks the store nothing, so a store that ignores the token keeps every
+    /// partition, and each tenant is reported not closed.
+    /// </summary>
+    [Fact]
+    public async Task ADeletionAlreadyStopped_RemovesNothing_AndReportsEveryTenant()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        var closing = provider.GetServices<ITenantClosing>().OfType<TenantKeyRingClosing>().Single();
+
+        var failures = await closing.CloseAsync([Acme, globex], new CancellationToken(canceled: true));
+
+        Assert.Equal(2, failures.Count);
+        Assert.All(failures.Values, failure => Assert.IsType<OperationCanceledException>(failure));
         var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
         Assert.Contains(left, IsOf("acme"));
-        Assert.DoesNotContain(left, IsOf("globex"));
+        Assert.Contains(left, IsOf("globex"));
     }
 
     private static Predicate<StoredKey> IsOf(string partition)
