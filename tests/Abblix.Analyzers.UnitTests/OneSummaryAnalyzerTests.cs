@@ -35,6 +35,20 @@ public class OneSummaryAnalyzerTests
     }
 
     /// <summary>
+    /// Each part of a partial method is a symbol of its own, read on its own: two summaries on the declaring part are
+    /// reported, though the compiler keeps only the implementing part's, since they are text nobody will see.
+    /// </summary>
+    [Fact]
+    public async Task TwoSummariesOnThePartialMethodsDeclaration_AreReported()
+    {
+        const string source =
+            "partial class A\n{\n    /// <summary>First.</summary>\n    /// <summary>Second.</summary>\n    partial void M();\n\n" +
+            "    /// <summary>Implemented.</summary>\n    partial void M() { }\n}";
+
+        Assert.Equal(2, (await AnalyzerRun.DiagnosticsOf(new OneSummaryAnalyzer(), source)).Length);
+    }
+
+    /// <summary>
     /// A diagnostic marks the summary itself, not the declaration it documents.
     /// </summary>
     [Fact]
