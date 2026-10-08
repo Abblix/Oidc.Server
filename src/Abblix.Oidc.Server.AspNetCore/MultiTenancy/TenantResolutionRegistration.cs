@@ -32,8 +32,10 @@ internal static class TenantResolutionRegistration
         services.TryAddSingleton<ITenantManager, TenantManager>();
 
         // A server minting its keys keeps a part of its key ring for each creation of each tenant served, named as
-        // its issuer settings name it, so no two tenants share a key and a tenant gained at runtime has one
+        // its issuer settings name it, so no two tenants share a key and a tenant gained at runtime has one; the part
+        // of a released tenant is deleted from the store
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantOpening, TenantKeyRingOpening>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantClosing, TenantKeyRingClosing>());
         services.TryAddSingleton<IKeyRingPartitions, TenantKeyRingPartitions>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantCatalogRefreshService>());
