@@ -211,6 +211,55 @@ public partial class MultiTenancyRegistrationTests
         Assert.Contains(left, IsOf("globex"));
     }
 
+    /// <summary>
+    /// A creation of a tenant released while a later creation under the same id is served loses its keys alone: each
+    /// creation mints into a partition of its own generation.
+    /// </summary>
+    [Fact]
+    public async Task TheKeysOfAReleasedCreation_AreDeleted_AndTheNextCreationsStay()
+    {
+        var first = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "1" };
+        var second = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "2" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(first, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [new StoredTenant(second, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(left, IsOf("acme~1"));
+        Assert.Contains(left, IsOf("acme~2"));
+    }
+
+    /// <summary>
+    /// A tenant refused for an id that spells another tenant's partition is never opened, so releasing it deletes
+    /// nothing, and the tenant whose partition its id spells keeps its keys.
+    /// </summary>
+    [Fact]
+    public async Task ReleasingATenantWhoseIdSpellsAnothersPartition_LeavesThatPartitionsKeys()
+    {
+        var live = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "1" };
+        var spelling = new TenantDefinition { Id = "acme~1", Issuer = "https://auth.example.com/tenants/spelling" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(live, "1"), new StoredTenant(spelling, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [new StoredTenant(live, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
+    }
+
     private static Predicate<StoredKey> IsOf(string partition)
         => entry => entry.Id.StartsWith(partition + ".", StringComparison.Ordinal);
 
