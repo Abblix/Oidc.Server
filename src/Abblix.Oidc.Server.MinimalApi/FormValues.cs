@@ -99,8 +99,8 @@ internal static class FormValues
 
     /// <summary>
     /// The posted form, or null when the request declares none or declares one the server cannot read, such as one
-    /// past the form limits: the model records the latter and the validation filter refuses it, as the MVC host
-    /// refuses a form its value provider cannot read.
+    /// past the form limits or one whose body fails to arrive: the model records the latter and the validation filter
+    /// refuses it, as the MVC host refuses a form its value provider cannot read for the same two exceptions.
     /// </summary>
     public static async Task<IFormCollection?> ReadFormAsync(HttpRequest request, CancellationToken cancellationToken)
     {
@@ -111,7 +111,7 @@ internal static class FormValues
         {
             return await request.ReadFormAsync(cancellationToken);
         }
-        catch (InvalidDataException)
+        catch (Exception exception) when (exception is InvalidDataException or IOException)
         {
             return null;
         }

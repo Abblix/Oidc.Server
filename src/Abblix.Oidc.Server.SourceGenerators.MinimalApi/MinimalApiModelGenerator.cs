@@ -362,6 +362,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         // A repeated parameter such as resource binds to an array without a wire-format marker and may repeat.
         private readonly List<string> _singleValuedWireNames = [];
         private bool _readsWire;
+        private readonly List<(string WireName, string Member)> _wireMembers = [];
 
         public GenerationResult Emit()
         {
@@ -476,6 +477,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 property.Name,
                 $"{known.FormValues}.Read(() => {GetBindExpression(property, wireName)}, {Literal(wireName)}, malformed)"));
             _readsWire = true;
+            _wireMembers.Add((wireName, property.Name));
 
             if (property.Type is not IArrayTypeSymbol || GetWireFormatMarkerName(property) != null)
                 _singleValuedWireNames.Add(wireName);
@@ -493,6 +495,15 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             _writer.AppendLine();
             _writer.AppendLine("\t/// <inheritdoc/>");
             _writer.AppendLine("\tpublic bool FormUnreadable { get; init; }");
+            _writer.AppendLine();
+            _writer.AppendLine(
+                $"\tstring {known.ValidatableModel}.MemberOf(string parameter) => parameter switch");
+            _writer.AppendLine("\t{");
+            foreach (var (wireName, member) in _wireMembers)
+                _writer.AppendLine($"\t\t{Literal(wireName)} => nameof({member}),");
+            _writer.AppendLine(
+                "\t\t_ => throw new global::System.ArgumentOutOfRangeException(nameof(parameter), parameter, null),");
+            _writer.AppendLine("\t};");
             _writer.AppendLine();
         }
 

@@ -35,4 +35,9 @@ internal interface IValidatableModel
     /// the filter refuses as malformed.
     /// </summary>
     bool FormUnreadable { get; }
+
+    /// <summary>
+    /// The model property that <paramref name="parameter"/>, a parameter name as sent, binds to.
+    /// </summary>
+    string MemberOf(string parameter);
 }
