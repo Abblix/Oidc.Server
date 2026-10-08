@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -21,7 +22,7 @@ namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 /// <param name="issuer">Tells when the issuer a response is for is gone, and its cached response with it.</param>
 public class CheckSessionResponseCachingDecorator(
     ICheckSessionResponseFormatter inner,
-    ICheckSessionResponseCache cache,
+    ICheckSessionResponseCache<ActionResult> cache,
     IIssuerSettings issuer): ICheckSessionResponseFormatter
 {
     /// <summary>

@@ -6,24 +6,25 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 
-namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
+namespace Abblix.Oidc.Server.AspNetCore.SessionManagement;
 
 /// <summary>
-/// In-memory cache for formatted check-session results. The result objects are stateless (they hold only the HTML
-/// template and mint a fresh nonce per execution), so caching them across requests is safe.
+/// Keeps the formatted check-session page of each issuer in memory until that issuer is released.
 /// </summary>
-public class CheckSessionResponseCache(IOptions<MemoryCacheOptions> cacheOptions) : ICheckSessionResponseCache
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+/// <param name="cacheOptions">The options to configure the memory cache.</param>
+public class CheckSessionResponseCache<TResult>(IOptions<MemoryCacheOptions> cacheOptions)
+    : ICheckSessionResponseCache<TResult> where TResult : class
 {
     private readonly MemoryCache _cache = new(cacheOptions);
 
     /// <inheritdoc />
-    public Task<IResult> GetOrAddAsync(object key, Func<Task<IResult>> factory, CancellationToken released)
-        => _cache.GetOrCreateAsync<IResult>(key, entry =>
+    public Task<TResult> GetOrAddAsync(object key, Func<Task<TResult>> factory, CancellationToken released)
+        => _cache.GetOrCreateAsync<TResult>(key, entry =>
         {
             entry.AddExpirationToken(new CancellationChangeToken(released));
             return factory();
