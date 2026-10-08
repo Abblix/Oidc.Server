@@ -24,8 +24,9 @@ dotnet_diagnostic.S104.severity = warning
 dotnet_diagnostic.S138.severity = warning
 dotnet_diagnostic.S1541.severity = warning
 dotnet_diagnostic.S1200.severity = warning
-dotnet_diagnostic.S1067.severity = warning
 dotnet_diagnostic.S134.severity = warning
+# Expression complexity is held by ABX1005 from src/Abblix.Analyzers rather than S1067, which also counts the
+# cases a pattern lists with `or` and `and` and so splits an exhaustive switch into arms repeating one answer.
 
 # One Sonar rule CRASHES on a union declaration rather than reporting anything: the analyzer throws
 # NullReferenceException, which arrives as AD0001 and fails the build here, where warnings are errors.
