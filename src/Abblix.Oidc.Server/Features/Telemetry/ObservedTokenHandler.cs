@@ -10,9 +10,9 @@ using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
-/// <summary>
+/// <remarks>
 /// The token endpoint's span names the request's grant type, when the server supports it as spelled.
-/// </summary>
+/// </remarks>
 internal sealed partial class ObservedTokenHandler
 {
     private partial (string Key, string? Value) RequestTagOf(

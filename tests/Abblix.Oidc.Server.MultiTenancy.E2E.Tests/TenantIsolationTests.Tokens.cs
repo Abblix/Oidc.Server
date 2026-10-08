@@ -15,10 +15,10 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
-/// <summary>
+/// <remarks>
 /// A token one tenant issued is honoured by no other: the other tenant neither reports it active, nor revokes it, nor
 /// refreshes it, though the same client id and secret authenticate at both.
-/// </summary>
+/// </remarks>
 public sealed partial class TenantIsolationTests
 {
     private const string IntrospectionPath = "/connect/introspect";

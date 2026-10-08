@@ -7,7 +7,6 @@
 
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -18,19 +17,21 @@ namespace Abblix.Analyzers;
 /// </summary>
 /// <remarks>
 /// A member inserted between an existing summary and the member it documents takes that summary along with its
-/// own, and the member it was taken from is left with none. The compiler reports neither, and the published API
-/// reference then shows the wrong text on one member and nothing on the other. Read from the documentation
-/// comment structure the compiler parses, so a summary split across two comment blocks, one after a blank line,
-/// is counted the same way, and the word written inside a code sample or a string is not.
+/// own, and the member it was taken from is left with none; a partial type documented in two parts carries both. The
+/// compiler reports neither and writes every summary into the documentation file, so the published API reference
+/// shows two texts on one declaration and, in the first case, nothing on the other. The summaries are counted per
+/// declared symbol across all its parts, read from the documentation comment structure the compiler parses, so two
+/// comment blocks, one after a blank line, count the same as one, and the word written inside a code sample or a
+/// string does not count.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class OneSummaryAnalyzer : DiagnosticAnalyzer
 {
-    /// <summary>The diagnostic reported on every summary after the first one of a declaration.</summary>
+    /// <summary>The diagnostic reported on every summary of a declaration that carries more than one.</summary>
     public static readonly DiagnosticDescriptor Rule = new(
         id: "ABX1006",
         title: "A declaration has more than one summary",
-        messageFormat: "Keep one <summary>: a second one usually belongs to the declaration below or above this one",
+        messageFormat: "'{0}' carries {1} summaries across its declaration: keep the one that describes it",
         category: "Abblix.Conventions",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -41,33 +42,53 @@ public sealed class OneSummaryAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
-        // Generated code is left alone: nobody reads or edits that output, and its documentation is not published.
+        // A declaration a generator writes alone is left to it, since nobody edits that output. A symbol declared by
+        // hand too still carries its generated parts, whose summaries the compiler joins to the others, so they count,
+        // and the finding lands on the parts somebody edits
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
-        context.RegisterSyntaxTreeAction(Analyze);
+        context.RegisterSymbolAction(
+            Analyze,
+            SymbolKind.NamedType,
+            SymbolKind.Method,
+            SymbolKind.Property,
+            SymbolKind.Field,
+            SymbolKind.Event);
     }
 
-    private static void Analyze(SyntaxTreeAnalysisContext context)
+    private static void Analyze(SymbolAnalysisContext context)
     {
-        // A documentation comment is leading trivia of the declaration's first token, so every summary that token
-        // carries, in however many comment blocks, documents one declaration.
-        var tokens = context.Tree.GetRoot(context.CancellationToken)
-            .DescendantTokens()
-            .Where(token => token.HasStructuredTrivia);
+        var summaries = context.Symbol.DeclaringSyntaxReferences
+            .Select(reference => DocumentedDeclarationOf(reference.GetSyntax(context.CancellationToken)))
+            .OfType<SyntaxNode>()
+            .SelectMany(SummariesOf)
+            .ToArray();
 
-        foreach (var token in tokens)
+        if (summaries.Length < 2)
+            return;
+
+        foreach (var summary in summaries)
         {
-            var extraSummaries = token.LeadingTrivia
-                .Select(trivia => trivia.GetStructure())
-                .OfType<DocumentationCommentTriviaSyntax>()
-                .SelectMany(comment => comment.Content)
-                .Where(IsSummary)
-                .Skip(1);
-
-            foreach (var summary in extraSummaries)
-                context.ReportDiagnostic(Diagnostic.Create(Rule, summary.GetLocation()));
+            context.ReportDiagnostic(
+                Diagnostic.Create(Rule, summary.GetLocation(), context.Symbol.Name, summaries.Length));
         }
     }
+
+    // A field or an event field shares its declaration, and the documentation on it, with the other variables it
+    // declares, so the declaration is read for the first of them alone
+    private static SyntaxNode? DocumentedDeclarationOf(SyntaxNode node) => node switch
+    {
+        VariableDeclaratorSyntax { Parent: VariableDeclarationSyntax { Parent: BaseFieldDeclarationSyntax field } } declarator
+            => field.Declaration.Variables[0] == declarator ? field : null,
+        _ => node,
+    };
+
+    private static IEnumerable<XmlNodeSyntax> SummariesOf(SyntaxNode declaration)
+        => declaration.GetLeadingTrivia()
+            .Select(trivia => trivia.GetStructure())
+            .OfType<DocumentationCommentTriviaSyntax>()
+            .SelectMany(comment => comment.Content)
+            .Where(IsSummary);
 
     private static bool IsSummary(XmlNodeSyntax node) => node switch
     {
