@@ -145,6 +145,31 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, delegated)).StatusCode);
     }
 
+    /// <summary>
+    /// Revoking a refresh token at the revocation endpoint revokes its grant, so an access token of the same grant is
+    /// refused too (RFC 7009 section 2.1).
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_refresh_token_refuses_the_access_tokens_of_its_grant()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var accessToken = initial[ResponseParameters.AccessToken]!.GetValue<string>();
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, accessToken)).StatusCode);
+
+        var revoked = await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
+        {
+            [RevocationRequest.Parameters.Token] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, accessToken)).StatusCode);
+    }
+
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {

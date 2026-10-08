@@ -24,10 +24,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </remarks>
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
 /// <param name="cutoffChecker">Decides whether a revocation cutoff reaches this token.</param>
+/// <param name="grantRevocation">Revokes the grant of a replayed refresh token.</param>
 /// <param name="innerValidator">The inner validator for initial token validation.</param>
 public class TokenStatusValidatorDecorator(
 	ITokenRegistry tokenRegistry,
 	IRevocationCutoffChecker cutoffChecker,
+	GrantRevocation grantRevocation,
 	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
 	/// <summary>
@@ -134,8 +136,7 @@ public class TokenStatusValidatorDecorator(
 			case JsonWebTokenStatus.Used:
 				// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
 				// so revoke the whole grant family; the active token dies with it on its next use.
-				if (token.Payload is { GrantId: { } grantId, ExpiresAt: { } grantExpiresAt })
-					await tokenRegistry.SetStatusAsync(grantId, JsonWebTokenStatus.Revoked, grantExpiresAt);
+				await grantRevocation.RevokeAsync(token.Payload);
 
 				return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
 

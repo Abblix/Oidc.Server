@@ -140,6 +140,7 @@ public class TokenStatusCoverageTests
                 Options.Create(new OidcOptions()),
                 clients.Object,
                 new SubjectTypeConverter()),
+            new GrantRevocation(registry.Object, clients.Object),
             inner.Object);
 
         var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters());

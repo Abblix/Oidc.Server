@@ -114,6 +114,7 @@ public static class TokenServiceCollectionExtensions
         services.TryAddSingleton<IRevocationCutoffRegistry, RevocationCutoffRegistry>();
         services.TryAddSingleton<IRevocationCutoffChecker, RevocationCutoffChecker>();
         services.TryAddSingleton<ITokenRevoker, TokenRevoker>();
+        services.TryAddSingleton<GrantRevocation>();
         services.TryAddSingleton(TimeProvider.System);
         return services
             .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>();
