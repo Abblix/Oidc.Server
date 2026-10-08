@@ -28,7 +28,8 @@ public class FormValuesReadFormTests
     {
         var form = await FormValues.ReadFormAsync(RequestWith(new MemoryStream(Encoding.ASCII.GetBytes("a=1&b=2"))), TestContext.Current.CancellationToken);
 
-        Assert.Equal("1", form!["a"].ToString());
+        Assert.NotNull(form);
+        Assert.Equal("1", form["a"].ToString());
     }
 
     [Fact]
