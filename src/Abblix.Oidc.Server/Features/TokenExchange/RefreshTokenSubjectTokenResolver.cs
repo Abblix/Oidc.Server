@@ -105,6 +105,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
             JwtTokenType = jwt.Header.Type,
 
             GrantId = jwt.Payload.GrantId,
+            ExpiresAt = jwt.Payload.ExpiresAt,
         };
     }
 }

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
@@ -29,12 +30,15 @@ public class RevocationRequestProcessorTests
     private readonly Mock<ITokenRegistry> _tokenRegistry;
     private readonly FakeTimeProvider _clock;
     private readonly RevocationRequestProcessor _processor;
+    private readonly Mock<IClientInfoProvider> _clients;
 
     public RevocationRequestProcessorTests()
     {
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
-        _processor = new RevocationRequestProcessor(_tokenRegistry.Object, _clock);
+        _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        _processor = new RevocationRequestProcessor(
+            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object), _clock);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()

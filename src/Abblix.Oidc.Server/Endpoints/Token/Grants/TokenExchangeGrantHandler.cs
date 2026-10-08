@@ -513,7 +513,11 @@ public class TokenExchangeGrantHandler(
         // refresh token family and a replay revoking the family refuses it too. The subject_token's family and no
         // other, even where an actor_token was presented as well: a token names one family, and the one the
         // issued token acts under is the end user's.
-        return new AuthorizedGrant(authSession, authContext) { GrantId = subject.GrantId };
+        return new AuthorizedGrant(authSession, authContext)
+        {
+            GrantId = subject.GrantId,
+            ExpiresNoLaterThan = subject.GrantId is not null ? subject.ExpiresAt : null,
+        };
     }
 
     /// <summary>

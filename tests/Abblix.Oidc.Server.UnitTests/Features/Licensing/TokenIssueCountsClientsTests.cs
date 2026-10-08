@@ -104,7 +104,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     options,
                     settings,
                     new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()));
-                return clientId => access.CreateAccessTokenAsync(session, Context(clientId), client, grantId: null);
+                return clientId => access.CreateAccessTokenAsync(session, Context(clientId), client, grantId: null, null);
 
             case IdentityToken:
                 var clientFormatter = new Mock<IClientJwtFormatter>();

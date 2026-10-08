@@ -69,4 +69,10 @@ public sealed record SubjectTokenContext(
     /// subject_token carries no family.
     /// </summary>
     public string? GrantId { get; init; }
+
+    /// <summary>
+    /// When the subject_token expires, so a token exchanged from it within a refresh token family does not outlive
+    /// it, and with it the revocation of that family. <c>null</c> when the subject_token states no expiry.
+    /// </summary>
+    public DateTimeOffset? ExpiresAt { get; init; }
 }

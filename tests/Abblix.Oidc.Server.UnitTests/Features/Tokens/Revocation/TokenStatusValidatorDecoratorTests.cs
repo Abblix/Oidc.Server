@@ -67,6 +67,7 @@ public class TokenStatusValidatorDecoratorTests
         _decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
+            new GrantRevocation(_registry.Object, _clients.Object),
             _inner.Object);
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
@@ -508,6 +509,7 @@ public class TokenStatusValidatorDecoratorTests
         var decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
+            new GrantRevocation(_registry.Object, _clients.Object),
             _inner.Object);
 
         SetupInnerReturns(new JsonWebToken

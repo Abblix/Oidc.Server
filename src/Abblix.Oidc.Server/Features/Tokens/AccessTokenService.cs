@@ -71,6 +71,8 @@ internal class AccessTokenService(
 	/// <param name="clientInfo">Client-specific information, including token expiration settings and required JWT
 	/// algorithms.</param>
 	/// <param name="grantId">The refresh token family this access token belongs to, or <c>null</c>.</param>
+	/// <param name="expiresNoLaterThan">The latest moment the token may expire, or <c>null</c> when only the client's
+	/// access token lifetime bounds it.</param>
 	/// <returns>A task that resolves to an <see cref="EncodedJsonWebToken"/>, representing the newly minted access
 	/// token.</returns>
 	/// <remarks>
@@ -82,7 +84,8 @@ internal class AccessTokenService(
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
-		string? grantId)
+		string? grantId,
+		DateTimeOffset? expiresNoLaterThan)
 	{
 		// Four claims answer four different questions, and keeping them apart is what stops any one of them
 		// from being asked to carry two meanings at once:
@@ -119,7 +122,9 @@ internal class AccessTokenService(
 				JwtId = tokenIdGenerator.GenerateTokenId(),
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
-				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,
+				ExpiresAt = expiresNoLaterThan is { } latest && latest < issuedAt + clientInfo.AccessTokenExpiresIn
+					? latest
+					: issuedAt + clientInfo.AccessTokenExpiresIn,
 				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer(), issuerSettings, authContext.ClientId),
 				GrantId = grantId,
 			},

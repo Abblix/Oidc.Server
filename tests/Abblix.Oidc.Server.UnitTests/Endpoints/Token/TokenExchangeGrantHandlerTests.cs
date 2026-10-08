@@ -179,6 +179,33 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal(grantId, grant.GrantId);
     }
 
+    /// <summary>
+    /// A token exchanged within a refresh token family expires no later than the subject_token, so the family's
+    /// revocation outlasts it; one exchanged outside any family keeps its client's lifetime.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_the_subject_token", true)]
+    [InlineData(null, false)]
+    public async Task ExchangedGrant_WithinAFamily_ExpiresNoLaterThanTheSubjectToken(string? grantId, bool capped)
+    {
+        var subjectExpiresAt = new DateTimeOffset(2024, 1, 15, 13, 0, 0, TimeSpan.Zero);
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            GrantId = grantId,
+            ExpiresAt = subjectExpiresAt,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(capped ? subjectExpiresAt : null, grant.ExpiresNoLaterThan);
+    }
+
     [Fact]
     public async Task DelegationFlow_BuildsActClaimWithActorSubject()
     {
