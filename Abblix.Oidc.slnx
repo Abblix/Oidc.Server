@@ -20,6 +20,7 @@
     <Project Path="src/Abblix.Utils/Abblix.Utils.csproj" />
     <Project Path="src/Abblix.DependencyInjection/Abblix.DependencyInjection.csproj" />
     <Project Path="src/Abblix.Jwt/Abblix.Jwt.csproj" />
+    <Project Path="src/Abblix.Oidc/Abblix.Oidc.csproj" />
     <Project Path="src/Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
     <Project Path="src/Abblix.Oidc.Server.AspNetCore/Abblix.Oidc.Server.AspNetCore.csproj" />
     <Project Path="src/Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />

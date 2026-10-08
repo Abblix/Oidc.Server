@@ -158,7 +158,7 @@ public record ClientInfo(string ClientId)
     /// its effective response mode (the explicit <c>response_mode</c>, or the flow default when the parameter is
     /// omitted) is a member of the list, compared by exact, case-sensitive string match. This lets a host close a
     /// response-mode downgrade: a client the host intends to run with
-    /// <see cref="Common.Constants.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
+    /// <see cref="Abblix.Oidc.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
     /// <c>query</c> on a crafted request, nor by omitting the parameter to inherit the flow default. The
     /// restriction is applied on top of, and after, the flow-compatibility check. When <c>null</c> or empty (the
     /// default) it imposes no per-client restriction. There is no registered DCR metadata parameter for it, so

@@ -62,7 +62,7 @@ public record ClientRegistrationRequest
     /// </remarks>
     [JsonPropertyName(Parameters.ResponseTypes)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
-    public string[][] ResponseTypes { get; init; } = [[Common.Constants.ResponseTypes.Code]];
+    public string[][] ResponseTypes { get; init; } = [[Abblix.Oidc.ResponseTypes.Code]];
 
     /// <summary>
     /// The <c>grant_types</c> the client will request at the token endpoint per RFC 7591 section 2,
@@ -74,7 +74,7 @@ public record ClientRegistrationRequest
     /// union the server actually supports and advertises in its discovery document.
     /// </remarks>
     [JsonPropertyName(Parameters.GrantTypes)]
-    public string[] GrantTypes { get; init; } = [Common.Constants.GrantTypes.AuthorizationCode];
+    public string[] GrantTypes { get; init; } = [Abblix.Oidc.GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// The <c>application_type</c> declared at registration (OIDC Dynamic Client Registration section 2),

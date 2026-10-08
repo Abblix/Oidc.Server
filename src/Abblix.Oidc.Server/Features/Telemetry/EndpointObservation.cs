@@ -185,9 +185,9 @@ internal static class EndpointObservation
     }
 
     /// <summary>
-    /// The error codes of <see cref="Common.Constants.ErrorCodes"/>, the only ones a span names as they are.
+    /// The error codes of <see cref="Abblix.Oidc.ErrorCodes"/>, the only ones a span names as they are.
     /// </summary>
-    private static readonly HashSet<string> KnownErrors = typeof(Common.Constants.ErrorCodes)
+    private static readonly HashSet<string> KnownErrors = typeof(Abblix.Oidc.ErrorCodes)
         .GetFields(BindingFlags.Public | BindingFlags.Static)
         .Where(field => field is { IsLiteral: true } && field.FieldType == typeof(string))
         .Select(field => (string)field.GetRawConstantValue()!)
@@ -195,9 +195,9 @@ internal static class EndpointObservation
 
     private static readonly string[] KnownResponseTypes =
     [
-        Common.Constants.ResponseTypes.Code,
-        Common.Constants.ResponseTypes.Token,
-        Common.Constants.ResponseTypes.IdToken,
-        Common.Constants.ResponseTypes.None,
+        Abblix.Oidc.ResponseTypes.Code,
+        Abblix.Oidc.ResponseTypes.Token,
+        Abblix.Oidc.ResponseTypes.IdToken,
+        Abblix.Oidc.ResponseTypes.None,
     ];
 }
