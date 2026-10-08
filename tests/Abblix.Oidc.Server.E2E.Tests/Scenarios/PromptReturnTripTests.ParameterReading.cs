@@ -17,10 +17,10 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
-/// <summary>
+/// <remarks>
 /// How a parameter in the query is read, the same on both hosts: RFC 6749 section 3.1 says "Parameters sent
 /// without a value MUST be treated as if they were omitted from the request".
-/// </summary>
+/// </remarks>
 public partial class PromptReturnTripTests
 {
     /// <summary>

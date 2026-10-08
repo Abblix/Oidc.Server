@@ -25,9 +25,9 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
-/// <summary>
+/// <remarks>
 /// An unsupported value inside a signed request object is answered as the same value is in the query.
-/// </summary>
+/// </remarks>
 public partial class PromptReturnTripTests
 {
     /// <summary>

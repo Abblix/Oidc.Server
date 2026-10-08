@@ -11,11 +11,11 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
-/// <summary>
+/// <remarks>
 /// The authorization endpoint's span names the request's response type, when the protocol defines each of its values,
 /// and the tokens the endpoint hands out through the front channel are counted under the implicit grant, the grant
 /// OAuth names for them.
-/// </summary>
+/// </remarks>
 internal sealed partial class ObservedAuthorizationHandler
 {
     private partial (string Key, string? Value) RequestTagOf(Model.AuthorizationRequest request)

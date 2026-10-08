@@ -16,9 +16,9 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
-/// <summary>
+/// <remarks>
 /// How the backchannel authentication endpoint reads its form, the same on both hosts.
-/// </summary>
+/// </remarks>
 public partial class BackChannelAuthenticationTests
 {
     /// <summary>
