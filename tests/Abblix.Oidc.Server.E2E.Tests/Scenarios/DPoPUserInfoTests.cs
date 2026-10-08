@@ -122,6 +122,30 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
     }
 
     /// <summary>
+    /// The UserInfo endpoint reads the client's own parameters from the form on both hosts, so client parameters in
+    /// the query of a GET are not read, and a repeated one there is not a repetition of anything read.
+    /// </summary>
+    [Fact]
+    public async Task UserInfo_client_parameters_in_the_query_are_not_read()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var tokenResponse = await DriveParAuthorizeTokenAsync(
+            client, discovery,
+            clientId: TestConstants.DPoPOpportunisticClientId,
+            parProof: null, tokenProof: null);
+        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{discovery.UserInfoEndpoint}?{ClientRequest.Parameters.ClientId}=a&{ClientRequest.Parameters.ClientId}=b");
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
     /// Drives PAR -> /authorize -> /token with a token-endpoint DPoP proof signed by
     /// <paramref name="proofKey"/>, asserts the resulting access token is DPoP-bound to
     /// that key, and returns the raw access_token string. UserInfo scenarios start here.

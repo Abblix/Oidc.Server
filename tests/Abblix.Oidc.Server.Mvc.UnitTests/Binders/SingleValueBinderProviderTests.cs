@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using Abblix.Oidc.Server.Mvc.Model;
 using AuthorizationRequest = Abblix.Oidc.Server.Mvc.Model.AuthorizationRequest;
 using Parameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 
@@ -49,6 +50,19 @@ public class SingleValueBinderProviderTests
     [Fact]
     public void RepeatableParameterIsNotWrapped()
         => Assert.IsNotType<SingleValueBinder>(BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)));
+
+    /// <summary>
+    /// A header, the client certificate and a route value bind as they would without this package: only a query or
+    /// form parameter is counted.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(ClientRequest), nameof(ClientRequest.DPoPProof))]
+    [InlineData(typeof(ClientRequest), nameof(ClientRequest.AuthorizationHeader))]
+    [InlineData(typeof(ClientRequest), nameof(ClientRequest.ClientCertificate))]
+    [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.ClientId))]
+    [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.AuthorizationHeader))]
+    public void ParameterOutsideTheQueryAndTheFormIsNotWrapped(Type container, string property)
+        => Assert.IsNotType<SingleValueBinder>(BinderFor(container, property));
 
     /// <summary>
     /// A host's own model binds as it would without this package, a culture list included.

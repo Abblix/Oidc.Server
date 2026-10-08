@@ -29,4 +29,10 @@ internal interface IValidatableModel
     /// invalid parameter value.
     /// </summary>
     IReadOnlyList<string> MalformedParameters { get; }
+
+    /// <summary>
+    /// Whether the request declared a form body the server could not read, such as one past the form limits, which
+    /// the filter refuses as malformed.
+    /// </summary>
+    bool FormUnreadable { get; }
 }

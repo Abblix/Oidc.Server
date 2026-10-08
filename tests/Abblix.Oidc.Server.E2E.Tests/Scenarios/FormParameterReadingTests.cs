@@ -60,6 +60,41 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidTarget, body[ResponseParameters.Error]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// The token endpoint reads the form, so a copy of a parameter in the query is not read and not counted.
+    /// </summary>
+    [Fact]
+    public async Task TokenParameter_AlsoInTheQuery_IsNotCounted()
+    {
+        var (status, body) = await PostTokenAsync([], $"?{ClientRequest.Parameters.ClientId}={TestConstants.ClientCredentialsClientId}");
+
+        Assert.True(status == HttpStatusCode.OK, body.ToJsonString());
+    }
+
+    /// <summary>
+    /// A form field named like a header is not the header, so sending it twice is not a repetition of anything read.
+    /// </summary>
+    [Fact]
+    public async Task FormFieldNamedLikeAHeader_SentTwice_IsNotCounted()
+    {
+        var (status, body) = await PostTokenAsync([new("DPoP", "x"), new("DPoP", "y")]);
+
+        Assert.True(status == HttpStatusCode.OK, body.ToJsonString());
+    }
+
+    /// <summary>
+    /// A form past the server's form limits cannot be read, and is refused as a malformed request on both hosts.
+    /// </summary>
+    [Fact]
+    public async Task FormPastTheLimits_IsRefused()
+    {
+        var (status, body) = await PostTokenAsync(
+            [.. Enumerable.Range(0, 1100).Select(index => new KeyValuePair<string, string>($"extra{index}", "x"))]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task Audience_SentTwice_IsNotRefusedAsRepeated()
     {
@@ -91,18 +126,30 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
         ];
 
         var accepted = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, form);
+        var stateInTheQuery = await FormPostHelpers.PostFormAsync(
+            client,
+            new Uri($"{discovery.PushedAuthorizationRequestEndpoint}?{AuthorizationRequest.Parameters.State}=second"),
+            form);
         var refused = await FormPostHelpers.PostFormAsync(
             client,
             discovery.PushedAuthorizationRequestEndpoint!,
             [.. form, new(AuthorizationRequest.Parameters.State, "second")]);
 
         Assert.True(accepted.IsSuccessStatusCode, await accepted.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        // RFC 9126 section 2.1 carries the parameters in the body, so a copy in the query is not read
+        Assert.True(
+            stateInTheQuery.IsSuccessStatusCode,
+            await stateInTheQuery.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal(ErrorCodes.InvalidRequest, (await ReadJsonAsync(refused))[ResponseParameters.Error]!.GetValue<string>());
     }
 
-    private async Task<(HttpStatusCode Status, JsonObject Body)> PostTokenAsync(
+    private Task<(HttpStatusCode Status, JsonObject Body)> PostTokenAsync(
         KeyValuePair<string, string>[] added, bool withResource = true)
+        => PostTokenAsync(added, string.Empty, withResource);
+
+    private async Task<(HttpStatusCode Status, JsonObject Body)> PostTokenAsync(
+        KeyValuePair<string, string>[] added, string query, bool withResource = true)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -116,7 +163,7 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
             form.Add(new(TokenRequest.Parameters.Resource, TestConstants.ApiResource));
         form.AddRange(added);
 
-        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form);
+        var response = await FormPostHelpers.PostFormAsync(client, new Uri(discovery.TokenEndpoint + query), form);
         return (response.StatusCode, await ReadJsonAsync(response));
     }
 

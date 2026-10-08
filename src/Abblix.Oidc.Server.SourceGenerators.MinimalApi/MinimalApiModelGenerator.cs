@@ -491,6 +491,9 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             _writer.AppendLine(
                 "\tpublic global::System.Collections.Generic.IReadOnlyList<string> MalformedParameters { get; init; } = [];");
             _writer.AppendLine();
+            _writer.AppendLine("\t/// <inheritdoc/>");
+            _writer.AppendLine("\tpublic bool FormUnreadable { get; init; }");
+            _writer.AppendLine();
         }
 
         /// <summary>
@@ -592,20 +595,10 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             // A form-only model never reads the query - per RFC 6749 the token-endpoint parameters must travel in the
             // request body. A SupportsGet model reads query-or-form via RequestValues.
-            if (stub.SupportsGet)
-            {
-                _writer.AppendLine(
-                    "\t\tvar form = request.HasFormContentType ? await request.ReadFormAsync(context.RequestAborted) : null;");
-                _writer.AppendLine(
-                    $"\t\tvar source = new {known.RequestValues}(request.Query, form);");
-            }
-            else
-            {
-                _writer.AppendLine(
-                    "\t\tvar source = request.HasFormContentType " +
-                    "? await request.ReadFormAsync(context.RequestAborted) " +
-                    ": (global::Microsoft.AspNetCore.Http.IFormCollection)global::Microsoft.AspNetCore.Http.FormCollection.Empty;");
-            }
+            _writer.AppendLine($"\t\tvar form = await {known.FormValues}.ReadFormAsync(request, context.RequestAborted);");
+            _writer.AppendLine(stub.SupportsGet
+                ? $"\t\tvar source = new {known.RequestValues}(request.Query, form);"
+                : "\t\tvar source = form ?? (global::Microsoft.AspNetCore.Http.IFormCollection)global::Microsoft.AspNetCore.Http.FormCollection.Empty;");
 
             if (_readsWire)
                 _writer.AppendLine("\t\tvar malformed = new global::System.Collections.Generic.List<string>();");
@@ -623,7 +616,10 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             }
 
             if (_readsWire)
+            {
                 _writer.AppendLine("\t\t\tMalformedParameters = malformed,");
+                _writer.AppendLine("\t\t\tFormUnreadable = request.HasFormContentType && form is null,");
+            }
 
             _writer.AppendLine("\t\t};");
             _writer.AppendLine("\t}");

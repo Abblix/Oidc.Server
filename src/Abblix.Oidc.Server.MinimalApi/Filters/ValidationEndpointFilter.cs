@@ -36,11 +36,19 @@ internal sealed class ValidationEndpointFilter : IEndpointFilter
 
     private static async Task<IEnumerable<string>> FailuresOf(IValidatableModel model)
     {
+        if (model.FormUnreadable)
+            return [ErrorFactory.UnreadableForm];
+
+        // A refused parameter is left unbound, so validating the model would also report it missing, which says
+        // nothing the refusal did not
+        var refusals = model.RepeatedParameters.Select(ErrorFactory.RepeatedParameter)
+            .Concat(model.MalformedParameters.Select(ErrorFactory.MalformedParameter))
+            .ToArray();
+        if (refusals.Length > 0)
+            return refusals;
+
         var results = new List<ValidationResult>();
         await Validator.TryValidateObjectAsync(model, new ValidationContext(model), results, validateAllProperties: true);
-
-        return model.RepeatedParameters.Select(ErrorFactory.RepeatedParameter)
-            .Concat(model.MalformedParameters.Select(ErrorFactory.MalformedParameter))
-            .Concat(results.Select(result => result.ErrorMessage ?? string.Empty));
+        return results.Select(result => result.ErrorMessage ?? string.Empty);
     }
 }

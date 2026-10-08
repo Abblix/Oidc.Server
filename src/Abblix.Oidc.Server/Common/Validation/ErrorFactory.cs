@@ -38,6 +38,11 @@ public static class ErrorFactory
     public static string MalformedParameter(string name) => $"The parameter '{name}' has a value that cannot be read";
 
     /// <summary>
+    /// The validation message for a request whose form body cannot be read, such as one past the form limits.
+    /// </summary>
+    public const string UnreadableForm = "The request body cannot be read as a form";
+
+    /// <summary>
     /// Maps a flat sequence of model-validation messages onto an <see cref="OidcError"/> carrying the
     /// <see cref="ErrorCodes.InvalidRequest"/> code. The input is a plain message sequence on purpose, so each
     /// transport adapter can feed it the output of

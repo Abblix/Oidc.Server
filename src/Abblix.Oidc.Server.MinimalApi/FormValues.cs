@@ -98,6 +98,26 @@ internal static class FormValues
     }
 
     /// <summary>
+    /// The posted form, or null when the request declares none or declares one the server cannot read, such as one
+    /// past the form limits: the model records the latter and the validation filter refuses it, as the MVC host
+    /// refuses a form its value provider cannot read.
+    /// </summary>
+    public static async Task<IFormCollection?> ReadFormAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+            return null;
+
+        try
+        {
+            return await request.ReadFormAsync(cancellationToken);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The value <paramref name="read"/> produces. A value it cannot read adds the parameter's name to
     /// <paramref name="malformed"/>, which the validation filter refuses before anything reads the model, so the
     /// default standing in for it is never seen.
