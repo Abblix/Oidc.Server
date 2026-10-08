@@ -795,6 +795,61 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
+    /// A client whose access tokens can arrive unbound rotates by default, whatever binds its token requests: one
+    /// registered for CIBA push delivery, one allowed a response type that returns an access token from the
+    /// authorization endpoint, and a private_key_jwt client whose certificate binding is optional.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, true, false, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, true, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, false, false, true)]
+    public async Task CreateRefreshToken_ByDefault_RotatesAClientWhoseAccessTokensCanArriveUnbound(
+        string tokenEndpointAuthMethod,
+        bool requireDPoP,
+        bool pushDelivery,
+        bool accessTokenFromTheAuthorizationEndpoint,
+        bool optionalCertificateBinding)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        clientInfo.RequireDPoP = requireDPoP;
+        clientInfo.TlsClientCertificateBoundAccessTokens = optionalCertificateBinding;
+        if (pushDelivery)
+            clientInfo.BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push;
+        if (accessTokenFromTheAuthorizationEndpoint)
+            clientInfo.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.Token]];
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(
+            CreateAuthSession(), CreateAuthorizationContext(), clientInfo, oldToken, GrantId);
+
+        _tokenRegistry.Verify(
+            registry => registry.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            Times.Once());
+    }
+
+    /// <summary>
     /// An explicit policy wins over the client's authentication method and its token binding, in both directions.
     /// </summary>
     [Theory]
@@ -837,8 +892,8 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// A policy value the enum does not define, as a configuration binder or a host's client store can hand over, is
-    /// refused rather than read as one of the three.
+    /// A policy value the enum does not define, a number a configuration binder takes as it stands or a value a host's
+    /// client store holds, is refused rather than read as one of the three.
     /// </summary>
     [Fact]
     public async Task CreateRefreshToken_WithAnUndefinedPolicy_Throws()

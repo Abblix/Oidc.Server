@@ -86,8 +86,9 @@ public class RefreshTokenService(
 		// FAPI 2.0 section 5.3.2.1 forbids rotation for a client held to it, because a confidential
 		// client with a sender-constrained token gains nothing from rotating while losing its session
 		// whenever it fails to store the token it was handed. The profile decides over the client's own
-		// policy. Both places that drop rotation, the profile and the default policy, do so only for a
-		// confidential client whose tokens are sender-constrained, the two controls that replace it.
+		// policy. The profile and the default policy drop rotation only for a confidential client whose
+		// tokens are sender-constrained, the two controls that replace it; an explicit Reuse is the host's own
+		// decision and drops it for whatever client the host sets it on.
 		var rotates =
             !ReusesRefreshTokens(clientInfo) &&
             !SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation;
@@ -173,20 +174,36 @@ public class RefreshTokenService(
 	};
 
 	/// <summary>
-	/// Whether every access token of <paramref name="clientInfo"/> is bound to a key the client proves, on every
-	/// request, as <see cref="RefreshTokenReusePolicy.WhenSenderConstrained"/> explains.
+	/// Whether every access token of <paramref name="clientInfo"/> is bound to a key the client proves, as
+	/// <see cref="RefreshTokenReusePolicy.WhenSenderConstrained"/> explains.
 	/// </summary>
-	/// <remarks>
-	/// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
-	/// is the rule rather than a fallback: a method this library cannot name is not known to bind its tokens, and
-	/// keeps rotating.
-	/// </remarks>
-	private static bool IsAlwaysSenderConstrained(ClientInfo clientInfo) => clientInfo.TokenEndpointAuthMethod switch
+	private static bool IsAlwaysSenderConstrained(ClientInfo clientInfo)
 	{
-		ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
-		ClientAuthenticationMethods.PrivateKeyJwt => clientInfo.RequireDPoP,
-		_ => false,
-	};
+		if (ReceivesTokensOutsideTheTokenEndpoint(clientInfo))
+			return false;
+
+		return BindsEveryTokenRequest(clientInfo.TokenEndpointAuthMethod, clientInfo.RequireDPoP);
+	}
+
+	/// <summary>
+	/// Whether <paramref name="clientInfo"/> is registered to receive an access token that no token request binds:
+	/// one delivered by CIBA push, or one returned from the authorization endpoint for a response type that includes
+	/// <c>token</c>.
+	/// </summary>
+	private static bool ReceivesTokensOutsideTheTokenEndpoint(ClientInfo clientInfo)
+		=> clientInfo.BackChannelTokenDeliveryMode is BackchannelTokenDeliveryModes.Push ||
+		   clientInfo.EffectiveResponseTypes.Any(responseType => responseType.Contains(ResponseTypes.Token));
+
+	// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
+	// is the rule rather than a fallback: a method this library cannot name is not known to bind its tokens, and
+	// keeps rotating
+	private static bool BindsEveryTokenRequest(string tokenEndpointAuthMethod, bool requireDPoP)
+		=> tokenEndpointAuthMethod switch
+		{
+			ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
+			ClientAuthenticationMethods.PrivateKeyJwt => requireDPoP,
+			_ => false,
+		};
 
 	private static DateTimeOffset CalculateExpiresAt(
 		DateTimeOffset issuedAt,
