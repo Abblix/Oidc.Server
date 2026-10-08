@@ -156,7 +156,7 @@ internal sealed partial class TenantCreations(
     /// Hands the creations <see cref="Track"/> released to every closing at once, each call with a token canceled
     /// after <paramref name="limit"/> of its own, so a closing that heeds it and does not answer costs its own call and
     /// no other closing. Each tenant a closing reports, and every tenant of a call that fails, runs out of time or is
-    /// stopped, is logged with its id, since a released creation is not handed over again.
+    /// stopped, is logged with its id and generation, since a released creation is not handed over again.
     /// </summary>
     public async Task CloseAsync(
         IReadOnlyCollection<TenantDefinition> released,
@@ -168,12 +168,12 @@ internal sealed partial class TenantCreations(
 
         foreach (var closing in closings)
         {
-            foreach (var (tenantId, failure) in await FailuresOfAsync(closing, released, limit, cancellationToken))
-                LogTenantNotClosed(failure, tenantId);
+            foreach (var (tenant, failure) in await FailuresOfAsync(closing, released, limit, cancellationToken))
+                LogTenantNotClosed(failure, tenant.Id, tenant.Generation);
         }
     }
 
-    private async Task<IEnumerable<(string TenantId, Exception Failure)>> FailuresOfAsync(
+    private async Task<IReadOnlyList<(TenantDefinition Tenant, Exception Failure)>> FailuresOfAsync(
         ITenantClosing closing,
         IReadOnlyCollection<TenantDefinition> released,
         TimeSpan limit,
@@ -184,11 +184,11 @@ internal sealed partial class TenantCreations(
         try
         {
             var failures = await closing.CloseAsync(released, bounded.Token);
-            return failures.Select(failure => (failure.Key, failure.Value));
+            return [..failures.Select(failure => (failure.Key, failure.Value))];
         }
         catch (Exception exception)
         {
-            return released.Select(tenant => (tenant.Id, exception));
+            return [..released.Select(tenant => (tenant, exception))];
         }
     }
 

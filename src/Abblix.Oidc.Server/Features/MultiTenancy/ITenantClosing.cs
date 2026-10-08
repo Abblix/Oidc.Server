@@ -20,9 +20,10 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// after a reading first found it gone from the store, in the definition last served for that creation, or the one it
 /// was first listed in when it was never served. Each closing is called once per reading, with a token canceled one
 /// refresh period after the call begins, and the reading waits for the call to end, so a closing heeds that token:
-/// one that does not holds the reading, and every reading after it, for as long as it runs. A tenant a closing
-/// reports, and every tenant of a call that throws, runs out of time or is stopped, is logged with its id and is not
-/// handed over again; the other closings still run. A tenant gone from the store while no instance served it, as
+/// one that does not holds the reading, and every reading after it, for as long as it runs. One reading may release
+/// two creations of one id, so a closing reports each tenant by the definition it was handed. A tenant a closing
+/// reports, and every tenant of a call that throws, runs out of time or is stopped, is logged with its id and
+/// generation and is not handed over again; the other closings still run. A tenant gone from the store while no instance served it, as
 /// during a restart, is never listed by the new instance and so is never released or closed. A tenant created again
 /// under the same id is a different creation, so closing the one released leaves what the new one keeps alone.
 /// </remarks>
@@ -35,8 +36,9 @@ public interface ITenantClosing
     /// </summary>
     /// <param name="tenants">The tenants released, each in the creation that was served.</param>
     /// <param name="cancellationToken">Cancels the closing.</param>
-    /// <returns>Why each tenant that could not be closed was not, by its id; the others are closed.</returns>
-    Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+    /// <returns>Why each tenant that could not be closed, wholly or in part, was not, by the definition it was handed
+    /// in; the others are closed.</returns>
+    Task<IReadOnlyDictionary<TenantDefinition, Exception>> CloseAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
         CancellationToken cancellationToken);
 }

@@ -48,6 +48,7 @@ public sealed class SharedSignalsTenantReleaseTests
 
     // The event a stream of a released tenant that could not be deleted is logged under, as the package numbers it
     private const int StreamNotDeleted = 10801;
+    private const int TenantNotClosed = 10703;
 
     [Fact]
     public async Task AReleasedTenantsStreamsAndQueues_AreDeleted()
@@ -86,7 +87,8 @@ public sealed class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// A stream whose deletion fails stays and is logged, and the released tenant's other streams are deleted.
+    /// A stream whose deletion fails stays and is logged, the released tenant's other streams are deleted, and the
+    /// tenant is logged as not closed.
     /// </summary>
     [Fact]
     public async Task AStreamThatCannotBeDeleted_LeavesTheOthersDeleted()
@@ -120,6 +122,7 @@ public sealed class SharedSignalsTenantReleaseTests
         Assert.Equal(2, streams.Deletions);
         Assert.Single(await StreamsOfAsync(app, acme, ct));
         Assert.Single(logs.EventIds, StreamNotDeleted);
+        Assert.Single(logs.EventIds, TenantNotClosed);
     }
 
     private static async Task<IReadOnlyList<StreamState>> StreamsOfAsync(

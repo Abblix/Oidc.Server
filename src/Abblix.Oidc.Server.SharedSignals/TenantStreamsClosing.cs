@@ -33,36 +33,49 @@ public sealed partial class TenantStreamsClosing(
     IServiceProvider serviceProvider) : ITenantClosing
 {
     /// <inheritdoc />
-    public async Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+    public async Task<IReadOnlyDictionary<TenantDefinition, Exception>> CloseAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
         CancellationToken cancellationToken)
     {
         var streams = serviceProvider.GetRequiredService<IStreamStore>();
         var management = serviceProvider.GetRequiredService<StreamManagementService>();
 
-        var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
+        var failures = new Dictionary<TenantDefinition, Exception>();
         foreach (var tenant in tenants)
         {
+            // Stopped, the tenants not reached yet are not closed, and asking the store for them would not end sooner
+            if (cancellationToken.IsCancellationRequested)
+            {
+                failures[tenant] = new OperationCanceledException(cancellationToken);
+                continue;
+            }
+
             try
             {
-                await CloseAsync(tenant, streams, management, cancellationToken);
+                if (await FailureOfAsync(tenant, streams, management, cancellationToken) is { } failure)
+                    failures[tenant] = failure;
             }
             catch (Exception exception)
             {
-                failures[tenant.Id] = exception;
+                failures[tenant] = exception;
             }
         }
 
         return failures;
     }
 
-    private async Task CloseAsync(
+    /// <summary>
+    /// Deletes every stream of <paramref name="tenant"/>, each on its own, and gives the first failure, or null when
+    /// all were deleted.
+    /// </summary>
+    private async Task<Exception?> FailureOfAsync(
         TenantDefinition tenant,
         IStreamStore streams,
         StreamManagementService management,
         CancellationToken cancellationToken)
     {
         using var scope = TenantScope.Enter(tenant);
+        Exception? first = null;
         foreach (var stream in await streams.ListAllAsync(cancellationToken))
         {
             try
@@ -72,7 +85,10 @@ public sealed partial class TenantStreamsClosing(
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 LogStreamNotDeleted(exception, stream.StreamId, tenant.Id);
+                first ??= exception;
             }
         }
+
+        return first;
     }
 }

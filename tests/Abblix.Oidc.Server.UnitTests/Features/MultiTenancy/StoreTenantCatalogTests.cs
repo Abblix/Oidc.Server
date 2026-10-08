@@ -75,6 +75,8 @@ public class StoreTenantCatalogTests
 
         public List<(int EventId, object? TenantId)> ErrorEvents { get; } = [];
 
+        public List<(object? TenantId, object? Generation)> NotClosed { get; } = [];
+
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
@@ -87,10 +89,11 @@ public class StoreTenantCatalogTests
                 return;
 
             Errors.Add(formatter(state, exception));
-            ErrorEvents.Add((
-                eventId.Id,
-                (state as IEnumerable<KeyValuePair<string, object?>>)?
-                    .FirstOrDefault(pair => pair.Key == "TenantId").Value));
+            var values = (state as IEnumerable<KeyValuePair<string, object?>>)?.ToArray() ?? [];
+            object? ValueOf(string name) => values.FirstOrDefault(pair => pair.Key == name).Value;
+            ErrorEvents.Add((eventId.Id, ValueOf("TenantId")));
+            if (eventId.Id == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
+                NotClosed.Add((ValueOf("TenantId"), ValueOf("Generation")));
         }
     }
 
@@ -575,6 +578,30 @@ public class StoreTenantCatalogTests
     }
 
     /// <summary>
+    /// Two creations of one id released by one reading are each reported and logged with their generation, so the
+    /// failure of one does not hide the other's.
+    /// </summary>
+    [Fact]
+    public async Task TwoCreationsOfOneIdReleasedTogether_AreEachLoggedNotClosed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog(closings: [_failingClosing]);
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com", Generation = "g2" }, "2"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal([("acme", "g1"), ("acme", "g2")], _logger.NotClosed.Order());
+    }
+
+    /// <summary>
     /// A closing that does not answer is cut off one refresh period into its call and every tenant of the call is
     /// logged, and the closings after it get a period of their own, so a closing that heeds its token still closes
     /// every tenant.
@@ -912,16 +939,16 @@ public class StoreTenantCatalogTests
 
         public List<string> Issuers { get; } = [];
 
-        public async Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+        public async Task<IReadOnlyDictionary<TenantDefinition, Exception>> CloseAsync(
             IReadOnlyCollection<TenantDefinition> tenants,
             CancellationToken cancellationToken)
         {
-            var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
+            var failures = new Dictionary<TenantDefinition, Exception>();
             foreach (var tenant in tenants)
             {
                 if (Failing.Contains(tenant.Id))
                 {
-                    failures[tenant.Id] = new InvalidOperationException("the tenant's streams could not be deleted");
+                    failures[tenant] = new InvalidOperationException("the tenant's streams could not be deleted");
                     continue;
                 }
 

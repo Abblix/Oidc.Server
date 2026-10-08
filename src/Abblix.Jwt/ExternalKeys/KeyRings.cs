@@ -51,6 +51,14 @@ internal sealed class KeyRings(
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
         foreach (var partition in partitions)
         {
+            // Stopped, the partitions not reached yet keep their entries, and asking the store for them would not end
+            // sooner
+            if (cancellationToken.IsCancellationRequested)
+            {
+                failures[partition] = new OperationCanceledException(cancellationToken);
+                continue;
+            }
+
             try
             {
                 var entries = new PartitionedKeyRingStore(round, partition);

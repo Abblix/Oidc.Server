@@ -30,24 +30,22 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed class TenantKeyRingClosing(IServiceProvider serviceProvider) : ITenantClosing
 {
     /// <inheritdoc />
-    public async Task<IReadOnlyDictionary<string, Exception>> CloseAsync(
+    public async Task<IReadOnlyDictionary<TenantDefinition, Exception>> CloseAsync(
         IReadOnlyCollection<TenantDefinition> tenants,
         CancellationToken cancellationToken)
     {
         if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
-            return new Dictionary<string, Exception>();
+            return new Dictionary<TenantDefinition, Exception>();
 
+        // A partition names one creation of one tenant once its id and generation are partition segments
         var byPartition = tenants
             .Where(NamesItsOwnPartition)
-            .ToDictionary(TenantKey.PartitionOf, tenant => tenant.Id, StringComparer.Ordinal);
+            .ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
 
         var failures = await serviceProvider.GetRequiredService<IKeyRings>()
             .DeleteAsync(byPartition.Keys, cancellationToken);
 
-        return failures.ToDictionary(
-            failure => byPartition[failure.Key],
-            failure => failure.Value,
-            StringComparer.Ordinal);
+        return failures.ToDictionary(failure => byPartition[failure.Key], failure => failure.Value);
     }
 
     private static bool NamesItsOwnPartition(TenantDefinition tenant)
