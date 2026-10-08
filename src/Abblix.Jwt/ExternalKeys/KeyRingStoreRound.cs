@@ -10,8 +10,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <summary>
 /// The store every partition shares, read once for one round: each partition refreshed or opened in the round
 /// takes the same read, a write the round won is added to it, and a write another pod won makes the next load read
-/// the store again. A round lives only as long as one pass of the refresh service or one opening of partitions, so
-/// nothing it read outlives that pass.
+/// the store again. A round lives only as long as one pass of the refresh service, one opening of partitions or one
+/// deletion of partitions, so nothing it read outlives that pass.
 /// </summary>
 /// <remarks>
 /// Every backend reads each entry's body to load, so a read per partition would cost the number of partitions
@@ -55,8 +55,8 @@ internal sealed class KeyRingStoreRound(IKeyRingStore store) : IKeyRingStore
 
     /// <inheritdoc />
     /// <remarks>
-    /// The round's read is kept: a partition removes only its own entries, as the last step of its refresh, and
-    /// no other partition reads them.
+    /// The round's read is kept: a partition removes only its own entries, as the last step of its refresh or when
+    /// it is deleted, and no other partition reads them.
     /// </remarks>
     public Task RemoveAsync(string id, CancellationToken cancellationToken)
         => store.RemoveAsync(id, cancellationToken);
