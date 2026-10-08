@@ -187,6 +187,34 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// The keys minted for a released tenant are deleted from the key ring's store when it is closed, while another
+    /// tenant's stay.
+    /// </summary>
+    [Fact]
+    public async Task TheKeysOfAReleasedTenant_AreDeletedFromTheStore()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme"));
+
+        store.Tenants = [new StoredTenant(globex, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(left, IsOf("acme"));
+        Assert.Contains(left, IsOf("globex"));
+    }
+
+    private static Predicate<StoredKey> IsOf(string partition)
+        => entry => entry.Id.StartsWith(partition + ".", StringComparison.Ordinal);
+
+    /// <summary>
     /// Keys adopted into the ring would be seeded into each tenant's part of it, so a server serving tenants refuses
     /// to start with them, its store empty or not.
     /// </summary>

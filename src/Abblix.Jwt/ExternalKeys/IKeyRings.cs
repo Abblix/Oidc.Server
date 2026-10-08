@@ -41,4 +41,12 @@ public interface IKeyRings
     /// </summary>
     /// <param name="partition">The partition to close.</param>
     void Close(string partition);
+
+    /// <summary>
+    /// Closes the ring of <paramref name="partition"/> as <see cref="Close"/> does and removes the partition's entries
+    /// from the store, once nothing will verify a token its keys signed.
+    /// </summary>
+    /// <param name="partition">The partition to delete.</param>
+    /// <param name="cancellationToken">Cancels the removal; the entries not removed yet stay.</param>
+    Task DeleteAsync(string partition, CancellationToken cancellationToken);
 }
