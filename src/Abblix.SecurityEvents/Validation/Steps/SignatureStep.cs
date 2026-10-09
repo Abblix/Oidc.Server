@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 
 namespace Abblix.SecurityEvents.Validation.Steps;
@@ -35,8 +36,11 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         context.Require(
             SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.IssuerAccepted);
 
+        // A profile carries no type step only after naming the gap with AllowInsecureValidation, the exemption
+        // every critical default step requires, so its typing is the host's decision rather than a default
         var result = await verifier.VerifyAsync(
             context.CompactToken,
+            context.TokenTypes ?? TokenTypePolicy.CheckedByCaller,
             context.UnverifiedHeader!.KeyId,
             cancellationToken);
 

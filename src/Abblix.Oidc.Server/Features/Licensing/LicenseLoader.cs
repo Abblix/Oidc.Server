@@ -72,6 +72,7 @@ public static class LicenseLoader
                           ValidationOptions.RequireSignedTokens |
                           ValidationOptions.ValidateIssuerSigningKey,
 
+                TokenTypes = TokenTypePolicy.Exactly(ValidLicenseType),
                 ValidateIssuer = ValidateIssuer,
                 ResolveIssuerSigningKeys = ResolveIssuerSigningKeys,
             });
@@ -81,11 +82,6 @@ public static class LicenseLoader
                 $"The license can't be validated: [{error.Error}] {error.ErrorDescription}");
 
         var token = validationResult.GetSuccess();
-
-        if (token.Header.Type != ValidLicenseType)
-        {
-            throw new InvalidOperationException("The JWT type is not valid");
-        }
 
         LicenseChecker.AddLicense(ReadLicense(token.Payload));
     }

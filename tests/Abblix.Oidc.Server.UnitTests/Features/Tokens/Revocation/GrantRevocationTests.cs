@@ -138,7 +138,7 @@ public class GrantRevocationTests
         new ValidRevocationRequest(new RevocationRequest { Token = token.Payload.JwtId! }, token));
 
     private async Task<bool> AcceptedAsync(JsonWebToken token)
-        => (await _decorator.ValidateAsync(token.Payload.JwtId!, new ValidationParameters())).TryGetSuccess(out _);
+        => (await _decorator.ValidateAsync(token.Payload.JwtId!, new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller })).TryGetSuccess(out _);
 
     private JsonWebToken AccessTokenOfTheGrant()
     {

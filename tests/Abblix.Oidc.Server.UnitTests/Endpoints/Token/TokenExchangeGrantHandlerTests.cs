@@ -215,7 +215,7 @@ public class TokenExchangeGrantHandlerTests
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -235,8 +235,8 @@ public class TokenExchangeGrantHandlerTests
         Assert.NotNull(grant.Context.Actor);
         Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
         Assert.Null(grant.Context.Actor["act"]);
-        resolverMock.Verify(r => r.ResolveAsync(SubjectTokenWire, caller.Token), Times.Once);
-        resolverMock.Verify(r => r.ResolveAsync(actorWire, caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(SubjectTokenWire, It.IsAny<string>(), caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(actorWire, It.IsAny<string>(), caller.Token), Times.Once);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public class TokenExchangeGrantHandlerTests
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -311,7 +311,7 @@ public class TokenExchangeGrantHandlerTests
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "actor expired"));
 
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -338,7 +338,7 @@ public class TokenExchangeGrantHandlerTests
         // detail).
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);
         resolverMock
-            .Setup(r => r.ResolveAsync(SubjectTokenWire, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(SubjectTokenWire, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "subject expired"));
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
@@ -498,7 +498,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = "client-A",
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // ClientId = "test-client"
@@ -520,7 +519,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = null,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -541,7 +539,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = null,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var brokerClient = new ClientInfo(ClientId)
@@ -563,7 +560,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = "client-A",
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var brokerClient = new ClientInfo(ClientId)
@@ -587,7 +583,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -610,7 +605,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], ad)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientWithDifferentAllowlist = new ClientInfo(ClientId)
@@ -633,7 +627,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -659,7 +652,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // no audience allowlist
@@ -680,7 +672,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -710,7 +701,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -733,7 +723,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -757,7 +746,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -783,7 +771,6 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -800,28 +787,6 @@ public class TokenExchangeGrantHandlerTests
     }
 
     [Fact]
-    public async Task S3_IdTokenTyp_rejected_when_subject_token_type_is_access_token()
-    {
-        // A JWT minted as a refresh token presented under subject_token_type=access_token is a cross-type
-        // confusion: the two carry different authority and are redeemed at different places. Reject even
-        // though the signature validates.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
-        {
-            OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.RefreshToken,  // typ mismatch
-        };
-        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
-        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
-        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
-
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Contains("typ", error.ErrorDescription);
-    }
-
-    [Fact]
     public async Task C3_ActorTokenType_not_in_allowlist_rejected_same_as_subject()
     {
         // The TokenExchangeAllowedSubjectTokenTypes allowlist applies symmetrically to actor
@@ -830,17 +795,15 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         const string actorWire = "actor.jwt";
         var actor = new SubjectTokenContext("svc-worker", null, null, null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(actorWire, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
 
         // Client allowlist only id_token (subject); actor_token_type=access_token NOT in allowlist.
@@ -868,7 +831,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var (handler, resolverMock) = CreateHandlerWithResolverMock(tokenType);
         resolverMock
-            .Setup(r => r.ResolveAsync(SubjectTokenWire, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(SubjectTokenWire, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(resolvedContext);
         return (handler, resolverMock);
     }

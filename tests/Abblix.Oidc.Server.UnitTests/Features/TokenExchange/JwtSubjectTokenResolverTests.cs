@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using System;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
@@ -59,10 +61,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: "https://idp.example.com");
         jwt.Payload.Scope = ["openid", "profile"];
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-1", ctx.Subject);
@@ -84,10 +86,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.GrantId = grantId;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(grantId, ctx.GrantId);
@@ -102,10 +104,10 @@ public class JwtSubjectTokenResolverTests
     {
         var jwt = NewJwt(subject: "user-1", issuer: null);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(jwt.Payload.ExpiresAt);
@@ -119,10 +121,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails] = (JsonArray)JsonNode.Parse(adWire)!;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(ctx.AuthorizationDetails);
@@ -135,14 +137,56 @@ public class JwtSubjectTokenResolverTests
     public async Task JwtValidationFailure_Rejected()
     {
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "expired"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Contains("invalid", error.ErrorDescription, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The types a subject token may carry under each URI it is presented under (RFC 8693 Section 3).
+    /// </summary>
+    public static TheoryData<string, TokenTypePolicy> TypesUnderEachUri => new()
+    {
+        { TokenExchangeTokenTypes.AccessToken, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken) },
+        { TokenExchangeTokenTypes.IdToken, JwtTypes.IdTokens },
+        {
+            TokenExchangeTokenTypes.Jwt,
+            TokenTypePolicy.OrUntyped(JsonWebTokenTypes.AccessToken, JsonWebTokenTypes.Jwt)
+        },
+    };
+
+    /// <summary>
+    /// A subject token is validated as the type its URI names, so a token issued for one purpose, such as an ID
+    /// token presented as an access token, is refused rather than exchanged as another.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TypesUnderEachUri))]
+    public async Task ATokenOfAnotherType_IsRejected(string tokenType, TokenTypePolicy accepted)
+    {
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, TokenTypesArg.Is(accepted), SubjectTokenValidation))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "another type"));
+
+        var result = await _resolver.ResolveAsync(TokenWire, tokenType, CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// A URI this resolver is not registered for is a wiring defect, so it fails loudly rather than validating the
+    /// token under some guessed type.
+    /// </summary>
+    [Fact]
+    public async Task AUriThisResolverDoesNotServe_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None));
     }
 
     [Fact]
@@ -150,10 +194,10 @@ public class JwtSubjectTokenResolverTests
     {
         var jwt = NewJwt(subject: null, issuer: null);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -168,10 +212,10 @@ public class JwtSubjectTokenResolverTests
         // fire. Otherwise any client could exchange any user id_token.
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("client-A", ctx.OriginalClientId);
@@ -186,10 +230,10 @@ public class JwtSubjectTokenResolverTests
         jwt.Payload.ClientId = "client-A";
         jwt.Payload.AuthorizedParty = "client-Z";
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("client-A", ctx.OriginalClientId);
@@ -203,10 +247,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A", "client-B"]);
         jwt.Payload.AuthorizedParty = "client-A";
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("client-A", ctx.OriginalClientId);
@@ -219,10 +263,10 @@ public class JwtSubjectTokenResolverTests
         // origin undetermined rather than guessing; the cross-client guard then cannot narrow it.
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["a", "b"]);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Null(ctx.OriginalClientId);

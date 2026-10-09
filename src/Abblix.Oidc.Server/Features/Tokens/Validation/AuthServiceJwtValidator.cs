@@ -35,17 +35,22 @@ public class AuthServiceJwtValidator(
 	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
 	/// </summary>
 	/// <param name="jwt">The JWT string to validate.</param>
+	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
 	/// <returns>
 	/// A task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.
 	/// </returns>
-	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default)
+	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
+		string jwt,
+		TokenTypePolicy tokenTypes,
+		ValidationOptions options = ValidationOptions.Default)
 	{
 		return validator.ValidateAsync(
 			jwt,
 			new ValidationParameters
 			{
 				Options = options,
+				TokenTypes = tokenTypes,
 				ValidateIssuer = ValidateIssuerAsync,
 				ValidateAudience = ValidateAudienceAsync,
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(),

@@ -44,26 +44,13 @@ public record ValidationParameters
 	public ClockSkew ClockSkew { get; set; } = ClockSkew.None;
 
 	/// <summary>
-	/// Token-type values (per RFC 7515 section 4.1.9 <c>typ</c> header) that the JWT MUST match.
-	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 section 3.11 to
-	/// prevent token-type confusion: a JWS signed for one type (id_token, logout_token,
-	/// request_object, DPoP proof, JARM response, OAuth access_token) cannot be replayed
-	/// as another by relying parties that trust the same issuer for several classes.
+	/// Which <c>typ</c> header values the token may carry, RFC 8725 section 3.11.
 	/// </summary>
 	/// <remarks>
-	/// Matching is case-insensitive and accepts either spelling of the <c>application/</c>
-	/// prefix on either side, so <c>at+jwt</c> and <c>application/AT+JWT</c> name the same
-	/// class. A <c>typ</c> is a media type, and RFC 7515 section 4.1.9 adopts RFC 2045 section 5.1 for it:
-	/// "Matching of media type and subtype is ALWAYS case-insensitive". The general
-	/// string-comparison rules of RFC 7515 section 5.3 do not govern this parameter; that section
-	/// ends by exempting it by name.
-	/// The comparer carried by the set is NOT what produces this behavior and is not consulted
-	/// for matching - the validator compares explicitly, so that its rules cannot be widened or
-	/// narrowed by how a host happened to construct the collection. Supply any comparer, or none.
-	/// When this property is null or empty the validator skips the check, preserving
-	/// historical behavior for callers that have not opted in.
+	/// Required: every validation states the types it accepts, or states that its caller judges the type, as
+	/// <see cref="TokenTypePolicy"/> explains.
 	/// </remarks>
-	public IReadOnlySet<string>? ExpectedTokenTypes { get; init; }
+	public required TokenTypePolicy TokenTypes { get; init; }
 
 	/// <summary>
 	/// JWS signing algorithms (per RFC 7518) that the validator MUST accept; any other

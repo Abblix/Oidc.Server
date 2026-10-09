@@ -71,6 +71,7 @@ public class ExternalSignerTests
         var validator = provider.GetRequiredService<IJsonWebTokenValidator>();
         var result = await validator.ValidateAsync(jwt, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.ValidateIssuer | ValidationOptions.RequireSignedTokens,
             ValidateIssuer = iss => Task.FromResult(iss == Issuer),
             ResolveIssuerSigningKeys = _ => new JsonWebKey[] { publicOnlyKey }.ToAsyncEnumerable(),

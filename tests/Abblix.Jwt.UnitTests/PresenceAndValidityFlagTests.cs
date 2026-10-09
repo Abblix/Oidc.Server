@@ -52,6 +52,7 @@ public class PresenceAndValidityFlagTests
             jwt,
             new ValidationParameters
             {
+                TokenTypes = TokenTypePolicy.CheckedByCaller,
                 Options = options,
                 ValidateIssuer = validateIssuer,
                 ValidateAudience = validateAudience,

@@ -38,8 +38,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <see cref="Result{TSuccess,TFailure}"/>, mirroring <see cref="JwtBearerGrantHandler"/>: each
 /// step returns either an enriched <see cref="ValidationContext"/> or an <see cref="OidcError"/>;
 /// the chain short-circuits at the first failure. Subject-token resolution sits in the middle
-/// of the chain, so post-resolve guards (cross-client origin, typ-confusion, forwarded AD
-/// allowlist) read the resolved <see cref="SubjectTokenContext"/> directly from the context.
+/// of the chain, so post-resolve guards (cross-client origin, forwarded AD allowlist) read the
+/// resolved <see cref="SubjectTokenContext"/> directly from the context.
 /// </para>
 /// <para>
 /// Supports both RFC 8693 section 4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
@@ -76,10 +76,10 @@ public class TokenExchangeGrantHandler(
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
             .BindAsync(ctx => ResolveSubjectTokenAsync(ctx, cancellationToken))
-            .Bind(ValidateSubjectTokenOriginAndType)
+            .Bind(ValidateSubjectTokenOrigin)
             .Bind(ValidateForwardedAuthorizationDetails)
             .BindAsync(ctx => ResolveActorTokenAsync(ctx, cancellationToken))
-            .Bind(ValidateActorTokenOriginAndType)
+            .Bind(ValidateActorTokenOrigin)
             .Bind(ValidateAudiences)
             .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx)));
     }
@@ -232,17 +232,14 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// S1 + S3 (PR #135 review): the subject_token must have been issued to the requesting client
+    /// S1 (PR #135 review): the subject_token must have been issued to the requesting client
     /// (confused-deputy guard; opt-out via <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>
-    /// for broker scenarios), and -- for JWT-based URIs -- the JWT typ header must match the URI
-    /// it was presented under (cross-type confusion guard, e.g. id+jwt as access_token).
+    /// for broker scenarios). The typ header is matched against the presented URI earlier, by the
+    /// resolver, which receives that URI and validates the JWT for it.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOriginAndType(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(ValidationContext ctx)
     {
-        if (CheckTokenOriginAndType(
-                ctx.Subject.NotNull(nameof(ctx.Subject)),
-                ctx.Request.SubjectTokenType,
-                ctx.ClientInfo) is { } error)
+        if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
         {
             return error;
         }
@@ -309,16 +306,16 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// Applies the same origin + typ-header guards to the actor_token (when present) that
-    /// <see cref="ValidateSubjectTokenOriginAndType"/> applies to the subject_token. No-op when
+    /// Applies the same origin guard to the actor_token (when present) that
+    /// <see cref="ValidateSubjectTokenOrigin"/> applies to the subject_token. No-op when
     /// the request had no actor.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateActorTokenOriginAndType(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateActorTokenOrigin(ValidationContext ctx)
     {
         if (ctx.Actor is not { } actor)
             return ctx;
 
-        return CheckTokenOriginAndType(actor, ctx.Request.ActorTokenType, ctx.ClientInfo) is { } error
+        return CheckTokenOrigin(actor, ctx.ClientInfo) is { } error
             ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
             : ctx;
     }
@@ -376,11 +373,11 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// Shared origin + typ-header guards applied identically to subject and actor tokens.
+    /// The origin guard applied identically to subject and actor tokens; the token's type is judged where it is
+    /// validated, against the type it was presented under.
     /// </summary>
-    private static OidcError? CheckTokenOriginAndType(
+    private static OidcError? CheckTokenOrigin(
         SubjectTokenContext token,
-        string? requestedTypeUri,
         ClientInfo clientInfo)
     {
         // The confused-deputy check needs an origin to compare against, and an absent one is the case
@@ -407,27 +404,6 @@ public class TokenExchangeGrantHandler(
             }
         }
 
-        // typ header expected per URI (JWT-based subject types only):
-        //   access_token  -> at+jwt
-        //   refresh_token -> the refresh class this server issues
-        //   id_token      -> nothing to expect: an ID token carries no type of its own
-        //   jwt           -> any typ acceptable (generic JWT URI)
-        // Resolvers for non-JWT formats leave JwtTokenType null; this check is a no-op for them.
-        var expectedTyp = requestedTypeUri switch
-        {
-            TokenExchangeTokenTypes.AccessToken => JsonWebTokenTypes.AccessToken,
-            TokenExchangeTokenTypes.RefreshToken => JwtTypes.RefreshToken,
-            _ => null,
-        };
-        if (expectedTyp is not null &&
-            token.JwtTokenType is { Length: > 0 } actualTyp &&
-            !string.Equals(actualTyp, expectedTyp, StringComparison.Ordinal))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"subject_token has typ '{actualTyp}' but was presented under '{requestedTypeUri}' (expected typ '{expectedTyp}').");
-        }
-
         return null;
     }
 
@@ -436,15 +412,14 @@ public class TokenExchangeGrantHandler(
         string tokenValue,
         CancellationToken cancellationToken)
     {
-        var resolver = serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType);
-        if (resolver is null)
+        if (tokenType is null || serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType) is not { } resolver)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tokenValue, cancellationToken);
+        return await resolver.ResolveAsync(tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)

@@ -125,7 +125,8 @@ internal class IdentityTokenService(
 			{
 				// No explicit type. OpenID Connect Core defines none for an ID token, no relying party checks
 				// one, and a vendor value only breaks when two servers of different builds share a deployment.
-				// The JWT library writes the generic JWT that RFC 7519 Section 5.1 recommends.
+				// The token therefore goes out without a typ header, which is what lets an id_token_hint be
+				// told from every typed token this server issues.
 				Algorithm = clientInfo.IdentityTokenSignedResponseAlgorithm,
 			},
 			Payload = new JsonWebTokenPayload(userInfo)

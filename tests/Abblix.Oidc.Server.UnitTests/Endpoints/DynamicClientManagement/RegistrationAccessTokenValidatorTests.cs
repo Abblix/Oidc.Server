@@ -33,7 +33,7 @@ public class RegistrationAccessTokenValidatorTests
     {
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         return new RegistrationAccessTokenValidator(jwtValidator.Object);
@@ -94,6 +94,27 @@ public class RegistrationAccessTokenValidatorTests
         var result = await validator.ValidateAsync(Bearer, "client-2");
 
         Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// Only a registration access token manages a registration: the validator is asked for exactly that type, and
+    /// its refusal of another one, such as an access token this server issued, reaches the caller.
+    /// </summary>
+    [Fact]
+    public async Task ATokenOfAnotherType_IsRejected()
+    {
+        var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
+        jwtValidator
+            .Setup(v => v.ValidateAsync(
+                It.IsAny<string>(),
+                TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken)),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
+
+        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object).ValidateAsync(Bearer, ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
     }
 
 }

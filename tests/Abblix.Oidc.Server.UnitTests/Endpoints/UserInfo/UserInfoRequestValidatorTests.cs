@@ -128,7 +128,7 @@ public class UserInfoRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_token_123",
-                It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
@@ -169,7 +169,7 @@ public class UserInfoRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_token_123",
-                It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
@@ -289,7 +289,7 @@ public class UserInfoRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "invalid_token",
-                It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(validationError);
 
         // Act
@@ -302,34 +302,27 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// Verifies invalid token type handling.
-    /// Per OIDC Core, only access tokens are valid for UserInfo endpoint.
-    /// ID tokens or other token types should be rejected.
+    /// Only an access token opens this endpoint. RFC 9068 Section 4: "The resource server MUST verify that the 'typ'
+    /// header value is 'at+jwt' or 'application/at+jwt' and reject tokens carrying any other value." The validator
+    /// is asked for exactly that type, and its refusal reaches the caller as an invalid token.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithInvalidTokenType_ShouldReturnError()
+    public async Task ValidateAsync_TokenOfAnotherType_IsRejected()
     {
-        // Arrange
         var userInfoRequest = CreateUserInfoRequest("id_token_value");
         var clientRequest = CreateClientRequest();
-
-        var idToken = CreateValidAccessToken();
-        idToken.Header.Type = "id+jwt"; // Not an access token type
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "id_token_value",
-                It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
-            .ReturnsAsync(idToken);
+                TokenTypesArg.Is(TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken)),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
 
-        // Act
         var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
 
-        // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-        Assert.Contains("Invalid token type", error.ErrorDescription);
-        Assert.Contains("id+jwt", error.ErrorDescription);
     }
 
     /// <summary>
@@ -350,7 +343,7 @@ public class UserInfoRequestValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_token",
-                It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
@@ -393,8 +386,8 @@ public class UserInfoRequestValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync("token_123", It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, ValidationOptions>((_, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync("token_123", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<string, TokenTypePolicy, ValidationOptions>((_, _, options) => capturedOptions = options))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
@@ -415,70 +408,4 @@ public class UserInfoRequestValidatorTests
             capturedOptions.Value & ValidationOptions.RequireValidAudience);
     }
 
-    /// <summary>
-    /// Both spellings of the access-token media type are accepted, per RFC 9068 Section 4: "The resource
-    /// server MUST verify that the 'typ' header value is 'at+jwt' or 'application/at+jwt' and reject tokens
-    /// carrying any other value." RFC 7515 Section 4.1.9 is why there are two of them: a recipient treats a
-    /// value with no '/' as though 'application/' were prepended, so the short and long forms name one type
-    /// rather than two.
-    /// </summary>
-    [Theory]
-    [InlineData(JsonWebTokenTypes.AccessToken)]
-    [InlineData("application/" + JsonWebTokenTypes.AccessToken)]
-    [InlineData("Application/AT+JWT")]
-    public async Task ValidateAsync_AcceptsEitherSpellingOfTheAccessTokenType(string tokenType)
-    {
-        var userInfoRequest = CreateUserInfoRequest();
-        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
-        var clientRequest = CreateClientRequest(authHeader: authHeader);
-
-        var accessToken = CreateValidAccessToken();
-        accessToken.Header.Type = tokenType;
-        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync("valid_token_123", It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(accessToken);
-
-        _accessTokenService
-            .Setup(service => service.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
-            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(
-                CreateAuthSession(), CreateAuthContext()));
-
-        _clientInfoProvider
-            .Setup(provider => provider.TryFindClientAsync(TestConstants.DefaultClientId))
-            .ReturnsAsync(clientInfo);
-
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
-
-        Assert.True(result.TryGetSuccess(out _), $"'{tokenType}' names the access-token media type");
-    }
-
-    /// <summary>
-    /// Widening the accepted spelling must not widen the accepted set of token types: a token of another
-    /// type is still refused, which is the RFC 8725 Section 3.11 token-type confusion guard the check exists
-    /// for.
-    /// </summary>
-    [Theory]
-    [InlineData(JwtTypes.RefreshToken)]
-    [InlineData("application/jwt")]
-    [InlineData("at+jwt-but-not-really")]
-    public async Task ValidateAsync_ForeignTokenType_IsRejected(string tokenType)
-    {
-        var userInfoRequest = CreateUserInfoRequest();
-        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
-        var clientRequest = CreateClientRequest(authHeader: authHeader);
-
-        var accessToken = CreateValidAccessToken();
-        accessToken.Header.Type = tokenType;
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync("valid_token_123", It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(accessToken);
-
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
-
-        Assert.True(result.TryGetFailure(out var error), $"'{tokenType}' is not an access token");
-        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-    }
 }

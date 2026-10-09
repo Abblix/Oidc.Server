@@ -90,6 +90,7 @@ public class ClientSecretHmacKeyLengthTests
         var validator = Jwt.GetRequiredService<IJsonWebTokenValidator>();
         var result = await validator.ValidateAsync(jws, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.RequireValidSignedTokens,
             ResolveIssuerSigningKeys = _ => ((JsonWebKey)key).ToAsync(),
         });

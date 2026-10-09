@@ -81,6 +81,7 @@ public partial class JsonWebTokenValidationTests
         // Positive control: the SAME token validates only under the explicit embedded-key opt-in.
         var embeddedParameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.Default | ValidationOptions.UseEmbeddedVerificationKey,
             ValidateIssuer = _ => Task.FromResult(true),
             ValidateAudience = _ => Task.FromResult(true),

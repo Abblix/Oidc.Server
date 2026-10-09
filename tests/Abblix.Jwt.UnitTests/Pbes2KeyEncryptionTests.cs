@@ -229,6 +229,7 @@ public class Pbes2KeyEncryptionTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwe, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 			ResolveTokenDecryptionKeys = _ => passwordKey.ToAsync(),

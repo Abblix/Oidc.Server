@@ -85,6 +85,7 @@ public class JweCriticalHeaderTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         return validator.ValidateAsync(jwt, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),

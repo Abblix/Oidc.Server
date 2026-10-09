@@ -19,9 +19,10 @@ namespace Abblix.SecurityEvents.Abstractions;
 /// The verifier owns key resolution and the algorithm allowlist, and it reports failures already
 /// in this package's error vocabulary, because only the implementation can tell a signature that
 /// does not verify from a key that was not found - the distinction a receiver acts on, since a
-/// key miss may heal after refetching the issuer's keys and a bad signature never does. Every
-/// check beyond the signature - typing, audience, freshness - belongs to the pipeline's steps,
-/// where a profile can see and compose it.
+/// key miss may heal after refetching the issuer's keys and a bad signature never does. The token
+/// types arrive from the profile's type step and are checked on the signed header; every other
+/// check - audience, freshness - belongs to the pipeline's steps, where a profile can see and
+/// compose it.
 /// </remarks>
 public interface ISecurityEventTokenVerifier
 {
@@ -29,6 +30,7 @@ public interface ISecurityEventTokenVerifier
     /// Verifies the token's signature.
     /// </summary>
     /// <param name="compactToken">The token as received, in compact serialization.</param>
+    /// <param name="tokenTypes">The token types the profile accepts.</param>
     /// <param name="keyId">
     /// The "kid" the token's header names, when the caller has already parsed it - the signature
     /// step has - so a caching key resolver can recognize a rollover without re-parsing the
@@ -39,6 +41,7 @@ public interface ISecurityEventTokenVerifier
     /// receiver branches on.</returns>
     Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
         string compactToken,
+        TokenTypePolicy tokenTypes,
         string? keyId = null,
         CancellationToken cancellationToken = default);
 }

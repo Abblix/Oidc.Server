@@ -47,6 +47,7 @@ public class SecurityEventTokenValidatorTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            TokenTypePolicy tokenTypes,
             string? keyId = null,
             CancellationToken cancellationToken = default)
         {
@@ -72,6 +73,7 @@ public class SecurityEventTokenValidatorTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            TokenTypePolicy tokenTypes,
             string? keyId = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(error));

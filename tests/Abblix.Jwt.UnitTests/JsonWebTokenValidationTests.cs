@@ -97,6 +97,7 @@ public partial class JsonWebTokenValidationTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => AsyncEnumerable.Empty<JsonWebKey>(),
@@ -324,7 +325,7 @@ public partial class JsonWebTokenValidationTests
         var jweShapedJwt = "header.encryptedKey.iv.ciphertext.tag";
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
-        var parameters = new ValidationParameters { Options = ValidationOptions.Default };
+        var parameters = new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller, Options = ValidationOptions.Default };
 
         var result = await validator.ValidateAsync(jweShapedJwt, parameters);
 
@@ -373,7 +374,7 @@ public partial class JsonWebTokenValidationTests
         // ValidationOptions.Default selects the issuer-resolved-keys trust branch, but the
         // host did not provide a ResolveIssuerSigningKeys resolver - the validator must
         // return a typed error, not throw an InvalidOperationException.
-        var parameters = new ValidationParameters { Options = ValidationOptions.Default };
+        var parameters = new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller, Options = ValidationOptions.Default };
 
         var result = await validator.ValidateAsync(signedJwt, parameters);
 
@@ -457,6 +458,7 @@ public partial class JsonWebTokenValidationTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),
@@ -587,6 +589,7 @@ public partial class JsonWebTokenValidationTests
         // Clear BOTH signature flags; keep issuer/audience/lifetime so signature is the only gate left.
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.Default & ~ValidationOptions.RequireValidSignedTokens,
             ValidateIssuer = _ => Task.FromResult(true),
             ValidateAudience = _ => Task.FromResult(true),
@@ -1357,6 +1360,7 @@ public partial class JsonWebTokenValidationTests
     {
         return new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => signingKey.ToAsync(),

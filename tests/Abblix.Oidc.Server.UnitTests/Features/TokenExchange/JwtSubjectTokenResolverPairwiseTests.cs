@@ -81,10 +81,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             },
         };
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.Jwt, CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(RealSubject, ctx.Subject);

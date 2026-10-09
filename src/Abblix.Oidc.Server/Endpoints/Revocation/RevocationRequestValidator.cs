@@ -175,6 +175,7 @@ public partial class RevocationRequestValidator(
 		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
 		var result = await jwtValidator.ValidateAsync(
 			revocationRequest.Token,
+			JwtTypes.IntrospectableTokens,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		return result.Match(

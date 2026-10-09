@@ -114,7 +114,7 @@ public class ClientMayTightenItselfTests
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = deploymentProfile })),
             new FakeTimeProvider(Now));
 
-        return await validator.ValidateAsync("header.payload.signature", options);
+        return await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller, options);
     }
 
     /// <summary>

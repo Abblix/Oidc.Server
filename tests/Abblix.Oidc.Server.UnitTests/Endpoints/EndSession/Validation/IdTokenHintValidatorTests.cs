@@ -84,7 +84,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -109,7 +109,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -135,7 +135,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -161,7 +161,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -176,45 +176,25 @@ public class IdTokenHintValidatorTests
     /// <summary>
     /// RFC 8725 section 3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
     /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
-    /// when its audience matches the requesting client.
+    /// when its audience matches the requesting client. The validator is asked for the types an ID token may
+    /// carry, and its refusal reaches the caller.
     /// </summary>
-    /// <remarks>
-    /// The rejection reason is asserted, not just the error code. Every refusal in this validator answers
-    /// <c>invalid_request</c>, so a test that checks only the code passes whichever check fired - and this one
-    /// did: removing the type check entirely left it green, because the request then failed further down for
-    /// an unrelated reason.
-    /// <para>
-    /// The client-authentication and request-object rows are the ones that pin the design. Both are permitted
-    /// elsewhere - one is what a client assertion is, the other what a request object is - and both must still
-    /// be refused here, which works only because the catalog names every type and each position states its own
-    /// exceptions. Drop either from the catalog to spare its own position, and it starts passing as an ID token
-    /// too.
-    /// </para>
-    /// </remarks>
-    [Theory]
-    [InlineData(JsonWebTokenTypes.AccessToken)]
-    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
-    [InlineData(JsonWebTokenTypes.RequestObject)]
-    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError(string tokenType)
+    [Fact]
+    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError()
     {
-        // Arrange
         var context = CreateContext("access_token_as_hint");
-        var accessToken = CreateValidIdToken(TestConstants.DefaultClientId);
-        accessToken.Header.Type = tokenType;
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "access_token_as_hint",
+                TokenTypesArg.Is(JwtTypes.IdTokens),
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(accessToken);
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        // Act
         var error = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Equal("The id token hint is not an ID Token", error.ErrorDescription);
     }
 
     // The signed-UserInfo case used to live here, driving a token with no exp through this validator. It
@@ -239,7 +219,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "valid_id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -265,7 +245,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "invalid_id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(validationError);
 
         // Act
@@ -326,8 +306,8 @@ public class IdTokenHintValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync("id_token", It.IsAny<ValidationOptions>()))
-            .Callback(new System.Action<string, ValidationOptions>((_, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync("id_token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new System.Action<string, TokenTypePolicy, ValidationOptions>((_, _, options) => capturedOptions = options))
             .ReturnsAsync(idToken);
 
         // Act
@@ -352,7 +332,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -376,7 +356,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -401,7 +381,7 @@ public class IdTokenHintValidatorTests
         _jwtValidator
             .Setup(v => v.ValidateAsync(
                 "id_token",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
         // Act

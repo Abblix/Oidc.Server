@@ -98,7 +98,7 @@ public class TokenStatusValidatorDecoratorTests
             .Setup(r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, Expiry))
             .Returns(Task.CompletedTask);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
@@ -117,7 +117,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupInnerReturns(RefreshToken(GrantId));
         _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -136,7 +136,7 @@ public class TokenStatusValidatorDecoratorTests
         _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.Same(token, validated);
@@ -153,7 +153,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupInnerReturns(RefreshToken(grantId: null));
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
@@ -173,7 +173,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupInnerReturns(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -192,7 +192,7 @@ public class TokenStatusValidatorDecoratorTests
         _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetSuccess(out _));
         _cutoffs.Verify(
@@ -209,7 +209,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupInnerReturns(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -236,7 +236,7 @@ public class TokenStatusValidatorDecoratorTests
         });
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -262,7 +262,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupCutoff(RevocationScope.Subject, Subject, Expiry);
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetSuccess(out _));
 
@@ -308,7 +308,7 @@ public class TokenStatusValidatorDecoratorTests
         // The host revokes the subject it knows, which is the real one.
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -330,7 +330,11 @@ public class TokenStatusValidatorDecoratorTests
 
         var result = await _decorator.ValidateAsync(
             "opaque.id.jwt",
-            new ValidationParameters { Options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime });
+            new ValidationParameters
+            {
+                TokenTypes = TokenTypePolicy.CheckedByCaller,
+                Options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime,
+            });
 
         Assert.True(result.TryGetSuccess(out _));
 
@@ -409,7 +413,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupCutoff(RevocationScope.Subject, Subject, Expiry);
         _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.assertion.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.assertion.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetSuccess(out _));
 
@@ -456,7 +460,7 @@ public class TokenStatusValidatorDecoratorTests
             }
         });
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -488,7 +492,7 @@ public class TokenStatusValidatorDecoratorTests
             }
         });
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -528,7 +532,7 @@ public class TokenStatusValidatorDecoratorTests
         // revoking instance looks like from here.
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-30));
 
-        var result = await decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+        var result = await decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);

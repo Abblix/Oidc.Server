@@ -121,7 +121,7 @@ public class InitialAccessTokenValidatorTests
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "bad-jwt"));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("bad-jwt", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync("bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is expired"));
 
         var result = await _validator.ValidateAsync(context);
@@ -131,21 +131,26 @@ public class InitialAccessTokenValidatorTests
         Assert.Contains("expired", result.ErrorDescription);
     }
 
+    /// <summary>
+    /// Only an initial access token registers a client: the validator is asked for exactly that type, and its
+    /// refusal of another one, such as an access token this server issued, reaches the caller.
+    /// </summary>
     [Fact]
     public async Task ValidateAsync_WithWrongTokenType_ShouldReturnInvalidToken()
     {
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
-        var token = CreateValidToken(tokenType: JsonWebTokenTypes.AccessToken);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(token);
+            .Setup(v => v.ValidateAsync(
+                "jwt-token",
+                TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken)),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
         var result = await _validator.ValidateAsync(context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
-        Assert.Contains("token type", result.ErrorDescription);
     }
 
     [Theory]
@@ -157,7 +162,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken(subject: subject);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(context);
@@ -174,7 +179,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         _revocationProvider
@@ -195,7 +200,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("valid-jwt", It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync("valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         _revocationProvider
@@ -219,8 +224,8 @@ public class InitialAccessTokenValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, ValidationOptions>((_, opts) => capturedOptions = opts))
+            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<string, TokenTypePolicy, ValidationOptions>((_, _, opts) => capturedOptions = opts))
             .ReturnsAsync(token);
 
         _revocationProvider

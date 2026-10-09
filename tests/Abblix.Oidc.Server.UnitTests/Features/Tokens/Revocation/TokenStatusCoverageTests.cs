@@ -143,7 +143,7 @@ public class TokenStatusCoverageTests
             new GrantRevocation(registry.Object, clients.Object),
             inner.Object);
 
-        var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters());
+        var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         if (expected is null)
         {

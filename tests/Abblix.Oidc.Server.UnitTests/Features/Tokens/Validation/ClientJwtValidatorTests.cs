@@ -106,7 +106,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -114,6 +114,41 @@ public class ClientJwtValidatorTests
         // Verify audience validation callback accepts request URI
         var audienceValidationResult = await capturedParams!.ValidateAudience!([RequestUri]);
         Assert.True(audienceValidationResult);
+    }
+
+    /// <summary>
+    /// The token types the caller accepts reach the JWT validator unchanged, which is what refuses a token of
+    /// another type.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PassesTheAcceptedTokenTypes()
+    {
+        var accepted = TokenTypePolicy.Exactly(JsonWebTokenTypes.ClientAuthentication);
+        var clientInfo = CreateClientInfo(ValidClientId);
+
+        ValidationParameters? capturedParams = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>(async (_, p) =>
+            {
+                capturedParams = p;
+                if (p.ValidateIssuer != null)
+                    await p.ValidateIssuer(ValidClientId);
+            })
+            .ReturnsAsync(CreateValidToken());
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        await _validator.ValidateAsync(ValidJwt, accepted);
+
+        Assert.NotNull(capturedParams);
+        Assert.Same(accepted, capturedParams.TokenTypes);
     }
 
     /// <summary>
@@ -149,7 +184,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -189,7 +224,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -231,7 +266,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -269,7 +304,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -311,7 +346,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validToken));
@@ -349,7 +384,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -390,7 +425,7 @@ public class ClientJwtValidatorTests
             .Setup(p => p.GetSigningKeys(clientInfo))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Act & Assert - Second validation with different issuer should throw
         ValidationParameters? capturedParams = null;
@@ -404,7 +439,7 @@ public class ClientJwtValidatorTests
             })
             .ReturnsAsync(token);
 
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
         Assert.NotNull(capturedParams);
 
         // Second call with different issuer should return false (already looked up different client)
@@ -441,8 +476,8 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act - Validate twice with same issuer
-        var result1 = await _validator.ValidateAsync(ValidJwt);
-        var result2 = await _validator.ValidateAsync(ValidJwt);
+        var result1 = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var result2 = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var validToken1));
@@ -474,7 +509,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert - a failure, never a success carrying a null Client.
         Assert.True(result.TryGetFailure(out var error));
@@ -517,7 +552,7 @@ public class ClientJwtValidatorTests
             .Returns(signingKeys.ToAsyncEnumerable());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -558,7 +593,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -592,7 +627,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -635,7 +670,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert - the decryption-key resolver is configured and yields the server's private keys.
         Assert.NotNull(capturedParams);
@@ -676,7 +711,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -716,7 +751,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt, customOptions);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller, customOptions);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -752,7 +787,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validToken));
@@ -785,7 +820,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -814,7 +849,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -852,7 +887,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -891,7 +926,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));

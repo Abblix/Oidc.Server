@@ -140,6 +140,10 @@ public partial class JwtBearerGrantHandler(
 				// time window during which the JWT can be used." Without the flag, an assertion
 				// omitting exp would be treated as having nothing to check rather than as invalid.
 				Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
+
+				// RFC 7523 defines no type for an assertion grant, so the accepted types are the deployment's,
+				// judged by the assertion policy after validation
+				TokenTypes = TokenTypePolicy.CheckedByCaller,
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = _audienceValidator.ValidateAsync,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,

@@ -292,6 +292,7 @@ public class JweKeyManagementInteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		return await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			Options = ValidationOptions.ValidateIssuer |
 			          ValidationOptions.ValidateAudience |
 			          ValidationOptions.RequireSignedTokens |

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -46,21 +47,15 @@ public sealed class RefreshTokenSubjectTokenResolver(
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
+        string tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken);
+        var validation = await jwtValidator.ValidateAsync(subjectToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
                 "The subject_token is invalid or has expired.");
-        }
-
-        if (jwt.Header.Type != JwtTypes.RefreshToken)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"subject_token has unexpected typ header '{jwt.Header.Type}' for token type refresh_token.");
         }
 
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
@@ -100,10 +95,6 @@ public sealed class RefreshTokenSubjectTokenResolver(
             // the handler's cross-client guard.
             OriginalClientId = grant.Context.ClientId,
             
-            // Refresh tokens always have typ=rt+jwt (enforced above). Recording it here makes
-            // the typ-confusion check at the handler uniform across resolvers.
-            JwtTokenType = jwt.Header.Type,
-
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
         };

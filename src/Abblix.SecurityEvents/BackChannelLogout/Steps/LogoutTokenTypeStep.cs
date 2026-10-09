@@ -43,6 +43,7 @@ public sealed class LogoutTokenTypeStep : ISecurityCriticalValidator
         SecurityEventTokenValidationError? error;
         if (type is null || JwtTypeName.Matches(type, JsonWebTokenTypes.LogoutToken))
         {
+            context.TokenTypes = TokenTypePolicy.OrUntyped(JsonWebTokenTypes.LogoutToken);
             context.Establish(SecurityEventTokenValidationStates.TypVerified);
             error = null;
         }

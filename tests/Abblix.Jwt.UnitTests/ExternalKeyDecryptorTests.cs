@@ -160,6 +160,7 @@ public class ExternalKeyDecryptorTests
         var validator = provider.GetRequiredService<IJsonWebTokenValidator>();
         return await validator.ValidateAsync(jwe, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.ValidateIssuer | ValidationOptions.RequireSignedTokens,
             ValidateIssuer = iss => Task.FromResult(iss == Issuer),
             ResolveIssuerSigningKeys = _ => new[] { SigningKey.Sanitize(false) }.ToAsyncEnumerable(),

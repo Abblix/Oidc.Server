@@ -52,6 +52,12 @@ public sealed class SecurityEventTokenValidationContext(
     public JsonWebTokenHeader? UnverifiedHeader { get; set; }
 
     /// <summary>
+    /// The token types the profile's type step accepts, which the signature step has the JWT core verify again on
+    /// the signed header; null when the profile carries no type step.
+    /// </summary>
+    public TokenTypePolicy? TokenTypes { get; set; }
+
+    /// <summary>
     /// The token's claims as parsed, before any signature check. Shape, not authorship.
     /// </summary>
     public JsonWebTokenPayload? UnverifiedPayload { get; set; }

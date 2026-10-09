@@ -425,6 +425,7 @@ public class SymmetricKeyEncryptionTests
 	{
 		return new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 			ResolveTokenDecryptionKeys = _ => encryptionKey.ToAsync(),

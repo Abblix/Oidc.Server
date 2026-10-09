@@ -73,26 +73,18 @@ public class UserInfoRequestValidator(
 		// what an access token carries when its request named no resource. Section 5 is why the check matters
 		// rather than being a formality: distinct audiences per resource exist to prevent cross-JWT confusion,
 		// and accepting a token minted for someone else's API here is that confusion.
+		//
+		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
+		// 'application/at+jwt' and reject tokens carrying any other value."
 		var result = await jwtValidator.ValidateAsync(
 			jwtAccessToken,
+			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
 			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
 		if (result.TryGetFailure(out var error))
 			return new OidcError(ErrorCodes.InvalidToken, error.ToString());
 
 		var token = result.GetSuccess();
-
-		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
-		// 'application/at+jwt' and reject tokens carrying any other value." The two spellings name one media
-		// type, per RFC 7515 Section 4.1.9, so the comparison folds the prefix and the case rather than
-		// testing for equality against one of them.
-		var tokenType = token.Header.Type;
-		if (!JwtTypeName.Matches(tokenType, JsonWebTokenTypes.AccessToken))
-		{
-			return new OidcError(
-				ErrorCodes.InvalidToken,
-				$"Invalid token type: {tokenType}");
-		}
 
 		// RFC 9449 section 7.1 RS-side enforcement: when the access token carries cnf.jkt the
 		// request MUST present it via the DPoP scheme together with a valid DPoP proof

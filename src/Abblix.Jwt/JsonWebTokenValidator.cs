@@ -70,6 +70,16 @@ internal class JsonWebTokenValidator(
         string jwt,
         ValidationParameters parameters)
     {
+        // Refused before the token is read: a validation that names no token types is a host's mistake rather than a
+        // property of the token
+        if (parameters.TokenTypes is null)
+        {
+            throw new ArgumentException(
+                $"{nameof(ValidationParameters)}.{nameof(ValidationParameters.TokenTypes)} must name the token types " +
+                "this validation accepts.",
+                nameof(parameters));
+        }
+
         if (string.IsNullOrWhiteSpace(jwt))
             return new JwtValidationError(JwtError.MalformedToken, "JWT is null or empty");
 
@@ -195,10 +205,9 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Pins the JWT's <c>typ</c> header (RFC 7515 section 4.1.9) to the set the caller expects, per
-    /// the RFC 8725 section 3.11 token-type confusion guidance. When
-    /// <see cref="ValidationParameters.ExpectedTokenTypes"/> is null or empty the check is
-    /// skipped (backward-compatible default for callers that have not opted in).
+    /// Pins the JWT's <c>typ</c> header (RFC 7515 section 4.1.9) to the types the caller accepts, per
+    /// the RFC 8725 section 3.11 token-type confusion guidance, as <see cref="ValidationParameters.TokenTypes"/>
+    /// states them.
     /// </summary>
     /// <remarks>
     /// Matching is case-insensitive, and the <c>application/</c> prefix is stripped from the
@@ -211,40 +220,35 @@ internal class JsonWebTokenValidator(
     /// Note that RFC 7515 section 5.3 does NOT apply here despite defining the library's general
     /// string-comparison rules: it ends by exempting exactly this parameter, "Only the 'typ'
     /// and 'cty' member values defined in this specification do not use these comparison
-    /// rules". This code cited section 5.3 for the opposite conclusion until 2026-07-20.
+    /// rules".
     /// Folding costs no separation between the classes actually pinned here (<c>dpop+jwt</c>,
     /// <c>at+jwt</c>, <c>logout+jwt</c>, <c>id_token</c>): they differ in their letters, not
     /// their casing. The one place RFC 2045 keeps case significant is the value of a
     /// <c>;parameter=</c> tail, which no <c>typ</c> in these specifications carries; should one
     /// ever appear, this whole-string fold would be more permissive than the RFC on that tail.
-    /// The comparison deliberately does not use <see cref="IReadOnlySet{T}.Contains"/>: the set
-    /// arrives from the caller with a comparer of their choosing, which would quietly hand a
-    /// security decision to host configuration this validator can neither see nor vouch for.
     /// </remarks>
     private static Result<JsonWebToken, JwtValidationError> ValidateTokenType(
         JsonWebToken token, ValidationParameters parameters)
     {
-        if (parameters is not { ExpectedTokenTypes: { Count: > 0 } expected})
-            return token;
-
+        var policy = parameters.TokenTypes;
         var typ = token.Header.Type;
-        if (typ is null)
+        return policy.Rule switch
         {
-            return new JwtValidationError(
+            TokenTypeRule.CheckedByCaller => token,
+            TokenTypeRule.OrUntyped when typ is null => token,
+            TokenTypeRule.Exactly when typ is null => new JwtValidationError(
                 JwtError.InvalidTokenType,
-                $"JWT 'typ' header is missing - expected one of: {string.Join(", ", expected)}");
-        }
-
-        var matched = expected.Any(expectedTyp => JwtTypeName.Matches(typ, expectedTyp));
-
-        if (!matched)
-        {
-            return new JwtValidationError(
-                JwtError.InvalidTokenType,
-                $"JWT 'typ' header '{typ}' does not match expected token type(s): {string.Join(", ", expected)}");
-        }
-
-        return token;
+                $"JWT 'typ' header is missing - expected one of: {string.Join(", ", policy.Types)}"),
+            TokenTypeRule.Exactly or TokenTypeRule.OrUntyped =>
+                policy.Types.Any(expected => JwtTypeName.Matches(typ, expected))
+                    ? token
+                    : new JwtValidationError(
+                        JwtError.InvalidTokenType,
+                        $"JWT 'typ' header '{typ}' does not match expected token type(s): " +
+                        string.Join(", ", policy.Types)),
+            _ => throw new InvalidOperationException(
+                $"Unknown {nameof(TokenTypeRule)} value {policy.Rule}."),
+        };
     }
 
     /// <summary>
