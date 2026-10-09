@@ -15,29 +15,33 @@ namespace Abblix.Oidc.UnitTests;
 /// Each claim property writes the claim under its registered name, which a test that writes and reads through the
 /// same property cannot show: a wrong name survives the round trip.
 /// </summary>
+/// <remarks>
+/// The expected names are written as the registries spell them rather than through the claim constants: the
+/// property reads those same constants, so a misspelled value would sit on both sides of the comparison and pass.
+/// </remarks>
 public class JsonWebTokenPayloadClaimNamesTests
 {
     public static TheoryData<string, Action<JsonWebTokenPayload>> Claims => new()
     {
-        { IanaClaimTypes.Sid, p => p.SessionId = "s" },
-        { IanaClaimTypes.ClientId, p => p.ClientId = "c" },
-        { IanaClaimTypes.Azp, p => p.AuthorizedParty = "c" },
-        { IanaClaimTypes.Scope, p => p.Scope = ["openid"] },
-        { OidcClaimTypes.IdentityProvider, p => p.IdentityProvider = "local" },
-        { OidcClaimTypes.GrantId, p => p.GrantId = "g" },
-        { IanaClaimTypes.AuthTime, p => p.AuthenticationTime = DateTimeOffset.UnixEpoch },
-        { IanaClaimTypes.Nonce, p => p.Nonce = "n" },
-        { IanaClaimTypes.AtHash, p => p.AccessTokenHash = "h" },
-        { IanaClaimTypes.CHash, p => p.CodeHash = "h" },
-        { IanaClaimTypes.Amr, p => p.AuthenticationMethodReferences = ["pwd"] },
-        { IanaClaimTypes.Acr, p => p.AuthContextClassRef = "loa" },
-        { IanaClaimTypes.Email, p => p.Email = "e@example.com" },
-        { IanaClaimTypes.EmailVerified, p => p.EmailVerified = true },
-        { IanaClaimTypes.Htm, p => p.DPoPHttpMethod = "POST" },
-        { IanaClaimTypes.Htu, p => p.DPoPHttpUri = "https://example.com/token" },
-        { IanaClaimTypes.Ath, p => p.DPoPAccessTokenHash = "h" },
+        { "sid", p => p.SessionId = "s" },
+        { "client_id", p => p.ClientId = "c" },
+        { "azp", p => p.AuthorizedParty = "c" },
+        { "scope", p => p.Scope = ["openid"] },
+        { "idp", p => p.IdentityProvider = "local" },
+        { "grant_id", p => p.GrantId = "g" },
+        { "auth_time", p => p.AuthenticationTime = DateTimeOffset.UnixEpoch },
+        { "nonce", p => p.Nonce = "n" },
+        { "at_hash", p => p.AccessTokenHash = "h" },
+        { "c_hash", p => p.CodeHash = "h" },
+        { "amr", p => p.AuthenticationMethodReferences = ["pwd"] },
+        { "acr", p => p.AuthContextClassRef = "loa" },
+        { "email", p => p.Email = "e@example.com" },
+        { "email_verified", p => p.EmailVerified = true },
+        { "htm", p => p.DPoPHttpMethod = "POST" },
+        { "htu", p => p.DPoPHttpUri = "https://example.com/token" },
+        { "ath", p => p.DPoPAccessTokenHash = "h" },
         {
-            IanaClaimTypes.AuthorizationDetails,
+            "authorization_details",
             p => p.AuthorizationDetails = [new AuthorizationDetail(new JsonObject { ["type"] = "t" })]
         },
     };

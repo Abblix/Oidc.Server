@@ -17,7 +17,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>New in 3.0. The OAuth 2.0 and OpenID Connect vocabulary that Abblix OIDC Server and its client share, moved out of the server so a client can reference it alone: the protocol registries (grant and response types, response modes, scopes, prompts, display modes, client authentication methods, token types, error codes), the PKCE code challenge, the authorization details of RFC 9396, and the OpenID Connect and OAuth claims of a JSON Web Token as properties of its payload. Full details: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
+    <PackageReleaseNotes>New in 3.0. The OAuth 2.0 and OpenID Connect vocabulary that Abblix OIDC Server and its client share, moved out of Abblix.OIDC.Server and Abblix.JWT into the Abblix.Oidc namespace so a client can reference it alone: the protocol registries (grant and response types, response modes, scopes, prompts, display modes, client authentication methods, token types, error codes), the PKCE code challenge, the authorization details of RFC 9396, and the OpenID Connect and OAuth claims of a JSON Web Token as properties of its payload. Full details: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
