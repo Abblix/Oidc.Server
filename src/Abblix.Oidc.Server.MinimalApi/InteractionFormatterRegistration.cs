@@ -7,9 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -27,7 +29,7 @@ internal static class InteractionFormatterRegistration
 
         services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
         services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
-        services.TryAddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>();
+        services.TryAddSingleton<ICheckSessionResponseCache<IResult>, CheckSessionResponseCache<IResult>>();
 
         services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
         services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();

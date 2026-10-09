@@ -6,7 +6,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Abblix.Oidc.Server.SharedSignals</PackageId>
+    <PackageId>Abblix.OIDC.Server.SharedSignals</PackageId>
     <Title>Abblix OIDC Server Shared Signals</Title>
     <Description>Runs an Abblix Shared Signals transmitter on a multi-tenant Abblix OIDC Server: each tenant's streams, queued events, delivery claims, issuer and signing keys are its own.</Description>
     <Authors>Abblix LLP</Authors>

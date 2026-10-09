@@ -1,4 +1,4 @@
-# Abblix.Oidc.Server.SharedSignals
+# Abblix.OIDC.Server.SharedSignals
 
 Runs an [Abblix Shared Signals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter on a multi-tenant Abblix OIDC Server, so that each tenant transmits as itself.
 

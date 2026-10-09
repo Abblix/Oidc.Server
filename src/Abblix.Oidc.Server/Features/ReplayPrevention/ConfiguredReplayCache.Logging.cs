@@ -13,19 +13,19 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 partial class ConfiguredReplayCache
 {
     [LoggerMessage(
-        EventId = LogEvents.Tokens.DistributedJwtReplayCache.ReplayDetected,
+        EventId = LogEvents.Tokens.ConfiguredReplayCache.ReplayDetected,
         Level = LogLevel.Debug,
         Message = "JWT replay detected for jti {JwtId}")]
     private partial void LogReplayDetected(string JwtId);
 
     [LoggerMessage(
-        EventId = LogEvents.Tokens.DistributedJwtReplayCache.MarkedAsUsed,
+        EventId = LogEvents.Tokens.ConfiguredReplayCache.MarkedAsUsed,
         Level = LogLevel.Debug,
         Message = "Marked jti {JwtId} as used, remembered until {ExpiresAt}")]
     private partial void LogMarkedAsUsed(string JwtId, DateTimeOffset ExpiresAt);
 
     [LoggerMessage(
-        EventId = LogEvents.Tokens.DistributedJwtReplayCache.Released,
+        EventId = LogEvents.Tokens.ConfiguredReplayCache.Released,
         Level = LogLevel.Debug,
         Message = "Released jti {JwtId}, so it reads as fresh again")]
     private partial void LogReleased(string JwtId);

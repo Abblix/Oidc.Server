@@ -60,7 +60,7 @@ public class ReplayPreventionRegistrationTests
         Assert.True(await cache.TryReserveAsync(
             "some-jti", Now.AddMinutes(5), TestContext.Current.CancellationToken));
 
-        Assert.Equal(1, recorder.Count(LogEvents.Tokens.DistributedJwtReplayCache.MarkedAsUsed));
+        Assert.Equal(1, recorder.Count(LogEvents.Tokens.ConfiguredReplayCache.MarkedAsUsed));
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider

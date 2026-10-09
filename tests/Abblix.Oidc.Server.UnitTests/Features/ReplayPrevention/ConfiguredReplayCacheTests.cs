@@ -98,7 +98,7 @@ public class ConfiguredReplayCacheTests
         // nothing between, which reads as the guard letting a replay through.
         Assert.Contains(
             logs.Entries,
-            entry => entry.EventId.Id == LogEvents.Tokens.DistributedJwtReplayCache.Released
+            entry => entry.EventId.Id == LogEvents.Tokens.ConfiguredReplayCache.Released
                      && entry.Message.Contains("token-released", StringComparison.Ordinal));
     }
 
