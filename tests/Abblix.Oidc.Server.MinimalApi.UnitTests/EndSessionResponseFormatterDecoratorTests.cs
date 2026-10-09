@@ -104,6 +104,6 @@ public class EndSessionResponseFormatterDecoratorTests
     public async Task ARefusal_LeavesTheCookieAlone()
     {
         Assert.False(await ClearsTheCookieAsync(
-            new OidcError(Abblix.Oidc.Server.Common.Constants.ErrorCodes.InvalidRequest, "no")));
+            new OidcError(Abblix.Oidc.ErrorCodes.InvalidRequest, "no")));
     }
 }

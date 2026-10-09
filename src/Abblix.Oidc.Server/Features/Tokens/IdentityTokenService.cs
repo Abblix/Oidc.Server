@@ -187,8 +187,8 @@ internal class IdentityTokenService(
 		// half of the value's digest, taken with the hash JWA pairs with this token's own signing 'alg'.
 		// The computation is shared with the client package through Abblix.Jwt, because a binding both
 		// sides must agree on is not something to write twice.
-		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.CodeHash, authorizationCode);
-		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.AccessTokenHash, accessToken);
+		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.CHash, authorizationCode);
+		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.AtHash, accessToken);
 
 		if (pushBindings is null)
 			return;
@@ -197,12 +197,12 @@ internal class IdentityTokenService(
 		// sentence being phrased about hashes: the worked example beside it carries the plain value, and
 		// the client's own requirement is to check this claim MATCHES the identifier it asked about,
 		// which it could not do against a digest.
-		identityToken.Payload[JwtClaimTypes.AuthenticationRequestId] = pushBindings.AuthenticationRequestId;
+		identityToken.Payload[OidcClaimTypes.AuthenticationRequestId] = pushBindings.AuthenticationRequestId;
 
 		// The refresh token's hash is a hash, by the same recipe as at_hash, and only when one is sent -
 		// "In case a Refresh Token is sent to the Client".
 		AddHashClaim(
-			identityToken, signingAlgorithm, JwtClaimTypes.RefreshTokenHash, pushBindings.RefreshToken);
+			identityToken, signingAlgorithm, OidcClaimTypes.RefreshTokenHash, pushBindings.RefreshToken);
 	}
 
 	private static void AddHashClaim(

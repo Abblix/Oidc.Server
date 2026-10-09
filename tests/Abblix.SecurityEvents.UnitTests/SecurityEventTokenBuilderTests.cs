@@ -175,7 +175,7 @@ public class SecurityEventTokenBuilderTests
             .WithJwtId("id-1");
 
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
-        Assert.Contains(JwtClaimTypes.Events, exception.Message);
+        Assert.Contains(IanaClaimTypes.Events, exception.Message);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class SecurityEventTokenBuilderTests
     [InlineData(JwtClaimTypes.JwtId)]
     [InlineData(JwtClaimTypes.IssuedAt)]
     [InlineData(JwtClaimTypes.Subject)]
-    [InlineData(JwtClaimTypes.Events)]
+    [InlineData(IanaClaimTypes.Events)]
     [InlineData(IanaClaimTypes.Txn)]
     [InlineData(IanaClaimTypes.Toe)]
     [InlineData(IanaClaimTypes.SubId)]
@@ -339,7 +339,7 @@ public class SecurityEventTokenBuilderTests
         var second = builder.Build();
 
         // Mutating one token must not reach the other.
-        first.Token.Payload.Json.Remove(JwtClaimTypes.Events);
+        first.Token.Payload.Json.Remove(IanaClaimTypes.Events);
 
         Assert.NotNull(second.Events);
         Assert.Single(second.Events);

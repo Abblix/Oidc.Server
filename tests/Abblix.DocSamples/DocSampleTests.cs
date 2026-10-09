@@ -208,12 +208,12 @@ public class DocSampleTests
     /// versions were narrower and both looked complete: one type's assembly covered a third of the
     /// surface, and <c>GetReferencedAssemblies</c> covered five of the seven then referenced, because
     /// that is the reference table the compiler EMITTED - trimmed to assemblies whose types the test
-    /// code happens to touch. Sixteen projects are referenced now; what the assertion below reads is
+    /// code happens to touch. What the assertion below reads is
     /// <see cref="Enrolment.Libraries"/> against the number of ASSEMBLIES beside the output - a third
     /// quantity again, and one that agrees with the other two only while BOTH halves hold: every
     /// referenced project emits documentation, and nothing arrives beside the output that this project
-    /// does not name. Drop a transitively-reachable reference and the three read 15, 16 and 16. The
-    /// five-of-seven is history.
+    /// does not name. Drop a transitively-reachable reference and the reference count falls one below
+    /// the other two.
     /// Measured, it omitted <c>Abblix.DependencyInjection</c> and <c>Abblix.SecurityEvents</c>, both
     /// shipped packages, and a stub named after a type in either passed.
     /// </para>

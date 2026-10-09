@@ -5,12 +5,14 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Xunit;
 
-namespace Abblix.Jwt.UnitTests;
+namespace Abblix.Oidc.UnitTests;
 
 /// <summary>
 /// Unit tests for JWT claims serialization and deserialization (round-trip testing).
@@ -724,7 +726,7 @@ public class JsonWebTokenClaimsTests
     /// <summary>
     /// Verifies that the <c>authorization_details</c> claim (RFC 9396 Section 9) round-trips through the
     /// full sign/encrypt/decrypt/validate pipeline via the typed
-    /// <see cref="JsonWebTokenPayload.AuthorizationDetails"/> accessor. Both standardised
+    /// <c>AuthorizationDetails</c> accessor. Both standardised
     /// RFC 9396 Section 2.2 members and type-specific payload, which is reached through the wrapped
     /// <see cref="AuthorizationDetail.Json"/> node rather than through a typed member, survive the cycle.
     /// </summary>

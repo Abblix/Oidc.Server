@@ -227,7 +227,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
         var idToken = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
-        return idToken[JwtClaimTypes.AuthenticationTime]!.GetValue<long>();
+        return idToken[IanaClaimTypes.AuthTime]!.GetValue<long>();
     }
 
     /// <summary>

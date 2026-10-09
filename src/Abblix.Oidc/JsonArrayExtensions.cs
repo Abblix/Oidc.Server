@@ -8,11 +8,11 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
-namespace Abblix.Jwt;
+namespace Abblix.Oidc;
 
 /// <summary>
 /// Conversion helpers between a raw <see cref="JsonArray"/> wire form and a sequence of
-/// <see cref="AuthorizationDetail"/> wrappers. Parallels <see cref="JsonObjectExtensions"/>
+/// <see cref="AuthorizationDetail"/> wrappers. Parallels <see cref="Abblix.Jwt.JsonObjectExtensions"/>
 /// for object-shaped claims; here the shape is a JSON array and each element is a wrapper
 /// over its underlying <see cref="JsonNode"/>.
 /// </summary>

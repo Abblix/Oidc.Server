@@ -47,6 +47,7 @@ public class LicenseHeaderTests
         "Abblix.Utils",
         "Abblix.DependencyInjection",
         "Abblix.Jwt",
+        "Abblix.Oidc",
         "Abblix.SecurityEvents",
         "Abblix.SecurityEvents.CAEP",
         "Abblix.SecurityEvents.RISC",

@@ -6,8 +6,9 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 
-namespace Abblix.Jwt;
+namespace Abblix.Oidc;
 
 /// <summary>
 /// One entry in the OAuth 2.0 Rich Authorization Requests <c>authorization_details</c> array

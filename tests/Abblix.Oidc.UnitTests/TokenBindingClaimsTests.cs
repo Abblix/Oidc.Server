@@ -5,10 +5,11 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using System.Text.Json.Nodes;
 using Xunit;
 
-namespace Abblix.Jwt.UnitTests;
+namespace Abblix.Oidc.UnitTests;
 
 /// <summary>
 /// Tests the accessors for the claims that bind an ID token to what was issued alongside it.
@@ -21,8 +22,8 @@ namespace Abblix.Jwt.UnitTests;
 /// </remarks>
 public class TokenBindingClaimsTests
 {
-    private const string AccessTokenHashValue = "xsZZrUssMXjL3FBlzoSh2g";
-    private const string CodeHashValue = "LDktKdoQak3Pk0cnXxCltA";
+    private const string AccessTokenHashValue = "access-token-hash";
+    private const string CodeHashValue = "code-hash";
 
     /// <summary>
     /// The access-token hash round-trips through the accessor.

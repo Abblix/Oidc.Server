@@ -440,7 +440,7 @@ public class SecurityEventTokenValidatorTests
         var segments = compact.Split('.');
         var claims = (JsonObject)JsonNode.Parse(
             Encoding.UTF8.GetString(Base64Url.DecodeFromChars(segments[1])))!;
-        claims[JwtClaimTypes.Events] = new JsonObject
+        claims[IanaClaimTypes.Events] = new JsonObject
         {
             [MembershipChanged] = new JsonObject { ["change"] = new JsonObject() },
         };

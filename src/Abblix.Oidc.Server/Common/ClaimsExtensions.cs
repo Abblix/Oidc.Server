@@ -44,20 +44,6 @@ public static class ClaimsExtensions
 	private static bool IsRegistered(this Claim claim) => IanaClaimTypes.Registered.Contains(claim.Type);
 
 	/// <summary>
-	/// These can be defined at will by those using JWTs. But to avoid collisions they should be defined in the IANA JSON Web Token Registry
-	/// or be defined as a URI that contains a collision resistant namespace.
-	/// </summary>
-	public static IEnumerable<Claim> GetPublicClaims(this IEnumerable<Claim> claims) => claims.Where(IsPublic);
-
-	private static bool IsPublic(this Claim claim) => IanaClaimTypes.Public.Contains(claim.Type);
-
-	/// <summary>
-	/// These are the custom claims created to share information between parties that agree on using them and are neither registered or public claims.
-	/// </summary>
-	public static IEnumerable<Claim> GetPrivateClaims(this IEnumerable<Claim> claims)
-		=> claims.Where(claim => !claim.IsRegistered() && !claim.IsPublic());
-
-	/// <summary>
 	/// Returns the claims whose type does not match any of the given types, using case-insensitive comparison.
 	/// </summary>
 	/// <param name="claims">The source sequence of claims to filter.</param>

@@ -14,12 +14,12 @@ Usage:
 
 <!-- Include this section only for major releases with breaking changes -->
 <!-- Example from v2.0.0:
-- **Result Pattern Migration**: Completely migrated to `Result<TSuccess, TFailure>` pattern
+- Result Pattern Migration: Completely migrated to `Result<TSuccess, TFailure>` pattern
   - All handler methods now return `Result<TSuccess, TFailure>` instead of throwing exceptions
   - See [MIGRATION-2.0.md](MIGRATION-2.0.md) for detailed migration guide
-- **Framework Support Changes**: Dropped .NET 6 and .NET 7 support
+- Framework Support Changes: Dropped .NET 6 and .NET 7 support
   - Now exclusively targets .NET 8 (LTS), .NET 9, and .NET 10
-- **API Simplification**: All response types renamed to remove redundant 'Response' suffix
+- API Simplification: All response types renamed to remove redundant 'Response' suffix
   - `SuccessfulAuthorizationResponse` → `SuccessfulAuthorization`
   - `AuthorizationErrorResponse` → `AuthorizationError`
 -->
@@ -80,22 +80,22 @@ Detailed description
 <!-- Use bold headers for each item, then explain in detail with bullet points -->
 <!-- Examples:
 
-**Added support for CIBA with a dedicated endpoint compliant with the Client-Initiated Backchannel Authentication (CIBA) standard**
+Added support for CIBA with a dedicated endpoint compliant with the Client-Initiated Backchannel Authentication (CIBA) standard
 
 - Added support for CIBA with a dedicated endpoint compliant with the Client-Initiated Backchannel Authentication (CIBA) standard. This allows clients to initiate authentication through a secure backchannel.
 - Supports Signed Authentication Requests, allowing clients to send JWS-signed requests for enhanced security. This ensures that the requests are tamper-proof and that their integrity can be verified by the server.
 - The token endpoint now supports Poll Mode for CIBA, enabling clients to poll for tokens during the backchannel authentication process.
 - Full support for the CIBA grant type (`urn:openid:params:grant-type:ciba`) at the token endpoint, ensuring seamless token exchange once authentication is completed.
 
-**Multi-value claim support**
+Multi-value claim support
 
 - JWTs that previously dropped all but the first value for repeated claim types (e.g., multiple roles) now correctly emit arrays. The Abblix.JWT package now aggregates claims of the same type into JSON arrays and parses them back accurately.
 
-**Fixed routing-template resolution**
+Fixed routing-template resolution
 
 - The original token parser used a regex that stopped capturing fallback values at the first closing bracket, and its resolution loop could exit before all placeholders were replaced, resulting in literal `[route:…]` fragments, malformed templates, and startup-time 404s. We broadened the regex to capture any character in the fallback and improved the loop to run until no further substitutions occur.
 -->
 
 ---
 
-**Full Changelog**: https://github.com/Abblix/Oidc.Server/compare/v[PREVIOUS_VERSION]...v[VERSION]
+Full Changelog: https://github.com/Abblix/Oidc.Server/compare/v[PREVIOUS_VERSION]...v[VERSION]

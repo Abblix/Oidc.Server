@@ -5,14 +5,15 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using System.Text.Json.Nodes;
 using Xunit;
 
-namespace Abblix.Jwt.UnitTests;
+namespace Abblix.Oidc.UnitTests;
 
 /// <summary>
 /// Unit tests for <see cref="AuthorizationDetail"/> as a thin wrapper over a
-/// <see cref="JsonNode"/> claim element and the <see cref="JsonWebTokenPayload.AuthorizationDetails"/>
+/// <see cref="JsonNode"/> claim element and the <c>AuthorizationDetails</c>
 /// accessor. Verifies that the wrapper's typed property accessors read from and write to the
 /// underlying JSON in place - so member order and type-specific extension members survive the
 /// authorize → code → token round-trip byte-exact.

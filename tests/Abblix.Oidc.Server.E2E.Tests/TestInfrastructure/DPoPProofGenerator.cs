@@ -92,15 +92,15 @@ public sealed class DPoPProofGenerator : IDisposable
 
         var payload = new JsonObject
         {
-            [JwtClaimTypes.DPoPHttpMethod] = httpMethod,
-            [JwtClaimTypes.DPoPHttpUri] = requestUri.AbsoluteUri,
+            [IanaClaimTypes.Htm] = httpMethod,
+            [IanaClaimTypes.Htu] = requestUri.AbsoluteUri,
             [JwtClaimTypes.JwtId] = Guid.NewGuid().ToString("N"),
             [JwtClaimTypes.IssuedAt] = _timeProvider.GetUtcNow().ToUnixTimeSeconds(),
         };
 
         if (accessToken is not null)
         {
-            payload[JwtClaimTypes.DPoPAccessTokenHash] =
+            payload[IanaClaimTypes.Ath] =
                 Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(accessToken)));
         }
 

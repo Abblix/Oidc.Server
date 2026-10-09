@@ -76,12 +76,12 @@ public class UserClaimsProviderTests
     /// claim broke first.
     /// </summary>
     [Theory]
-    [InlineData(JwtClaimTypes.Email, true)]
-    [InlineData(JwtClaimTypes.Email, false)]
-    [InlineData(JwtClaimTypes.Email, null)]
-    [InlineData(JwtClaimTypes.AuthenticationTime, true)]
-    [InlineData(JwtClaimTypes.AuthenticationTime, false)]
-    [InlineData(JwtClaimTypes.AuthenticationTime, null)]
+    [InlineData(IanaClaimTypes.Email, true)]
+    [InlineData(IanaClaimTypes.Email, false)]
+    [InlineData(IanaClaimTypes.Email, null)]
+    [InlineData(IanaClaimTypes.AuthTime, true)]
+    [InlineData(IanaClaimTypes.AuthTime, false)]
+    [InlineData(IanaClaimTypes.AuthTime, null)]
     public async Task AClaimTheProviderDidNotReturn_CostsTheResponseNothing(string claimName, bool? essential)
     {
         var claims = await GetClaimsAsync(
@@ -116,7 +116,7 @@ public class UserClaimsProviderTests
         // speak about at all.
         var claims = await GetClaimsAsync(
             userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
-            requested: Requested(JwtClaimTypes.AuthContextClassRef, essential));
+            requested: Requested(IanaClaimTypes.Acr, essential));
 
         Assert.NotNull(claims);
     }
@@ -127,14 +127,14 @@ public class UserClaimsProviderTests
         var claims = await GetClaimsAsync(
             userInfo: new JsonObject
             {
-                [JwtClaimTypes.Email] = "jane@example.com",
-                [JwtClaimTypes.EmailVerified] = true,
+                [IanaClaimTypes.Email] = "jane@example.com",
+                [IanaClaimTypes.EmailVerified] = true,
             },
-            requested: Requested(JwtClaimTypes.Email, essential: true));
+            requested: Requested(IanaClaimTypes.Email, essential: true));
 
         Assert.NotNull(claims);
-        Assert.Equal("jane@example.com", (string?)claims![JwtClaimTypes.Email]);
-        Assert.Equal(true, (bool?)claims[JwtClaimTypes.EmailVerified]);
+        Assert.Equal("jane@example.com", (string?)claims![IanaClaimTypes.Email]);
+        Assert.Equal(true, (bool?)claims[IanaClaimTypes.EmailVerified]);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class UserClaimsProviderTests
         // the host does not hold, because there is no response to shape rather than one claim to leave out.
         var claims = await GetClaimsAsync(
             userInfo: null,
-            requested: Requested(JwtClaimTypes.Email, essential: true));
+            requested: Requested(IanaClaimTypes.Email, essential: true));
 
         Assert.Null(claims);
     }
@@ -156,7 +156,7 @@ public class UserClaimsProviderTests
         // replaces whatever the provider wrote under that name.
         var claims = await GetClaimsAsync(
             userInfo: new JsonObject { [JwtClaimTypes.Subject] = "whatever-the-provider-says" },
-            requested: Requested(JwtClaimTypes.Email, essential: true));
+            requested: Requested(IanaClaimTypes.Email, essential: true));
 
         Assert.NotNull(claims);
         Assert.Equal(ClientFacingSubject, (string?)claims![JwtClaimTypes.Subject]);

@@ -20,6 +20,7 @@
     <Project Path="src/Abblix.Utils/Abblix.Utils.csproj" />
     <Project Path="src/Abblix.DependencyInjection/Abblix.DependencyInjection.csproj" />
     <Project Path="src/Abblix.Jwt/Abblix.Jwt.csproj" />
+    <Project Path="src/Abblix.Oidc/Abblix.Oidc.csproj" />
     <Project Path="src/Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
     <Project Path="src/Abblix.Oidc.Server.AspNetCore/Abblix.Oidc.Server.AspNetCore.csproj" />
     <Project Path="src/Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
@@ -45,6 +46,7 @@
     <Project Path="tests/Abblix.DocSamples/Abblix.DocSamples.csproj" />
     <Project Path="tests/Abblix.DocSamples.WebTemplate/Abblix.DocSamples.WebTemplate.csproj" />
     <Project Path="tests/Abblix.Jwt.UnitTests/Abblix.Jwt.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.UnitTests/Abblix.Oidc.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.AspNetCore.UnitTests/Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />

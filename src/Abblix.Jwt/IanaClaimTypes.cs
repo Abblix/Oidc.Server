@@ -38,7 +38,7 @@ public static class IanaClaimTypes
         Nonce, AuthTime, AtHash, CHash, Acr, Amr, SubJwk, Cnf, SipFromTag, SipDate, SipCallid, SipCseqNum, SipViaBranch,
         Orig, Dest, Mky, Events, Toe, Txn, Rph, Sid, Vot, Vtm, Attest, Origid, Act, Scope, ClientId, MayAct, Jcard,
         AtUseNbr, Div, Opt, Vc, Vp, Sph, AceProfile, Cnonce, Exi, Roles, Groups, Entitlements, TokenIntrospection,
-        Cdniv, Cdnicrit, Cdniip, Cdniuc, Cdniets, Cdnistt, Cdnistd, SigValClaims, AuthorizationDetails
+        Cdniv, Cdnicrit, Cdniip, Cdniuc, Cdniets, Cdnistt, Cdnistd, SigValClaims, AuthorizationDetails, Htm, Htu, Ath
     };
 
     // RFC7519, Section 4.1.1 - Issuer Claim
@@ -823,4 +823,23 @@ public static class IanaClaimTypes
     /// for a transaction, enabling fine-grained access control and tailored authorization experiences.
     /// </remarks>
     public const string AuthorizationDetails = "authorization_details";
+
+    // RFC9449, Section 12.7 - JSON Web Token Claims Registration
+
+    /// <summary>
+    /// The HTTP method of the request a DPoP proof is bound to (RFC 9449 section 4.2).
+    /// </summary>
+    public const string Htm = "htm";
+
+    /// <summary>
+    /// The HTTP target URI, without query and fragment, of the request a DPoP proof is bound to
+    /// (RFC 9449 section 4.2).
+    /// </summary>
+    public const string Htu = "htu";
+
+    /// <summary>
+    /// The hash of the access token a DPoP proof accompanies (RFC 9449 section 4.2): the base64url encoding of the
+    /// SHA-256 hash of the ASCII encoding of the access token's value.
+    /// </summary>
+    public const string Ath = "ath";
 }

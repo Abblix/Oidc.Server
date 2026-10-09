@@ -310,7 +310,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
 
         var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
         Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
-        Assert.Contains(TestConstants.ApiScope, payload[JwtClaimTypes.Scope]!.GetValue<string>().Split(' '));
+        Assert.Contains(TestConstants.ApiScope, payload[IanaClaimTypes.Scope]!.GetValue<string>().Split(' '));
     }
 
     /// <summary>

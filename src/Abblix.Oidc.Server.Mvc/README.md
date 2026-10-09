@@ -1,6 +1,6 @@
 # Abblix OIDC Server MVC
 
-**Abblix.OIDC.Server.MVC** integrates the Abblix OIDC Server with ASP.NET Core MVC, providing controller classes, model binding, and routing for the OpenID Connect endpoints. This is the recommended package for controller-based ASP.NET Core applications; hosts without MVC take [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) instead.
+Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, providing controller classes, model binding, and routing for the OpenID Connect endpoints. This is the recommended package for controller-based ASP.NET Core applications; hosts without MVC take [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) instead.
 
 ## What's New in Version 2.4
 
@@ -28,7 +28,7 @@
 dotnet add package Abblix.OIDC.Server.MVC
 ```
 
-This package includes **Abblix.OIDC.Server**, **Abblix.JWT**, **Abblix.DependencyInjection**, and **Abblix.Utils** as transitive dependencies.
+This package includes Abblix.OIDC.Server, Abblix.OIDC, Abblix.JWT, Abblix.DependencyInjection, and Abblix.Utils as transitive dependencies.
 
 ## Quick Start
 
@@ -72,14 +72,14 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils)** | Utility library with crypto, URI, and JSON helpers |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | .NET DI extensions with aliasing, composites, and decorators |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **Abblix.OIDC.Server.MVC** | ASP.NET Core MVC integration *(this package)* |
-| **[Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI)** | ASP.NET Core Minimal API integration |
-| **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
-| **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
+| [Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils) | Utility library with crypto, URI, and JSON helpers |
+| [Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection) | .NET DI extensions with aliasing, composites, and decorators |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| Abblix.OIDC.Server.MVC | ASP.NET Core MVC integration *(this package)* |
+| [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) | ASP.NET Core Minimal API integration |
+| [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents) | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
+| [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 
 ## Getting Started
 

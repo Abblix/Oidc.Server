@@ -164,7 +164,7 @@ public class AccessTokenServiceTests
 
         Assert.NotNull(capturedToken);
         Assert.Equal(grantId, capturedToken!.Payload.GrantId);
-        Assert.Equal(grantId is not null, capturedToken.Payload.Json.ContainsKey(JwtClaimTypes.GrantId));
+        Assert.Equal(grantId is not null, capturedToken.Payload.Json.ContainsKey(OidcClaimTypes.GrantId));
     }
 
     /// <summary>

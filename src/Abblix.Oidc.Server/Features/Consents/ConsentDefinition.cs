@@ -49,7 +49,7 @@ public record ConsentDefinition(ScopeDefinition[] Scopes, ResourceDefinition[] R
     /// <para>
     /// The storage is raw so that member order, type-specific payload and members this server does not model
     /// survive the round trip untouched. For rendering a consent screen, read the same entries as
-    /// <see cref="Abblix.Jwt.AuthorizationDetail"/> through <c>ToTypedArray()</c>: the typed view wraps these
+    /// <see cref="AuthorizationDetail"/> through <c>ToTypedArray()</c>: the typed view wraps these
     /// nodes rather than copying them, so it names the RFC 9396 section 2.2 common members without costing the
     /// rest.
     /// </para>

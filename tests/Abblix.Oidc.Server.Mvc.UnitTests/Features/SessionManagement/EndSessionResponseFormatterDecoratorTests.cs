@@ -82,7 +82,7 @@ public class EndSessionResponseFormatterDecoratorTests
     {
         var result = await _decorator.FormatResponseAsync(
             new EndSessionRequest(),
-            new OidcError(Common.Constants.ErrorCodes.InvalidRequest, "no"));
+            new OidcError(Abblix.Oidc.ErrorCodes.InvalidRequest, "no"));
 
         Assert.IsNotType<ActionResultDecorator>(result);
     }

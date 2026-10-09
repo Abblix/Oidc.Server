@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.OIDC</PackageId>
+    <Title>Abblix OIDC</Title>
+    <Description>The OAuth 2.0 and OpenID Connect vocabulary shared by Abblix OIDC Server and its client: grant and response types, scopes, prompts, error codes, client authentication methods, PKCE, and the protocol claims of a JSON Web Token.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Oidc</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix OIDC OpenID-Connect OAuth OAuth2 PKCE JWT Claims Scopes Grant-Types Response-Types Authorization-Details dotnet RFC6749 RFC7636 RFC8693 RFC9396</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>New in 3.0. The OAuth 2.0 and OpenID Connect vocabulary that Abblix OIDC Server and its client share, moved out of Abblix.OIDC.Server and Abblix.JWT into the Abblix.Oidc namespace so a client can reference it alone: the protocol registries (grant and response types, response modes, scopes, prompts, display modes, client authentication methods, token types, error codes), the PKCE code challenge, the authorization details of RFC 9396, and the OpenID Connect and OAuth claims of a JSON Web Token as properties of its payload. Full details: https://github.com/Abblix/Oidc.Server/releases</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>
