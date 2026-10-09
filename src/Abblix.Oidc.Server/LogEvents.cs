@@ -400,11 +400,10 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ReplayPrevention/DistributedJwtReplayCache.cs</c> - JWT replay
-        /// protection via <c>IDistributedCache</c> per RFC 7523 Section 3 and
-        /// RFC 9449 section 11.1 (sub-range 5040-5059).
+        /// <c>Features/ReplayPrevention/ConfiguredReplayCache.cs</c> - JWT replay
+        /// protection per RFC 7523 Section 3 and RFC 9449 section 11.1 (sub-range 5040-5059).
         /// </summary>
-        public static class DistributedJwtReplayCache
+        public static class ConfiguredReplayCache
         {
             private const int Base = 5040;
 

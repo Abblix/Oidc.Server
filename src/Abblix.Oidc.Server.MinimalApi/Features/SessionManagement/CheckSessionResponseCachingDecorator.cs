@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
@@ -18,7 +19,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 /// </summary>
 public class CheckSessionResponseCachingDecorator(
     ICheckSessionResponseFormatter inner,
-    ICheckSessionResponseCache cache,
+    ICheckSessionResponseCache<IResult> cache,
     IIssuerSettings issuer) : ICheckSessionResponseFormatter
 {
     /// <inheritdoc />
