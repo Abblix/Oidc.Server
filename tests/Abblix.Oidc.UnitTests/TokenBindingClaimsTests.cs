@@ -22,8 +22,8 @@ namespace Abblix.Oidc.UnitTests;
 /// </remarks>
 public class TokenBindingClaimsTests
 {
-    private const string AccessTokenHashValue = "xsZZrUssMXjL3FBlzoSh2g";
-    private const string CodeHashValue = "LDktKdoQak3Pk0cnXxCltA";
+    private const string AccessTokenHashValue = "access-token-hash";
+    private const string CodeHashValue = "code-hash";
 
     /// <summary>
     /// The access-token hash round-trips through the accessor.

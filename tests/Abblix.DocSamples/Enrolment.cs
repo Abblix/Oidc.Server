@@ -82,7 +82,7 @@ public static class Enrolment
     /// as coverage.
     /// </para>
     /// </remarks>
-    public const int Libraries = 17;
+    public const int Libraries = 18;
 
     /// <summary>
     /// How many projects under <c>src/</c> this one names in its own project file.
@@ -102,7 +102,7 @@ public static class Enrolment
     /// design with a better failure.
     /// </para>
     /// </remarks>
-    public const int References = 17;
+    public const int References = 18;
 
     /// <summary>
     /// How many distinct code samples the compiler recorded that nothing here compiles.
@@ -149,5 +149,5 @@ public static class Enrolment
     /// as that work is done.
     /// </para>
     /// </remarks>
-    public const int ReadmeUnenrolled = 55;
+    public const int ReadmeUnenrolled = 56;
 }

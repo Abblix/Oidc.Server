@@ -41,6 +41,7 @@
         <ProjectReference Include="..\..\src\Abblix.Jwt\Abblix.Jwt.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc\Abblix.Oidc.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
