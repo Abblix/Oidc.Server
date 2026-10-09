@@ -22,6 +22,17 @@ public class CodeChallengeTests
             CodeChallenge.Calculate(CodeChallengeMethods.S256, "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
     }
 
+    /// <summary>
+    /// The verifier of RFC 7636 Appendix B under SHA-512, computed outside this library.
+    /// </summary>
+    [Fact]
+    public void S512_IsTheBase64UrlOfTheSha512OfTheVerifier()
+    {
+        Assert.Equal(
+            "gF6OL6GcjNWj0_70FLf0hrPaehhw-bZdlX_UytXqksUpQdbsb34wySChXvpivpSVbgF5a7PLad6hekkGrqW2Nw",
+            CodeChallenge.Calculate(CodeChallengeMethods.S512, "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
+    }
+
     [Fact]
     public void Plain_IsTheVerifierItself()
     {

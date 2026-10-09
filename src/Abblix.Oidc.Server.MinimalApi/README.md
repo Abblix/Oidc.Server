@@ -24,7 +24,7 @@
 dotnet add package Abblix.OIDC.Server.MinimalAPI
 ```
 
-This package includes **Abblix.OIDC.Server**, **Abblix.JWT**, **Abblix.DependencyInjection**, and **Abblix.Utils** as transitive dependencies.
+This package includes **Abblix.OIDC.Server**, **Abblix.OIDC**, **Abblix.JWT**, **Abblix.DependencyInjection**, and **Abblix.Utils** as transitive dependencies.
 
 ## Quick Start
 

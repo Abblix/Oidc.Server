@@ -132,7 +132,7 @@ the key material rather than beside either consumer.
 
 ## Part of the Abblix product family
 
-Abblix.JWT is the token layer under [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) and [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents); the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
+Abblix.JWT is the token layer under [Abblix.OIDC](https://www.nuget.org/packages/Abblix.OIDC), [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) and [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents); the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 

@@ -18,3 +18,13 @@ if (payload.Nonce != expectedNonce)
 ```bash
 dotnet add package Abblix.OIDC
 ```
+
+## License
+
+Abblix.OIDC is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
+
+## Contacts
+
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

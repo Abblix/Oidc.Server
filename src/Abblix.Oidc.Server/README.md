@@ -68,6 +68,7 @@ dotnet add package Abblix.OIDC.Server
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 | **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | Signing and decryption keys held in HashiCorp Vault / OpenBao Transit |
 | **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Signing and decryption keys held in Azure Key Vault |
+| **[Abblix.OIDC](https://www.nuget.org/packages/Abblix.OIDC)** | The OAuth 2.0 and OpenID Connect vocabulary the server shares with its client |
 | **Abblix.OIDC.Server** | Core OpenID Connect server implementation *(this package)* |
 | **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
 | **[Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI)** | ASP.NET Core Minimal API integration |

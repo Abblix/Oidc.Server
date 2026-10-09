@@ -38,7 +38,7 @@ public static class IanaClaimTypes
         Nonce, AuthTime, AtHash, CHash, Acr, Amr, SubJwk, Cnf, SipFromTag, SipDate, SipCallid, SipCseqNum, SipViaBranch,
         Orig, Dest, Mky, Events, Toe, Txn, Rph, Sid, Vot, Vtm, Attest, Origid, Act, Scope, ClientId, MayAct, Jcard,
         AtUseNbr, Div, Opt, Vc, Vp, Sph, AceProfile, Cnonce, Exi, Roles, Groups, Entitlements, TokenIntrospection,
-        Cdniv, Cdnicrit, Cdniip, Cdniuc, Cdniets, Cdnistt, Cdnistd, SigValClaims, AuthorizationDetails
+        Cdniv, Cdnicrit, Cdniip, Cdniuc, Cdniets, Cdnistt, Cdnistd, SigValClaims, AuthorizationDetails, Htm, Htu, Ath
     };
 
     // RFC7519, Section 4.1.1 - Issuer Claim
