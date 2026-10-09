@@ -36,7 +36,7 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         context.Require(
             SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.IssuerAccepted);
 
-        // The profile's type step judges the type, before the signature and in this package's error vocabulary
+        // The profile's type step judges the type, in this package's error vocabulary
         var result = await verifier.VerifyAsync(
             context.CompactToken,
             TokenTypePolicy.CheckedByCaller,

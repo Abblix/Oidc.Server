@@ -88,9 +88,8 @@ public static class JwtTypes
 		JsonWebTokenTypes.AccessToken, RefreshToken, RegistrationAccessToken, InitialAccessToken);
 
 	/// <summary>
-	/// The types an ID token this server issued may carry: none, since OpenID Connect Core defines none, or the
-	/// generic <c>JWT</c> of RFC 7519 Section 5.1, which the JWT library of earlier versions wrote into an ID
-	/// token issued without a type.
+	/// The types an ID token may carry: none, since OpenID Connect Core defines none, or the generic <c>JWT</c> of
+	/// RFC 7519 Section 5.1.
 	/// </summary>
 	/// <remarks>
 	/// Every other token this server issues carries a type of its own, so this refuses each of them.

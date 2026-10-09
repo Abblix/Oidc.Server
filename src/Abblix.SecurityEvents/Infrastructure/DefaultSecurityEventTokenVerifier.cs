@@ -19,9 +19,10 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// <remarks>
 /// The core is asked for the signature - a signed token, verified against the issuer's keys - and
 /// for the token types the caller accepts; the validation pipeline judges the type in its own step
-/// and asks for none here. Issuer allowlisting, audience and freshness are pipeline steps, and letting the core re-check them would report their
-/// failures in the wrong vocabulary from the wrong place. An issuer the resolver yields no keys for is reported as a key miss
-/// rather than a bad signature, because a refetch may heal the former and never the latter.
+/// and asks for none here. Issuer allowlisting, audience and freshness are pipeline steps, and
+/// letting the core re-check them would report their failures in the wrong vocabulary from the
+/// wrong place. An issuer the resolver yields no keys for is reported as a key miss rather than a
+/// bad signature, because a refetch may heal the former and never the latter.
 /// </remarks>
 /// <param name="validator">The JWT core's validator.</param>
 /// <param name="keyResolver">The receiver's key trust.</param>

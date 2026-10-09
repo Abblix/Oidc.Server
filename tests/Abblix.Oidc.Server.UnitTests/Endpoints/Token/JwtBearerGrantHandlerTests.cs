@@ -1042,7 +1042,7 @@ public class JwtBearerGrantHandlerTests
 	[Theory]
 	[InlineData(JsonWebTokenTypes.AccessToken)]
 	[InlineData(JwtTypes.RefreshToken)]
-	[InlineData(null)]
+	[InlineData("text/jwt")]
 	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
 	{
 		// Arrange
@@ -1067,13 +1067,16 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that JWTs with allowed token types are accepted (case-insensitive).
+	/// Verifies that JWTs with allowed token types are accepted, in any case and either spelling of the
+	/// application/ prefix, and that an assertion without a type is accepted too, since RFC 7523 defines none.
 	/// </summary>
 	[Theory]
 	[InlineData("JWT")]
 	[InlineData("jwt")]
 	[InlineData("Jwt")]
-	public async Task TokenTypeValidation_WithAllowedType_ShouldSucceed(string tokenType)
+	[InlineData("application/JWT")]
+	[InlineData(null)]
+	public async Task TokenTypeValidation_WithAllowedType_ShouldSucceed(string? tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["JWT"]);
