@@ -98,8 +98,9 @@ public partial class AuthenticationCompletionHandlerTests
             _notificationService.Object);
 
     private PushModeCompletionHandler CreatePushModeHandler(
-        StubAuthorizationDetailsPolicy? policy = null) =>
-        new(Mock.Of<ILogger<PushModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+        StubAuthorizationDetailsPolicy? policy = null,
+        ILogger<PushModeCompletionHandler>? logger = null) =>
+        new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
             _notificationService.Object, _tokenRequestProcessor.Object,
             policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
@@ -521,16 +522,30 @@ public partial class AuthenticationCompletionHandlerTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
         };
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
-            .ThrowsAsync(new InvalidOperationException("The signing key is unavailable"));
+        var fault = new InvalidOperationException("The signing key is unavailable");
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>())).ThrowsAsync(fault);
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler()
+        var logger = new Mock<ILogger<PushModeCompletionHandler>>();
+        // [LoggerMessage] gates each call on IsEnabled, which a loose mock answers false
+        logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(logger: logger.Object)
             .CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn));
 
+        Assert.Same(fault, thrown);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
         VerifyPushErrorSent(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        logger.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.Is<EventId>(id => id.Id == LogEvents.Device.PushModeCompletionHandler.TokenIssuanceFaulted),
+                It.IsAny<It.IsAnyType>(),
+                fault,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 
     /// <summary>
