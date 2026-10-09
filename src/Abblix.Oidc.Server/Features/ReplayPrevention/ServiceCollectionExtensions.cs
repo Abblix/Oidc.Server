@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
     private const string CacheKeyPrefix = "Abblix.Oidc.Server.Features.ReplayPrevention:";
 
     /// <summary>
-    /// Registers the replay cache and the deprecated contract that still resolves to it.
+    /// Registers the replay cache and decorates it with this server's clock skew and log events.
     /// </summary>
     /// <remarks>
     /// Idempotent and TryAdd throughout, because three unrelated feature registrations call it

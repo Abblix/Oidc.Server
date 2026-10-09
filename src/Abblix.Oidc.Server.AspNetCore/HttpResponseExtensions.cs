@@ -71,6 +71,23 @@ public static class HttpResponseExtensions
     }
 
     /// <summary>
+    /// Redirects the user agent with HTTP 303 See Other instead of the framework-default 302 Found.
+    /// </summary>
+    /// <remarks>
+    /// A 303 forces the follow-up request to use GET and never re-sends the original request body, so the
+    /// authorization endpoint (which accepts POST and may carry the user's credentials) never leaks that body
+    /// to the redirect target. RFC 9700 Section 4.12 says such a server "MUST NOT use the HTTP 307" and
+    /// "SHOULD use HTTP status code 303 (See Other)": 307 is forbidden, and 303 is the recommended choice.
+    /// </remarks>
+    /// <param name="response">The HTTP response to modify.</param>
+    /// <param name="location">The absolute URI to redirect the user agent to.</param>
+    public static void RedirectSeeOther(this HttpResponse response, string location)
+    {
+        response.StatusCode = StatusCodes.Status303SeeOther;
+        response.Headers.Location = location;
+    }
+
+    /// <summary>
     /// Writes <c>Retry-After</c> onto the response, telling the caller how long to wait before asking again.
     /// Use it where the response itself is at hand; a refusal that travels as a result carries the header
     /// through <see cref="RetryAfterHeaderValue"/> instead.

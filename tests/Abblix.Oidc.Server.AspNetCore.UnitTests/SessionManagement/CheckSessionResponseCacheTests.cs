@@ -6,29 +6,24 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
-using Microsoft.AspNetCore.Http;
+using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
+namespace Abblix.Oidc.Server.AspNetCore.UnitTests.SessionManagement;
 
 public class CheckSessionResponseCacheTests
 {
-    /// <summary>
-    /// A check-session page is kept until the issuer it was formatted for is released, so a server whose tenants
-    /// come and go does not keep the page of every tenant it ever served.
-    /// </summary>
     [Fact]
     public async Task APage_IsKeptUntilItsIssuerIsReleased()
     {
-        var cache = new CheckSessionResponseCache(Options.Create(new MemoryCacheOptions()));
+        var cache = new CheckSessionResponseCache<object>(Options.Create(new MemoryCacheOptions()));
         using var released = new CancellationTokenSource();
         var formatted = 0;
-        Task<IResult> Format()
+        Task<object> Format()
         {
             formatted++;
-            return Task.FromResult(Results.Ok());
+            return Task.FromResult(new object());
         }
 
         await cache.GetOrAddAsync("acme", Format, released.Token);

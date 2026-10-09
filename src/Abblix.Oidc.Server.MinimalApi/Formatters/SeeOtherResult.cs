@@ -6,16 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Redirects the user agent with HTTP 303 See Other instead of the framework-default 302 Found.
-/// A 303 forces the follow-up request to use GET and never re-sends the original request body, so the
-/// authorization endpoint (which accepts POST and may carry the user's credentials) never leaks that body
-/// to the redirect target. RFC 9700 Section 4.12 says such a server "MUST NOT use the HTTP 307" and
-/// "SHOULD use HTTP status code 303 (See Other)": 307 is forbidden, and 303 is the recommended choice.
+/// Redirects the user agent with HTTP 303 See Other, as <see cref="HttpResponseExtensions.RedirectSeeOther"/>
+/// explains.
 /// </summary>
 internal sealed class SeeOtherResult : IResult
 {
@@ -30,9 +28,7 @@ internal sealed class SeeOtherResult : IResult
     /// <inheritdoc />
     public Task ExecuteAsync(HttpContext httpContext)
     {
-        var response = httpContext.Response;
-        response.StatusCode = StatusCodes.Status303SeeOther;
-        response.Headers.Location = _location;
+        httpContext.Response.RedirectSeeOther(_location);
         return Task.CompletedTask;
     }
 }
