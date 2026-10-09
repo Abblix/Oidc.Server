@@ -132,14 +132,15 @@ public record JwtBearerOptions
 
 	/// <summary>
 	/// Allowed values for the 'typ' (type) header in JWT assertions.
-	/// When not empty, JWTs must have a typ header matching one of these values.
-	/// Common values include "JWT" and "at+jwt".
-	/// Default is empty (typ header validation disabled).
+	/// When not empty, a JWT carrying a typ header must match one of these values; a JWT without one is accepted,
+	/// since RFC 7523 defines no type for an assertion. Common values include "JWT" and "at+jwt".
+	/// Default is empty: a token typed as another kind of token, such as an access token, is refused, and any
+	/// other type is accepted.
 	/// </summary>
 	/// <remarks>
-	/// While RFC 7523 does not mandate typ header validation, validating it prevents token confusion attacks
-	/// in multi-token environments where different token types (access tokens, ID tokens, assertions) may coexist.
-	/// Set to ["JWT"] or ["at+jwt"] based on your token ecosystem requirements.
+	/// Listing the types separates typed tokens only: a token without a type, an ID token included, passes any
+	/// list and is held back by the audience check, which requires this server's token endpoint. A deployment
+	/// whose trusted issuers send their access tokens as assertions lists "at+jwt".
 	/// </remarks>
 	public string[] AllowedTokenTypes { get; set; } = [];
 }

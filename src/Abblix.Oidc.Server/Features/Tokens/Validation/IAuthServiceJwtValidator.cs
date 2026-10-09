@@ -23,8 +23,13 @@ public interface IAuthServiceJwtValidator
 	/// This method ensures that the JWT is correctly formatted, signed, and adheres to the expected claims and audience.
 	/// </summary>
 	/// <param name="jwt">The JWT string to be validated.</param>
+	/// <param name="tokenTypes">The token types the caller accepts, so a token this server issued for one purpose is
+	/// refused where another is expected.</param>
 	/// <param name="options">The validation options that control how the JWT is validated, including checks for issuer,
 	/// audience, expiration, and more. Defaults to <see cref="ValidationOptions.Default"/> if not specified.</param>
 	/// <returns>A task representing the asynchronous operation, resulting in a Result containing either a validated JsonWebToken or a JwtValidationError.</returns>
-	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default);
+	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
+		string jwt,
+		TokenTypePolicy tokenTypes,
+		ValidationOptions options = ValidationOptions.Default);
 }

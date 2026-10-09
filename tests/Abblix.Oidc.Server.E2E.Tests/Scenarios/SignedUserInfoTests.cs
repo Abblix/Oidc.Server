@@ -137,6 +137,7 @@ public class SignedUserInfoTests(TestFactory factory) : TestBase(factory)
 
         var validationResult = await CreateValidator().ValidateAsync(body, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateIssuer = iss => Task.FromResult(
                 iss.TrimEnd('/') == discovery.Issuer.AbsoluteUri.TrimEnd('/')),
             ValidateAudience = aud => Task.FromResult(aud.Contains(clientId)),

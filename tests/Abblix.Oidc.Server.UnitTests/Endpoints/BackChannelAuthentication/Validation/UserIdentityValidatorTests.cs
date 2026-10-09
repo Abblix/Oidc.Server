@@ -136,7 +136,7 @@ public class UserIdentityValidatorTests
         var token = new JsonWebToken();
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         var context = CreateContext(
@@ -152,6 +152,33 @@ public class UserIdentityValidatorTests
     }
 
     /// <summary>
+    /// A login_hint_token signed by the client but typed as another kind of token this server names is refused,
+    /// since CIBA Core 1.0 leaves its format to the deployment and the type is judged after validation
+    /// (RFC 8725 Section 3.11).
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
+    public async Task ValidateAsync_LoginHintTokenOfAnotherKind_ShouldReturnInvalidRequest(string tokenType)
+    {
+        var token = new JsonWebToken { Header = { Type = tokenType } };
+
+        _clientJwtValidator
+            .Setup(v => v.ValidateAsync(
+                "jwt-token", TokenTypesArg.Is(TokenTypePolicy.CheckedByCaller), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
+
+        var context = CreateContext(
+            loginHintToken: "jwt-token",
+            parseLoginHintTokenAsJwt: true);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
     /// Verifies error when login_hint_token is issued for different client.
     /// JWT must be issued for the requesting client.
     /// </summary>
@@ -162,7 +189,7 @@ public class UserIdentityValidatorTests
         var token = new JsonWebToken();
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("different-client")));
 
         var context = CreateContext(
@@ -189,7 +216,7 @@ public class UserIdentityValidatorTests
         var validationError = new JwtValidationError(JwtError.TokenAlreadyUsed, "Already used");
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         var context = CreateContext(
@@ -217,7 +244,7 @@ public class UserIdentityValidatorTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Not a JWT");
 
         _clientJwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         var context = CreateContext(
@@ -246,7 +273,7 @@ public class UserIdentityValidatorTests
         };
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -280,7 +307,7 @@ public class UserIdentityValidatorTests
         };
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -310,8 +337,8 @@ public class UserIdentityValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, ValidationOptions>((_, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<string, TokenTypePolicy, ValidationOptions>((_, _, options) => capturedOptions = options))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -327,35 +354,23 @@ public class UserIdentityValidatorTests
     /// <summary>
     /// RFC 8725 section 3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
     /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
-    /// when its audience matches the requesting client.
+    /// when its audience matches the requesting client. The validator is asked for the types an ID token may
+    /// carry, and its refusal reaches the caller.
     /// </summary>
-    /// <remarks>
-    /// The rejection reason is asserted, not just the error code: every refusal here answers
-    /// <c>invalid_request</c>, so a test checking only the code passes whichever check happened to fire.
-    /// </remarks>
     [Fact]
     public async Task ValidateAsync_IdTokenHintWrongType_ShouldReturnInvalidRequest()
     {
-        // Arrange
-        var token = new JsonWebToken
-        {
-            Header = { Type = JsonWebTokenTypes.AccessToken },
-            Payload = { Audiences = ["test-client"] },
-        };
-
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(token);
+            .Setup(v => v.ValidateAsync(
+                "access-token-as-hint", TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
         var context = CreateContext(idTokenHint: "access-token-as-hint");
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Equal("The id token hint is not an ID Token", result.ErrorDescription);
     }
 
     /// <summary>
@@ -372,7 +387,7 @@ public class UserIdentityValidatorTests
         };
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -397,7 +412,7 @@ public class UserIdentityValidatorTests
         var validationError = new JwtValidationError(JwtError.TokenAlreadyUsed, "Already used");
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         var context = CreateContext(idTokenHint: "invalid-id-token");
@@ -466,8 +481,8 @@ public class UserIdentityValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, ValidationOptions>((_, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<string, TokenTypePolicy, ValidationOptions>((_, _, options) => capturedOptions = options))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");

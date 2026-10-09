@@ -26,6 +26,7 @@ public interface IClientJwtValidator
     /// Asynchronously validates a JWT and retrieves associated client information if the validation is successful.
     /// </summary>
     /// <param name="jwt">The JWT to validate.</param>
+    /// <param name="tokenTypes">The token types the caller accepts.</param>
     /// <param name="options">Optional validation options that define the specific checks and constraints
     /// to apply during validation. Default is <see cref="ValidationOptions.Default"/>.</param>
     /// <returns>
@@ -33,5 +34,5 @@ public interface IClientJwtValidator
     /// or a JwtValidationError on failure.
     /// </returns>
     public Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
-        string jwt, ValidationOptions options = ValidationOptions.Default);
+        string jwt, TokenTypePolicy tokenTypes, ValidationOptions options = ValidationOptions.Default);
 }

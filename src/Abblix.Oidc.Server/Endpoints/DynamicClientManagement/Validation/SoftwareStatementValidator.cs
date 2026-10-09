@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -68,6 +69,9 @@ public partial class SoftwareStatementValidator(
                       ~ValidationOptions.RequireAudience &
                       ~ValidationOptions.ValidateAudience,
 
+            // RFC 7591 Section 2.3 gives a software statement no type, so the type is judged below
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
+
             ValidateIssuer = issuer => ValidateIssuer(softwareStatementOptions, issuer),
             ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer),
         };
@@ -81,7 +85,17 @@ public partial class SoftwareStatementValidator(
                 $"The software_statement is invalid: {error.ErrorDescription}");
         }
 
-        return ValidateSoftwareId(softwareStatementOptions, result.GetSuccess());
+        var statement = result.GetSuccess();
+
+        // A JWT declaring itself some other kind this server names is one replayed where a statement about the
+        // software belongs (RFC 8725 Section 3.11)
+        if (!JwtTypes.IsPermitted(statement.Header.Type))
+        {
+            return ErrorFactory.InvalidSoftwareStatement(
+                $"A token of type '{statement.Header.Type}' cannot be used as a software statement");
+        }
+
+        return ValidateSoftwareId(softwareStatementOptions, statement);
     }
 
     /// <summary>

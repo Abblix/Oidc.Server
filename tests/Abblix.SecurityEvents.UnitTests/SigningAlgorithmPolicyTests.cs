@@ -73,7 +73,7 @@ public class SigningAlgorithmPolicyTests
 
         var compact = await SignAsync(pair, cancellationToken);
         var verified = await pair.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetSuccess(out _), "A token signed with an allowed algorithm did not verify.");
     }
@@ -138,7 +138,7 @@ public class SigningAlgorithmPolicyTests
 
         var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.False(verified.TryGetSuccess(out _), "A signature outside the accepted set was verified.");
     }
@@ -215,14 +215,14 @@ public class SigningAlgorithmPolicyTests
         var compact = await SignAsync(transmitter, cancellationToken);
 
         var verified = await host.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.Equal(acceptedByDefault, verified.TryGetSuccess(out _));
 
         // And widening admits it, which is the move the documentation tells such a host to make.
         await using var widened = BuildPair(key, [algorithm]);
         var accepted = await widened.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(accepted.TryGetSuccess(out _), $"{algorithm} was refused after widening.");
     }
@@ -256,7 +256,7 @@ public class SigningAlgorithmPolicyTests
         var compact = $"{Base64UrlOf(header)}.{Base64UrlOf(payload)}.{signature}";
 
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetFailure(out var error));
         Assert.DoesNotContain("allowed signing algorithms", error.Description, StringComparison.Ordinal);
@@ -289,7 +289,7 @@ public class SigningAlgorithmPolicyTests
         await using var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
 
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetFailure(out var error));
 

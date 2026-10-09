@@ -37,11 +37,14 @@ public interface ISubjectTokenResolver
     /// portable subject context on success, or an <see cref="OidcError"/> on failure.
     /// </summary>
     /// <param name="subjectToken">The exact <c>subject_token</c> string from the wire.</param>
+    /// <param name="tokenType">The token type URI the token was presented under (RFC 8693 section 3), which
+    /// decides the token types the resolver accepts, since one resolver may serve several URIs.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The resolved subject context on success; an OIDC error describing the
     /// rejection reason on failure. The handler maps every failure to wire-level
     /// <c>invalid_request</c> per RFC 8693 section 2.2.2.</returns>
     Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
+        string tokenType,
         CancellationToken cancellationToken);
 }

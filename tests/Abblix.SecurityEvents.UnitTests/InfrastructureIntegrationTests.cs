@@ -197,6 +197,27 @@ public class InfrastructureIntegrationTests
     }
 
     /// <summary>
+    /// A validly signed token of a type the caller did not ask for is token confusion: a SET presented where a
+    /// logout token is expected is refused by its type, which RFC 8417 Section 4 names as the defense.
+    /// </summary>
+    [Fact]
+    public async Task ATokenOfAnotherType_IsRejected_AsTokenConfusion()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        await using var host = BuildHost(key, key);
+
+        var compact = await SignedCompact(host);
+
+        var result = await host.GetRequiredService<ISecurityEventTokenVerifier>().VerifyAsync(
+            compact,
+            TokenTypePolicy.Exactly(JsonWebTokenTypes.LogoutToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(SecurityEventTokenErrorCode.TokenConfusion, error.Code);
+    }
+
+    /// <summary>
     /// A validly signed token whose JOSE header is structurally wrong is a MALFORMED token, not a key
     /// problem.
     /// </summary>
@@ -318,6 +339,7 @@ public class InfrastructureIntegrationTests
     {
         public Task<Abblix.Utils.Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            TokenTypePolicy tokenTypes,
             string? keyId = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException("Registration identity is the assertion; this never runs.");

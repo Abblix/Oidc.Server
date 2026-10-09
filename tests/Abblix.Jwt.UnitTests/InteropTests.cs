@@ -126,6 +126,7 @@ public class InteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateIssuer = _ => Task.FromResult(true),
 			ValidateAudience = _ => Task.FromResult(true),
 			Options = ValidationOptions.ValidateIssuer | ValidationOptions.ValidateAudience
@@ -163,6 +164,7 @@ public class InteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateIssuer = _ => Task.FromResult(true),
 			Options = ValidationOptions.ValidateIssuer
 		});
@@ -301,6 +303,7 @@ public class InteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
@@ -402,6 +405,7 @@ public class InteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
@@ -501,6 +505,7 @@ public class InteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.RequireSignedTokens |
 					  ValidationOptions.ValidateIssuerSigningKey,
@@ -671,6 +676,7 @@ public class InteropTests
 			jwt,
 			new ValidationParameters
 			{
+				TokenTypes = TokenTypePolicy.CheckedByCaller,
 				Options = ValidationOptions.ValidateIssuer |
 						  ValidationOptions.ValidateAudience |
 						  ValidationOptions.RequireSignedTokens |
@@ -730,6 +736,7 @@ public class InteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			Options = ValidationOptions.ValidateIssuer |
 					  ValidationOptions.ValidateAudience |
 					  ValidationOptions.RequireSignedTokens |

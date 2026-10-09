@@ -54,15 +54,6 @@ public sealed record SubjectTokenContext(
     public string? OriginalClientId { get; init; }
 
     /// <summary>
-    /// For JWT-formatted subject_tokens, the value of the JWS <c>typ</c> header (e.g. <c>at+jwt</c>,
-    /// <c>id+jwt</c>, <c>rt+jwt</c>). The grant handler uses this to detect cross-type confusion --
-    /// a JWT minted as an id_token presented under <c>subject_token_type=access_token</c> is
-    /// rejected even though both pass signature validation. <c>null</c> when the subject_token is
-    /// not a JWT or the typ header was absent.
-    /// </summary>
-    public string? JwtTokenType { get; init; }
-
-    /// <summary>
     /// The refresh token family the subject_token carries, so the exchanged token joins it and a revoked family
     /// refuses the exchanged token too (RFC 9700 section 4.14.2). The authority the exchange hands out comes from
     /// the subject_token, so it must not outlive the grant that token came from. <c>null</c> when the

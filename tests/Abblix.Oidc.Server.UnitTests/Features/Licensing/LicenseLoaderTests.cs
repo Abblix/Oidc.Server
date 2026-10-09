@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// These tests focus on:
 /// - Error handling for invalid JWTs
 /// - Validation of issuer requirements
-/// - Validation of JWT type requirements
 /// - Parsing error scenarios
 ///
 /// Successful license loading is tested through integration tests with actual licenses.
@@ -142,33 +141,6 @@ public class LicenseLoaderTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             LicenseLoader.LoadAsync(unsignedJwt));
 
-        Assert.Contains("can't be validated", exception.Message);
-    }
-
-    /// <summary>
-    /// Verifies that LoadAsync rejects JWT with wrong type in header.
-    /// </summary>
-    /// <remarks>
-    /// Even if JWT is properly signed and has correct issuer, wrong type should be rejected.
-    /// This test uses a standard JWT type instead of the required license type.
-    /// </remarks>
-    [Fact]
-    public async Task LoadAsync_WrongJwtType_ThrowsInvalidOperationException()
-    {
-        // Arrange - JWT with standard type "JWT" instead of license type
-        // Header: {"alg":"RS256","typ":"JWT"}
-        // Payload: {"iss":"https://abblix.com","exp":9999999999}
-        // Note: This will fail at signature validation, but demonstrates type checking
-        const string jwtWithWrongType =
-            "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9." +
-            "eyJpc3MiOiJodHRwczovL2FiYmxpeC5jb20iLCJleHAiOjk5OTk5OTk5OTl9." +
-            "dummy_signature";
-
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            LicenseLoader.LoadAsync(jwtWithWrongType));
-
-        // Will fail at validation stage before type check
         Assert.Contains("can't be validated", exception.Message);
     }
 

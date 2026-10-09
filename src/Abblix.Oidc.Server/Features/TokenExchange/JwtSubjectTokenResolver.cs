@@ -52,12 +52,35 @@ public sealed class JwtSubjectTokenResolver(
     private const ValidationOptions SubjectTokenValidation =
         ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
 
+    /// <summary>
+    /// The token types a subject token presented under <paramref name="tokenType"/> may carry, so a token issued
+    /// for one purpose is not exchanged as another.
+    /// </summary>
+    /// <remarks>
+    /// An access token is typed <c>at+jwt</c> (RFC 9068 section 2.1); an ID token carries what
+    /// <see cref="JwtTypes.IdTokens"/> allows. The generic JWT type accepts either of those.
+    /// </remarks>
+    private static TokenTypePolicy? TokenTypesOf(string tokenType) => tokenType switch
+    {
+        TokenExchangeTokenTypes.AccessToken => TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
+        TokenExchangeTokenTypes.IdToken => JwtTypes.IdTokens,
+        TokenExchangeTokenTypes.Jwt => TokenTypePolicy.OrUntyped(JsonWebTokenTypes.AccessToken, JsonWebTokenTypes.Jwt),
+        _ => null,
+    };
+
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
+        string tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken, SubjectTokenValidation);
+        if (TokenTypesOf(tokenType) is not { } accepted)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");
+        }
+
+        var validation = await jwtValidator.ValidateAsync(subjectToken, accepted, SubjectTokenValidation);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
@@ -119,9 +142,6 @@ public sealed class JwtSubjectTokenResolver(
             // shape encodes its client; a token with several audiences and neither client_id nor azp
             // stays null, i.e. its origin is genuinely undeterminable.
             OriginalClientId = originalClientId,
-
-            // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
-            JwtTokenType = jwt.Header.Type,
 
             // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
             GrantId = jwt.Payload.GrantId,

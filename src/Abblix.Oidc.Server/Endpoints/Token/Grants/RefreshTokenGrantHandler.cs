@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -62,7 +63,8 @@ public class RefreshTokenGrantHandler(
 		}
 
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
-		var jwtValidationResult = await jwtValidator.ValidateAsync(request.RefreshToken);
+		var jwtValidationResult = await jwtValidator.ValidateAsync(
+			request.RefreshToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
 		if (jwtValidationResult.TryGetFailure(out var error))
 		{
@@ -70,14 +72,6 @@ public class RefreshTokenGrantHandler(
 		}
 
 		var token = jwtValidationResult.GetSuccess();
-
-		// If the token type is invalid, return an error indicating the issue.
-		if (token.Header.Type is var tokenType && tokenType != JwtTypes.RefreshToken)
-		{
-			return new OidcError(
-				ErrorCodes.InvalidGrant,
-				$"Invalid token type: {tokenType}");
-		}
 
 		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
 		// The authenticated client is the one the refresh token was issued to (verified below), so its sector opens

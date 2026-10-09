@@ -308,6 +308,7 @@ public class CriticalHeaderTests
         var validator = sp.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),

@@ -55,6 +55,7 @@ internal static class LogEvents
             public const int AudienceFailedStrict = Base + 14;
             public const int AudienceFailedPermissive = Base + 15;
             public const int MissingExpiration = Base + 16;
+            public const int TokenOfAnotherKind = Base + 17;
         }
 
         /// <summary>

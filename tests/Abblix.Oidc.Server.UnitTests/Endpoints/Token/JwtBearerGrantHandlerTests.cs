@@ -1042,8 +1042,8 @@ public class JwtBearerGrantHandlerTests
 	[Theory]
 	[InlineData(JsonWebTokenTypes.AccessToken)]
 	[InlineData(JwtTypes.RefreshToken)]
-	[InlineData(null)]
-	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
+	[InlineData("text/jwt")]
+	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["JWT"]);
@@ -1067,13 +1067,16 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that JWTs with allowed token types are accepted (case-insensitive).
+	/// Verifies that JWTs with allowed token types are accepted, in any case and either spelling of the
+	/// application/ prefix, and that an assertion without a type is accepted too, since RFC 7523 defines none.
 	/// </summary>
 	[Theory]
 	[InlineData("JWT")]
 	[InlineData("jwt")]
 	[InlineData("Jwt")]
-	public async Task TokenTypeValidation_WithAllowedType_ShouldSucceed(string tokenType)
+	[InlineData("application/JWT")]
+	[InlineData(null)]
+	public async Task TokenTypeValidation_WithAllowedType_ShouldSucceed(string? tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["JWT"]);
@@ -1097,13 +1100,38 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that when AllowedTokenTypes is empty, no type restriction is enforced.
+	/// Verifies that a type configured with the application/ prefix matches a token carrying its short form,
+	/// since RFC 7515 Section 4.1.9 makes the two spellings one type.
+	/// </summary>
+	[Fact]
+	public async Task TokenTypeValidation_WithPrefixedConfiguredType_AcceptsTheShortForm()
+	{
+		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["application/JWT"]);
+		var jwt = CreateValidJwt();
+		jwt.Header.Type = JsonWebTokenTypes.Jwt;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(
+			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetSuccess(out _));
+	}
+
+	/// <summary>
+	/// Verifies that when AllowedTokenTypes is empty, an assertion without a type, with the generic one or with one
+	/// this server does not know is accepted, since RFC 7523 defines none.
 	/// </summary>
 	[Theory]
-	[InlineData("JWT")]
-	[InlineData("at+jwt")]
+	[InlineData(JsonWebTokenTypes.Jwt)]
+	[InlineData("application/custom-assertion+jwt")]
 	[InlineData(null)]
-	public async Task TokenTypeValidation_WhenNotConfigured_ShouldAcceptAny(string? tokenType)
+	public async Task TokenTypeValidation_WhenNotConfigured_ShouldAcceptAnAssertion(string? tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: []);
@@ -1124,6 +1152,35 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.Equal(Subject, grant.AuthSession.Subject);
+	}
+
+	/// <summary>
+	/// Verifies that when AllowedTokenTypes is empty, a token typed as another kind of token - an access token or
+	/// a logout token of a trusted issuer whose audience names this server - is refused rather than taken as a
+	/// grant (RFC 8725 Section 3.11).
+	/// </summary>
+	[Theory]
+	[InlineData(JsonWebTokenTypes.AccessToken)]
+	[InlineData(JsonWebTokenTypes.LogoutToken)]
+	[InlineData(JwtTypes.RefreshToken)]
+	public async Task TokenTypeValidation_WhenNotConfigured_ShouldRefuseAnotherKindOfToken(string tokenType)
+	{
+		var (handler, mocks) = CreateHandler(allowedTokenTypes: []);
+		var jwt = CreateValidJwt();
+		jwt.Header.Type = tokenType;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(
+			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
 	private static void SetupTrustedIssuer(

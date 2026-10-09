@@ -65,7 +65,10 @@ public class PrivateKeyJwtAuthenticator(
         // the validator's: RFC 7521 Section 5.2 requires the assertion to carry an "Expires At
         // entity that limits the time window during which the assertion can be used", which
         // RFC 7523 Section 3 item 4 spells as a MUST on exp.
+        //
+        // RFC 7523bis types an assertion only by a SHOULD on the sender and admits more specific values, so the base
+        // class judges the type after validation.
         return await tokenValidator.ValidateAsync(
-            jwt, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+            jwt, TokenTypePolicy.CheckedByCaller, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
     }
 }

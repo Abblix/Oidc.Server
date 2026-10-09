@@ -88,6 +88,7 @@ public class JwtEncryptionTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = aud => Task.FromResult(token.Payload.Audiences.SequenceEqual(aud)),
             ValidateIssuer = iss => Task.FromResult(iss == token.Payload.Issuer),
             ResolveTokenDecryptionKeys = _ => new [] { encryptionKey }.ToAsyncEnumerable(),
@@ -163,6 +164,7 @@ public class JwtEncryptionTests
 
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
@@ -204,6 +206,7 @@ public class JwtEncryptionTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),

@@ -54,17 +54,13 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdToken
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, string>> ParseAsync(string idTokenHint)
     {
-        var result = await jwtValidator.ValidateAsync(idTokenHint, HintOptions);
+        // Another token this server issued, an access or refresh token whose audience may well match, is refused
+        // by its type, which the signature alone would not catch, as RFC 8725 Section 3.12 describes.
+        var result = await jwtValidator.ValidateAsync(idTokenHint, JwtTypes.IdTokens, HintOptions);
         if (result.TryGetFailure(out var validationError))
             return $"The id token hint contains an invalid token: {validationError}";
 
         var idToken = result.GetSuccess();
-
-        // RFC 8725 Section 3.12 on the header this time: another own-issued token whose audience happens to
-        // match - an access or refresh token - must not be replayable here, which signature alone would not
-        // catch.
-        if (!JwtTypes.IsPermitted(idToken.Header.Type))
-            return "The id token hint is not an ID Token";
 
         // The one own-issued kind a type check cannot reach is a signed UserInfo response, which carries no
         // type either and is signed with the same key for the same client. What parts the two is a claim

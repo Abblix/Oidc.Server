@@ -169,7 +169,7 @@ public class ProfileClockSkewReachesValidationTests
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = profile })),
             TimeProvider.System);
 
-        await validator.ValidateAsync("header.payload.signature");
+        await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(
             SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),

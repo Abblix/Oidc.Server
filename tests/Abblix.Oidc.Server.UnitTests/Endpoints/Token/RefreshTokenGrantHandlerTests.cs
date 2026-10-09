@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -75,7 +76,7 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(refreshToken);
 
         var expectedGrant = new AuthorizedGrant(
@@ -108,7 +109,7 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(refreshToken);
 
         // Token belongs to different client
@@ -130,52 +131,26 @@ public class RefreshTokenGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when an access token is provided instead of a refresh token, the request is rejected.
-    /// The handler must validate that the token type is specifically 'refresh_token'.
+    /// Only a refresh token is exchanged here: the validator is asked for exactly that type, and its refusal of
+    /// another one ends the grant.
     /// </summary>
     [Fact]
-    public async Task WrongTokenType_AccessToken_ShouldReturnError()
+    public async Task TokenOfAnotherType_ShouldReturnError()
     {
-        // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
-        var accessToken = CreateTokenWithType(JsonWebTokenTypes.AccessToken);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(accessToken);
+            .Setup(v => v.ValidateAsync(
+                ValidRefreshToken,
+                TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)),
+                ValidationOptions.Default))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
-        // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("Invalid token type", error.ErrorDescription);
-    }
-
-    /// <summary>
-    /// Verifies that when an ID token is provided instead of a refresh token, the request is rejected.
-    /// </summary>
-    [Fact]
-    public async Task WrongTokenType_IdToken_ShouldReturnError()
-    {
-        // Arrange
-        var clientInfo = new ClientInfo(ClientId);
-        var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
-        var idToken = CreateTokenWithType("JWT");
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(idToken);
-
-        // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("Invalid token type", error.ErrorDescription);
     }
 
     /// <summary>
@@ -189,7 +164,7 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = "malformed.jwt" };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("malformed.jwt", ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync("malformed.jwt", It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is malformed"));
 
         // Act
@@ -212,7 +187,7 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token has expired"));
 
         // Act
@@ -237,7 +212,7 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(refreshToken);
 
         var serviceError = new OidcError(ErrorCodes.InvalidGrant, "Token has been revoked");
@@ -285,26 +260,6 @@ public class RefreshTokenGrantHandlerTests
                 Audiences = ["test-audience"],
                 IssuedAt = TimeProvider.System.GetUtcNow(),
                 ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(30),
-            },
-        };
-    }
-
-    /// <summary>
-    /// Creates a JWT with a specific token type.
-    /// </summary>
-    private static JsonWebToken CreateTokenWithType(string tokenType)
-    {
-        return new JsonWebToken
-        {
-            Header = { Type = tokenType, Algorithm = SigningAlgorithms.RS256 },
-            Payload =
-            {
-                JwtId = Guid.NewGuid().ToString("N"),
-                Issuer = "https://issuer.example.com",
-                Subject = "user123",
-                Audiences = ["test-audience"],
-                IssuedAt = TimeProvider.System.GetUtcNow(),
-                ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
             },
         };
     }

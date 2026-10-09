@@ -64,6 +64,7 @@ public partial class ClientJwtValidator(
     /// and request object validation.
     /// </summary>
     /// <param name="jwt">The JWT to validate.</param>
+    /// <param name="tokenTypes">The token types the caller accepts.</param>
     /// <param name="options">Options to customize the validation process.</param>
     /// <returns>
     /// A task that returns a Result containing either a ValidJsonWebToken on success,
@@ -71,6 +72,7 @@ public partial class ClientJwtValidator(
     /// </returns>
     public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         string jwt,
+        TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
         var context = new ValidationContext(clientInfoProvider, clientJwksProvider);
@@ -80,6 +82,7 @@ public partial class ClientJwtValidator(
             new ValidationParameters
             {
                 Options = options,
+                TokenTypes = tokenTypes,
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = context.ValidateIssuer,
                 ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,

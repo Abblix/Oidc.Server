@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -53,18 +54,13 @@ public class InitialAccessTokenValidator(
         // server, so this server is its audience, and the shared validator accepts exactly that. The check
         // used to be off because the token carried no 'aud' at all - a token with no stated recipient, and
         // the one exception to the rule every other token here follows.
-        var result = await jwtValidator.ValidateAsync(header.Parameter);
+        var result = await jwtValidator.ValidateAsync(
+            header.Parameter, TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken));
 
         if (result.TryGetFailure(out var error))
             return new OidcError(ErrorCodes.InvalidToken, error.ErrorDescription);
 
         var token = result.GetSuccess();
-
-        if (token.Header.Type != JwtTypes.InitialAccessToken)
-        {
-            return new OidcError(ErrorCodes.InvalidToken,
-                $"Invalid token type: {token.Header.Type}");
-        }
 
         var subject = token.Payload.Subject;
         if (string.IsNullOrEmpty(subject))

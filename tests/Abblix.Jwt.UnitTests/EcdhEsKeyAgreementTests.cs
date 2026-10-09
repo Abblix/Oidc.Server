@@ -318,6 +318,7 @@ public class EcdhEsKeyAgreementTests
 
 	private static ValidationParameters CreateValidationParameters(JsonWebKey decryptionKey, JsonWebKey signingKey) => new()
 	{
+		TokenTypes = TokenTypePolicy.CheckedByCaller,
 		ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 		ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 		ResolveTokenDecryptionKeys = _ => decryptionKey.ToAsync(),

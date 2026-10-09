@@ -141,6 +141,44 @@ public class SoftwareStatementValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// A signed JWT of another kind this server names, such as an access token of a trusted issuer, is refused as a
+    /// software statement rather than read as one (RFC 8725 Section 3.11).
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JwtTypes.RegistrationAccessToken)]
+    public async Task ValidateAsync_WithATokenOfAnotherKind_ShouldReturnError(string tokenType)
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        _oidcOptions.SoftwareStatement.ApprovedSoftwareIds = [];
+
+        var token = new JsonWebToken
+        {
+            Header = { Type = tokenType },
+            Payload = new JsonWebTokenPayload(new JsonObject
+            {
+                ["software_id"] = "any-software",
+            }),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
+
+        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
+    }
+
     [Fact]
     public async Task ValidateAsync_WithApprovedSoftwareId_ShouldReturnNull()
     {

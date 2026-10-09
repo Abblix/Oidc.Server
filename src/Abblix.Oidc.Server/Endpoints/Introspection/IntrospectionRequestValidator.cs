@@ -102,6 +102,7 @@ public partial class IntrospectionRequestValidator(
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
 			introspectionRequest.Token,
+			JwtTypes.IntrospectableTokens,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		return result.Match(

@@ -38,11 +38,6 @@ internal sealed class ProofValidator(
     IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IProofValidator
 {
-    private static readonly IReadOnlySet<string> ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal)
-    {
-        JsonWebTokenTypes.DPoPProof,
-    };
-
     /// <inheritdoc/>
     public async Task<Result<Proof, ProofError>> ValidateAsync(
         string proofJwt,
@@ -68,7 +63,7 @@ internal sealed class ProofValidator(
             new ()
             {
                 Options = ValidationOptions.RequireSignedTokens | ValidationOptions.UseEmbeddedVerificationKey,
-                ExpectedTokenTypes = ExpectedTokenTypes,
+                TokenTypes = TokenTypePolicy.Exactly(JsonWebTokenTypes.DPoPProof),
                 AllowedSigningAlgorithms = DPoPAlgorithms.Allowed,
             });
 

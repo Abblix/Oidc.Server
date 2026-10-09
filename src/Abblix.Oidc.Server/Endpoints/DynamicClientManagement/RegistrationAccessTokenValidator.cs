@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System.Net.Http.Headers;
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
@@ -39,18 +40,15 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
 
         // The audience is required and checked: it names this server, which is what reads the token. Which
         // registration the token is about is a separate question, and the subject answers it - see below.
-        var result = await jwtValidator.ValidateAsync(header.Parameter);
+        var result = await jwtValidator.ValidateAsync(
+            header.Parameter, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         if (result.TryGetFailure(out var error))
             return Refused(error.ErrorDescription);
 
         var token = result.GetSuccess();
 
-        var tokenType = token.Header.Type;
         var subject = token.Payload.Subject;
-
-        if (tokenType != JwtTypes.RegistrationAccessToken)
-            return Refused($"Invalid token type: {tokenType}");
 
         // RFC 7592 Section 1.2: the token "is associated with a particular registered client". The subject
         // carries that association, so a token cannot manage a registration other than the one it names.

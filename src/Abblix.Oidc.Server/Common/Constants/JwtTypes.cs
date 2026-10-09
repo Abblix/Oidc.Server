@@ -81,6 +81,22 @@ public static class JwtTypes
 	public const string InitialAccessToken = VendorPrefix + "iat+jwt";
 
 	/// <summary>
+	/// The typed tokens this server issues and accepts back at its introspection and revocation endpoints: access
+	/// and refresh tokens, which RFC 7662 and RFC 7009 cover, and the registration and initial access tokens.
+	/// </summary>
+	public static readonly TokenTypePolicy IntrospectableTokens = TokenTypePolicy.Exactly(
+		JsonWebTokenTypes.AccessToken, RefreshToken, RegistrationAccessToken, InitialAccessToken);
+
+	/// <summary>
+	/// The types an ID token may carry: none, since OpenID Connect Core defines none, or the generic <c>JWT</c> of
+	/// RFC 7519 Section 5.1.
+	/// </summary>
+	/// <remarks>
+	/// Every other token this server issues carries a type of its own, so this refuses each of them.
+	/// </remarks>
+	public static readonly TokenTypePolicy IdTokens = TokenTypePolicy.OrUntyped(JsonWebTokenTypes.Jwt);
+
+	/// <summary>
 	/// Every <c>typ</c> this server can name: the core registry's specification-fixed values plus the vendor
 	/// values minted here. The refusal decision must see BOTH vocabularies - a vendor-typed token is exactly
 	/// as out of place in a position that did not ask for it as a specification-typed one.

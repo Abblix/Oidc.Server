@@ -250,6 +250,7 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 
         var result = await CreateValidator().ValidateAsync(signed, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             // RFC 8414 section 2.1 makes iss REQUIRED in signed metadata and says nothing about aud, so the
             // audience requirement is dropped rather than satisfied with a permissive delegate: demanding a
             // claim the specification does not is how a conforming document gets rejected.

@@ -52,11 +52,14 @@ Two classes of failure still surface as exceptions, both after the signature has
 ```csharp
 var result = await validator.ValidateAsync(jwt, new ValidationParameters
 {
+    TokenTypes = TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
     ValidateIssuer = issuer => Task.FromResult(issuer == "https://issuer.example.com"),
     ValidateAudience = audiences => Task.FromResult(audiences.Contains("https://api.example.com")),
     ResolveIssuerSigningKeys = issuer => KnownKeysOf(issuer),
 });
 ```
+
+Every validation states the `typ` values it accepts, and there is no default: `TokenTypePolicy.Exactly(...)` accepts only the listed types, `TokenTypePolicy.OrUntyped(...)` also accepts a token with no type, and `TokenTypePolicy.CheckedByCaller` leaves the type to your own code. A validation that states none throws before the token is read, so a token issued for one purpose is not accepted as another by accident.
 
 The payload is a `JsonObject` underneath, so claims keep their JSON types - numbers, arrays and nested objects need no string round-trips, and custom claims are first-class.
 

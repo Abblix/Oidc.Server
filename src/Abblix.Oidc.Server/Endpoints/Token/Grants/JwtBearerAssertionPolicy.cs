@@ -117,20 +117,34 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	}
 
 	/// <summary>
-	/// Validates the JWT token type header against allowed types if configured.
+	/// Validates the JWT token type header against the allowed types, or, when the deployment lists none, refuses a
+	/// type naming another kind of token.
 	/// </summary>
+	/// <remarks>
+	/// RFC 7523 defines no type for an assertion, so an assertion without one is accepted either way. Without a
+	/// list of its own a deployment also accepts the generic type or one this server does not know, while an
+	/// access token or a logout token of a trusted issuer is refused rather than taken as a grant (RFC 8725
+	/// Section 3.11). A listed type matches in either spelling of its <c>application/</c> prefix, as RFC 7515
+	/// Section 4.1.9 makes them one type.
+	/// </remarks>
 	public Result<JwtBearerValidationContext, OidcError> ValidateTokenType(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var options = issuerProvider.Options;
-		if (options.AllowedTokenTypes is not { Length: > 0 } allowedTypes)
-			return ctx;
-
 		var tokenType = ctx.Jwt.Header.Type;
-		if (allowedTypes.Contains(tokenType, StringComparer.OrdinalIgnoreCase))
+		if (options.AllowedTokenTypes is not { Length: > 0 } allowedTypes)
+		{
+			if (JwtTypes.IsPermitted(tokenType))
+				return ctx;
+
+			LogTokenOfAnotherKind(tokenType, clientInfo.ClientId, ctx.Issuer);
+			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has an unsupported token type");
+		}
+
+		if (tokenType is null || allowedTypes.Any(allowed => JwtTypeName.Matches(tokenType, allowed)))
 			return ctx;
 
-		LogTokenTypeNotAllowed(tokenType ?? "(none)", string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
+		LogTokenTypeNotAllowed(tokenType, string.Join(", ", allowedTypes), clientInfo.ClientId, ctx.Issuer);
 
 		return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has an unsupported token type");
 	}

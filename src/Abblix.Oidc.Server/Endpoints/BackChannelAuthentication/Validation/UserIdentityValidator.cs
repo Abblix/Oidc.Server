@@ -68,10 +68,21 @@ public class UserIdentityValidator(
         // Validate the LoginHintToken if it is provided and the client is configured to parse it as a JWT
         if (request.LoginHintToken.HasValue() && context.ClientInfo.ParseLoginHintTokenAsJwt)
         {
-            var loginHintTokenResult = await clientJwtValidator.ValidateAsync(request.LoginHintToken);
+            // CIBA Core 1.0 Section 7.1 leaves the format of a login_hint_token to the deployment, so the type is
+            // judged below: a JWT declaring itself some other kind this server names is refused (RFC 8725 Section
+            // 3.11)
+            var loginHintTokenResult = await clientJwtValidator.ValidateAsync(
+                request.LoginHintToken, TokenTypePolicy.CheckedByCaller);
 
             if (loginHintTokenResult.TryGetSuccess(out var validJwt))
             {
+                if (!JwtTypes.IsPermitted(validJwt.Token.Header.Type))
+                {
+                    return new OidcError(
+                        ErrorCodes.InvalidRequest,
+                        $"A token of type '{validJwt.Token.Header.Type}' cannot be used as a login_hint_token.");
+                }
+
                 // The token was issued for another client
                 if (validJwt.Client.ClientId != context.ClientInfo.ClientId)
                 {

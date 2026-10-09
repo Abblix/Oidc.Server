@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -42,18 +43,25 @@ public class IdTokenHintParserTests
     {
         Result<JsonWebToken, JwtValidationError> success = token;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(success);
     }
 
-    private static JsonWebToken IdToken(string? type = null, bool withExpiry = true)
+    private void SetupRefusalOfTheType()
+    {
+        Result<JsonWebToken, JwtValidationError> refusal =
+            new JwtValidationError(JwtError.InvalidTokenType, "a registration access token");
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(refusal);
+    }
+
+    private static JsonWebToken IdToken(bool withExpiry = true)
     {
         var token = new JsonWebToken { Payload = { Subject = "user_42" } };
         if (withExpiry)
             token.Payload.ExpiresAt = Expiry;
-
-        if (type is not null)
-            token.Header.Type = type;
 
         return token;
     }
@@ -80,7 +88,7 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidToken, "bad signature");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(failure);
 
         var result = await _parser.ParseAsync(Hint);
@@ -90,45 +98,22 @@ public class IdTokenHintParserTests
     }
 
     /// <summary>
-    /// Another own-issued token of this server is refused by its type.
+    /// Another own-issued token of this server is refused by its type: the validator is asked for the types an ID
+    /// token may carry, and its refusal comes back as a reason.
     /// </summary>
     /// <remarks>
     /// RFC 8725 Section 3.12 on keeping the validation rules of different kinds of JWT mutually exclusive:
     /// these are signed with the same key and can carry the same audience, so the type is what parts them
     /// from an ID token.
     /// </remarks>
-    [Theory]
-    [InlineData(JsonWebTokenTypes.AccessToken)]
-    [InlineData(JsonWebTokenTypes.RequestObject)]
-    [InlineData(JsonWebTokenTypes.LogoutToken)]
-    [InlineData(JsonWebTokenTypes.TokenIntrospection)]
-    public async Task AnotherKindOfOwnIssuedToken_IsRefused(string type)
+    [Fact]
+    public async Task AnotherKindOfOwnIssuedToken_IsRefused()
     {
-        SetupToken(IdToken(type));
+        SetupRefusalOfTheType();
 
         var result = await _parser.ParseAsync(Hint);
 
-        Assert.True(result.TryGetFailure(out var reason));
-        Assert.Contains("not an ID Token", reason, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The generic type an ID token carries, and no type at all, both pass.
-    /// </summary>
-    /// <remarks>
-    /// Stated because <see cref="AnotherKindOfOwnIssuedToken_IsRefused"/> would hold equally over a parser
-    /// that refused everything: what makes it a discriminator is that these two get through.
-    /// </remarks>
-    [Theory]
-    [InlineData(null)]
-    [InlineData(JsonWebTokenTypes.Jwt)]
-    public async Task TheTypeAnIdTokenCarries_IsAccepted(string? type)
-    {
-        SetupToken(IdToken(type));
-
-        var result = await _parser.ParseAsync(Hint);
-
-        Assert.True(result.TryGetSuccess(out _));
+        Assert.True(result.TryGetFailure(out _));
     }
 
     /// <summary>
@@ -160,14 +145,15 @@ public class IdTokenHintParserTests
     /// The order is the point, and it is not cosmetic. This server mints one own-issued kind that carries no
     /// <c>exp</c> by default - a registration access token, which RFC 7592 Section 5 says SHOULD NOT expire -
     /// so asking for the expiry first answers its sender with "add an exp claim", which is advice the
-    /// specification forbids this server to take, about a token that could never be a hint anyway. Requiring
-    /// the expiry through <see cref="ValidationOptions.RequireExpirationTime"/> would put it first, inside
-    /// the validator call, which is why the parser asks for it itself.
+    /// specification forbids this server to take, about a token that could never be a hint anyway. The validator
+    /// refuses the type before the parser asks for the expiry, and requiring the expiry through
+    /// <see cref="ValidationOptions.RequireExpirationTime"/> would put it first, inside the validator call, which
+    /// is why the parser asks for it itself.
     /// </remarks>
     [Fact]
     public async Task ATokenBothOfTheWrongKindAndWithoutAnExpiry_IsRefusedForItsKind()
     {
-        SetupToken(IdToken(JwtTypes.RegistrationAccessToken, withExpiry: false));
+        SetupRefusalOfTheType();
 
         var result = await _parser.ParseAsync(Hint);
 
@@ -198,8 +184,8 @@ public class IdTokenHintParserTests
         Result<JsonWebToken, JwtValidationError> success = IdToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<ValidationOptions>()))
-            .Callback((string _, ValidationOptions options) => asked = options)
+            .Setup(v => v.ValidateAsync(Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback((string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
             .ReturnsAsync(success);
 
         await _parser.ParseAsync(Hint);
