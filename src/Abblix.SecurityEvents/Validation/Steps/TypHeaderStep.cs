@@ -37,7 +37,6 @@ public sealed class TypHeaderStep : ISecurityCriticalValidator
         SecurityEventTokenValidationError? error;
         if (JwtTypeName.Matches(type, SecurityEventToken.TokenType))
         {
-            context.TokenTypes = TokenTypePolicy.Exactly(SecurityEventToken.TokenType);
             context.Establish(SecurityEventTokenValidationStates.TypVerified);
             error = null;
         }

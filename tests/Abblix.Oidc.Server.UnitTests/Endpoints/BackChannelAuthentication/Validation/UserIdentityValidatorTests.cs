@@ -152,6 +152,33 @@ public class UserIdentityValidatorTests
     }
 
     /// <summary>
+    /// A login_hint_token signed by the client but typed as another kind of token this server names is refused,
+    /// since CIBA Core 1.0 leaves its format to the deployment and the type is judged after validation
+    /// (RFC 8725 Section 3.11).
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
+    public async Task ValidateAsync_LoginHintTokenOfAnotherKind_ShouldReturnInvalidRequest(string tokenType)
+    {
+        var token = new JsonWebToken { Header = { Type = tokenType } };
+
+        _clientJwtValidator
+            .Setup(v => v.ValidateAsync(
+                "jwt-token", TokenTypesArg.Is(TokenTypePolicy.CheckedByCaller), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
+
+        var context = CreateContext(
+            loginHintToken: "jwt-token",
+            parseLoginHintTokenAsJwt: true);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
     /// Verifies error when login_hint_token is issued for different client.
     /// JWT must be issued for the requesting client.
     /// </summary>

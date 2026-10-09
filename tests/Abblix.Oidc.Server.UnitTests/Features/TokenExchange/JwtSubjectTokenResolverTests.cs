@@ -179,14 +179,18 @@ public class JwtSubjectTokenResolverTests
     }
 
     /// <summary>
-    /// A URI this resolver is not registered for is a wiring defect, so it fails loudly rather than validating the
-    /// token under some guessed type.
+    /// A URI this resolver does not read, such as one a host registered it under, is refused as an invalid request
+    /// before the token is read, rather than validated under some guessed type.
     /// </summary>
     [Fact]
-    public async Task AUriThisResolverDoesNotServe_Throws()
+    public async Task AUriThisResolverDoesNotServe_IsRefused()
     {
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None));
+        var result = await _resolver.ResolveAsync(
+            TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        _jwtValidator.VerifyNoOtherCalls();
     }
 
     [Fact]

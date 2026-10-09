@@ -222,7 +222,7 @@ internal class JsonWebTokenValidator(
     /// and 'cty' member values defined in this specification do not use these comparison
     /// rules".
     /// Folding costs no separation between the classes actually pinned here (<c>dpop+jwt</c>,
-    /// <c>at+jwt</c>, <c>logout+jwt</c>, <c>id_token</c>): they differ in their letters, not
+    /// <c>at+jwt</c>, <c>logout+jwt</c>): they differ in their letters, not
     /// their casing. The one place RFC 2045 keeps case significant is the value of a
     /// <c>;parameter=</c> tail, which no <c>typ</c> in these specifications carries; should one
     /// ever appear, this whole-string fold would be more permissive than the RFC on that tail.

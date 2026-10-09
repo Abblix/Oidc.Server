@@ -36,11 +36,10 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         context.Require(
             SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.IssuerAccepted);
 
-        // A profile carries no type step only after naming the gap with AllowInsecureValidation, the exemption
-        // every critical default step requires, so its typing is the host's decision rather than a default
+        // The profile's type step judges the type, before the signature and in this package's error vocabulary
         var result = await verifier.VerifyAsync(
             context.CompactToken,
-            context.TokenTypes ?? TokenTypePolicy.CheckedByCaller,
+            TokenTypePolicy.CheckedByCaller,
             context.UnverifiedHeader!.KeyId,
             cancellationToken);
 

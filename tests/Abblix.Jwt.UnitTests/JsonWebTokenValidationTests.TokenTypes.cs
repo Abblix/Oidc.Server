@@ -52,10 +52,25 @@ public partial class JsonWebTokenValidationTests
         Assert.True((await ValidateTypedAsync(typ, TokenTypePolicy.Exactly("at+jwt"))).TryGetSuccess(out _));
     }
 
-    [Fact]
-    public async Task Exactly_AnotherType_IsRefused()
+    // The accepted type may itself be stated with the prefix, and the short form a token carries still matches it
+    [Theory]
+    [InlineData("at+jwt")]
+    [InlineData("AT+JWT")]
+    public async Task Exactly_ATypeStatedWithThePrefix_AcceptsTheShortForm(string typ)
     {
-        AssertRefusedAsInvalidTokenType(await ValidateTypedAsync("logout+jwt", TokenTypePolicy.Exactly("at+jwt")));
+        var policy = TokenTypePolicy.Exactly("application/at+jwt");
+        Assert.True((await ValidateTypedAsync(typ, policy)).TryGetSuccess(out _));
+    }
+
+    // Folding the prefix and the case must not widen the match beyond the one type
+    [Theory]
+    [InlineData("logout+jwt")]
+    [InlineData("at+jwt-but-not-really")]
+    [InlineData("application/jwt")]
+    [InlineData("text/at+jwt")]
+    public async Task Exactly_AnotherType_IsRefused(string typ)
+    {
+        AssertRefusedAsInvalidTokenType(await ValidateTypedAsync(typ, TokenTypePolicy.Exactly("at+jwt")));
     }
 
     [Fact]

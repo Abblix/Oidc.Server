@@ -232,7 +232,7 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// S1 (PR #135 review): the subject_token must have been issued to the requesting client
+    /// The subject_token must have been issued to the requesting client
     /// (confused-deputy guard; opt-out via <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>
     /// for broker scenarios). The typ header is matched against the presented URI earlier, by the
     /// resolver, which receives that URI and validates the JWT for it.

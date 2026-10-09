@@ -1097,13 +1097,14 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that when AllowedTokenTypes is empty, no type restriction is enforced.
+	/// Verifies that when AllowedTokenTypes is empty, an assertion without a type, with the generic one or with one
+	/// this server does not know is accepted, since RFC 7523 defines none.
 	/// </summary>
 	[Theory]
-	[InlineData("JWT")]
-	[InlineData("at+jwt")]
+	[InlineData(JsonWebTokenTypes.Jwt)]
+	[InlineData("application/custom-assertion+jwt")]
 	[InlineData(null)]
-	public async Task TokenTypeValidation_WhenNotConfigured_ShouldAcceptAny(string? tokenType)
+	public async Task TokenTypeValidation_WhenNotConfigured_ShouldAcceptAnAssertion(string? tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: []);
@@ -1124,6 +1125,35 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.Equal(Subject, grant.AuthSession.Subject);
+	}
+
+	/// <summary>
+	/// Verifies that when AllowedTokenTypes is empty, a token typed as another kind of token - an access token or
+	/// a logout token of a trusted issuer whose audience names this server - is refused rather than taken as a
+	/// grant (RFC 8725 Section 3.11).
+	/// </summary>
+	[Theory]
+	[InlineData(JsonWebTokenTypes.AccessToken)]
+	[InlineData(JsonWebTokenTypes.LogoutToken)]
+	[InlineData(JwtTypes.RefreshToken)]
+	public async Task TokenTypeValidation_WhenNotConfigured_ShouldRefuseAnotherKindOfToken(string tokenType)
+	{
+		var (handler, mocks) = CreateHandler(allowedTokenTypes: []);
+		var jwt = CreateValidJwt();
+		jwt.Header.Type = tokenType;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(
+			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
 
 	private static void SetupTrustedIssuer(

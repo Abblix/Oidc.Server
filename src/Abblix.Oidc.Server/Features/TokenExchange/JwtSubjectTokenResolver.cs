@@ -60,13 +60,12 @@ public sealed class JwtSubjectTokenResolver(
     /// An access token is typed <c>at+jwt</c> (RFC 9068 section 2.1); an ID token carries what
     /// <see cref="JwtTypes.IdTokens"/> allows. The generic JWT type accepts either of those.
     /// </remarks>
-    private static TokenTypePolicy TokenTypesOf(string tokenType) => tokenType switch
+    private static TokenTypePolicy? TokenTypesOf(string tokenType) => tokenType switch
     {
         TokenExchangeTokenTypes.AccessToken => TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
         TokenExchangeTokenTypes.IdToken => JwtTypes.IdTokens,
         TokenExchangeTokenTypes.Jwt => TokenTypePolicy.OrUntyped(JsonWebTokenTypes.AccessToken, JsonWebTokenTypes.Jwt),
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(tokenType), tokenType, "A token type this resolver is not registered for."),
+        _ => null,
     };
 
     /// <inheritdoc/>
@@ -75,7 +74,13 @@ public sealed class JwtSubjectTokenResolver(
         string tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken, TokenTypesOf(tokenType), SubjectTokenValidation);
+        if (TokenTypesOf(tokenType) is not { } accepted)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");
+        }
+
+        var validation = await jwtValidator.ValidateAsync(subjectToken, accepted, SubjectTokenValidation);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");

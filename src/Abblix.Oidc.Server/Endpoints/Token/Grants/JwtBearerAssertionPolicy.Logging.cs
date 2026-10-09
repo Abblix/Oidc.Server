@@ -31,6 +31,12 @@ partial class JwtBearerAssertionPolicy
 	private partial void LogTokenTypeNotAllowed(string TokenType, string AllowedTypes, string ClientId, string Issuer);
 
 	[LoggerMessage(
+		EventId = LogEvents.Endpoints.JwtBearer.TokenOfAnotherKind,
+		Level = LogLevel.Warning,
+		Message = "JWT assertion rejected: token type '{TokenType}' names another kind of token, client {ClientId}, issuer {Issuer}")]
+	private partial void LogTokenOfAnotherKind(string? TokenType, string ClientId, string Issuer);
+
+	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.MissingIssuedAt,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: missing 'iat' claim but MaxJwtAge is configured, client {ClientId}, issuer {Issuer}")]

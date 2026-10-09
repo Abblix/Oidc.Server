@@ -141,8 +141,8 @@ public partial class JwtBearerGrantHandler(
 				// omitting exp would be treated as having nothing to check rather than as invalid.
 				Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
 
-				// RFC 7523 defines no type for an assertion grant, so the accepted types are the deployment's,
-				// judged by the assertion policy after validation
+				// RFC 7523 defines no type for an assertion grant, so the assertion policy judges it after
+				// validation, against the deployment's list or, without one, against the other kinds of token
 				TokenTypes = TokenTypePolicy.CheckedByCaller,
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = _audienceValidator.ValidateAsync,
