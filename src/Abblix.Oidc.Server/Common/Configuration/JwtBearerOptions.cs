@@ -138,9 +138,9 @@ public record JwtBearerOptions
 	/// other type is accepted.
 	/// </summary>
 	/// <remarks>
-	/// Listing the types prevents token confusion in multi-token environments where different token types
-	/// (access tokens, ID tokens, assertions) may coexist. A deployment whose trusted issuers send their access
-	/// tokens as assertions lists "at+jwt".
+	/// Listing the types separates typed tokens only: a token without a type, an ID token included, passes any
+	/// list and is held back by the audience check, which requires this server's token endpoint. A deployment
+	/// whose trusted issuers send their access tokens as assertions lists "at+jwt".
 	/// </remarks>
 	public string[] AllowedTokenTypes { get; set; } = [];
 }

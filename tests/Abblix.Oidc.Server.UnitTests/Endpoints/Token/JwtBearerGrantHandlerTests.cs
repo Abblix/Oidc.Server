@@ -1043,7 +1043,7 @@ public class JwtBearerGrantHandlerTests
 	[InlineData(JsonWebTokenTypes.AccessToken)]
 	[InlineData(JwtTypes.RefreshToken)]
 	[InlineData("text/jwt")]
-	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
+	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["JWT"]);
@@ -1097,6 +1097,30 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.Equal(Subject, grant.AuthSession.Subject);
+	}
+
+	/// <summary>
+	/// Verifies that a type configured with the application/ prefix matches a token carrying its short form,
+	/// since RFC 7515 Section 4.1.9 makes the two spellings one type.
+	/// </summary>
+	[Fact]
+	public async Task TokenTypeValidation_WithPrefixedConfiguredType_AcceptsTheShortForm()
+	{
+		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["application/JWT"]);
+		var jwt = CreateValidJwt();
+		jwt.Header.Type = JsonWebTokenTypes.Jwt;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(
+			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetSuccess(out _));
 	}
 
 	/// <summary>
