@@ -1,6 +1,6 @@
 # Abblix.Jwt.Azure
 
-**Abblix.Jwt.Azure** lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by Azure Key Vault, in either of two postures. Hold the keys in the vault, so their private halves never enter your process and every signature is a Key Vault round-trip; or mint them in-process and seal each to a vault key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls the vault.
+Abblix.Jwt.Azure lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by Azure Key Vault, in either of two postures. Hold the keys in the vault, so their private halves never enter your process and every signature is a Key Vault round-trip; or mint them in-process and seal each to a vault key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls the vault.
 
 The Azure SDK is driven through the host's `IHttpClientFactory` pipeline, so it inherits your HTTP handlers, logging and connection policy. No provider private key crosses that pipeline; what does is the signing input, the wrapped keys, and the plaintext key an unwrap returns, which a handler on this pipeline can observe, so scope logging accordingly.
 
@@ -155,9 +155,9 @@ ECDH-ES key agreement is not supported: Azure Key Vault exposes no key-agreement
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | HashiCorp Vault / OpenBao Transit custodian for the same external-key seam |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| [Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault) | HashiCorp Vault / OpenBao Transit custodian for the same external-key seam |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started
 
@@ -169,6 +169,6 @@ See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
-- **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
