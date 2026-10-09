@@ -22,10 +22,10 @@ You are free to fork an Apache-2.0 package and change it in your own copy. That 
 
 These are the contributions we value most:
 
-- **Report a bug.** Open a [GitHub issue](https://github.com/Abblix/Oidc.Server/issues) with the library version, your .NET version, your configuration, the request sequence, and what you expected versus what happened. A clear reproduction is the fastest path to a fix.
-- **Suggest a feature or improvement.** Open an [issue](https://github.com/Abblix/Oidc.Server/issues), or post in [Ideas](https://github.com/Abblix/Oidc.Server/discussions/categories/ideas) describing the use case. That is where we ask what to build next, and we read it when planning. We cannot build everything, and we say so when we decide against something.
-- **Point out a specification gap.** If something diverges from an RFC or an OpenID Connect specification, tell us which clause, and where our behavior departs from it. Abblix OIDC Server is certified by the OpenID Foundation, and the standards it implements are listed in the [documentation](https://docs.abblix.com/docs/implemented-standards): a divergence from a clause is a defect, and we treat it as one.
-- **Ask a question.** [Q&A](https://github.com/Abblix/Oidc.Server/discussions/categories/q-a) is the place for integration questions and design conversations.
+- Report a bug. Open a [GitHub issue](https://github.com/Abblix/Oidc.Server/issues) with the library version, your .NET version, your configuration, the request sequence, and what you expected versus what happened. A clear reproduction is the fastest path to a fix.
+- Suggest a feature or improvement. Open an [issue](https://github.com/Abblix/Oidc.Server/issues), or post in [Ideas](https://github.com/Abblix/Oidc.Server/discussions/categories/ideas) describing the use case. That is where we ask what to build next, and we read it when planning. We cannot build everything, and we say so when we decide against something.
+- Point out a specification gap. If something diverges from an RFC or an OpenID Connect specification, tell us which clause, and where our behavior departs from it. Abblix OIDC Server is certified by the OpenID Foundation, and the standards it implements are listed in the [documentation](https://docs.abblix.com/docs/implemented-standards): a divergence from a clause is a defect, and we treat it as one.
+- Ask a question. [Q&A](https://github.com/Abblix/Oidc.Server/discussions/categories/q-a) is the place for integration questions and design conversations.
 
 ## Security issues
 
