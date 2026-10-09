@@ -54,6 +54,11 @@ public interface IAuthenticationCompletionHandler
     /// Completing a request that is not pending would deliver a second answer for one authentication.
     /// Recovering from a failed delivery therefore means asking the end user again, not repeating the
     /// call.
+    /// </para>
+    /// <para>
+    /// Any other exception from a push-mode completion was raised after the request was taken, while its
+    /// authorization details were checked or its tokens issued, and the client has already been sent
+    /// <c>transaction_failed</c>. The request is gone, so here too the recovery is to ask the end user again.
     /// </para></exception>
     Task CompleteAsync(
         string authenticationRequestId,

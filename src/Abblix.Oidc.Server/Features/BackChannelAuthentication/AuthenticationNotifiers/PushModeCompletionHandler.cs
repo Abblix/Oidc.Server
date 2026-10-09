@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -158,25 +159,7 @@ public partial class PushModeCompletionHandler(
 
         LogGeneratingTokens(authenticationRequestId);
 
-        var tokenRequest = new TokenRequest
-        {
-            GrantType = GrantTypes.Ciba,
-            AuthenticationRequestId = authenticationRequestId,
-        };
-
-        // Says out loud that this is a push delivery, and hands over the identifier in the same breath.
-        // It is what turns on the two bindings CIBA Core 1.0 Section 10.3.1 requires here and nowhere
-        // else. Stated rather than left to be derived downstream, for the reasons PushDeliveryBindings
-        // sets out.
-        var validTokenRequest = new ValidTokenRequest(
-            tokenRequest,
-            request.AuthorizedGrant,
-            clientInfo,
-            [],
-            [],
-            PushDeliveryOf: authenticationRequestId);
-
-        var tokenResult = await tokenRequestProcessor.ProcessAsync(validTokenRequest);
+        var tokenResult = await IssueTokensAsync(authenticationRequestId, request, clientInfo);
 
         await tokenResult.MatchAsync<object?>(
             async tokens =>
@@ -211,6 +194,46 @@ public partial class PushModeCompletionHandler(
                 await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
                 return null;
             });
+    }
+
+    /// <summary>
+    /// Issues the tokens of a taken push request, telling the client the transaction failed when issuing throws.
+    /// </summary>
+    private async Task<Result<TokenIssued, OidcError>> IssueTokensAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        ClientInfo clientInfo)
+    {
+        var tokenRequest = new TokenRequest
+        {
+            GrantType = GrantTypes.Ciba,
+            AuthenticationRequestId = authenticationRequestId,
+        };
+
+        // Says out loud that this is a push delivery, and hands over the identifier in the same breath.
+        // It is what turns on the two bindings CIBA Core 1.0 Section 10.3.1 requires here and nowhere
+        // else. Stated rather than left to be derived downstream, for the reasons PushDeliveryBindings
+        // sets out.
+        var validTokenRequest = new ValidTokenRequest(
+            tokenRequest,
+            request.AuthorizedGrant,
+            clientInfo,
+            [],
+            [],
+            PushDeliveryOf: authenticationRequestId);
+
+        try
+        {
+            return await tokenRequestProcessor.ProcessAsync(validTokenRequest);
+        }
+        catch (Exception exception)
+        {
+            // The request is already taken and a push client never polls, so it is told the transaction failed
+            // before the fault goes on to the host that completed the request.
+            LogTokenIssuanceFaulted(exception, authenticationRequestId, clientInfo.ClientId);
+            await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
+            throw;
+        }
     }
 
     /// <summary>
