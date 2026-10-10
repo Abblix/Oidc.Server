@@ -150,7 +150,7 @@ public class CheckSessionTests(TestFactory factory) : TestBase(factory)
         Assert.True(
             response.Headers.TryGetValues(HeaderNames.ContentSecurityPolicy, out var values),
             "The check session page was served without a Content-Security-Policy header.");
-        return Assert.Single(values!);
+        return Assert.Single(values);
     }
 
     private static string ExtractNonce(Regex pattern, string source, string sourceName)

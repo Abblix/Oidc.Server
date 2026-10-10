@@ -37,6 +37,9 @@ public sealed class PollDeliveryByDefaultTests
     private const string Issuer = "https://transmitter.example";
     private const string ReceiverId = "https://receiver.example";
     private const string SomeEvent = "https://tenant.example.com/events/membership-changed";
+    private const string StreamsPath = "/ssf/stream";
+    private const string AlertsStream = "alerts/eu";
+    private const string PushEndpoint = "https://receiver.example/events";
 
     /// <summary>
     /// The address the transmitter mints is the address it serves. Asserted by USING it: a create with no
@@ -171,7 +174,7 @@ public sealed class PollDeliveryByDefaultTests
                 [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts eu" }]));
         var client = host.GetTestClient();
 
-        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
         var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
 
         Assert.Equal("/ssf/poll/alerts%20eu", poll.EndpointUrl!.AbsolutePath);
@@ -209,7 +212,7 @@ public sealed class PollDeliveryByDefaultTests
                 [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = streamId }]));
 
         var streams = await host.GetTestClient()
-            .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+            .GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
         var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
 
         Assert.Equal($"/ssf/poll/alerts{escaped}eu", poll.EndpointUrl!.AbsolutePath);
@@ -311,7 +314,7 @@ public sealed class PollDeliveryByDefaultTests
                 [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "%2E%2E" }]));
         var client = host.GetTestClient();
 
-        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
         var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
 
         using var polled = await client.PostAsJsonAsync(
@@ -339,15 +342,15 @@ public sealed class PollDeliveryByDefaultTests
                 new ConfiguredStream
                 {
                     ReceiverId = ReceiverId,
-                    StreamId = "alerts/eu",
-                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                    StreamId = AlertsStream,
+                    PushEndpointUrl = new Uri(PushEndpoint),
                 },
             ]));
 
         var streams = await host.GetTestClient()
-            .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+            .GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
 
-        Assert.Equal("alerts/eu", Assert.Single(streams!).StreamId);
+        Assert.Equal(AlertsStream, Assert.Single(streams!).StreamId);
     }
 
     /// <summary>
@@ -374,16 +377,16 @@ public sealed class PollDeliveryByDefaultTests
                 new ConfiguredStream
                 {
                     ReceiverId = ReceiverId,
-                    StreamId = "alerts/eu",
-                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                    StreamId = AlertsStream,
+                    PushEndpointUrl = new Uri(PushEndpoint),
                 },
             ]));
 
-        using var request = new HttpRequestMessage(new HttpMethod(verb), "/ssf/stream")
+        using var request = new HttpRequestMessage(new HttpMethod(verb), StreamsPath)
         {
             Content = JsonContent.Create(new UpdateStreamRequest
             {
-                StreamId = "alerts/eu",
+                StreamId = AlertsStream,
                 Delivery = new PollDeliveryMethod(),
             }),
         };
@@ -398,7 +401,7 @@ public sealed class PollDeliveryByDefaultTests
         var service = host.Services.GetRequiredService<StreamManagementService>();
         var refused = await service.UpdateStreamAsync(
             ReceiverId,
-            new UpdateStreamRequest { StreamId = "alerts/eu", Delivery = new PollDeliveryMethod() },
+            new UpdateStreamRequest { StreamId = AlertsStream, Delivery = new PollDeliveryMethod() },
             cancellationToken);
 
         Assert.Contains("no poll address for this stream", refused.Description!, StringComparison.Ordinal);

@@ -73,7 +73,7 @@ public abstract class TestBase(TestFactory factory)
         JsonObject body)
     {
         Assert.NotNull(discovery.RegistrationEndpoint);
-        var response = await client.PostAsJsonAsync(discovery.RegistrationEndpoint!, body);
+        var response = await client.PostAsJsonAsync(discovery.RegistrationEndpoint, body);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"DCR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
@@ -87,7 +87,7 @@ public abstract class TestBase(TestFactory factory)
         IEnumerable<KeyValuePair<string, string>> form)
     {
         Assert.NotNull(discovery.PushedAuthorizationRequestEndpoint);
-        var response = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, form);
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint, form);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"PAR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();

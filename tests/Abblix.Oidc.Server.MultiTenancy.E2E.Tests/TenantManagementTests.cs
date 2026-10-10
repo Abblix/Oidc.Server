@@ -40,6 +40,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 {
     private const string Host = "https://auth.example.com";
     private const string Acme = "/tenants/acme";
+    private const string AcmeClient = "acme-client";
     private const string Globex = "/tenants/globex";
     private const string TokenPath = "/connect/token";
     private const string ConfigurationPath = "/.well-known/openid-configuration";
@@ -59,7 +60,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         // The server starts with one tenant in the store; every other change reaches it through the manager
         await _store.AddAsync(
-            Tenant("acme", Acme, "acme-client", Guid.NewGuid().ToString("N")),
+            Tenant("acme", Acme, AcmeClient, Guid.NewGuid().ToString("N")),
             TestContext.Current.CancellationToken);
 
         var builder = WebApplication.CreateBuilder();
@@ -171,7 +172,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     [Fact]
     public async Task ATenantChangedWhileTheServerRuns_IsServedAsChanged()
     {
-        Assert.Equal(HttpStatusCode.OK, (await RequestTokenAsync(Acme, "acme-client")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await RequestTokenAsync(Acme, AcmeClient)).StatusCode);
         var stored = await StoredAsync("acme");
 
         AssertMade(await Manager.UpdateAsync(
@@ -179,7 +180,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
             stored.Version,
             TestContext.Current.CancellationToken));
 
-        var dropped = await RequestTokenAsync(Acme, "acme-client");
+        var dropped = await RequestTokenAsync(Acme, AcmeClient);
         Assert.Equal(HttpStatusCode.Unauthorized, dropped.StatusCode);
         Assert.Equal(
             ErrorCodes.InvalidClient,
@@ -202,6 +203,6 @@ public sealed class TenantManagementTests : IAsyncLifetime
         AssertMade(await Manager.RemoveAsync("acme", stored.Version, TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.NotFound, (await DiscoverAsync(Acme)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await RequestTokenAsync(Acme, "acme-client")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await RequestTokenAsync(Acme, AcmeClient)).StatusCode);
     }
 }
