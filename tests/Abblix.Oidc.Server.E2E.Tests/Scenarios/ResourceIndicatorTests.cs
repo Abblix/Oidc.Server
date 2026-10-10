@@ -377,7 +377,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
 
         var header = JsonNode.Parse(Base64UrlDecode(segments[0]))?.AsObject();
         Assert.NotNull(header);
-        Assert.Equal(resourceKey.KeyId, header![JwtClaimTypes.KeyId]?.GetValue<string>());
+        Assert.Equal(resourceKey.KeyId, header[JwtClaimTypes.KeyId]?.GetValue<string>());
     }
 
     /// <summary>

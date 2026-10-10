@@ -247,7 +247,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.True(response.Headers.TryGetValues(HeaderNames.ContentSecurityPolicy, out var cspValues),
             "check_session response is missing the Content-Security-Policy header");
         var match = Regex.Match(
-            string.Join(' ', cspValues!), "nonce-([A-Za-z0-9+/=]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
+            string.Join(' ', cspValues), "nonce-([A-Za-z0-9+/=]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
         Assert.True(match.Success, "no nonce in the Content-Security-Policy header");
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return (match.Groups[1].Value, body);

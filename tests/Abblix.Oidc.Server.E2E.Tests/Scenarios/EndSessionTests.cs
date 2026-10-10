@@ -415,7 +415,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         HttpClient client, DiscoveryDocument discovery, Dictionary<string, string> queryParams)
     {
         Assert.NotNull(discovery.EndSessionEndpoint);
-        var uri = QueryHelpers.BuildUri(discovery.EndSessionEndpoint!, queryParams);
+        var uri = QueryHelpers.BuildUri(discovery.EndSessionEndpoint, queryParams);
         return await client.GetAsync(uri, TestContext.Current.CancellationToken);
     }
 

@@ -279,7 +279,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
         Assert.NotNull(stored);
-        Assert.NotEqual(false, stored.PkceRequired);
+        Assert.True(stored.PkceRequired is null or true);
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
         Assert.NotNull(stored);
-        Assert.Equal(false, stored.PkceRequired);
+        Assert.False(stored.PkceRequired);
     }
 
     /// <summary>

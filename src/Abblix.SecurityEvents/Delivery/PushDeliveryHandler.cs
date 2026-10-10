@@ -106,11 +106,11 @@ public sealed class PushDeliveryHandler(
                 + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
         }
 
-        var refusal = await sink.ConsumeAsync(validated!, cancellationToken);
+        var refusal = await sink.ConsumeAsync(validated, cancellationToken);
         if (refusal is not null)
             return PushDeliveryResult.BadRequest(refusal);
 
-        await RecordAsync(validated!, cancellationToken);
+        await RecordAsync(validated, cancellationToken);
         return PushDeliveryResult.Accepted;
     }
 

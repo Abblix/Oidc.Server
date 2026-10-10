@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
@@ -43,6 +44,8 @@ namespace Abblix.SharedSignals.Transmitter;
 /// deployment claims a profile such as the CAEP Interoperability Profile. Null emits whatever the host
 /// builds, which is what a transmitter claiming no profile does.
 /// </param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency decides a different part of one dispatch: the logger, the streams, the outbox, the signer, the issuer identity, the instruments, the sharing and payload policies and the clock.")]
 public sealed partial class EventDispatcher(
     ILogger<EventDispatcher> logger,
     IStreamStore streams,

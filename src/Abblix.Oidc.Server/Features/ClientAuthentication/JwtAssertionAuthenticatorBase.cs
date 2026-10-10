@@ -355,8 +355,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
         // One call avoids the read-then-write race a separate status check + mark step would leave
-        // between two concurrent presenters of the same assertion.
-        if (!await replayCache.TryReserveAsync(jwtId, expiry))
+        // between two concurrent presenters of the same assertion. Client authentication is handed no cancellation of
+        // the request, and the issuer's Released is not one: it lets memory go after a request under way finishes.
+        if (!await replayCache.TryReserveAsync(jwtId, expiry, CancellationToken.None))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
             return false;

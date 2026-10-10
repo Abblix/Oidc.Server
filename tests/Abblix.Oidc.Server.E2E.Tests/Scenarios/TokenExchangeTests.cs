@@ -54,7 +54,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(originalSubject, newPayload["sub"]!.GetValue<string>());
         var ad = newPayload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray;
         Assert.NotNull(ad);
-        Assert.Equal(PaymentInitiationWireJson, ad!.ToJsonString());
+        Assert.Equal(PaymentInitiationWireJson, ad.ToJsonString());
         Assert.Null(newPayload["act"]);
     }
 
@@ -94,7 +94,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(subjectSub, newPayload["sub"]!.GetValue<string>());
         var act = newPayload["act"] as JsonObject;
         Assert.NotNull(act);
-        Assert.Equal(actorSub, act!["sub"]!.GetValue<string>());
+        Assert.Equal(actorSub, act["sub"]!.GetValue<string>());
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 
         var echoed = registered["token_exchange_subject_token_types"] as JsonArray;
         Assert.NotNull(echoed);
-        Assert.Equal(2, echoed!.Count);
+        Assert.Equal(2, echoed.Count);
         Assert.Equal(TokenExchangeTokenTypes.AccessToken, echoed[0]!.GetValue<string>());
         Assert.Equal(TokenExchangeTokenTypes.IdToken, echoed[1]!.GetValue<string>());
     }

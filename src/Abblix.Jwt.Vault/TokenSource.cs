@@ -149,7 +149,7 @@ internal sealed partial class TokenSource(
                     case RenewStatus.Renewed:
                         // The max-TTL ceiling: the lease stopped extending to full length. The renewal
                         // still bought time, so the login below happens while the token is valid.
-                        LogLeaseStoppedExtending(renewal.Lease!.LeaseDuration, alive.FullLease);
+                        LogLeaseStoppedExtending(renewal.Lease.LeaseDuration, alive.FullLease);
                         break;
 
                     case RenewStatus.PermissionDenied:

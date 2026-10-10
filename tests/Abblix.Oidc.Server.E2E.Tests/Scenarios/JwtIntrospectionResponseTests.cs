@@ -84,7 +84,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var discovery = await FetchDiscoveryAsync(httpClient);
 
         Assert.NotNull(discovery.IntrospectionSigningAlgValuesSupported);
-        Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported!);
+        Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported);
     }
 
     private static async Task<(string ClientId, string ClientSecret, string AccessToken)> RegisterClientAndGetAccessTokenAsync(

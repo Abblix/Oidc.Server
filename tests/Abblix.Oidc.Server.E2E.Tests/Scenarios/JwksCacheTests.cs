@@ -29,7 +29,7 @@ public class JwksCacheTests(TestFactory factory) : TestBase(factory)
         response.EnsureSuccessStatusCode();
         var cacheControl = response.Headers.CacheControl;
         Assert.NotNull(cacheControl);
-        Assert.True(cacheControl!.Public);
+        Assert.True(cacheControl.Public);
         Assert.Equal(TimeSpan.FromHours(1), cacheControl.MaxAge); // the default KeyRolloverPropagation window
         Assert.False(cacheControl.NoStore);
         Assert.False(cacheControl.NoCache);

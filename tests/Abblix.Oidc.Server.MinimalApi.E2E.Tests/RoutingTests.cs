@@ -250,7 +250,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         response.EnsureSuccessStatusCode();
 
         Assert.NotNull(response.Headers.CacheControl);
-        Assert.True(response.Headers.CacheControl!.NoStore,
+        Assert.True(response.Headers.CacheControl.NoStore,
             $"{path} response is not Cache-Control: no-store; a shared cache may store it.");
     }
 
