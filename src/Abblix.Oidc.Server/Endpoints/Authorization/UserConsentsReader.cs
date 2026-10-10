@@ -16,10 +16,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Reads the consents the host keeps for an authorization request, in a stage of its own, as the request's
-/// <c>prompt=consent</c> leaves them.
+/// <c>prompt=consent</c> leaves them, and answers a request whose consent is still pending.
 /// </summary>
 /// <param name="consentsProvider">The host's consents.</param>
-internal sealed class UserConsentsReader(IUserConsentsProvider consentsProvider)
+/// <param name="clock">Stamps the consent page a request is sent to.</param>
+internal sealed class UserConsentsReader(IUserConsentsProvider consentsProvider, TimeProvider clock)
 {
     /// <summary>
     /// The consents the request proceeds with.
@@ -36,6 +37,43 @@ internal sealed class UserConsentsReader(IUserConsentsProvider consentsProvider)
             StageObservation.NeverRefused);
 
         return ConsentAskedOf(request, hostConsents);
+    }
+
+    /// <summary>
+    /// The answer a request gets while consent for some of what it asks is still pending, or null when none is.
+    /// </summary>
+    public AuthorizationResponse? StillOwed(
+        ValidAuthorizationRequest request,
+        AuthSession authSession,
+        UserConsents userConsents)
+    {
+        var model = request.Model;
+
+        // If consent for required scopes, resources, or authorization_details is still pending, handle it.
+        if (userConsents.Pending is { Scopes.Length: > 0 }
+            or { Resources.Length: > 0 }
+            or { AuthorizationDetails.Count: > 0 })
+        {
+            // If user interaction is disallowed but consent is necessary, return an error.
+            if (PromptPages.Asks(model, Prompts.None))
+            {
+                return new AuthorizationError(
+                    model,
+                    ErrorCodes.ConsentRequired,
+                    "The Authorization Server requires End-User consent.",
+                    request.ResponseMode,
+                    model.RedirectUri);
+            }
+
+            // Prompt for consent if necessary permissions are not yet granted.
+            // A request asking for consent is stamped, so the consent the host records on that page answers it
+            var consentPage = PromptPages.Asks(model, Prompts.Consent)
+                ? PromptPages.Stamped(model, Prompts.Consent, clock.GetUtcNow())
+                : model;
+            return new ConsentRequired(consentPage, authSession, userConsents.Pending);
+        }
+
+        return null;
     }
 
     /// <summary>

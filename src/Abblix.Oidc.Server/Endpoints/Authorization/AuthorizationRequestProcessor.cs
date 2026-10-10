@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInteraction;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
 
@@ -31,10 +32,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// of the user's session.
 /// </summary>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-	Justification = "Every dependency is used: the session store, the record of which clients a session has, the consent provider and its backstop, the revocation check, the subject converter, the clock and the response builders each decide a different part of one authorization.")]
+	Justification = "Every dependency is used: the session store, the record of which clients a session has, the host's interaction step, the consent provider and its backstop, the revocation check, the subject converter, the clock and the response builders each decide a different part of one authorization.")]
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	ISessionClientRegistry sessionClients,
+	IUserInteractionRequirement interactionRequirement,
 	IUserConsentsProvider consentsProvider,
 	IRevocationCutoffChecker cutoffChecker,
 	ISubjectTypeConverter subjectTypeConverter,
@@ -42,9 +44,11 @@ public class AuthorizationRequestProcessor(
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
 	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
 {
-	// Extracted collaborator: which session answers the request is one question with its own dependencies,
-	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
-	private readonly UserConsentsReader _consentsReader = new(consentsProvider);
+	// Extracted collaborators, each answering one question of the authorization with its own dependencies, built
+	// here from the constructor's arguments so the processor's public constructor stays as hosts call it.
+	private readonly UserConsentsReader _consentsReader = new(consentsProvider, clock);
+
+	private readonly UserInteractionStep _interactionStep = new(interactionRequirement);
 
 	private readonly AuthorizationContextBuilder _contextBuilder = new(consentConstraintEnforcer);
 
@@ -78,6 +82,10 @@ public class AuthorizationRequestProcessor(
 	{
 		var model = request.Model;
 
+		// A step of the host's own comes before the consents, so the end user completes it before granting anything
+		if (await _interactionStep.OwedAsync(request, authSession) is { } interactionAnswer)
+			return interactionAnswer;
+
 		// What the request asked for, read BEFORE the provider sees it. The provider is a host seam and it
 		// is handed the array this request carries, while every decision below is measured against that same
 		// array: whether the end user denied everything, what the granted set is checked against, and what
@@ -99,7 +107,7 @@ public class AuthorizationRequestProcessor(
 		// scopes/resources/authorization_details), as prompt=consent leaves them
 		var userConsents = await _consentsReader.ReadAsync(request, authSession);
 
-		if (ConsentStillOwed(request, authSession, userConsents) is { } consentAnswer)
+		if (_consentsReader.StillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;
 
 		// A consent the end user gave that grants nothing of what was asked is their refusal, which OpenID Connect
@@ -164,43 +172,6 @@ public class AuthorizationRequestProcessor(
 		return askedFor &&
 		       consents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
 		       (!askedForDetails || consents.Granted.AuthorizationDetails is null or { Count: 0 });
-	}
-
-	/// <summary>
-	/// The answer a request gets while consent for some of what it asks is still pending, or null when none is.
-	/// </summary>
-	private AuthorizationResponse? ConsentStillOwed(
-		ValidAuthorizationRequest request,
-		AuthSession authSession,
-		UserConsents userConsents)
-	{
-		var model = request.Model;
-
-		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
-		if (userConsents.Pending is { Scopes.Length: > 0 }
-			or { Resources.Length: > 0 }
-			or { AuthorizationDetails.Count: > 0 })
-		{
-			// If user interaction is disallowed but consent is necessary, return an error.
-			if (PromptPages.Asks(model, Prompts.None))
-			{
-				return new AuthorizationError(
-					model,
-					ErrorCodes.ConsentRequired,
-					"The Authorization Server requires End-User consent.",
-					request.ResponseMode,
-					model.RedirectUri);
-			}
-
-			// Prompt for consent if necessary permissions are not yet granted.
-			// A request asking for consent is stamped, so the consent the host records on that page answers it
-			var consentPage = PromptPages.Asks(model, Prompts.Consent)
-				? PromptPages.Stamped(model, Prompts.Consent, clock.GetUtcNow())
-				: model;
-			return new ConsentRequired(consentPage, authSession, userConsents.Pending);
-		}
-
-		return null;
 	}
 
 	/// <summary>

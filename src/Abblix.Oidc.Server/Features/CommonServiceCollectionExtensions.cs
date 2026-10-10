@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Telemetry;
+using Abblix.Oidc.Server.Features.UserInteraction;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -32,6 +33,7 @@ public static class CommonServiceCollectionExtensions
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
         services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
+        services.TryAddSingleton<IUserInteractionRequirement, NoUserInteractionRequirement>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();

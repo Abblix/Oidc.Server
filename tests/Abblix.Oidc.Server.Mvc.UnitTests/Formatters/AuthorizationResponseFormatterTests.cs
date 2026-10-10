@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Security.Claims;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -56,7 +55,12 @@ public class AuthorizationResponseFormatterTests
                 new AuthSession("alice", "session-1", DateTimeOffset.UnixEpoch, "local"),
                 new ConsentDefinition([], []))
         },
-        { "interaction", new InteractionRequired(Request, new ClaimsPrincipal()) },
+        {
+            "interaction",
+            new InteractionRequired(
+                Request,
+                new AuthSession("alice", "session-1", DateTimeOffset.UnixEpoch, "local"))
+        },
         { "login", new LoginRequired(Request) },
         { "registration", new RegistrationRequired(Request) },
     };
