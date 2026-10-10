@@ -224,7 +224,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, ITransmi
     {
         try
         {
-            var read = JsonSerializer.Deserialize<StreamState>((byte[])stored!, SerializerOptions);
+            var read = JsonSerializer.Deserialize<StreamState>((byte[]?)stored, SerializerOptions);
             stream = read!;
             return read is not null;
         }
