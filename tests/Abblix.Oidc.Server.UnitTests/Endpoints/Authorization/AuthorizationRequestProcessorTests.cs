@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInteraction;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
@@ -41,6 +42,8 @@ public partial class AuthorizationRequestProcessorTests
     private readonly Mock<IAuthSessionService> _authSessionService;
     private readonly Mock<ISessionClientRegistry> _sessionClients = new();
     private readonly Mock<IUserConsentsProvider> _consentsProvider;
+    // No step of the host's own is the ordinary case; the tests about steps set their own answer.
+    private readonly Mock<IUserInteractionRequirement> _interactionRequirement = new();
     private readonly Mock<IRevocationCutoffChecker> _cutoffChecker = new();
     private readonly Mock<IAuthorizationCodeService> _authorizationCodeService;
     private readonly Mock<IAccessTokenService> _accessTokenService;
@@ -93,6 +96,7 @@ public partial class AuthorizationRequestProcessorTests
         return new AuthorizationRequestProcessor(
             _authSessionService.Object,
             _sessionClients.Object,
+            _interactionRequirement.Object,
             _consentsProvider.Object,
             _cutoffChecker.Object,
             new SubjectTypeConverter(),

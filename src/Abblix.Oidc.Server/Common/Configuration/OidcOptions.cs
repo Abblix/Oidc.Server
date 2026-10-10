@@ -57,9 +57,8 @@ public record OidcOptions
 	public Uri? ConsentUri { get; set; }
 
 	/// <summary>
-	/// The URL to a user interface or service for handling additional interactions required during the authentication
-	/// process. This can include multiple factor authentication, user consent, or any custom interaction required by
-	/// the authentication flow. The OIDC server can redirect users to this URI when additional interaction is needed.
+	/// The page the end user completes a step of the host's own on, such as accepting a new version of the terms, when
+	/// <see cref="Features.UserInteraction.IUserInteractionRequirement"/> requires one before anything is issued.
 	/// </summary>
 	public Uri? InteractionUri { get; set; }
 

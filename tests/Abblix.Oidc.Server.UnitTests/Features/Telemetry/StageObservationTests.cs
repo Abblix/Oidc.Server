@@ -118,7 +118,7 @@ public sealed class StageObservationTests : IDisposable
         inner
             .Setup(provider => provider.GetUserConsentsAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
             .ReturnsAsync(new UserConsents());
-        var reader = new UserConsentsReader(inner.Object);
+        var reader = new UserConsentsReader(inner.Object, TimeProvider.System);
         var request = new ValidAuthorizationRequest(
             new AuthorizationValidationContext(new AuthorizationRequest()) { ClientInfo = new ClientInfo("client") });
 
