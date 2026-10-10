@@ -32,9 +32,9 @@ public static class MultiTenancyExtensions
     /// Call this after <c>AddOidcServices</c> and every other <c>Add*</c> of the server: it keeps each tenant's
     /// data apart by wrapping the services those calls registered, so it refuses when one is not registered yet,
     /// and startup refuses a server in which a later registration replaced or wrapped a wrapper. Call it once.
-    /// The users and the consents stay the host's and are not partitioned here: a host keeping them apart per tenant
-    /// reads the tenant of the request from <see cref="ITenantAccessor"/> in its <c>IUserInfoProvider</c> and
-    /// <c>IUserConsentsProvider</c>.
+    /// The users, the consents and the steps a host requires before issuing stay the host's and are not partitioned
+    /// here: a host keeping them apart per tenant reads the tenant of the request from <see cref="ITenantAccessor"/>
+    /// in its <c>IUserInfoProvider</c>, <c>IUserConsentsProvider</c> and <c>IUserInteractionRequirement</c>.
     /// </remarks>
     /// <returns>The builder a feature made per tenant is turned on by.</returns>
     public static IMultiTenancyBuilder AddMultiTenancy(

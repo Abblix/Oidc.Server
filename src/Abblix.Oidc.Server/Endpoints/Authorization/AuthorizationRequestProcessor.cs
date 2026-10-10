@@ -44,8 +44,8 @@ public class AuthorizationRequestProcessor(
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
 	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
 {
-	// Extracted collaborator: which session answers the request is one question with its own dependencies,
-	// built here from the constructor's arguments so the processor's public constructor stays as hosts call it.
+	// Extracted collaborators, each answering one question of the authorization with its own dependencies, built
+	// here from the constructor's arguments so the processor's public constructor stays as hosts call it.
 	private readonly UserConsentsReader _consentsReader = new(consentsProvider, clock);
 
 	private readonly UserInteractionStep _interactionStep = new(interactionRequirement);

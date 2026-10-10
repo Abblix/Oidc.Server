@@ -55,6 +55,28 @@ public partial class AuthorizationRequestProcessorTests
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.InteractionRequired, error.Error);
         Assert.Equal(request.Model.RedirectUri, error.RedirectUri);
+        _consentsProvider.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A login the request asks for and the session has not answered yet comes first, and the host is not asked
+    /// about a session the end user is about to replace.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_LoginNotYetAnswered_SendsToLoginWithoutAskingForAStep()
+    {
+        var request = CreateRequest(prompt: [Prompts.Login]);
+        SessionsAre(CreateAuthSession());
+        _interactionRequirement
+            .Setup(r => r.IsRequiredAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
+            .ReturnsAsync(true);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.IsType<LoginRequired>(result);
+        _interactionRequirement.Verify(
+            r => r.IsRequiredAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()),
+            Times.Never);
     }
 
     /// <summary>

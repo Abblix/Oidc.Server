@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Reads the consents the host keeps for an authorization request, in a stage of its own, as the request's
-/// <c>prompt=consent</c> leaves them.
+/// <c>prompt=consent</c> leaves them, and answers a request whose consent is still pending.
 /// </summary>
 /// <param name="consentsProvider">The host's consents.</param>
 /// <param name="clock">Stamps the consent page a request is sent to.</param>
