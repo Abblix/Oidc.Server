@@ -65,7 +65,8 @@ public class UpdateClientRequestValidator(
         {
             return new OidcError(
                 ErrorCodes.InvalidClientMetadata,
-                "The sector identifier of a registered client cannot change");
+                "The subject type and the sector of a registered client cannot change, since its end users would be given new " +
+                "identifiers; a client that needs others registers anew");
         }
 
         return registrationValidation.MapSuccess(
