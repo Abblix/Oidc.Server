@@ -128,7 +128,7 @@ internal sealed class ProofValidator(
     /// <summary>
     /// Validates the request-binding claims per RFC 9449 section 4.3: <c>htm</c> matches the
     /// request method byte-exact, <c>htu</c> matches the request URI after RFC 3986 section 6.2
-    /// canonicalisation, and <c>iat</c> falls within the configured tolerance window
+    /// canonicalization, and <c>iat</c> falls within the configured tolerance window
     /// around the server's current time. Returns the parsed <c>iat</c> on success.
     /// </summary>
     private ProofError? ValidateRequestBinding(

@@ -617,9 +617,9 @@ public class AuthenticationSchemeAdapterTests
 	{
 		var birthdate = new DateOnly(1990, 1, 1);
 
-		var result = await RoundTripAsync(Session(new JsonObject { ["birthdate"] = JsonValue.Create(birthdate) }));
+		var result = await RoundTripAsync(Session(new JsonObject { [IanaClaimTypes.Birthdate] = JsonValue.Create(birthdate) }));
 
-		Assert.Equal(birthdate, result!.AdditionalClaims!["birthdate"]!.GetValue<DateOnly>());
+		Assert.Equal(birthdate, result!.AdditionalClaims![IanaClaimTypes.Birthdate]!.GetValue<DateOnly>());
 	}
 
 	/// <summary>

@@ -38,7 +38,7 @@ internal static class ProofBindingClaims
 
     /// <summary>
     /// Compares the proof's <c>htu</c> claim against the current request URI after
-    /// RFC 3986 section 6.2 canonicalisation.
+    /// RFC 3986 section 6.2 canonicalization.
     /// </summary>
     public static ProofError? HttpUri(JsonWebTokenPayload payload, Uri requestUri)
     {
@@ -53,14 +53,14 @@ internal static class ProofBindingClaims
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriInvalid,
-                $"{IanaClaimTypes.Htu} is not a valid absolute URI.");
+                $"{IanaClaimTypes.Htu} is not an absolute http or https URI.");
         }
 
         if (uri.Normalize() != requestUri.Normalize())
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriMismatch,
-                $"{IanaClaimTypes.Htu} does not match the request URI after canonicalisation.");
+                $"{IanaClaimTypes.Htu} does not match the request URI after canonicalization.");
         }
 
         return null;

@@ -15,7 +15,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.DPoP;
 
 /// <summary>
-/// A DPoP proof's <c>htu</c> claim is told apart as absent, not an absolute URI, or another URI than the request's
+/// A DPoP proof's <c>htu</c> claim is told apart as absent, not an absolute http or https URI, or another URI than the request's
 /// (RFC 9449 section 4.3), each with a reason of its own.
 /// </summary>
 public class ProofBindingClaimsTests
@@ -29,7 +29,9 @@ public class ProofBindingClaimsTests
     [Theory]
     [InlineData("not a uri")]
     [InlineData("/token")]
-    public void AClaimThatIsNoAbsoluteUri_IsInvalid(string htu)
+    [InlineData("file:///token")]
+    [InlineData("wss://auth.example.com/token")]
+    public void AClaimThatIsNoHttpUri_IsInvalid(string htu)
         => Assert.Equal(ProofErrorReasons.HttpUriInvalid, ProofBindingClaims.HttpUri(Payload(htu), RequestUri)?.Reason);
 
     [Fact]

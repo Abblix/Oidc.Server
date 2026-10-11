@@ -27,7 +27,7 @@ public sealed class AccountSubject(Uri uri)
     /// <remarks>
     /// RFC 9493 Section 3.2.1 requires the value to be the subject's "acct" URI, so a value that is not an
     /// absolute URI is refused; the scheme itself is not checked, which leaves the account's own spelling to the
-    /// application. No canonicalisation is stated by the RFC, so the value keeps the spelling it was written
+    /// application. No canonicalization is stated by the RFC, so the value keeps the spelling it was written
     /// with, and two spellings of one account remain two distinct identifiers.
     /// </remarks>
     [JsonPropertyName(SubjectMemberNames.Uri)]
