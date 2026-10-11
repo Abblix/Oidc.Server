@@ -413,6 +413,7 @@ public record ClientRegistrationRequest
     /// client. Serialized as an integer number of seconds.
     /// </summary>
     [JsonPropertyName(Parameters.DefaultMaxAge)]
+    [JsonConverter(typeof(TimeSpanSecondsConverter))]
     public TimeSpan? DefaultMaxAge { get; init; }
 
     /// <summary>

@@ -51,7 +51,7 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
 
     private ActionResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
     {
-        var modelResponse = new ClientRegistrationResponse
+        var modelResponse = new ClientRegistrationResponse(success.Metadata)
         {
             ClientId = success.ClientId,
             ClientIdIssuedAt = success.ClientIdIssuedAt,
@@ -65,54 +65,8 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 ? GetClientReadUrl(success.ClientId)
                 : null,
 
-            // Prefer the resolved server-side value from `success` (which reflects defaults
-            // applied by the registration pipeline) over the raw request - RFC 7591 section 3.2.1
-            // requires the response to echo registered values, not the literal request input.
-            InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
-            TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
-
-            // RFC 7591 section 3.2.1: scope echoes the registered value (the server may narrow or default
-            // it), not the literal request input.
-            Scope = success.Scope ?? request.Scope,
-            SoftwareId = request.SoftwareId,
-            SoftwareVersion = request.SoftwareVersion,
+            // RFC 7591 section 3.2.1: a software statement "MUST be returned unmodified", and the server keeps none
             SoftwareStatement = request.SoftwareStatement,
-
-            // RFC 7591 section 3.2.1: echo registered metadata so clients can confirm what was stored.
-            ApplicationType = success.ApplicationType,
-            RedirectUris = success.RedirectUris,
-            GrantTypes = success.GrantTypes,
-            ResponseTypes = success.ResponseTypes,
-            ClientName = success.ClientName,
-            LogoUri = success.LogoUri,
-            SubjectType = success.SubjectType,
-            SectorIdentifierUri = success.SectorIdentifierUri,
-            JwksUri = success.JwksUri,
-            UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
-            // RFC 9701 section 6 / RFC 7591 section 3.2.1: echo the registered introspection response algorithms.
-            IntrospectionSignedResponseAlg = success.IntrospectionSignedResponseAlg,
-            IntrospectionEncryptedResponseAlg = success.IntrospectionEncryptedResponseAlg,
-            IntrospectionEncryptedResponseEnc = success.IntrospectionEncryptedResponseEnc,
-            Contacts = success.Contacts,
-            RequestUris = success.RequestUris,
-            TlsClientAuthSubjectDn = success.TlsClientAuthSubjectDn,
-            TlsClientAuthSanDns = success.TlsClientAuthSanDns,
-            TlsClientAuthSanUri = success.TlsClientAuthSanUri,
-            TlsClientAuthSanIp = success.TlsClientAuthSanIp,
-            TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
-            // RFC 9449 section 5.2: dpop_bound_access_tokens echo.
-            DpopBoundAccessTokens = success.DpopBoundAccessTokens,
-            // RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: per-client enforcement flags echo.
-            RequirePushedAuthorizationRequests = success.RequirePushedAuthorizationRequests,
-            RequireSignedRequestObject = success.RequireSignedRequestObject,
-            TlsClientCertificateBoundAccessTokens = success.TlsClientCertificateBoundAccessTokens,
-            // RFC 9396 section 10: authorization_details_types echo.
-            AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
-            // Non-standard extension: token_exchange_subject_token_types echo.
-            TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,
-            // Non-standard extension: token_exchange_audiences echo.
-            TokenExchangeAudiences = success.TokenExchangeAudiences,
         };
 
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };

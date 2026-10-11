@@ -339,7 +339,7 @@ public sealed class EndpointMetricsTests : IDisposable
         var inner = new Mock<IRegisterClientHandler>();
         inner
             .SetupSequence(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
-            .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token"))
+            .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token") { Metadata = new() })
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRedirectUri, "Refused"));
         var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
 

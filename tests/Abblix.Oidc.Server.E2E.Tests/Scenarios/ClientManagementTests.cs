@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.TestHost;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -770,6 +771,73 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
 #endif
+
+    /// <summary>
+    /// The registration, read and update responses return the metadata the client registered, each member as it
+    /// was sent (RFC 7591 section 3.2.1, RFC 7592 section 3).
+    /// </summary>
+    [Fact]
+    public async Task Every_registered_member_comes_back_from_registration_read_and_update()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("described");
+        metadata[RequestMembers.ClientUri] = "https://client.example.com/";
+        metadata[RequestMembers.PolicyUri] = "https://client.example.com/privacy";
+        metadata[RequestMembers.TosUri] = "https://client.example.com/terms";
+        metadata[RequestMembers.LogoUri] = "https://client.example.com/logo.png";
+        metadata[RequestMembers.Contacts] = new JsonArray("ops@client.example.com");
+        metadata[RequestMembers.PostLogoutRedirectUris] = new JsonArray("https://client.example.com/signed-out");
+        metadata[RequestMembers.InitiateLoginUri] = "https://client.example.com/login";
+        metadata[RequestMembers.DefaultMaxAge] = 300;
+        metadata[RequestMembers.RequireAuthTime] = true;
+        metadata[RequestMembers.DefaultAcrValues] = new JsonArray("urn:example:loa:2");
+        metadata[RequestMembers.IdTokenSignedResponseAlg] = SigningAlgorithms.RS256;
+        metadata[RequestMembers.UserInfoSignedResponseAlg] = SigningAlgorithms.RS256;
+        metadata[RequestMembers.FrontChannelLogoutUri] = "https://client.example.com/fc-logout";
+        metadata[RequestMembers.FrontChannelLogoutSessionRequired] = false;
+        metadata[RequestMembers.BackChannelLogoutUri] = "https://client.example.com/bc-logout";
+        metadata[RequestMembers.BackChannelLogoutSessionRequired] = false;
+        metadata[RequestMembers.SoftwareId] = "described-software";
+        metadata[RequestMembers.SoftwareVersion] = "1.2.3";
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        AssertEchoed(metadata, registered);
+
+        var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var configurationUri = new Uri(
+            registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute);
+
+        var read = await client.SendAsync(
+            Request(HttpMethod.Get, configurationUri, registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>()),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        AssertEchoed(metadata, await ReadJsonAsync(read));
+
+        var updated = metadata.DeepClone().AsObject();
+        updated[RequestMembers.ClientId] = clientId;
+        updated[RequestMembers.PolicyUri] = "https://client.example.com/privacy-v2";
+        var update = Request(
+            HttpMethod.Put, configurationUri, registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var updateResponse = await client.SendAsync(update, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        AssertEchoed(updated, await ReadJsonAsync(updateResponse), except: RequestMembers.ClientId);
+    }
+
+    /// <summary>
+    /// Each member of <paramref name="sent"/> is present in <paramref name="returned"/> with the same JSON value.
+    /// </summary>
+    private static void AssertEchoed(JsonObject sent, JsonObject returned, string? except = null)
+    {
+        var differing = sent
+            .Where(member => member.Key != except && !JsonNode.DeepEquals(member.Value, returned[member.Key]))
+            .Select(member => $"{member.Key}: sent {member.Value?.ToJsonString()}, got {returned[member.Key]?.ToJsonString()}")
+            .ToArray();
+
+        Assert.Empty(differing);
+    }
 
     [Fact]
     public async Task A_client_can_read_its_own_registration()

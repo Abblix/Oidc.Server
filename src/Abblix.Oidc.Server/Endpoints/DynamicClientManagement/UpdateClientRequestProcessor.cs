@@ -75,48 +75,12 @@ public class UpdateClientRequestProcessor(
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
         }
 
-        return new ReadClientSuccessfulResponse
+        return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(updatedClient))
         {
             ClientId = updatedClient.ClientId,
             ClientSecret = null, // The update issues no new secret, so there is none to return
             ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
-            TokenEndpointAuthMethod = updatedClient.TokenEndpointAuthMethod,
-            ApplicationType = updatedClient.ApplicationType,
-            RedirectUris = updatedClient.RedirectUris,
-            // RFC 7592 section 3: echo the post-update registered state so the client can verify the
-            // full replacement took effect (grant/response types and scope included).
-            GrantTypes = updatedClient.EffectiveGrantTypes,
-            ResponseTypes = updatedClient.EffectiveResponseTypes,
-            Scope = updatedClient.AllowedScopes,
-            RequirePushedAuthorizationRequests = updatedClient.RequirePushedAuthorizationRequests,
-            RequireSignedRequestObject = updatedClient.RequireSignedRequestObject,
-            TlsClientCertificateBoundAccessTokens = updatedClient.TlsClientCertificateBoundAccessTokens,
-            ClientName = updatedClient.ClientName,
-            LogoUri = updatedClient.LogoUri,
-            SubjectType = updatedClient.SubjectType,
-            SectorIdentifierUri = Uri.TryCreate(updatedClient.SectorIdentifier, UriKind.Absolute, out var uri) ? uri : null,
-            JwksUri = updatedClient.JwksUri,
-            UserInfoEncryptedResponseAlg = updatedClient.UserInfoEncryptedResponseAlgorithm,
-            UserInfoEncryptedResponseEnc = updatedClient.UserInfoEncryptedResponseEncryption,
-            Contacts = updatedClient.Contacts,
-            RequestUris = updatedClient.RequestUris,
-            InitiateLoginUri = updatedClient.InitiateLoginUri,
-            // tls_client_auth metadata (if configured)
-            TlsClientAuthSubjectDn = updatedClient.TlsClientAuth?.SubjectDn,
-            TlsClientAuthSanDns = updatedClient.TlsClientAuth?.SanDns,
-            TlsClientAuthSanUri = updatedClient.TlsClientAuth?.SanUris,
-            TlsClientAuthSanIp = updatedClient.TlsClientAuth?.SanIps,
-            TlsClientAuthSanEmail = updatedClient.TlsClientAuth?.SanEmails,
-            // RFC 9449 section 5.2: echo dpop_bound_access_tokens so the client can confirm the
-            // current binding state.
-            DpopBoundAccessTokens = updatedClient.RequireDPoP,
-            // RFC 9396 section 10: echo authorization_details_types so the client confirms its allowlist.
-            AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
-            // Non-standard extension: echo token_exchange_subject_token_types.
-            TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,
-            // Non-standard extension: echo token_exchange_audiences.
-            TokenExchangeAudiences = updatedClient.TokenExchangeAllowedAudiences,
         };
     }
 
