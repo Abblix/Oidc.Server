@@ -53,6 +53,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         {
             ClientSecrets = _clientSecrets,
             SectorIdentifier = _sectorIdentifier,
+            SectorIdentifierUri = model.SectorIdentifierUri,
         };
 
         ApplyFlowMetadata(clientInfo);

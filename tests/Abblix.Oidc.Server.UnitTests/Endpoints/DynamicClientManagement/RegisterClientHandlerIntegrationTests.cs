@@ -230,7 +230,7 @@ public class RegisterClientHandlerIntegrationTests
 
         Assert.True(result.TryGetSuccess(out var success),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
-        Assert.True(success.DpopBoundAccessTokens);
+        Assert.True(success.Metadata.DpopBoundAccessTokens);
 
         var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
         Assert.NotNull(stored);
@@ -251,7 +251,7 @@ public class RegisterClientHandlerIntegrationTests
         var result = await handler.HandleAsync(CreateRequest());
 
         Assert.True(result.TryGetSuccess(out var success));
-        Assert.False(success.DpopBoundAccessTokens);
+        Assert.False(success.Metadata.DpopBoundAccessTokens);
 
         var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
         Assert.NotNull(stored);
@@ -325,10 +325,10 @@ public class RegisterClientHandlerIntegrationTests
         var result = await handler.HandleAsync(request);
 
         Assert.True(result.TryGetSuccess(out var success));
-        Assert.NotNull(success.RedirectUris);
-        Assert.Single(success.RedirectUris);
-        Assert.Equal(new Uri("https://client.example.com/callback"), success.RedirectUris[0]);
-        Assert.True(success.DpopBoundAccessTokens);
+        Assert.NotNull(success.Metadata.RedirectUris);
+        Assert.Single(success.Metadata.RedirectUris);
+        Assert.Equal(new Uri("https://client.example.com/callback"), success.Metadata.RedirectUris[0]);
+        Assert.True(success.Metadata.DpopBoundAccessTokens);
     }
 
     /// <summary>
@@ -343,11 +343,11 @@ public class RegisterClientHandlerIntegrationTests
 
         var withAlg = CreateRequest() with { IntrospectionSignedResponseAlg = SigningAlgorithms.RS256 };
         Assert.True((await handler.HandleAsync(withAlg)).TryGetSuccess(out var registered));
-        Assert.Equal(SigningAlgorithms.RS256, registered.IntrospectionSignedResponseAlg);
+        Assert.Equal(SigningAlgorithms.RS256, registered.Metadata.IntrospectionSignedResponseAlg);
 
         var withoutAlg = CreateRequest();
         Assert.True((await handler.HandleAsync(withoutAlg)).TryGetSuccess(out var registeredDefault));
-        Assert.Null(registeredDefault.IntrospectionSignedResponseAlg);
+        Assert.Null(registeredDefault.Metadata.IntrospectionSignedResponseAlg);
     }
 
     /// <summary>
@@ -372,9 +372,9 @@ public class RegisterClientHandlerIntegrationTests
         var result = await handler.HandleAsync(request);
 
         Assert.True(result.TryGetSuccess(out var success));
-        Assert.True(success.RequirePushedAuthorizationRequests);
-        Assert.True(success.RequireSignedRequestObject);
-        Assert.True(success.TlsClientCertificateBoundAccessTokens);
+        Assert.True(success.Metadata.RequirePushedAuthorizationRequests);
+        Assert.True(success.Metadata.RequireSignedRequestObject);
+        Assert.True(success.Metadata.TlsClientCertificateBoundAccessTokens);
 
         var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
         Assert.NotNull(stored);
@@ -452,8 +452,8 @@ public class RegisterClientHandlerIntegrationTests
         var result = await handler.HandleAsync(request);
 
         Assert.True(result.TryGetSuccess(out var success));
-        Assert.Equal([GrantTypes.AuthorizationCode], success.GrantTypes!);
-        Assert.Equal([[ResponseTypes.Code]], success.ResponseTypes);
-        Assert.Equal([Scopes.OpenId, Scopes.Profile], success.Scope!);
+        Assert.Equal([GrantTypes.AuthorizationCode], success.Metadata.GrantTypes!);
+        Assert.Equal([[ResponseTypes.Code]], success.Metadata.ResponseTypes);
+        Assert.Equal([Scopes.OpenId, Scopes.Profile], success.Metadata.Scope!);
     }
 }

@@ -90,50 +90,7 @@ public partial class RegisterClientRequestProcessor(
         {
             ClientSecret = credentials.ClientSecret,
             ClientSecretExpiresAt = credentials.ExpiresAt,
-            // RFC 7591 section 3.2.1: echo registered metadata so the client can confirm what was
-            // registered (including server-assigned defaults) without a follow-up read.
-            TokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod,
-            ApplicationType = clientInfo.ApplicationType,
-            RedirectUris = clientInfo.RedirectUris,
-            // RFC 7591 section 3.2.1: grant_types/response_types/scope are read back from the stored
-            // ClientInfo, not from the request - this is what makes server-assigned defaults
-            // (authorization_code / code when omitted) visible to the client.
-            GrantTypes = clientInfo.EffectiveGrantTypes,
-            ResponseTypes = clientInfo.EffectiveResponseTypes,
-            Scope = clientInfo.AllowedScopes,
-            ClientName = clientInfo.ClientName,
-            LogoUri = clientInfo.LogoUri,
-            SubjectType = clientInfo.SubjectType,
-            SectorIdentifierUri = Uri.TryCreate(clientInfo.SectorIdentifier, UriKind.Absolute, out var sectorUri) ? sectorUri : null,
-            JwksUri = clientInfo.JwksUri,
-            UserInfoEncryptedResponseAlg = clientInfo.UserInfoEncryptedResponseAlgorithm,
-            UserInfoEncryptedResponseEnc = clientInfo.UserInfoEncryptedResponseEncryption,
-
-            // RFC 9701: echo the registered introspection response algorithms. The signed algorithm is omitted
-            // when it is the implicit "none" default so the response only advertises an explicit opt-in.
-            IntrospectionSignedResponseAlg = clientInfo.IntrospectionSignedResponseAlgorithm switch
-            {
-                SigningAlgorithms.None => null,
-                _ => clientInfo.IntrospectionSignedResponseAlgorithm,
-            },
-            IntrospectionEncryptedResponseAlg = clientInfo.IntrospectionEncryptedResponseAlgorithm,
-            IntrospectionEncryptedResponseEnc = clientInfo.IntrospectionEncryptedResponseEncryption,
-
-            Contacts = clientInfo.Contacts,
-            RequestUris = clientInfo.RequestUris,
-            InitiateLoginUri = clientInfo.InitiateLoginUri,
-            TlsClientAuthSubjectDn = clientInfo.TlsClientAuth?.SubjectDn,
-            TlsClientAuthSanDns = clientInfo.TlsClientAuth?.SanDns,
-            TlsClientAuthSanUri = clientInfo.TlsClientAuth?.SanUris,
-            TlsClientAuthSanIp = clientInfo.TlsClientAuth?.SanIps,
-            TlsClientAuthSanEmail = clientInfo.TlsClientAuth?.SanEmails,
-            DpopBoundAccessTokens = clientInfo.RequireDPoP,
-            RequirePushedAuthorizationRequests = clientInfo.RequirePushedAuthorizationRequests,
-            RequireSignedRequestObject = clientInfo.RequireSignedRequestObject,
-            TlsClientCertificateBoundAccessTokens = clientInfo.TlsClientCertificateBoundAccessTokens,
-            AuthorizationDetailsTypes = clientInfo.AuthorizationDetailsTypes,
-            TokenExchangeSubjectTokenTypes = clientInfo.TokenExchangeAllowedSubjectTokenTypes,
-            TokenExchangeAudiences = clientInfo.TokenExchangeAllowedAudiences,
+            Metadata = RegisteredClientMetadata.Of(clientInfo),
         };
 
         return response;

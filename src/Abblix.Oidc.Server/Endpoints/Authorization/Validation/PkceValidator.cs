@@ -115,7 +115,7 @@ public class PkceValidator(
 		AuthorizationValidationContext context,
 		SecurityProfileRequirements profile)
 	{
-		var pkceRequired = profile.RequirePkce || (context.ClientInfo.PkceRequired ?? true);
+		var pkceRequired = profile.RequirePkce || context.ClientInfo.EffectivePkceRequired;
 
 		// PKCE (RFC 7636) protects the authorization code exchange, so a missing code_challenge is
 		// only a failure when the response_type actually yields a code (authorization code or hybrid).

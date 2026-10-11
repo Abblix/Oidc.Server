@@ -51,6 +51,8 @@ public partial class PromptReturnTripTests
     [InlineData(AuthorizationRequest.Parameters.Claims, "{not json")]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, " ")]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, "abc")]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, "-1")]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, "922337203686")]
     [InlineData(AuthorizationRequest.Parameters.UiLocales, "!")]
     [InlineData(AuthorizationRequest.Parameters.Resource, "https://exa mple.com/x")]
     [InlineData(AuthorizationRequest.Parameters.RedirectUri, "https://[")]

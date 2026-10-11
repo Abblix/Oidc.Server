@@ -38,45 +38,12 @@ public class ReadClientRequestProcessor(
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
             client.ClientId, issuedAt, null, request.Client.RegistrationAccessTokenId);
 
-        return new ReadClientSuccessfulResponse
+        return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(client))
         {
             ClientId = client.ClientId,
             ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
             ClientSecretExpiresAt = GetClientSecretExpiresAt(client),
             RegistrationAccessToken = registrationAccessToken,
-            TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
-            ApplicationType = client.ApplicationType,
-            RedirectUris = client.RedirectUris,
-            // RFC 7592 section 3: the read response carries the full registered metadata, including the
-            // grant/response types the server assigned by default when registration omitted them.
-            GrantTypes = client.EffectiveGrantTypes,
-            ResponseTypes = client.EffectiveResponseTypes,
-            Scope = client.AllowedScopes,
-            RequirePushedAuthorizationRequests = client.RequirePushedAuthorizationRequests,
-            RequireSignedRequestObject = client.RequireSignedRequestObject,
-            TlsClientCertificateBoundAccessTokens = client.TlsClientCertificateBoundAccessTokens,
-            ClientName = client.ClientName,
-            LogoUri = client.LogoUri,
-            SubjectType = client.SubjectType,
-            SectorIdentifierUri = Uri.TryCreate(client.SectorIdentifier, UriKind.Absolute, out var uri) ? uri : null,
-            JwksUri = client.JwksUri,
-            UserInfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlgorithm,
-            UserInfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEncryption,
-            Contacts = client.Contacts,
-            RequestUris = client.RequestUris,
-            InitiateLoginUri = client.InitiateLoginUri,
-            // tls_client_auth metadata (if configured)
-            TlsClientAuthSubjectDn = client.TlsClientAuth?.SubjectDn,
-            TlsClientAuthSanDns = client.TlsClientAuth?.SanDns,
-            TlsClientAuthSanUri = client.TlsClientAuth?.SanUris,
-            TlsClientAuthSanIp = client.TlsClientAuth?.SanIps,
-            TlsClientAuthSanEmail = client.TlsClientAuth?.SanEmails,
-            // RFC 7592 section 3 requires the read response to carry all registered metadata; mirror the
-            // update path so read and update return the identical surface for the same client.
-            DpopBoundAccessTokens = client.RequireDPoP,
-            AuthorizationDetailsTypes = client.AuthorizationDetailsTypes,
-            TokenExchangeSubjectTokenTypes = client.TokenExchangeAllowedSubjectTokenTypes,
-            TokenExchangeAudiences = client.TokenExchangeAllowedAudiences,
         };
     }
 

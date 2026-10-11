@@ -214,6 +214,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     [Theory]
     [InlineData(AuthorizationRequest.Parameters.Claims, "{not valid json")]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, "9999999999999999")]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, "-1")]
     [InlineData(AuthorizationRequest.Parameters.UiLocales, "!")]
     public async Task Malformed_special_format_query_param_is_a_400_not_a_500(string parameter, string badValue)
     {

@@ -79,13 +79,16 @@ public class RegisterClientResponseFormatterTests
         // RFC 7591 section 3.2.1 echo: registered metadata MUST appear on the wire response.
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
-            RedirectUris = [RedirectUri],
-            ApplicationType = "web",
-            ClientName = "Test Client",
-            JwksUri = JwksUri,
-            SectorIdentifierUri = SectorIdentifierUri,
-            SubjectType = "public",
-            Contacts = ["security@client.example.com"],
+            Metadata = new RegisteredClientMetadata
+            {
+                RedirectUris = [RedirectUri],
+                ApplicationType = "web",
+                ClientName = "Test Client",
+                JwksUri = JwksUri,
+                SectorIdentifierUri = SectorIdentifierUri,
+                SubjectType = "public",
+                Contacts = ["security@client.example.com"],
+            },
         };
 
         var result = await FormatAsync(success);
@@ -109,8 +112,11 @@ public class RegisterClientResponseFormatterTests
         // RFC 8705 mTLS metadata also flows through the bridge unchanged.
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
-            TlsClientAuthSubjectDn = "CN=client,O=test",
-            TlsClientAuthSanDns = ["client.example.com"],
+            Metadata = new RegisteredClientMetadata
+            {
+                TlsClientAuthSubjectDn = "CN=client,O=test",
+                TlsClientAuthSanDns = ["client.example.com"],
+            },
         };
 
         var result = await FormatAsync(success);
@@ -132,9 +138,12 @@ public class RegisterClientResponseFormatterTests
     {
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
-            IntrospectionSignedResponseAlg = SigningAlgorithms.RS256,
-            IntrospectionEncryptedResponseAlg = "RSA-OAEP",
-            IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
+            Metadata = new RegisteredClientMetadata
+            {
+                IntrospectionSignedResponseAlg = SigningAlgorithms.RS256,
+                IntrospectionEncryptedResponseAlg = "RSA-OAEP",
+                IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
+            },
         };
 
         var result = await FormatAsync(success);
@@ -174,6 +183,6 @@ public class RegisterClientResponseFormatterTests
             ClientIdIssuedAt: IssuedAt,
             RegistrationAccessToken: "registration-access-token")
         {
-            DpopBoundAccessTokens = dpopBoundAccessTokens,
+            Metadata = new RegisteredClientMetadata { DpopBoundAccessTokens = dpopBoundAccessTokens },
         };
 }
