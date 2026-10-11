@@ -32,6 +32,15 @@ public class TimeSpanSecondsConverterTests
     public void Read_ANumber_IsSeconds(string json, int expected)
         => Assert.Equal(TimeSpan.FromSeconds(expected), JsonSerializer.Deserialize<TimeSpan>(json, Options));
 
+    /// <summary>
+    /// The largest number of seconds a duration holds is read; one more is refused below.
+    /// </summary>
+    [Fact]
+    public void Read_TheLargestNumberOfSeconds_IsTheLongestDuration()
+        => Assert.Equal(
+            TimeSpan.FromSeconds((long)TimeSpan.MaxValue.TotalSeconds),
+            JsonSerializer.Deserialize<TimeSpan>(((long)TimeSpan.MaxValue.TotalSeconds).ToString(), Options));
+
     [Theory]
     [InlineData("\"3600\"", 3600)]
     [InlineData("\"0\"", 0)]

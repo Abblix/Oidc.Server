@@ -42,7 +42,12 @@ public class SecondsToTimeSpanModelBinder : ModelBinderBase
         // values cannot arrive here - and a set with values converts to a string. See ModelBinderBase.TryParse.
         var stringValue = ((string?)values).NotNull(nameof(values));
 
-        result = TimeSpan.FromSeconds(long.Parse(stringValue));
+        // A malformed value throws, which the base binder records as a model error, as it does a value that is
+        // not a number at all
+        if (!Durations.TryFromSeconds(long.Parse(stringValue), out var duration))
+            throw new FormatException($"{stringValue} is not a number of seconds a duration can have");
+
+        result = duration;
         return true;
     }
 }

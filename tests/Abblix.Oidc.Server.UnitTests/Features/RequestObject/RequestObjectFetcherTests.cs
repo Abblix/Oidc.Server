@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -247,6 +248,37 @@ public class RequestObjectFetcherTests
         var result = await fetcher.FetchAsync(originalRequest, jwt);
 
         // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// A request object carrying a member in a shape its parameter cannot take, as a negative max_age, is refused
+    /// as an invalid request object rather than failing the request.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithAMemberOfTheWrongShape_IsAnInvalidRequestObject()
+    {
+        var fetcher = CreateFetcher();
+        var originalRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
+        var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJtYXhfYWdlIjotMX0.signature";
+        var payload = new JsonObject { [RequestParameters.MaxAge] = -1 };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()),
+            Payload = new JsonWebTokenPayload(payload)
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
+
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, originalRequest))
+            .ThrowsAsync(new JsonException("negative seconds"));
+
+        var result = await fetcher.FetchAsync(originalRequest, jwt);
+
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
     }

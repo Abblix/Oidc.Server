@@ -81,7 +81,18 @@ public partial class RequestObjectFetcher(
                         .RequireStrictRequestObjectProcessing;
                 var target = strict ? Activator.CreateInstance<T>() : request;
 
-                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, target);
+                T? updatedRequest;
+                try
+                {
+                    updatedRequest = await jsonObjectBinder.BindModelAsync(payload, target);
+                }
+                catch (JsonException)
+                {
+                    // A member the request object carries in a shape its parameter cannot take, such as a negative
+                    // max_age, is the client's malformed object rather than a fault of the server
+                    return InvalidRequestObject("The request object carries a parameter of the wrong shape");
+                }
+
                 if (updatedRequest == null)
                     return InvalidRequestObject("Unable to bind request object");
 

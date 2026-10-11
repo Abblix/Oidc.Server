@@ -31,12 +31,9 @@ public class TimeSpanSecondsConverter : JsonConverter<TimeSpan>
             _ => throw new JsonException(),
         };
 
-        // A duration is never negative, and one past what a TimeSpan holds is a malformed value like any other,
-        // so both are refused as such rather than surfacing as an overflow from the conversion
-        if (seconds < 0 || seconds > (long)TimeSpan.MaxValue.TotalSeconds)
-            throw new JsonException($"{seconds} is not a number of seconds a duration can have");
-
-        return TimeSpan.FromSeconds(seconds);
+        return Durations.TryFromSeconds(seconds, out var duration)
+            ? duration
+            : throw new JsonException($"{seconds} is not a number of seconds a duration can have");
     }
 
     /// <summary>

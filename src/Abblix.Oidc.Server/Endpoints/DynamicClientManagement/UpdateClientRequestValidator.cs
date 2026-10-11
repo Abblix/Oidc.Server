@@ -58,6 +58,16 @@ public class UpdateClientRequestValidator(
         // Validate the registration request metadata using update-specific validator
         var registrationValidation = await registrationRequestValidator.ValidateAsync(request.RegistrationRequest);
 
+        // The pairwise subjects every end user of the client already holds are computed under its sector, so an
+        // update deriving another sector would hand each of them a new identity; it is refused instead
+        if (registrationValidation.TryGetSuccess(out var registration) &&
+            !string.Equals(registration.SectorIdentifier, clientInfo.Client.ClientInfo.SectorIdentifier, StringComparison.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidClientMetadata,
+                "The sector identifier of a registered client cannot change");
+        }
+
         return registrationValidation.MapSuccess(
             validRegistration => new ValidUpdateClientRequest(
                 request,

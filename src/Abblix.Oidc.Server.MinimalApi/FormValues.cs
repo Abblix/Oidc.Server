@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -171,19 +172,9 @@ internal static class FormValues
         if (value is null)
             return null;
 
-        if (!long.TryParse(value, out var seconds))
-            throw MalformedValue();
-
-        // A syntactically valid but out-of-range seconds value overflows TimeSpan. Shape it as a 400 rather than
-        // letting the throw escape BindAsync as a 500 (mirrors the MVC model binder's catch-into-ModelState).
-        try
-        {
-            return TimeSpan.FromSeconds(seconds);
-        }
-        catch (Exception ex) when (ex is ArgumentOutOfRangeException or OverflowException)
-        {
-            throw MalformedValue();
-        }
+        return long.TryParse(value, out var seconds) && Durations.TryFromSeconds(seconds, out var duration)
+            ? duration
+            : throw MalformedValue();
     }
 
     /// <summary>A single space-separated locale list (e.g. <c>ui_locales</c>) as cultures, or null.</summary>
