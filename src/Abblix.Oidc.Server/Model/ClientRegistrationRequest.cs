@@ -525,7 +525,7 @@ public record ClientRegistrationRequest
     /// Token Exchange at all.
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
-    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+    public Uri[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>
     /// Non-standard extension: the per-client allowlist of RFC 8693 <c>audience</c> values this

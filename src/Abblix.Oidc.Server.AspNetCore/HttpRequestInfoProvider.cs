@@ -29,16 +29,16 @@ public class HttpRequestInfoProvider(IHttpContextAccessor httpContextAccessor) :
     /// assertion are checked against, carries it too. Every other request keeps the address it always had.
     /// </remarks>
 #pragma warning disable ABXMT001 // Reading whether a tenant was resolved changes nothing for a host without them.
-    public string RequestUri => MultiTenancy.TenantRequirement.CurrentTenant(Request.HttpContext) is null
+    public Uri RequestUri => new(MultiTenancy.TenantRequirement.CurrentTenant(Request.HttpContext) is null
         ? Request.GetBaseUrl()
-        : Request.GetAppUrl() + Request.Path;
+        : Request.GetAppUrl() + Request.Path);
 #pragma warning restore ABXMT001
 
     /// <inheritdoc />
     public string RequestMethod => Request.Method;
 
     /// <inheritdoc />
-    public string ApplicationUri => Request.GetAppUrl();
+    public Uri ApplicationUri => new(Request.GetAppUrl());
 
     /// <inheritdoc />
     public bool IsHttps => Request.IsHttps;

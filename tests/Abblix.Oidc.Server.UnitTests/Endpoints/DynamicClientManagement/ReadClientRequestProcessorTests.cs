@@ -65,7 +65,7 @@ public class ReadClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
             RequireDPoP = true,
             AuthorizationDetailsTypes = ["payment_initiation"],
-            TokenExchangeAllowedSubjectTokenTypes = [TokenExchangeTokenTypes.AccessToken],
+            TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
             TokenExchangeAllowedAudiences = ["https://api.example.com"],
         };
         var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(client, TokenId));
@@ -78,7 +78,7 @@ public class ReadClientRequestProcessorTests
         Assert.True(response.DpopBoundAccessTokens);
         Assert.Equal(["payment_initiation"], response.AuthorizationDetailsTypes!);
         Assert.Equal(
-            [TokenExchangeTokenTypes.AccessToken],
+            [new Uri(TokenExchangeTokenTypes.AccessToken)],
             response.TokenExchangeSubjectTokenTypes!);
         Assert.Equal(["https://api.example.com"], response.TokenExchangeAudiences!);
     }

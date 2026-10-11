@@ -18,21 +18,18 @@ namespace Abblix.SecurityEvents.Subjects;
 /// </param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 [method: JsonConstructor]
-public sealed class AccountSubject(string uri)
+public sealed class AccountSubject(Uri uri)
     : SubjectIdentifier(SubjectFormats.Account)
 {
     /// <summary>
     /// The "acct" URI identifying the account (RFC 7565).
     /// </summary>
     /// <remarks>
-    /// The value is carried as written, and that leniency is the decision taken: RFC 9493
-    /// Section 3.2.1 requires the value to be the subject's "acct" URI, but this type does not
-    /// verify the scheme, for the same reason <see cref="EmailSubject"/> does not parse addr-spec
-    /// and <see cref="PhoneNumberSubject"/> does not enforce E.164 - a receiver that discarded an
-    /// event over a malformed value would lose a signal it could still act on, so lexical
-    /// validation is left to the application that chooses to refuse. No canonicalisation is stated
-    /// by the RFC either, so two spellings of one account remain two distinct identifiers here.
+    /// RFC 9493 Section 3.2.1 requires the value to be the subject's "acct" URI, so a value that is not an
+    /// absolute URI is refused; the scheme itself is not checked, which leaves the account's own spelling to the
+    /// application. No canonicalisation is stated by the RFC, so the value keeps the spelling it was written
+    /// with, and two spellings of one account remain two distinct identifiers.
     /// </remarks>
     [JsonPropertyName(SubjectMemberNames.Uri)]
-    public string Uri { get; } = RequirePresent(uri, SubjectMemberNames.Uri);
+    public Uri Uri { get; } = RequireUri(uri, SubjectMemberNames.Uri);
 }

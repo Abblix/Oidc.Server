@@ -377,7 +377,7 @@ public partial class AuthenticationCompletionHandlerTests
             new EncodedJsonWebToken(jwt, EncodedAccessToken),
             TokenTypes.Bearer,
             TimeSpan.FromHours(1),
-            TokenTypeIdentifiers.AccessToken);
+            new Uri(TokenExchangeTokenTypes.AccessToken));
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
@@ -431,7 +431,7 @@ public partial class AuthenticationCompletionHandlerTests
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
                 TimeSpan.FromHours(1),
-                TokenTypeIdentifiers.AccessToken));
+                new Uri(TokenExchangeTokenTypes.AccessToken)));
         _notificationService.Setup(s => s.SendAsync(
                 _notificationEndpoint,
                 NotificationToken,
@@ -881,7 +881,7 @@ public partial class AuthenticationCompletionHandlerTests
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
                 TimeSpan.FromHours(1),
-                TokenTypeIdentifiers.AccessToken));
+                new Uri(TokenExchangeTokenTypes.AccessToken)));
         _notificationService.Setup(s => s.SendAsync(
                 _notificationEndpoint,
                 NotificationToken,
@@ -1184,7 +1184,7 @@ public partial class AuthenticationCompletionHandlerTests
                     new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                     TokenTypes.Bearer,
                     TimeSpan.FromHours(1),
-                    TokenTypeIdentifiers.AccessToken)));
+                    new Uri(TokenExchangeTokenTypes.AccessToken))));
 
         _notificationService
             .Setup(s => s.SendAsync(

@@ -832,7 +832,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             [RequestMembers.PkceRequired] = false,
             [RequestMembers.OfflineAccessAllowed] = false,
             [RequestMembers.AuthorizationDetailsTypes] = new JsonArray(TestConstants.PaymentInitiationType),
-            [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenTypeIdentifiers.AccessToken.OriginalString),
+            [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenExchangeTokenTypes.AccessToken),
             [RequestMembers.TokenExchangeAudiences] = new JsonArray("https://api.example.com"),
             [RequestMembers.BackChannelTokenDeliveryMode] = BackchannelTokenDeliveryModes.Ping,
             [RequestMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/ciba",

@@ -45,6 +45,6 @@ public interface ISubjectTokenResolver
     /// <c>invalid_request</c> per RFC 8693 section 2.2.2.</returns>
     Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
-        string tokenType,
+        Uri tokenType,
         CancellationToken cancellationToken);
 }

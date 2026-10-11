@@ -60,7 +60,7 @@ public class ClientSecretJwtAuthenticatorTests
 
         _requestInfoProvider
             .Setup(p => p.RequestUri)
-            .Returns(RequestUri);
+            .Returns(new Uri(RequestUri));
 
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
@@ -155,6 +155,33 @@ public class ClientSecretJwtAuthenticatorTests
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The audience is compared with the request address as written (RFC 7519 section 4.1.3), so a spelling of the
+    /// same address in another case or with its default port is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("https://AUTH.example.com/token")]
+    [InlineData("HTTPS://auth.example.com/token")]
+    [InlineData("https://auth.example.com:443/token")]
+    public async Task TryAuthenticateClientAsync_TheRequestAddressSpelledOtherwise_IsRefused(string audience)
+    {
+        const string jwt = "valid.jwt.token";
+        ValidationParameters? captured = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, parameters) => captured = parameters)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
+
+        await _authenticator.TryAuthenticateClientAsync(new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        });
+
+        Assert.False(await captured!.ValidateAudience!([audience]));
+        Assert.True(await captured.ValidateAudience!([RequestUri]));
     }
 
     /// <summary>

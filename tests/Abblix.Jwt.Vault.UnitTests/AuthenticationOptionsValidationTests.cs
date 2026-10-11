@@ -37,6 +37,22 @@ public sealed class AuthenticationOptionsValidationTests
         Assert.Null(options.Authentication);
     }
 
+    /// <summary>
+    /// A server address with no scheme and host cannot be the base of a request, so it is refused at startup rather
+    /// than at the first call to the server.
+    /// </summary>
+    [Fact]
+    public void ARelativeAddress_IsRefused()
+    {
+        var exception = Assert.Throws<OptionsValidationException>(() => Resolve(vault =>
+        {
+            vault.Token = "s.host";
+            vault.Address = new Uri("/vault", UriKind.Relative);
+        }));
+
+        Assert.Contains(nameof(VaultTransitOptions.Address), exception.Message);
+    }
+
     [Fact]
     public void EmptySection_IsRefused()
     {

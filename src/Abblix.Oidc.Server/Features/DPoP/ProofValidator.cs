@@ -75,7 +75,7 @@ internal sealed class ProofValidator(
         var jwtId = string.Empty;
 
         var httpMethod = requestInfoProvider.RequestMethod;
-        var requestUri = new Uri(requestInfoProvider.RequestUri);
+        var requestUri = requestInfoProvider.RequestUri;
 
         var error = ValidateJwkShape(jwt.Header, out var jwk) ??
                     ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??

@@ -73,7 +73,7 @@ public sealed class EndpointMetricsTests : IDisposable
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
         TokenTypes.Bearer,
         TimeSpan.FromMinutes(5),
-        TokenTypeIdentifiers.AccessToken);
+        new Uri(TokenExchangeTokenTypes.AccessToken));
 
     private static EncodedJsonWebToken AToken => new(new JsonWebToken(), "token");
 

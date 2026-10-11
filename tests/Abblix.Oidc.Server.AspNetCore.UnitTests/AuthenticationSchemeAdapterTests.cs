@@ -609,6 +609,36 @@ public class AuthenticationSchemeAdapterTests
 		Assert.Equal(JsonValue.Create(dateTime).ToJsonString(), result!.AdditionalClaims!["ts"]!.ToJsonString());
 	}
 
+	/// <summary>
+	/// A date without a time comes back as the same date, so no time zone moves it to the day before.
+	/// </summary>
+	[Fact]
+	public async Task RoundTrip_Date_ComesBackAsTheSameDate()
+	{
+		var birthdate = new DateOnly(1990, 1, 1);
+
+		var result = await RoundTripAsync(Session(new JsonObject { ["birthdate"] = JsonValue.Create(birthdate) }));
+
+		Assert.Equal(birthdate, result!.AdditionalClaims!["birthdate"]!.GetValue<DateOnly>());
+	}
+
+	/// <summary>
+	/// A claim tagged as a DateTime, as a sign-in or an earlier release writes one, reads as the instant it names, one
+	/// written without an offset being UTC.
+	/// </summary>
+	[Theory]
+	[InlineData("2009-06-15T13:45:30.0000000Z")]
+	[InlineData("2009-06-15T13:45:30")]
+	public async Task AuthenticateAsync_DateTimeClaim_ReadsAsAUtcInstant(string text)
+	{
+		SetupAuthenticate(PrincipalWith(new Claim("ts", text, ClaimValueTypes.DateTime)));
+
+		var ts = (await _adapter.AuthenticateAsync())!.AdditionalClaims!["ts"]!.GetValue<DateTimeOffset>();
+
+		Assert.Equal(new DateTimeOffset(2009, 6, 15, 13, 45, 30, TimeSpan.Zero), ts);
+		Assert.Equal(TimeSpan.Zero, ts.Offset);
+	}
+
 	[Fact]
 	public async Task RoundTrip_DateTimeOffset_PreservesInstantAndOffset()
 	{

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json;
@@ -170,7 +171,7 @@ internal sealed partial class LoginClient(
             return null;
         }
 
-        return new TokenLease(clientToken, TimeSpan.FromSeconds(LeaseSeconds(auth)), IsRenewable(auth));
+        return new TokenLease(clientToken, LeaseDuration(auth), IsRenewable(auth));
     }
 
     private static bool TryGetAuth(JsonElement root, out JsonElement auth)
@@ -184,12 +185,21 @@ internal sealed partial class LoginClient(
         return clientToken is { Length: > 0 };
     }
 
-    private static long LeaseSeconds(JsonElement auth)
-        => auth.TryGetProperty("lease_duration", out var lease) &&
-           lease.ValueKind is JsonValueKind.Number &&
-           lease.TryGetInt64(out var seconds)
-            ? seconds
-            : 0;
+    /// <summary>
+    /// How long the lease runs, which Vault states in whole seconds; a lease stating none, or no duration a lease
+    /// can have, runs for no time at all.
+    /// </summary>
+    private static TimeSpan LeaseDuration(JsonElement auth)
+    {
+        if (!auth.TryGetProperty("lease_duration", out var lease) ||
+            lease.ValueKind is not JsonValueKind.Number ||
+            !lease.TryGetInt64(out var seconds))
+        {
+            return TimeSpan.Zero;
+        }
+
+        return Durations.TryFromSeconds(seconds, out var duration) ? duration : TimeSpan.Zero;
+    }
 
     private static bool IsRenewable(JsonElement auth)
         => auth.TryGetProperty("renewable", out var flag) && flag.ValueKind is JsonValueKind.True;

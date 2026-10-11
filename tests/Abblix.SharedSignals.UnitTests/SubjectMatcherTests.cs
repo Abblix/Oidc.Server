@@ -64,12 +64,12 @@ public class SubjectMatcherTests
         var added = new ComplexSubject
         {
             User = new EmailSubject("jdoe@example.com"),
-            Group = new DidSubject("did:example:123456"),
+            Group = new DidSubject(new Uri("did:example:123456")),
         };
         var eventSubject = new ComplexSubject
         {
             User = new EmailSubject("jdoe@example.com"),
-            Group = new DidSubject("did:example:9999999"),
+            Group = new DidSubject(new Uri("did:example:9999999")),
         };
 
         Assert.False(SubjectMatcher.Matches(added, eventSubject));

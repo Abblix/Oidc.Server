@@ -42,15 +42,14 @@ internal static class ProofBindingClaims
     /// </summary>
     public static ProofError? HttpUri(JsonWebTokenPayload payload, Uri requestUri)
     {
-        var httpUri = payload.DPoPHttpUri;
-        if (httpUri is null)
+        if (!payload.Json.ContainsKey(IanaClaimTypes.Htu))
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriMissing,
                 $"{IanaClaimTypes.Htu} claim is required.");
         }
 
-        if (!Uri.TryCreate(httpUri, UriKind.Absolute, out var uri))
+        if (payload.DPoPHttpUri is not { } uri)
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriInvalid,

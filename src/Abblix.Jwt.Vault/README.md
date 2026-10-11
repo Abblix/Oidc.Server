@@ -68,8 +68,8 @@ builder.Services
     .AddVaultCustodian(vault =>
     {
         // Vault must be reached over TLS: this connection carries the token and every signature.
-        vault.Address = builder.Configuration["Vault:Address"]
-            ?? throw new InvalidOperationException("Vault:Address is not configured.");
+        vault.Address = new Uri(builder.Configuration["Vault:Address"]
+            ?? throw new InvalidOperationException("Vault:Address is not configured."));
         vault.Token = builder.Configuration["Vault:Token"]; // from the environment, never hardcoded
         vault.TransitMount = "transit";                     // optional: this is the default mount
     })

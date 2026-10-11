@@ -59,7 +59,7 @@ public class ClientJwtValidatorTests
             .Setup(p => p.GetEncryptionKeys(true))
             .Returns(new[] { _serverDecryptionKey }.ToAsyncEnumerable());
 
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(RequestUri);
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(RequestUri));
         issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
 
         _validator = new ClientJwtValidator(
@@ -232,6 +232,28 @@ public class ClientJwtValidatorTests
         // Verify audience validation callback rejects wrong audience
         var audienceValidationResult = await capturedParams!.ValidateAudience!([wrongAudience]);
         Assert.False(audienceValidationResult);
+    }
+
+    /// <summary>
+    /// The audience is compared with the request address as written, as RFC 7519 section 4.1.3 compares
+    /// StringOrURI values, so a spelling of the same address in another case or with its default port is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("https://AUTH.example.com/token")]
+    [InlineData("HTTPS://auth.example.com/token")]
+    [InlineData("https://auth.example.com:443/token")]
+    public async Task ValidateAsync_TheRequestAddressSpelledOtherwise_IsRefused(string audience)
+    {
+        ValidationParameters? capturedParams = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
+
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.False(await capturedParams!.ValidateAudience!([audience]));
+        Assert.True(await capturedParams.ValidateAudience!([RequestUri]));
     }
 
     /// <summary>

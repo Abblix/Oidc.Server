@@ -195,7 +195,7 @@ public class TokenRequestProcessor(
 			accessToken,
 			tokenType,
 			lifetime,
-			TokenTypeIdentifiers.AccessToken)
+			new Uri(TokenExchangeTokenTypes.AccessToken))
 		{
 			// RFC 9396 section 7: the AS MUST return the authorization_details "as granted by the resource owner
 			// and assigned to the respective access token", and the same section lets the server OMIT

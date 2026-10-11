@@ -50,7 +50,7 @@ public class TenantRequestAddressTests
     }
 
     private static string RequestUriOf(HttpContext context)
-        => new HttpRequestInfoProvider(new HttpContextAccessor { HttpContext = context }).RequestUri;
+        => new HttpRequestInfoProvider(new HttpContextAccessor { HttpContext = context }).RequestUri.OriginalString;
 
     /// <summary>
     /// The address a DPoP proof's htu and a client assertion's aud are checked against is the one discovery

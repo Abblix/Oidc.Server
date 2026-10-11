@@ -48,7 +48,7 @@ public partial class AuthenticationCompletionHandlerTests
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
                 TimeSpan.FromHours(1),
-                TokenTypeIdentifiers.AccessToken));
+                new Uri(TokenExchangeTokenTypes.AccessToken)));
         _notificationService
             .Setup(s => s.SendAsync(
                 It.IsAny<Uri>(),

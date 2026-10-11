@@ -22,7 +22,7 @@ namespace Abblix.SecurityEvents.Subjects;
 /// </param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 [method: JsonConstructor]
-public sealed class UriSubject(string uri)
+public sealed class UriSubject(Uri uri)
     : SubjectIdentifier(SubjectFormats.Uri)
 {
     /// <summary>
@@ -30,5 +30,5 @@ public sealed class UriSubject(string uri)
     /// scheme or reachability, so it is neither dereferenced nor required to name a live resource.
     /// </summary>
     [JsonPropertyName(SubjectMemberNames.Uri)]
-    public string Uri { get; } = RequirePresent(uri, SubjectMemberNames.Uri);
+    public Uri Uri { get; } = RequireUri(uri, SubjectMemberNames.Uri);
 }

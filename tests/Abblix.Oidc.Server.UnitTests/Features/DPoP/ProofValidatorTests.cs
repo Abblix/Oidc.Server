@@ -44,7 +44,7 @@ public class ProofValidatorTests
     public ProofValidatorTests()
     {
         _requestInfo.SetupGet(p => p.RequestMethod).Returns(DefaultHttpMethod);
-        _requestInfo.SetupGet(p => p.RequestUri).Returns(DefaultRequestUri.ToString());
+        _requestInfo.SetupGet(p => p.RequestUri).Returns(DefaultRequestUri);
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -96,7 +96,7 @@ public class ProofValidatorTests
     {
         // Proof carries htu without port; request URI includes the default :443.
         // Both must canonicalise to the same form.
-        _requestInfo.SetupGet(p => p.RequestUri).Returns("https://auth.example.com:443/token");
+        _requestInfo.SetupGet(p => p.RequestUri).Returns(new Uri("https://auth.example.com:443/token"));
         var builder = new DPoPProofBuilder(_time.GetUtcNow());
         var proof = builder.Build();
 

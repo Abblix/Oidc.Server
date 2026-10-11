@@ -254,7 +254,7 @@ public record ClientInfo(string ClientId)
     /// </list>
     /// Mirrors the <see cref="AuthorizationDetailsTypes"/> tri-state pattern.
     /// </summary>
-    public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
+    public Uri[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
     /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when

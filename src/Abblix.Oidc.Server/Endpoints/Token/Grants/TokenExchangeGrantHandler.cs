@@ -107,7 +107,7 @@ public class TokenExchangeGrantHandler(
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.SubjectToken);
         }
 
-        if (!ctx.Request.SubjectTokenType.HasValue())
+        if (ctx.Request.SubjectTokenType is null)
         {
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.SubjectTokenType);
         }
@@ -138,7 +138,7 @@ public class TokenExchangeGrantHandler(
     private static Result<ValidationContext, OidcError> ValidateActorTokenPair(ValidationContext ctx)
     {
         var hasToken = !string.IsNullOrEmpty(ctx.Request.ActorToken);
-        var hasType = !string.IsNullOrEmpty(ctx.Request.ActorTokenType);
+        var hasType = ctx.Request.ActorTokenType is not null;
         if (hasToken != hasType)
         {
             return new OidcError(
@@ -193,11 +193,11 @@ public class TokenExchangeGrantHandler(
     ///   non-empty    -> allowlist of accepted token-type URIs
     /// </summary>
     private static OidcError? CheckTokenTypeAllowlist(
-        string? tokenTypeUri,
+        Uri? tokenTypeUri,
         ClientInfo clientInfo,
         string fieldName)
     {
-        if (string.IsNullOrEmpty(tokenTypeUri))
+        if (tokenTypeUri is null)
             return null;
 
         // Tri-state: null = no per-client constraint -- skip membership check entirely so the
@@ -209,7 +209,10 @@ public class TokenExchangeGrantHandler(
                     ErrorCodes.InvalidRequest,
                     "Client is not permitted to use the Token Exchange grant.");
 
-            case { Length: > 0 } allowlist when !allowlist.Contains(tokenTypeUri, StringComparer.Ordinal):
+            // A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by
+            // their spelling rather than as equivalent addresses
+            case { Length: > 0 } allowlist when !allowlist.Any(allowed =>
+                string.Equals(allowed.OriginalString, tokenTypeUri.OriginalString, StringComparison.Ordinal)):
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
                     $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
@@ -408,11 +411,12 @@ public class TokenExchangeGrantHandler(
     }
 
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
-        string? tokenType,
+        Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
     {
-        if (tokenType is null || serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType) is not { } resolver)
+        if (tokenType is null ||
+            serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType.OriginalString) is not { } resolver)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,

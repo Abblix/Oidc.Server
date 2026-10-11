@@ -128,7 +128,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
             [TokenRequest.Parameters.SubjectToken] = accessToken,
-            [TokenRequest.Parameters.SubjectTokenType] = TokenTypeIdentifiers.AccessToken.OriginalString,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });

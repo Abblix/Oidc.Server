@@ -631,11 +631,11 @@ public class JwtBearerGrantHandlerTests
 
 		requestInfoProvider
 			.Setup(r => r.RequestUri)
-			.Returns(tokenEndpoint ?? "https://authorization-server.example.com/token");
+			.Returns(new Uri(tokenEndpoint ?? "https://authorization-server.example.com/token"));
 
 		requestInfoProvider
 			.Setup(r => r.ApplicationUri)
-			.Returns(applicationUri ?? "https://authorization-server.example.com");
+			.Returns(new Uri(applicationUri ?? "https://authorization-server.example.com"));
 
 		requestInfoProvider
 			.Setup(r => r.RemoteIpAddress)
