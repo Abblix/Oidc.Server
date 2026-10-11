@@ -48,6 +48,12 @@ public class TimeSpanSecondsConverterTests
     [InlineData("true")]
     [InlineData("null")]
     [InlineData("[3600]")]
+    [InlineData("-5")]
+    [InlineData("\"-5\"")]
+    [InlineData("9223372036854775807")]
+    [InlineData("922337203686")]
+    [InlineData("18446744073709551615")]
+    [InlineData("300.5")]
     public void Read_AValueThatIsNotACountOfSeconds_IsRefused(string json)
         => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<TimeSpan>(json, Options));
 

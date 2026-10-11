@@ -71,6 +71,11 @@ public record ClientInfo(string ClientId)
     public bool? PkceRequired { get; set; } = true;
 
     /// <summary>
+    /// Whether the client uses PKCE when nothing else requires it: what it states, or true when it states nothing.
+    /// </summary>
+    public bool EffectivePkceRequired => PkceRequired ?? true;
+
+    /// <summary>
     /// Indicates if the client is allowed to use the "plain" method for PKCE.
     /// It is recommended to use stronger methods like "S256" for enhanced security.
     /// </summary>
@@ -440,6 +445,12 @@ public record ClientInfo(string ClientId)
     /// representing the client's sector.
     /// </summary>
     public string? SectorIdentifier { get; set; }
+
+    /// <summary>
+    /// The sector identifier URI the client registered (OpenID Connect Core 1.0 section 8.1), kept so the
+    /// registration responses return it; <see cref="SectorIdentifier"/> is the host derived from it.
+    /// </summary>
+    public Uri? SectorIdentifierUri { get; set; }
 
     /// <summary>
     /// Indicates whether the login hint token should be parsed and validated as a JSON Web Token (JWT).

@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -782,25 +783,64 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
-        var metadata = NewClientMetadata("described");
-        metadata[RequestMembers.ClientUri] = "https://client.example.com/";
-        metadata[RequestMembers.PolicyUri] = "https://client.example.com/privacy";
-        metadata[RequestMembers.TosUri] = "https://client.example.com/terms";
-        metadata[RequestMembers.LogoUri] = "https://client.example.com/logo.png";
-        metadata[RequestMembers.Contacts] = new JsonArray("ops@client.example.com");
-        metadata[RequestMembers.PostLogoutRedirectUris] = new JsonArray("https://client.example.com/signed-out");
-        metadata[RequestMembers.InitiateLoginUri] = "https://client.example.com/login";
-        metadata[RequestMembers.DefaultMaxAge] = 300;
-        metadata[RequestMembers.RequireAuthTime] = true;
-        metadata[RequestMembers.DefaultAcrValues] = new JsonArray("urn:example:loa:2");
-        metadata[RequestMembers.IdTokenSignedResponseAlg] = SigningAlgorithms.RS256;
-        metadata[RequestMembers.UserInfoSignedResponseAlg] = SigningAlgorithms.RS256;
-        metadata[RequestMembers.FrontChannelLogoutUri] = "https://client.example.com/fc-logout";
-        metadata[RequestMembers.FrontChannelLogoutSessionRequired] = false;
-        metadata[RequestMembers.BackChannelLogoutUri] = "https://client.example.com/bc-logout";
-        metadata[RequestMembers.BackChannelLogoutSessionRequired] = false;
-        metadata[RequestMembers.SoftwareId] = "described-software";
-        metadata[RequestMembers.SoftwareVersion] = "1.2.3";
+        // Every member the test host accepts without configuration of its own, each set apart from the server's
+        // default and from every other member, so a value returned under the wrong name or left at its default fails
+        var metadata = new JsonObject
+        {
+            [RequestMembers.ClientName] = "described",
+            [RequestMembers.RedirectUris] = new JsonArray("com.example.client:/callback"),
+            [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.Ciba),
+            [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
+            [RequestMembers.Scope] = $"{Scopes.OpenId} {Scopes.Profile}",
+            [RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+            [RequestMembers.TokenEndpointAuthSigningAlg] = SigningAlgorithms.PS256,
+            [RequestMembers.JwksUri] = "https://client.example.com/jwks",
+            [RequestMembers.ApplicationType] = ApplicationTypes.Native,
+            [RequestMembers.ClientUri] = "https://client.example.com/",
+            [RequestMembers.PolicyUri] = "https://client.example.com/privacy",
+            [RequestMembers.TosUri] = "https://client.example.com/terms",
+            [RequestMembers.LogoUri] = "https://client.example.com/logo.png",
+            [RequestMembers.Contacts] = new JsonArray("ops@client.example.com"),
+            [RequestMembers.PostLogoutRedirectUris] = new JsonArray("com.example.client:/signed-out"),
+            [RequestMembers.InitiateLoginUri] = "https://client.example.com/login",
+            [RequestMembers.RequestUris] = new JsonArray("https://client.example.com/request"),
+            [RequestMembers.DefaultMaxAge] = 300,
+            [RequestMembers.RequireAuthTime] = true,
+            [RequestMembers.DefaultAcrValues] = new JsonArray("urn:example:loa:2"),
+            [RequestMembers.IdTokenSignedResponseAlg] = SigningAlgorithms.ES256,
+            [RequestMembers.IdTokenEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            [RequestMembers.IdTokenEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            [RequestMembers.UserInfoSignedResponseAlg] = SigningAlgorithms.ES384,
+            [RequestMembers.UserInfoEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.RsaOaep,
+            [RequestMembers.UserInfoEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
+            [RequestMembers.IntrospectionSignedResponseAlg] = SigningAlgorithms.PS384,
+            [RequestMembers.IntrospectionEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.EcdhEs,
+            [RequestMembers.IntrospectionEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes192Gcm,
+            [RequestMembers.AuthorizationSignedResponseAlg] = SigningAlgorithms.ES512,
+            [RequestMembers.AuthorizationEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
+            [RequestMembers.AuthorizationEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+            [RequestMembers.RequestObjectSigningAlg] = SigningAlgorithms.PS512,
+            [RequestMembers.RequestObjectEncryptionAlg] = EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW,
+            [RequestMembers.RequestObjectEncryptionEnc] = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
+            [RequestMembers.FrontChannelLogoutUri] = "https://client.example.com/fc-logout",
+            [RequestMembers.FrontChannelLogoutSessionRequired] = false,
+            [RequestMembers.BackChannelLogoutUri] = "https://client.example.com/bc-logout",
+            [RequestMembers.BackChannelLogoutSessionRequired] = false,
+            [RequestMembers.DpopBoundAccessTokens] = true,
+            [RequestMembers.RequirePushedAuthorizationRequests] = true,
+            [RequestMembers.RequireSignedRequestObject] = true,
+            [RequestMembers.PkceRequired] = false,
+            [RequestMembers.OfflineAccessAllowed] = false,
+            [RequestMembers.AuthorizationDetailsTypes] = new JsonArray(TestConstants.PaymentInitiationType),
+            [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenTypeIdentifiers.AccessToken.OriginalString),
+            [RequestMembers.TokenExchangeAudiences] = new JsonArray("https://api.example.com"),
+            [RequestMembers.BackChannelTokenDeliveryMode] = BackchannelTokenDeliveryModes.Ping,
+            [RequestMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/ciba",
+            [RequestMembers.BackChannelAuthenticationRequestSigningAlg] = SigningAlgorithms.ES256,
+            [RequestMembers.BackChannelUserCodeParameter] = true,
+            [RequestMembers.SoftwareId] = "described-software",
+            [RequestMembers.SoftwareVersion] = "1.2.3",
+        };
 
         var registered = await RegisterClientAsync(client, discovery, metadata);
         AssertEchoed(metadata, registered);
@@ -824,6 +864,27 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var updateResponse = await client.SendAsync(update, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         AssertEchoed(updated, await ReadJsonAsync(updateResponse), except: RequestMembers.ClientId);
+    }
+
+    /// <summary>
+    /// A maximum authentication age no duration can hold, or a negative one, is a malformed request rather than a
+    /// fault of the server.
+    /// </summary>
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(-1L)]
+    public async Task A_maximum_authentication_age_no_duration_holds_is_refused(long seconds)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("ageless");
+        metadata[RequestMembers.DefaultMaxAge] = seconds;
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     /// <summary>

@@ -312,7 +312,8 @@ public record RegisteredClientMetadata
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
     public bool? RequireSignedRequestObject { get; init; }
 
-    /// <summary>Whether the client uses PKCE on every authorization code request.</summary>
+    /// <summary>Whether the client uses PKCE on every authorization code request, true when it registered no
+    /// choice.</summary>
     [JsonPropertyOrder(155)]
     [JsonPropertyName(Parameters.PkceRequired)]
     public bool? PkceRequired { get; init; }
@@ -374,7 +375,7 @@ public record RegisteredClientMetadata
         JwksUri = client.JwksUri,
         Jwks = client.Jwks,
         SubjectType = client.SubjectType,
-        SectorIdentifierUri = Uri.TryCreate(client.SectorIdentifier, UriKind.Absolute, out var sector) ? sector : null,
+        SectorIdentifierUri = client.SectorIdentifierUri,
         IdTokenSignedResponseAlg = client.IdentityTokenSignedResponseAlgorithm,
         IdTokenEncryptedResponseAlg = client.IdentityTokenEncryptedResponseAlgorithm,
         IdTokenEncryptedResponseEnc = client.IdentityTokenEncryptedResponseEncryption,
@@ -407,7 +408,7 @@ public record RegisteredClientMetadata
         DpopBoundAccessTokens = client.RequireDPoP,
         RequirePushedAuthorizationRequests = client.RequirePushedAuthorizationRequests,
         RequireSignedRequestObject = client.RequireSignedRequestObject,
-        PkceRequired = client.PkceRequired,
+        PkceRequired = client.EffectivePkceRequired,
         OfflineAccessAllowed = client.OfflineAccessAllowed,
         AuthorizationDetailsTypes = client.AuthorizationDetailsTypes,
         TokenExchangeSubjectTokenTypes = client.TokenExchangeAllowedSubjectTokenTypes,

@@ -13,8 +13,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Xunit;
@@ -25,21 +25,29 @@ namespace Abblix.Oidc.Server.UnitTests.Model;
 /// The metadata the registration, read and update responses return is every value the server stores for the
 /// client (RFC 7591 section 3.2.1, RFC 7592 section 3).
 /// </summary>
+/// <remarks>
+/// The client is built from a registration request by the builder the server stores registrations through, so a
+/// value the builder drops or a mapping that reads the wrong stored member fails here. Every member carries a value
+/// of its own, apart from the server's default and from every other member.
+/// </remarks>
 public class RegisteredClientMetadataTests
 {
     /// <summary>
-    /// Every member the registration request accepts and the server stores comes back under the same name, so a
-    /// member added to the request without one in the response fails here rather than going missing on the wire.
+    /// The two request members that are not client metadata: the identifier the server assigns, and a software
+    /// statement the server reads and does not keep, which the registration response returns from the request.
+    /// </summary>
+    private static readonly string[] NotMetadata =
+        [ClientRegistrationRequest.Parameters.ClientId, ClientRegistrationRequest.Parameters.SoftwareStatement];
+
+    /// <summary>
+    /// Every member the registration request accepts comes back under the same name, so a member added to the
+    /// request without one in the response fails here rather than going missing on the wire.
     /// </summary>
     [Fact]
-    public void EveryStoredRequestMember_HasAResponseMemberOfTheSameName()
+    public void EveryRequestMember_HasAResponseMemberOfTheSameName()
     {
-        // The two request members that are not client metadata: the identifier the server assigns, and a software
-        // statement the server reads and does not keep, which the registration response returns from the request
-        string[] notMetadata = [ClientRegistrationRequest.Parameters.ClientId, ClientRegistrationRequest.Parameters.SoftwareStatement];
-
         var missing = WireNames(typeof(ClientRegistrationRequest))
-            .Except(notMetadata)
+            .Except(NotMetadata)
             .Except(WireNames(typeof(RegisteredClientMetadata)))
             .ToArray();
 
@@ -47,47 +55,23 @@ public class RegisteredClientMetadataTests
     }
 
     /// <summary>
-    /// A client with every value set returns every member, so a member the mapping forgets fails here.
+    /// Every member of a request with every member set comes back with the value the request carried.
     /// </summary>
     [Fact]
-    public void AClientWithEveryValueSet_ReturnsEveryMember()
+    public void EveryRegisteredValue_ComesBackAsSent()
     {
-        var json = JsonSerializer.SerializeToNode(RegisteredClientMetadata.Of(FullClient()))!.AsObject();
+        var request = FullRequest();
+        var sent = JsonSerializer.SerializeToNode(request)!.AsObject();
 
-        var absent = WireNames(typeof(RegisteredClientMetadata))
-            .Where(name => json[name] is null)
+        var returned = JsonSerializer.SerializeToNode(RegisteredClientMetadata.Of(Registered(request)))!.AsObject();
+
+        var differing = WireNames(typeof(ClientRegistrationRequest))
+            .Except(NotMetadata)
+            .Where(name => sent[name] is null || !JsonNode.DeepEquals(sent[name], returned[name]))
+            .Select(name => $"{name}: sent {sent[name]?.ToJsonString()}, got {returned[name]?.ToJsonString()}")
             .ToArray();
 
-        Assert.Empty(absent);
-    }
-
-    /// <summary>
-    /// Each member carries the stored value, written as the registration request writes it.
-    /// </summary>
-    [Fact]
-    public void AClientWithEveryValueSet_ReturnsItsValues()
-    {
-        var client = FullClient();
-
-        var json = JsonSerializer.SerializeToNode(RegisteredClientMetadata.Of(client))!.AsObject();
-        var readBack = json.Deserialize<ClientRegistrationRequest>()!;
-
-        Assert.Equal(client.ClientUri, readBack.ClientUri);
-        Assert.Equal(client.PolicyUri, readBack.PolicyUri);
-        Assert.Equal(client.TermsOfServiceUri, readBack.TermsOfServiceUri);
-        Assert.Equal(client.PostLogoutRedirectUris, readBack.PostLogoutRedirectUris);
-        Assert.Equal(client.DefaultMaxAge, readBack.DefaultMaxAge);
-        Assert.Equal(client.RequireAuthTime, readBack.RequireAuthTime);
-        Assert.Equal(client.DefaultAcrValues, readBack.DefaultAcrValues);
-        Assert.Equal(client.IdentityTokenSignedResponseAlgorithm, readBack.IdTokenSignedResponseAlg);
-        Assert.Equal(client.RequestObjectEncryptionMethod, readBack.RequestObjectEncryptionEnc);
-        Assert.Equal(client.FrontChannelLogout!.Uri, readBack.FrontChannelLogoutUri);
-        Assert.Equal(client.BackChannelLogout!.RequiresSessionId, readBack.BackChannelLogoutSessionRequired);
-        Assert.Equal(client.BackChannelClientNotificationEndpoint, readBack.BackChannelClientNotificationEndpoint);
-        Assert.Equal(client.TlsClientAuth!.SanEmails, readBack.TlsClientAuthSanEmail);
-        Assert.Equal(client.SoftwareVersion, readBack.SoftwareVersion);
-        Assert.Equal(client.EffectiveResponseTypes, readBack.ResponseTypes);
-        Assert.Equal(client.AllowedScopes, readBack.Scope);
+        Assert.Empty(differing);
     }
 
     /// <summary>
@@ -97,14 +81,27 @@ public class RegisteredClientMetadataTests
     [Fact]
     public void APlainJsonResponse_LeavesItsSigningAlgorithmOut()
     {
-        var client = FullClient();
-        client.UserInfoSignedResponseAlgorithm = SigningAlgorithms.None;
-        client.IntrospectionSignedResponseAlgorithm = SigningAlgorithms.None;
+        var request = FullRequest() with
+        {
+            UserInfoSignedResponseAlg = SigningAlgorithms.None,
+            IntrospectionSignedResponseAlg = SigningAlgorithms.None,
+        };
 
-        var metadata = RegisteredClientMetadata.Of(client);
+        var metadata = RegisteredClientMetadata.Of(Registered(request));
 
         Assert.Null(metadata.UserInfoSignedResponseAlg);
         Assert.Null(metadata.IntrospectionSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// A client registering no PKCE choice is returned the choice the server applies to it.
+    /// </summary>
+    [Fact]
+    public void NoPkceChoice_ReturnsTheOneApplied()
+    {
+        var metadata = RegisteredClientMetadata.Of(Registered(FullRequest() with { PkceRequired = null }));
+
+        Assert.True(metadata.PkceRequired);
     }
 
     /// <summary>
@@ -113,10 +110,16 @@ public class RegisteredClientMetadataTests
     [Fact]
     public void AClientWithoutACertificate_ReturnsNoCertificateMembers()
     {
-        var client = FullClient();
-        client.TlsClientAuth = null;
+        var request = FullRequest() with
+        {
+            TlsClientAuthSubjectDn = null,
+            TlsClientAuthSanDns = null,
+            TlsClientAuthSanUri = null,
+            TlsClientAuthSanIp = null,
+            TlsClientAuthSanEmail = null,
+        };
 
-        var metadata = RegisteredClientMetadata.Of(client);
+        var metadata = RegisteredClientMetadata.Of(Registered(request));
 
         Assert.Null(metadata.TlsClientAuthSubjectDn);
         Assert.Null(metadata.TlsClientAuthSanDns);
@@ -132,69 +135,77 @@ public class RegisteredClientMetadataTests
             .OfType<string>()
             .ToArray();
 
-    private static ClientInfo FullClient() => new("client")
+    /// <summary>
+    /// The client the server stores for <paramref name="request"/>, its sector the host of the registered sector
+    /// identifier URI, as the registration validators derive it.
+    /// </summary>
+    private static ClientInfo Registered(ClientRegistrationRequest request)
+        => new ClientInfoBuilder("client", request)
+            .WithSectorIdentifier(request.SectorIdentifierUri?.Host)
+            .Build();
+
+    private static ClientRegistrationRequest FullRequest() => new()
     {
-        TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-        TokenEndpointAuthSigningAlgorithm = SigningAlgorithms.ES256,
-        ApplicationType = ApplicationTypes.Web,
         RedirectUris = [new Uri("https://client.example.com/callback")],
         PostLogoutRedirectUris = [new Uri("https://client.example.com/signed-out")],
-        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
-        AllowedResponseTypes = [[ResponseTypes.Code]],
-        AllowedScopes = [Scopes.OpenId, Scopes.Profile],
+        GrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.Ciba],
+        ResponseTypes = [[ResponseTypes.Code]],
+        Scope = [Scopes.OpenId, Scopes.Profile],
+        ApplicationType = ApplicationTypes.Native,
+        Contacts = ["ops@client.example.com"],
         ClientName = "Client",
         ClientUri = new Uri("https://client.example.com/"),
         LogoUri = new Uri("https://client.example.com/logo.png"),
         PolicyUri = new Uri("https://client.example.com/privacy"),
         TermsOfServiceUri = new Uri("https://client.example.com/terms"),
-        Contacts = ["ops@client.example.com"],
         JwksUri = new Uri("https://client.example.com/jwks"),
-        Jwks = new JsonWebKeySet([]),
+        Jwks = new JsonWebKeySet([new RsaJsonWebKey { KeyId = "client-key", Modulus = [1, 2, 3], Exponent = [1, 0, 1] }]),
+        SectorIdentifierUri = new Uri("https://sector.example.com/sector.json"),
         SubjectType = SubjectTypes.Pairwise,
-        SectorIdentifier = "https://client.example.com/sector",
-        IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.ES256,
-        IdentityTokenEncryptedResponseAlgorithm = "RSA-OAEP-256",
-        IdentityTokenEncryptedResponseEncryption = "A256GCM",
-        UserInfoSignedResponseAlgorithm = SigningAlgorithms.RS256,
-        UserInfoEncryptedResponseAlgorithm = "RSA-OAEP-256",
-        UserInfoEncryptedResponseEncryption = "A256GCM",
-        IntrospectionSignedResponseAlgorithm = SigningAlgorithms.RS256,
-        IntrospectionEncryptedResponseAlgorithm = "RSA-OAEP-256",
-        IntrospectionEncryptedResponseEncryption = "A256GCM",
-        AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
-        AuthorizationEncryptedResponseAlgorithm = "RSA-OAEP-256",
-        AuthorizationEncryptedResponseEncryption = "A256GCM",
-        RequestObjectSigningAlgorithm = SigningAlgorithms.PS256,
-        RequestObjectEncryptionAlgorithm = "RSA-OAEP-256",
-        RequestObjectEncryptionMethod = "A256GCM",
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+        TokenEndpointAuthSigningAlg = SigningAlgorithms.PS256,
+        IdTokenSignedResponseAlg = SigningAlgorithms.ES256,
+        IdTokenEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        IdTokenEncryptedResponseEnc = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+        UserInfoSignedResponseAlg = SigningAlgorithms.ES384,
+        UserInfoEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.RsaOaep,
+        UserInfoEncryptedResponseEnc = EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
+        IntrospectionSignedResponseAlg = SigningAlgorithms.PS384,
+        IntrospectionEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.EcdhEs,
+        IntrospectionEncryptedResponseEnc = EncryptionAlgorithms.ContentEncryption.Aes192Gcm,
+        AuthorizationSignedResponseAlg = SigningAlgorithms.ES512,
+        AuthorizationEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
+        AuthorizationEncryptedResponseEnc = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+        RequestObjectSigningAlg = SigningAlgorithms.PS512,
+        RequestObjectEncryptionAlg = EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW,
+        RequestObjectEncryptionEnc = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
+        TlsClientAuthSubjectDn = "CN=client",
+        TlsClientAuthSanDns = ["client.example.com"],
+        TlsClientAuthSanUri = [new Uri("https://san.example.com/")],
+        TlsClientAuthSanIp = ["192.0.2.1"],
+        TlsClientAuthSanEmail = ["cert@client.example.com"],
         DefaultMaxAge = TimeSpan.FromMinutes(5),
         RequireAuthTime = true,
         DefaultAcrValues = ["urn:example:loa:2"],
         InitiateLoginUri = new Uri("https://client.example.com/login"),
         RequestUris = [new Uri("https://client.example.com/request")],
-        FrontChannelLogout = new FrontChannelLogoutOptions(new Uri("https://client.example.com/fc-logout")),
-        BackChannelLogout = new BackChannelLogoutOptions(new Uri("https://client.example.com/bc-logout"), false),
-        BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
-        BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
-        BackChannelAuthenticationRequestSigningAlg = SigningAlgorithms.ES256,
-        BackChannelUserCodeParameter = true,
-        TlsClientAuth = new TlsClientAuthOptions
-        {
-            SubjectDn = "CN=client",
-            SanDns = ["client.example.com"],
-            SanUris = [new Uri("https://client.example.com/")],
-            SanIps = ["192.0.2.1"],
-            SanEmails = ["ops@client.example.com"],
-        },
-        TlsClientCertificateBoundAccessTokens = true,
-        RequireDPoP = true,
+        PkceRequired = false,
+        OfflineAccessAllowed = false,
+        DpopBoundAccessTokens = true,
         RequirePushedAuthorizationRequests = true,
         RequireSignedRequestObject = true,
-        PkceRequired = true,
-        OfflineAccessAllowed = true,
+        TlsClientCertificateBoundAccessTokens = true,
         AuthorizationDetailsTypes = ["payment_initiation"],
-        TokenExchangeAllowedSubjectTokenTypes = ["urn:ietf:params:oauth:token-type:access_token"],
-        TokenExchangeAllowedAudiences = ["https://api.example.com"],
+        TokenExchangeSubjectTokenTypes = [TokenTypeIdentifiers.AccessToken.OriginalString],
+        TokenExchangeAudiences = ["https://api.example.com"],
+        BackChannelLogoutUri = new Uri("https://client.example.com/bc-logout"),
+        BackChannelLogoutSessionRequired = false,
+        FrontChannelLogoutUri = new Uri("https://client.example.com/fc-logout"),
+        FrontChannelLogoutSessionRequired = false,
+        BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
+        BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+        BackChannelAuthenticationRequestSigningAlg = SigningAlgorithms.RS512,
+        BackChannelUserCodeParameter = true,
         SoftwareId = "software",
         SoftwareVersion = "1.0",
     };

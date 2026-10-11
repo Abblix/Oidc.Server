@@ -24,13 +24,19 @@ public class TimeSpanSecondsConverter : JsonConverter<TimeSpan>
     /// <returns>A TimeSpan object representing the value read from the JSON.</returns>
     public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        return TimeSpan.FromSeconds(
-            reader.TokenType switch
-            {
-                JsonTokenType.String when long.TryParse(reader.GetString(), out var parsed) => parsed,
-                JsonTokenType.Number => reader.GetInt64(),
-                _ => throw new JsonException(),
-            });
+        var seconds = reader.TokenType switch
+        {
+            JsonTokenType.String when long.TryParse(reader.GetString(), out var parsed) => parsed,
+            JsonTokenType.Number when reader.TryGetInt64(out var number) => number,
+            _ => throw new JsonException(),
+        };
+
+        // A duration is never negative, and one past what a TimeSpan holds is a malformed value like any other,
+        // so both are refused as such rather than surfacing as an overflow from the conversion
+        if (seconds < 0 || seconds > (long)TimeSpan.MaxValue.TotalSeconds)
+            throw new JsonException($"{seconds} is not a number of seconds a duration can have");
+
+        return TimeSpan.FromSeconds(seconds);
     }
 
     /// <summary>
