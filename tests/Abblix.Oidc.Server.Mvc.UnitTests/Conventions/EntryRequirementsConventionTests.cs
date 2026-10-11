@@ -25,15 +25,15 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Conventions;
 
 /// <summary>
-/// Every controller of the package is put behind <see cref="RequireTenantFilter"/>, and nobody else's is.
+/// Every controller of the package is put behind <see cref="RequireHostFilter"/> and <see cref="RequireTenantFilter"/>, and nobody else's is.
 /// </summary>
-public class RequireTenantConventionTests
+public class EntryRequirementsConventionTests
 {
     private static ControllerModel Controller(System.Type type)
         => new(type.GetTypeInfo(), []);
 
     [Fact]
-    public void EveryControllerOfThePackage_GetsTheFilter_AndTheHostsDoNot()
+    public void EveryControllerOfThePackage_GetsBothFilters_AndTheHostsDoNot()
     {
         var packageControllers = typeof(TokenController).Assembly.GetTypes()
             .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
@@ -43,14 +43,18 @@ public class RequireTenantConventionTests
         var application = new ApplicationModel();
         foreach (var type in packageControllers)
             application.Controllers.Add(Controller(type));
-        var hostController = Controller(typeof(RequireTenantConventionTests));
+        var hostController = Controller(typeof(EntryRequirementsConventionTests));
         application.Controllers.Add(hostController);
 
-        new RequireTenantConvention().Apply(application);
+        new EntryRequirementsConvention().Apply(application);
 
         Assert.All(
             application.Controllers.Where(controller => controller != hostController),
-            controller => Assert.Single(controller.Filters.OfType<RequireTenantFilter>()));
+            controller =>
+            {
+                Assert.Single(controller.Filters.OfType<RequireHostFilter>());
+                Assert.Single(controller.Filters.OfType<RequireTenantFilter>());
+            });
         Assert.Empty(hostController.Filters);
     }
 
@@ -94,6 +98,6 @@ public class RequireTenantConventionTests
 
         new ConfigureEndpointConventions(Options.Create(new OidcOptions())).PostConfigure(null, mvcOptions);
 
-        Assert.Single(mvcOptions.Conventions.OfType<RequireTenantConvention>());
+        Assert.Single(mvcOptions.Conventions.OfType<EntryRequirementsConvention>());
     }
 }

@@ -1,0 +1,40 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Text.Json.Nodes;
+using Abblix.Oidc;
+using Microsoft.AspNetCore.Http;
+using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+
+namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
+
+/// <summary>
+/// An HTTP/1.0 request may carry no Host header, and Kestrel passes it on with an empty host. No address of this
+/// server can be built for it, so the MVC transport refuses it before an endpoint builds one.
+/// </summary>
+public class HostlessRequestTests(TestFactory factory) : TestBase(factory)
+{
+    [Fact]
+    public async Task AHostlessRequest_IsRefusedAsInvalidRequest()
+    {
+        var context = await Factory.Server.SendAsync(
+            http =>
+            {
+                http.Request.Method = HttpMethods.Get;
+                http.Request.Scheme = Uri.UriSchemeHttps;
+                http.Request.Host = default;
+                http.Request.Path = "/.well-known/openid-configuration";
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        var body = await JsonNode.ParseAsync(context.Response.Body, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(ErrorCodes.InvalidRequest, body?[ResponseParameters.Error]?.GetValue<string>());
+    }
+}

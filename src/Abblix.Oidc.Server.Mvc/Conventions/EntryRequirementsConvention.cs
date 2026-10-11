@@ -12,20 +12,25 @@ using Microsoft.AspNetCore.Mvc.ApplicationModels;
 namespace Abblix.Oidc.Server.Mvc.Conventions;
 
 /// <summary>
-/// Puts every controller this package ships behind <see cref="RequireTenantFilter"/>.
+/// Puts every controller this package ships behind <see cref="RequireHostFilter"/> and
+/// <see cref="RequireTenantFilter"/>, in that order.
 /// </summary>
 /// <remarks>
 /// Selected by assembly rather than by an attribute on each controller, so a controller added to the package
 /// later is covered without anybody remembering to mark it; the host's own controllers are left alone.
 /// </remarks>
-internal sealed class RequireTenantConvention : IApplicationModelConvention
+internal sealed class EntryRequirementsConvention : IApplicationModelConvention
 {
-    private static readonly System.Reflection.Assembly Package = typeof(RequireTenantConvention).Assembly;
+    private static readonly System.Reflection.Assembly Package = typeof(EntryRequirementsConvention).Assembly;
 
     /// <inheritdoc />
     public void Apply(ApplicationModel application)
     {
-        foreach (var controller in application.Controllers.Where(c => c.ControllerType.Assembly == Package))
-            controller.Filters.Add(new RequireTenantFilter());
+        var packageControllers = application.Controllers.Where(c => c.ControllerType.Assembly == Package);
+        foreach (var filters in packageControllers.Select(controller => controller.Filters))
+        {
+            filters.Add(new RequireHostFilter());
+            filters.Add(new RequireTenantFilter());
+        }
     }
 }

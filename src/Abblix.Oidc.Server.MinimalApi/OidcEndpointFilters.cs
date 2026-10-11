@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.MinimalApi.Filters;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -24,6 +25,9 @@ internal static class OidcEndpointFilters
     /// <summary>Adds the filters to the OIDC route group.</summary>
     public static RouteGroupBuilder AddOidcEndpointFilters(this RouteGroupBuilder oidcGroup)
     {
+        // Outermost, because the HTTPS redirect below builds an address from the host too.
+        oidcGroup.AddEndpointFilter(RequireHostAsync);
+
         // Gate every OIDC endpoint on HTTPS, the public discovery and JWKS metadata included. This mirrors the
         // [RequireHttps] carried by every MVC controller (DiscoveryController included): the credential- and
         // token-bearing endpoints must never serve secrets in cleartext (RFC 6749 section 3.2/section 10.1), and the metadata must
@@ -80,6 +84,15 @@ internal static class OidcEndpointFilters
 
         return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
+
+    /// <summary>
+    /// Group endpoint filter answering <c>invalid_request</c> to a request that names no host.
+    /// </summary>
+    private static async ValueTask<object?> RequireHostAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+        => HostRequirement.IsUnmet(context.HttpContext)
+            ? ErrorFactory.InvalidRequest([ErrorFactory.NoHost]).Format(StatusCodes.Status400BadRequest)
+            : await next(context);
 
     /// <summary>
     /// Group endpoint filter answering 404 to a request that multi-tenancy left without a tenant.
