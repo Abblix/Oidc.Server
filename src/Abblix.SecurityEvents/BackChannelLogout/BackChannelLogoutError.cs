@@ -41,8 +41,8 @@ public sealed record BackChannelLogoutError(
     /// error_description: it may quote the request, such as the media type it arrived as.
     /// </summary>
     [JsonPropertyName(ParameterNames.Description)]
-    public string Description { get; init => field = ErrorDescriptionText.WithAllowedCharacters(value); } =
-        ErrorDescriptionText.WithAllowedCharacters(Description);
+    public string Description { get; init => field = OAuthErrorDescription.Sanitize(value); } =
+        OAuthErrorDescription.Sanitize(Description);
 
     /// <summary>
     /// The wire names of the error members (RFC 6749 Section 5.2, by the reference in

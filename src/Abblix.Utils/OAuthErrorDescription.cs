@@ -17,7 +17,7 @@ namespace Abblix.Utils;
 /// <see cref="Sanitized"/>, which escapes for a log line with the backslash this set excludes, every character is
 /// replaced one for one.
 /// </remarks>
-public static class ErrorDescriptionText
+public static class OAuthErrorDescription
 {
     private const char Replacement = '?';
 
@@ -26,7 +26,7 @@ public static class ErrorDescriptionText
     /// </summary>
     /// <param name="description">The description as a refusal wrote it.</param>
     /// <returns>The description with each character outside the allowed set replaced.</returns>
-    public static string WithAllowedCharacters(string description)
+    public static string Sanitize(string description)
         => string.Create(description.Length, description, static (span, source) =>
         {
             for (var i = 0; i < source.Length; i++)

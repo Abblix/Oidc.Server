@@ -55,8 +55,8 @@ public record AuthorizationError(
 	/// A human-readable description of the error, made only of the characters RFC 6749 allows in it, as
 	/// <see cref="OidcError.ErrorDescription"/> is: this response is built directly as well as from a validation error.
 	/// </summary>
-	public string ErrorDescription { get; init => field = ErrorDescriptionText.WithAllowedCharacters(value); } =
-		ErrorDescriptionText.WithAllowedCharacters(ErrorDescription);
+	public string ErrorDescription { get; init => field = OAuthErrorDescription.Sanitize(value); } =
+		OAuthErrorDescription.Sanitize(ErrorDescription);
 
 	/// <summary>
 	/// Constructs an instance of <see cref="AuthorizationError"/> from an <see cref="AuthorizationRequest"/> and

@@ -25,6 +25,6 @@ public record OidcError(string Error, string ErrorDescription)
     /// quotes what the client sent. <see cref="Endpoints.Authorization.Interfaces.AuthorizationError"/>, which an
     /// authorization response is also built as directly, does the same.
     /// </remarks>
-    public string ErrorDescription { get; init => field = ErrorDescriptionText.WithAllowedCharacters(value); } =
-        ErrorDescriptionText.WithAllowedCharacters(ErrorDescription);
+    public string ErrorDescription { get; init => field = OAuthErrorDescription.Sanitize(value); } =
+        OAuthErrorDescription.Sanitize(ErrorDescription);
 }
