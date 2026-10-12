@@ -24,8 +24,9 @@ public class Base64UrlTextEncoderConverter : JsonConverter<byte[]?>
     /// <param name="typeToConvert">The type of object to convert.</param>
     /// <param name="options">Options for the serializer.</param>
     /// <returns>A byte array if the token is a string, otherwise null.</returns>
-    /// <exception cref="InvalidOperationException">Thrown if the token is not a string or null.</exception>
-    /// <exception cref="JsonException">Thrown if the string is not valid base64url encoding.</exception>
+    /// <exception cref="JsonException">
+    /// Thrown if the token is neither a string nor null, or the string is not valid base64url encoding.
+    /// </exception>
     public override byte[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         return reader.TokenType switch

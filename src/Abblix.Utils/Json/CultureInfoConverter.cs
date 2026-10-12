@@ -33,22 +33,27 @@ public class CultureInfoConverter : JsonConverter<CultureInfo>
         return reader.TokenType switch
         {
             JsonTokenType.Null => CultureInfo.InvariantCulture,
-            JsonTokenType.String => Culture(reader.GetString().NotNull("reader.GetString() != null")),
+            JsonTokenType.String => FromName(reader.GetString().NotNull("reader.GetString() != null")),
             _ => throw new JsonException(),
         };
+    }
 
-        // CultureInfo offers no way to ask whether a name is one without constructing it, and the serializer passes
-        // the exception it throws through as it is, so it is told apart here
-        static CultureInfo Culture(string name)
+    /// <summary>
+    /// The culture <paramref name="name"/> names, or a <see cref="JsonException"/> when it names none.
+    /// </summary>
+    /// <remarks>
+    /// CultureInfo offers no way to ask whether a name is one without constructing it, and the serializer passes the
+    /// exception it throws through as it is, so it is told apart here.
+    /// </remarks>
+    internal static CultureInfo FromName(string name)
+    {
+        try
         {
-            try
-            {
-                return new CultureInfo(name);
-            }
-            catch (CultureNotFoundException failure)
-            {
-                throw new JsonException($"'{name}' names no culture", failure);
-            }
+            return new CultureInfo(name);
+        }
+        catch (CultureNotFoundException failure)
+        {
+            throw new JsonException($"'{name}' names no culture", failure);
         }
     }
 

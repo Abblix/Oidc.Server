@@ -10,8 +10,10 @@ using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -22,6 +24,7 @@ using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -286,18 +289,16 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// A request object naming a UI locale no culture can carry is refused as an invalid request object, read through
-    /// the binder and the converters the authorization request really uses, as the same value in the query is
-    /// refused as an invalid request.
+    /// Fetches a request object carrying <paramref name="uiLocales"/> as its <c>ui_locales</c> claim, read through
+    /// the binder and the converters the authorization request really uses.
     /// </summary>
-    [Fact]
-    public async Task FetchAsync_WithAUiLocaleNoCultureCanCarry_IsAnInvalidRequestObject()
+    private async Task<Result<AuthorizationRequest, OidcError>> FetchWithUiLocales(JsonNode uiLocales)
     {
         var fetcher = new RequestObjectFetcher(_logger.Object, new JsonSerializationBinder(), _serviceProvider.Object,
             _options.Object, SingleIssuer.SettingsOf(_options.Object));
         var originalRequest = new AuthorizationRequest { ClientId = TestConstants.DefaultClientId };
-        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjpbIiEiXX0.signature";
-        var payload = new JsonObject { [RequestParameters.UiLocales] = new JsonArray("!") };
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjoiISJ9.signature";
+        var payload = new JsonObject { [RequestParameters.UiLocales] = uiLocales };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -308,10 +309,33 @@ public class RequestObjectFetcherTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo(TestConstants.DefaultClientId)));
 
-        var result = await fetcher.FetchAsync(originalRequest, jwt);
+        return await fetcher.FetchAsync(originalRequest, jwt);
+    }
+
+    /// <summary>
+    /// A request object naming a UI locale no culture can carry is refused as an invalid request object, as the
+    /// same value in the query is refused as an invalid request.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithAUiLocaleNoCultureCanCarry_IsAnInvalidRequestObject()
+    {
+        var result = await FetchWithUiLocales(JsonValue.Create("en !"));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// A request object carries <c>ui_locales</c> in the shape the parameter has, a space-separated string of
+    /// language tags (OpenID Connect Core 1.0 sections 3.1.2.1 and 6.1), and every tag is read.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithUiLocalesAsASpaceSeparatedString_ReadsEveryTag()
+    {
+        var result = await FetchWithUiLocales(JsonValue.Create("en fr-CA"));
+
+        Assert.True(result.TryGetSuccess(out var request));
+        Assert.Equal(["en", "fr-CA"], request.UiLocales!.Select(culture => culture.Name));
     }
 
     /// <summary>

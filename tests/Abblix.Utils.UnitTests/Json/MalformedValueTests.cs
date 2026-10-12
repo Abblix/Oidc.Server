@@ -36,7 +36,6 @@ public class MalformedValueTests
     [Theory]
     [InlineData("[\"!\"]")]
     [InlineData("[5]")]
-    [InlineData("\"en\"")]
     public void ALocaleListWithAnElementNoCultureCanCarry_IsRefused(string json)
         => AssertRefused<CultureInfo?[]>(json, new ArrayConverter<CultureInfo, CultureInfoConverter>());
 
@@ -57,8 +56,8 @@ public class MalformedValueTests
 
     [Theory]
     [InlineData("\"1700000000\"")]
-    [InlineData("1.5")]
     [InlineData("99999999999999999")]
+    [InlineData("1e300")]
     [InlineData("-99999999999999999")]
     public void AUnixTimeNoInstantCanCarry_IsRefused(string json)
         => AssertRefused<DateTimeOffset>(json, new DateTimeOffsetUnixTimeSecondsConverter());
