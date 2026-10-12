@@ -19,11 +19,21 @@ public class FormValuesCulturesTests
 {
     [Fact]
     public void EveryTagNamingALanguage_IsRead()
-        => Assert.Equal(["en", "fr-CA"], FormValues.Cultures(new StringValues("en fr-CA"))!.Select(culture => culture.Name));
+    {
+        var cultures = FormValues.Cultures(new StringValues("en fr-CA"));
+
+        Assert.NotNull(cultures);
+        Assert.Equal(["en", "fr-CA"], cultures.Select(culture => culture.Name));
+    }
 
     [Fact]
     public void SpacesAlone_AreAnEmptyList()
-        => Assert.Empty(FormValues.Cultures(new StringValues("   "))!);
+    {
+        var cultures = FormValues.Cultures(new StringValues("   "));
+
+        Assert.NotNull(cultures);
+        Assert.Empty(cultures);
+    }
 
     [Theory]
     [InlineData("und")]
