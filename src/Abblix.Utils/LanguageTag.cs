@@ -26,8 +26,8 @@ public static class LanguageTag
     /// Every culture a space-separated list of language tags names, as OpenID Connect gives <c>ui_locales</c> and
     /// <c>claims_locales</c>.
     /// </summary>
-    /// <param name="list">The list as sent. Only a space separates two tags (OpenID Connect Core 1.0 section
-    /// 3.1.2.1), so any other whitespace stays part of a tag and fails to read.</param>
+    /// <param name="list">The list as sent. Only a space separates two tags (OpenID Connect Core 1.0 sections
+    /// 3.1.2.1 and 5.2), so any other whitespace stays part of a tag and fails to read.</param>
     /// <param name="cultures">The cultures in the order given, or null when some tag cannot be read.</param>
     /// <returns>True when every tag in the list can be read.</returns>
     public static bool TryParseList(string list, [NotNullWhen(true)] out CultureInfo[]? cultures)
@@ -57,6 +57,13 @@ public static class LanguageTag
     /// <returns>True when the tag can be read.</returns>
     public static bool TryParse(string tag, [NotNullWhen(true)] out CultureInfo? culture)
     {
+        // The culture lookup stops at a NUL and would read the tag as the part before it
+        if (tag.Contains('\0'))
+        {
+            culture = null;
+            return false;
+        }
+
         // CultureInfo offers no way to ask whether a name is one without constructing it
         try
         {

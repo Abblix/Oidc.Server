@@ -29,6 +29,8 @@ public class LanguageTagTests
     [InlineData("x-iv")]
     [InlineData("!")]
     [InlineData("en_US!")]
+    [InlineData("en\0zz")]
+    [InlineData("en-US\0")]
     public void ATagNamingNoLanguage_IsRefused(string tag)
         => Assert.False(LanguageTag.TryParse(tag, out _));
 }

@@ -62,6 +62,7 @@ public class ModelBinderRefusalTests
     [InlineData("en und")]
     [InlineData("!")]
     [InlineData("en\t")]
+    [InlineData("\t")]
     public async Task The_locale_binder_records_a_failure_for_a_tag_naming_no_language(string value)
     {
         var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo[]), value);
