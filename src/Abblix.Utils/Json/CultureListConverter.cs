@@ -32,11 +32,10 @@ public class CultureListConverter : JsonConverter<CultureInfo[]?>
     {
         if (reader.TokenType == JsonTokenType.String)
         {
-            return reader.GetString()
-                .NotNull("reader.GetString() != null")
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(CultureInfoConverter.FromName)
-                .ToArray();
+            var list = reader.GetString().NotNull("reader.GetString() != null");
+            return LanguageTag.TryParseList(list, out var listed)
+                ? listed
+                : throw new JsonException($"'{list}' has a tag that names no language");
         }
 
         // The serializer answers a JSON null for this list itself, so the array converter only ever sees an array

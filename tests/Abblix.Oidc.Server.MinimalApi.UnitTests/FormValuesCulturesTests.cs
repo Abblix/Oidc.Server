@@ -26,6 +26,7 @@ public class FormValuesCulturesTests
     [InlineData("en und")]
     [InlineData("x-iv")]
     [InlineData("!")]
+    [InlineData("en\t")]
     public void ATagNamingNoLanguage_IsAMalformedValue(string value)
         => Assert.Throws<FormatException>(() => FormValues.Cultures(new StringValues(value)));
 }

@@ -44,6 +44,7 @@ public class CultureListConverterTests
     [InlineData("\"en und\"")]
     [InlineData("\"x-iv\"")]
     [InlineData("[\"und\"]")]
+    [InlineData("\"en\\t\"")]
     [InlineData("[5]")]
     [InlineData("5")]
     [InlineData("{}")]

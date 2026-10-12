@@ -26,7 +26,7 @@ public class CultureInfoConverter : JsonConverter<CultureInfo>
     /// <param name="options">The serializer options to use.</param>
     /// <returns>The deserialized <see cref="CultureInfo"/> object.</returns>
     /// <exception cref="JsonException">
-    /// Thrown when the JSON token is not a string or null, or if the string is not a valid culture identifier.
+    /// Thrown when the JSON token is not a string or null, or the string names no culture with a name of its own.
     /// </exception>
     public override CultureInfo Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
@@ -41,7 +41,7 @@ public class CultureInfoConverter : JsonConverter<CultureInfo>
     /// <summary>
     /// The culture <paramref name="name"/> names, or a <see cref="JsonException"/> when it names no language.
     /// </summary>
-    internal static CultureInfo FromName(string name)
+    private static CultureInfo FromName(string name)
         => LanguageTag.TryParse(name, out var culture)
             ? culture
             : throw new JsonException($"'{name}' names no language");

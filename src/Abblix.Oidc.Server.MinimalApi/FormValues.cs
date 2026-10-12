@@ -184,9 +184,7 @@ internal static class FormValues
         if (string.IsNullOrEmpty(value))
             return null;
 
-        return value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(tag => LanguageTag.TryParse(tag, out var culture) ? culture : throw MalformedValue())
-            .ToArray();
+        return LanguageTag.TryParseList(value, out var cultures) ? cultures : throw MalformedValue();
     }
 
     /// <summary>Deserializes a single field's JSON value (e.g. <c>claims</c>, <c>authorization_details</c>), or null.</summary>

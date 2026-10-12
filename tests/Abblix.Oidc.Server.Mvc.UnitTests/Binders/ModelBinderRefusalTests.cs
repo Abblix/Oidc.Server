@@ -61,9 +61,22 @@ public class ModelBinderRefusalTests
     [InlineData("und")]
     [InlineData("en und")]
     [InlineData("!")]
+    [InlineData("en\t")]
     public async Task The_locale_binder_records_a_failure_for_a_tag_naming_no_language(string value)
     {
         var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo[]), value);
+
+        Assert.False(outcome.IsModelSet);
+        Assert.False(outcome.ModelState.IsValid);
+    }
+
+    /// <summary>
+    /// A single culture a host's own action binds is held to the same check as a list.
+    /// </summary>
+    [Fact]
+    public async Task The_locale_binder_records_a_failure_for_a_single_tag_naming_no_language()
+    {
+        var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo), "und");
 
         Assert.False(outcome.IsModelSet);
         Assert.False(outcome.ModelState.IsValid);
