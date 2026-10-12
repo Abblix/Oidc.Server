@@ -25,6 +25,7 @@ public class CultureListConverterTests
     [InlineData("\"en fr-CA\"", new[] { "en", "fr-CA" })]
     [InlineData("\" en  fr-CA \"", new[] { "en", "fr-CA" })]
     [InlineData("[\"en\",\"fr-CA\"]", new[] { "en", "fr-CA" })]
+    [InlineData("\"   \"", new string[0])]
     public void AListOfLanguageTags_ProducesThoseCultures(string json, string[] names)
     {
         var cultures = JsonSerializer.Deserialize<CultureInfo[]>(json, Options);

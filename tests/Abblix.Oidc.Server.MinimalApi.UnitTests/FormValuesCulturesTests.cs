@@ -21,6 +21,10 @@ public class FormValuesCulturesTests
     public void EveryTagNamingALanguage_IsRead()
         => Assert.Equal(["en", "fr-CA"], FormValues.Cultures(new StringValues("en fr-CA"))!.Select(culture => culture.Name));
 
+    [Fact]
+    public void SpacesAlone_AreAnEmptyList()
+        => Assert.Empty(FormValues.Cultures(new StringValues("   "))!);
+
     [Theory]
     [InlineData("und")]
     [InlineData("en und")]

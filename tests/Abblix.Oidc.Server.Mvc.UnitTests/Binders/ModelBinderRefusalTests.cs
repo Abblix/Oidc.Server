@@ -72,6 +72,18 @@ public class ModelBinderRefusalTests
     }
 
     /// <summary>
+    /// A list of spaces alone names no tag and binds as an empty list, as the other two paths read it.
+    /// </summary>
+    [Fact]
+    public async Task The_locale_binder_binds_spaces_alone_as_an_empty_list()
+    {
+        var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo[]), "   ");
+
+        Assert.True(outcome.IsModelSet);
+        Assert.Empty(Assert.IsType<CultureInfo[]>(outcome.Model));
+    }
+
+    /// <summary>
     /// A single culture a host's own action binds is held to the same check as a list.
     /// </summary>
     [Fact]
