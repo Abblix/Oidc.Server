@@ -37,7 +37,7 @@ public class MalformedValueTests
     [InlineData("[\"!\"]")]
     [InlineData("[5]")]
     public void ALocaleListWithAnElementNoCultureCanCarry_IsRefused(string json)
-        => AssertRefused<CultureInfo?[]>(json, new ArrayConverter<CultureInfo, CultureInfoConverter>());
+        => AssertRefused<CultureInfo[]>(json, new CultureListConverter());
 
     [Theory]
     [InlineData("5")]

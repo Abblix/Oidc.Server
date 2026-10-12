@@ -35,7 +35,8 @@ public class DateTimeOffsetUnixTimeSecondsConverter: JsonConverter<DateTimeOffse
     /// </exception>
     public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var seconds = reader.TryGetInt64(out var whole) ? whole : Math.Truncate(reader.GetDouble());
+        // Every second a DateTimeOffset can hold lies well within the integers a double carries exactly
+        var seconds = Math.Truncate(reader.GetDouble());
         if (seconds < EarliestSeconds || LatestSeconds < seconds)
             throw new JsonException($"{seconds} is not a Unix time an instant can have");
 

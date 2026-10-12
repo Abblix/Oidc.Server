@@ -40,6 +40,7 @@ public class CultureListConverterTests
     [InlineData("\"en !\"")]
     [InlineData("[\"!\"]")]
     [InlineData("[null,\"en\"]")]
+    [InlineData("[\"\",\"en\"]")]
     [InlineData("[5]")]
     [InlineData("5")]
     [InlineData("{}")]
