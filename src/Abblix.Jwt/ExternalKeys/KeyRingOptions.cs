@@ -29,9 +29,9 @@ public sealed class KeyRingOptions
     public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// How often the ring is refreshed: half the propagation window. A freshly minted key is announced for that
-    /// window before it signs, so refreshing twice per window means no pod meets a token signed by a key it has not
-    /// loaded.
+    /// How often the ring is refreshed: half the propagation window, kept between a second and a day. A freshly
+    /// minted key is announced for that window before it signs, so refreshing twice per window means no pod meets a
+    /// token signed by a key it has not loaded.
     /// </summary>
     /// <remarks>
     /// Kept between a second and a day, so that every window a host may choose gives a period the refresh timer

@@ -13,30 +13,35 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// The ring is refreshed on a timer at half its propagation window, and every window a host may choose, none at all
-/// included, gives a period the timer accepts.
+/// The ring is refreshed at half its propagation window, never more often than once a second and never less often
+/// than once a day, so every window a host may choose, none at all included, gives a period the timer accepts.
 /// </summary>
 public class KeyRingRefreshPeriodTests
 {
+    private const long Second = 1;
+    private const long Hour = 60 * 60 * Second;
+    private const long Day = 24 * Hour;
+
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2 * 60 * 60 * 1000)]
-    [InlineData(int.MaxValue)]
-    public void EveryWindow_GivesAPeriodTheTimerAccepts(int windowMilliseconds)
+    [InlineData(0, Second)]
+    [InlineData(Second, Second)]
+    [InlineData(2 * Hour, Hour)]
+    [InlineData(2 * Day, Day)]
+    [InlineData(365 * Day, Day)]
+    public void TheRefreshPeriod_IsHalfTheWindow_KeptBetweenASecondAndADay(long windowSeconds, long periodSeconds)
     {
-        var options = new KeyRingOptions { KeyRolloverPropagation = TimeSpan.FromMilliseconds(windowMilliseconds) * 100 };
+        var options = new KeyRingOptions { KeyRolloverPropagation = TimeSpan.FromSeconds(windowSeconds) };
 
-        using var timer = new PeriodicTimer(options.RefreshPeriod);
-
-        Assert.True(options.RefreshPeriod > TimeSpan.Zero);
+        Assert.Equal(TimeSpan.FromSeconds(periodSeconds), options.RefreshPeriod);
     }
 
     [Fact]
-    public void AnOrdinaryWindow_IsRefreshedTwicePerWindow()
+    public void TheLongestWindow_GivesAPeriodTheTimerAccepts()
     {
-        var options = new KeyRingOptions { KeyRolloverPropagation = TimeSpan.FromHours(2) };
+        var options = new KeyRingOptions { KeyRolloverPropagation = TimeSpan.MaxValue };
 
-        Assert.Equal(TimeSpan.FromHours(1), options.RefreshPeriod);
+        using var timer = new PeriodicTimer(options.RefreshPeriod);
+
+        Assert.Equal(TimeSpan.FromDays(1), options.RefreshPeriod);
     }
 }

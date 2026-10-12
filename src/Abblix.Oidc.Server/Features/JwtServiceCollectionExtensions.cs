@@ -75,6 +75,8 @@ public static class JwtServiceCollectionExtensions
         // be legitimately unreachable while the host boots.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SigningKeysPresenceValidator>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, KeyRolloverPropagationValidator>());
 
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();

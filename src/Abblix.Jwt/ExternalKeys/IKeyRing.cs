@@ -51,8 +51,9 @@ public interface IKeyRing
     /// is healthy or that it is not.
     /// </para>
     /// <para>
-    /// A ring that rotates only when asked for a key - the in-box one that mints in this process does - answers
-    /// about what it has been asked for. Reading it as a schedule needs a ring something keeps current.
+    /// A ring that rotates only when asked for a key - the in-memory one, whose keys never leave the process,
+    /// does - answers about what it has been asked for. Reading it as a schedule needs a ring something keeps
+    /// current, as the refresh service keeps the ring a store backs.
     /// </para>
     /// </remarks>
     DateTimeOffset? NewestKeyCreatedAt(string usage);
