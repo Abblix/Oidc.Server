@@ -26,7 +26,7 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
     [Theory]
     [InlineData("en\0")]
     [InlineData("en\t")]
-    [InlineData("en ")]
+    [InlineData("en\u00A0")]
     public async Task AValueThatCannotBeRead_IsDescribedByTheParameter_InCharactersTheRfcAllows(string uiLocales)
     {
         var client = CreateClient();
@@ -54,7 +54,10 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
     [InlineData(AuthorizationRequest.Parameters.RedirectUri, "http://[\t")]
     [InlineData(AuthorizationRequest.Parameters.Claims, "{\t")]
     [InlineData(AuthorizationRequest.Parameters.RequestUri, "http://[\t")]
-    public async Task AnyParameterThatCannotBeRead_IsDescribedByItsName(string parameter, string value)
+    [InlineData(AuthorizationRequest.Parameters.Resource, "http://[\t")]
+    [InlineData(AuthorizationRequest.Parameters.ResponseMode, "query\t")]
+    [InlineData(AuthorizationRequest.Parameters.Prompt, "login\t")]
+    public async Task AnyParameterRefusedForItsValue_IsDescribedByItsName(string parameter, string value)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -75,6 +78,32 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var description = JsonNode.Parse(raw)![ResponseParameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(parameter, description, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A parameter that may repeat, read from the form body of the token endpoint, is named the same way.
+    /// </summary>
+    [Fact]
+    public async Task ARepeatableParameterInTheForm_IsDescribedByItsName()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var form = new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Resource] = "http://[\t",
+        };
+
+        using var response = await client.PostAsync(
+            discovery.TokenEndpoint, new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        var description = JsonNode.Parse(raw)![ResponseParameters.ErrorDescription]!.GetValue<string>();
+        Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
+        Assert.Contains(TokenRequest.Parameters.Resource, description, StringComparison.Ordinal);
     }
 
     /// <summary>%x20-21 / %x23-5B / %x5D-7E: printable ASCII without the double quote and the backslash.</summary>

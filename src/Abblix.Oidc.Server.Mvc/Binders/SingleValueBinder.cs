@@ -27,31 +27,18 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 internal sealed class SingleValueBinder(IModelBinder inner) : IModelBinder
 {
     /// <inheritdoc />
-    public async Task BindModelAsync(ModelBindingContext bindingContext)
+    public Task BindModelAsync(ModelBindingContext bindingContext)
     {
         var name = bindingContext.ModelName;
         var sources = (IBindingSourceValueProvider)bindingContext.ValueProvider;
         if (CountIn(sources, BindingSource.Query, name) + CountIn(sources, BindingSource.Form, name) > 1)
         {
             bindingContext.ModelState.TryAddModelError(name, ErrorFactory.RepeatedParameter(name));
-            return;
+            return Task.CompletedTask;
         }
 
-        var failuresBefore = FailuresOn(bindingContext.ModelState, name);
-        await inner.BindModelAsync(bindingContext);
-
-        // A failure the binding records is a value it could not read, and the framework's message for it repeats
-        // the value the client sent, which may hold characters RFC 6749 keeps out of error_description; so the
-        // parameter is named instead, as the Minimal API host names it
-        if (FailuresOn(bindingContext.ModelState, name) > failuresBefore)
-        {
-            bindingContext.ModelState[name]!.Errors.Clear();
-            bindingContext.ModelState.TryAddModelError(name, ErrorFactory.MalformedParameter(name));
-        }
+        return inner.BindModelAsync(bindingContext);
     }
-
-    private static int FailuresOn(ModelStateDictionary state, string name)
-        => state.TryGetValue(name, out var entry) ? entry.Errors.Count : 0;
 
     private static int CountIn(IBindingSourceValueProvider sources, BindingSource source, string name)
         => sources.Filter(source)?.GetValue(name).Length ?? 0;
