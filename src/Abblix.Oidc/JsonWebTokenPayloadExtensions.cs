@@ -248,17 +248,11 @@ public static class JsonWebTokenPayloadExtensions
 
 		/// <summary>
 		/// The HTTP URI bound by a DPoP proof (RFC 9449 section 4.2 <c>htu</c>), or null when the claim is absent or
-		/// is not an absolute http or https URI. A caller telling the two apart looks for the claim itself.
+		/// is not an absolute URI. A caller telling the two apart looks for the claim itself.
 		/// </summary>
-		/// <remarks>
-		/// A proof's <c>htu</c> has to match the URI of the request it arrived with (RFC 9449 section 4.3), and that
-		/// URI is http or https, so a value with any other scheme can never match. Reading it as no URI at all also
-		/// treats a bare path alike on every platform: on Unix it parses as an absolute file URI.
-		/// </remarks>
 		public Uri? DPoPHttpUri
 		{
 			get => Uri.TryCreate(payload.Json.GetProperty<string>(IanaClaimTypes.Htu), UriKind.Absolute, out var uri)
-			       && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
 				? uri
 				: null;
 			set => payload.Json.SetProperty(IanaClaimTypes.Htu, value?.OriginalString);
