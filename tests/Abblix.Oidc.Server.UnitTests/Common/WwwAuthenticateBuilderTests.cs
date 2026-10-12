@@ -187,27 +187,28 @@ public class WwwAuthenticateBuilderTests
     }
 
     [Fact]
-    public void BuildBearerChallenge_QuoteInDescription_BackslashEscaped()
+    public void BuildBearerChallenge_QuoteInRealm_BackslashEscaped()
     {
         // RFC 7235 section 2.2 / RFC 9110 section 5.6.4: inside a quoted-string each `"` MUST be
         // backslash-escaped. The builder preserves the original character rather than
-        // substituting a different glyph so the on-wire value round-trips.
-        var error = new OidcError(ErrorCodes.InvalidToken, "value with \"quotes\" inside");
+        // substituting a different glyph so the on-wire value round-trips. The realm is the host's
+        // configuration and may hold one, while an error description never does
+        var error = new OidcError(ErrorCodes.InvalidToken, "The token is expired");
 
-        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: null);
+        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: "realm with \"quotes\" inside");
 
-        Assert.Contains("error_description=\"value with \\\"quotes\\\" inside\"", challenge);
+        Assert.Contains("realm=\"realm with \\\"quotes\\\" inside\"", challenge);
     }
 
     [Fact]
-    public void BuildBearerChallenge_BackslashInDescription_DoubledForRfc7235()
+    public void BuildBearerChallenge_BackslashInRealm_DoubledForRfc7235()
     {
         // A literal backslash inside a quoted-string is itself the escape character,
         // so it MUST be doubled per RFC 7235 section 2.2.
-        var error = new OidcError(ErrorCodes.InvalidToken, @"value with \ inside");
+        var error = new OidcError(ErrorCodes.InvalidToken, "The token is expired");
 
-        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: null);
+        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: @"realm with \ inside");
 
-        Assert.Contains(@"error_description=""value with \\ inside""", challenge);
+        Assert.Contains(@"realm=""realm with \\ inside""", challenge);
     }
 }

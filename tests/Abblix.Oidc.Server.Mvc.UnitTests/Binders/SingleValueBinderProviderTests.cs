@@ -108,9 +108,22 @@ public class SingleValueBinderProviderTests
     [InlineData("?resource[0]=http://[%09")]
     public async Task UnreadableRepeatableValueIsRefusedUnderTheParameter(string query)
     {
-        var modelState = await BindResourcesAsync(query);
+        var modelState = await BindResourcesAsync(query, ModelStateDictionary.DefaultMaxAllowedErrors);
 
         Assert.Equal(1, modelState.Values.Sum(entry => entry.Errors.Count));
+        Assert.Single(modelState[Parameters.Resource]!.Errors);
+    }
+
+    /// <summary>
+    /// A request carrying as many unreadable values as the model state takes errors still gets the parameter named.
+    /// </summary>
+    [Fact]
+    public async Task UnreadableValuesUpToTheErrorLimitAreStillRefusedUnderTheParameter()
+    {
+        const string query = "?resource[0]=http://[%09&resource[1]=http://[%09";
+
+        var modelState = await BindResourcesAsync(query, maxAllowedErrors: 2);
+
         Assert.Single(modelState[Parameters.Resource]!.Errors);
     }
 
@@ -165,12 +178,15 @@ public class SingleValueBinderProviderTests
         return context;
     }
 
-    private static async Task<ModelStateDictionary> BindResourcesAsync(string query)
+    private static async Task<ModelStateDictionary> BindResourcesAsync(
+        string query,
+        int maxAllowedErrors)
     {
         var httpContext = new DefaultHttpContext { RequestServices = Services };
         httpContext.Request.QueryString = new QueryString(query);
 
-        var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+        var actionContext = new ActionContext(
+            httpContext, new RouteData(), new ActionDescriptor(), new ModelStateDictionary(maxAllowedErrors));
         var valueProvider = new CompositeValueProvider(
         [
             new FormValueProvider(BindingSource.Form, FormCollection.Empty, CultureInfo.InvariantCulture),

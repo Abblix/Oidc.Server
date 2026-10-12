@@ -48,6 +48,7 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var description = body[ResponseParameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(AuthorizationRequest.Parameters.UiLocales, description, StringComparison.Ordinal);
+        Assert.DoesNotContain(AsEchoed(uiLocales), description, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -78,6 +79,7 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var description = JsonNode.Parse(raw)![ResponseParameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(parameter, description, StringComparison.Ordinal);
+        Assert.DoesNotContain(AsEchoed(value), description, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -104,9 +106,17 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var description = JsonNode.Parse(raw)![ResponseParameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(TokenRequest.Parameters.Resource, description, StringComparison.Ordinal);
+        Assert.DoesNotContain(AsEchoed(form[TokenRequest.Parameters.Resource]), description, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The value as a description repeating it would carry it: the server replaces each character RFC 6749 keeps out
+    /// of error_description, so a check for the value itself would pass on a description that still repeats it.
+    /// </summary>
+    internal static string AsEchoed(string value)
+        => new([.. value.Select(character => IsAllowed(character) ? character : '?')]);
+
     /// <summary>%x20-21 / %x23-5B / %x5D-7E: printable ASCII without the double quote and the backslash.</summary>
-    private static bool IsAllowed(char character)
+    internal static bool IsAllowed(char character)
         => character is (>= '\x20' and <= '\x21') or (>= '\x23' and <= '\x5B') or (>= '\x5D' and <= '\x7E');
 }

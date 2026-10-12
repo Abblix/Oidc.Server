@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -49,6 +50,13 @@ public record AuthorizationError(
 	Uri? ErrorUri = null)
 	: ClientDeliveredResponse(Model, ResponseMode)
 {
+	/// <summary>
+	/// A human-readable description of the error, made only of the characters RFC 6749 allows in it, as
+	/// <see cref="OidcError.ErrorDescription"/> is: this response is built directly as well as from a validation error.
+	/// </summary>
+	public string ErrorDescription { get; init => field = OidcError.WithAllowedCharacters(value); } =
+		OidcError.WithAllowedCharacters(ErrorDescription);
+
 	/// <summary>
 	/// Constructs an instance of <see cref="AuthorizationError"/> from an <see cref="AuthorizationRequest"/> and
 	/// an <see cref="AuthorizationRequestValidationError"/>.

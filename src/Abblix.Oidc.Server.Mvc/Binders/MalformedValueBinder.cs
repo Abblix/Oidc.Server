@@ -35,8 +35,10 @@ internal sealed class MalformedValueBinder(IModelBinder inner) : IModelBinder
         if (FailuresUnder(modelState, name) == failuresBefore)
             return;
 
-        foreach (var entry in modelState.FindKeysWithPrefix(name))
-            entry.Value.Errors.Clear();
+        // Removed rather than emptied: the dictionary counts its errors apart from the entries and stops taking new
+        // ones at its limit, so a request repeating a bad value up to it would otherwise leave no room for the name
+        foreach (var key in modelState.FindKeysWithPrefix(name).Select(entry => entry.Key).ToList())
+            modelState.Remove(key);
 
         modelState.TryAddModelError(name, ErrorFactory.MalformedParameter(name));
     }
