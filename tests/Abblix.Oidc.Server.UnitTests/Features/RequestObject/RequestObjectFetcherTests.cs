@@ -14,11 +14,13 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -276,6 +278,35 @@ public class RequestObjectFetcherTests
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, originalRequest))
             .ThrowsAsync(new JsonException("negative seconds"));
+
+        var result = await fetcher.FetchAsync(originalRequest, jwt);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// A request object naming a UI locale no culture can carry is refused as an invalid request object, read through
+    /// the binder and the converters the authorization request really uses, as the same value in the query is
+    /// refused as an invalid request.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_WithAUiLocaleNoCultureCanCarry_IsAnInvalidRequestObject()
+    {
+        var fetcher = new RequestObjectFetcher(_logger.Object, new JsonSerializationBinder(), _serviceProvider.Object,
+            _options.Object, SingleIssuer.SettingsOf(_options.Object));
+        var originalRequest = new AuthorizationRequest { ClientId = TestConstants.DefaultClientId };
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjpbIiEiXX0.signature";
+        var payload = new JsonObject { [RequestParameters.UiLocales] = new JsonArray("!") };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()),
+            Payload = new JsonWebTokenPayload(payload),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo(TestConstants.DefaultClientId)));
 
         var result = await fetcher.FetchAsync(originalRequest, jwt);
 

@@ -32,7 +32,7 @@ public class Base64UrlTextEncoderConverter : JsonConverter<byte[]?>
         {
             JsonTokenType.String => DecodeBase64Url(reader.GetString()!),
             JsonTokenType.Null => null,
-            _ => throw new InvalidOperationException($"Invalid token type: {reader.TokenType}"),
+            _ => throw new JsonException($"Invalid token type: {reader.TokenType}"),
         };
 
         static byte[] DecodeBase64Url(string value)

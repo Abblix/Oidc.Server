@@ -24,7 +24,16 @@ public class DateTimeOffsetUnixTimeSecondsConverter: JsonConverter<DateTimeOffse
     /// <param name="options">Options for the serializer.</param>
     /// <returns>A <see cref="DateTimeOffset"/> object.</returns>
     public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64());
+    {
+        var seconds = reader.GetInt64();
+        if (seconds < EarliestSeconds || LatestSeconds < seconds)
+            throw new JsonException($"{seconds} is not a Unix time an instant can have");
+
+        return DateTimeOffset.FromUnixTimeSeconds(seconds);
+    }
+
+    private static readonly long EarliestSeconds = DateTimeOffset.MinValue.ToUnixTimeSeconds();
+    private static readonly long LatestSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
 
     /// <summary>
     /// Writes a <see cref="DateTimeOffset"/> object as a Unix time (number of seconds since Unix epoch) to JSON.

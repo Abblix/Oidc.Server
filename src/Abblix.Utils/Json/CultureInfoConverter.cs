@@ -33,9 +33,23 @@ public class CultureInfoConverter : JsonConverter<CultureInfo>
         return reader.TokenType switch
         {
             JsonTokenType.Null => CultureInfo.InvariantCulture,
-            JsonTokenType.String => new CultureInfo(reader.GetString().NotNull("reader.GetString() != null")),
+            JsonTokenType.String => Culture(reader.GetString().NotNull("reader.GetString() != null")),
             _ => throw new JsonException(),
         };
+
+        // CultureInfo offers no way to ask whether a name is one without constructing it, and the serializer passes
+        // the exception it throws through as it is, so it is told apart here
+        static CultureInfo Culture(string name)
+        {
+            try
+            {
+                return new CultureInfo(name);
+            }
+            catch (CultureNotFoundException failure)
+            {
+                throw new JsonException($"'{name}' names no culture", failure);
+            }
+        }
     }
 
     /// <summary>

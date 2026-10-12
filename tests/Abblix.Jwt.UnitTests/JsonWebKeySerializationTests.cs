@@ -168,6 +168,20 @@ public class JsonWebKeySerializationTests
     }
 
     /// <summary>
+    /// A key a client sent, in a registration or a request object, that cannot be read is refused as malformed JSON,
+    /// the one exception a caller of the serializer is told to expect.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"kty":5}""")]
+    [InlineData("""{"kty":"RSA","n":5,"e":"AQAB"}""")]
+    [InlineData("""{"kty":"RSA","n":"!!!","e":"AQAB"}""")]
+    [InlineData("""{"kty":"EC","crv":"P-256","x":{},"y":"AQAB"}""")]
+    [InlineData("""{"kty":"oct","k":true}""")]
+    [InlineData("""{"kty":"RSA","x5c":[5]}""")]
+    public void AKeyThatCannotBeRead_IsRefusedAsMalformedJson(string json)
+        => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<JsonWebKey>(json, JsonOptions));
+
+    /// <summary>
     /// Verifies round-trip serialization/deserialization preserves all RSA key properties.
     /// </summary>
     [Fact]
