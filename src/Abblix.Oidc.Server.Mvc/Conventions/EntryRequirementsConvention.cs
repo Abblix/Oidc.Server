@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Mvc.Conventions;
 
 /// <summary>
 /// Puts every controller this package ships behind <see cref="RequireHostFilter"/> and
-/// <see cref="RequireTenantFilter"/>, in that order.
+/// <see cref="RequireTenantFilter"/>.
 /// </summary>
 /// <remarks>
 /// Selected by assembly rather than by an attribute on each controller, so a controller added to the package

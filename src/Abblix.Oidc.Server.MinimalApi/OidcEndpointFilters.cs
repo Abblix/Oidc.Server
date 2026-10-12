@@ -91,7 +91,7 @@ internal static class OidcEndpointFilters
     private static async ValueTask<object?> RequireHostAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
         => HostRequirement.IsUnmet(context.HttpContext)
-            ? ErrorFactory.InvalidRequest([ErrorFactory.NoHost]).Format(StatusCodes.Status400BadRequest)
+            ? ErrorFactory.InvalidRequest([ErrorFactory.UnusableHost]).Format(StatusCodes.Status400BadRequest)
             : await next(context);
 
     /// <summary>

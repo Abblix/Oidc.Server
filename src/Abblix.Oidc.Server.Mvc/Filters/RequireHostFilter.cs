@@ -10,30 +10,31 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Abblix.Oidc.Server.Mvc.Filters;
 
 /// <summary>
-/// Answers <c>invalid_request</c> to a request that names no host, before the action runs.
+/// Answers <c>invalid_request</c> to a request whose host no address of this server can be built from, before
+/// anything else an OpenID controller runs.
 /// </summary>
 /// <remarks>
-/// A resource filter: it runs after the authorization filters an OpenID controller carries - the HTTPS
-/// requirement, whose redirect does not parse the address it builds, and CORS - and before model binding and the
-/// action, so no address of this server is built for the request.
+/// An authorization filter ordered ahead of the HTTPS requirement, whose redirect would otherwise send a cleartext
+/// request to an address with no host; so the MVC transport answers such a request as the Minimal API one does,
+/// whatever its scheme.
 /// </remarks>
-internal sealed class RequireHostFilter : IResourceFilter
+internal sealed class RequireHostFilter : IAuthorizationFilter, IOrderedFilter
 {
-    /// <inheritdoc />
-    public void OnResourceExecuting(ResourceExecutingContext context)
-    {
-        if (HostRequirement.IsUnmet(context.HttpContext))
-            context.Result = ErrorFactory.InvalidRequest([ErrorFactory.NoHost]).Format(StatusCodes.Status400BadRequest);
-    }
+    private static readonly int OrderBeforeRequireHttps = new RequireHttpsAttribute().Order - 1;
 
     /// <inheritdoc />
-    public void OnResourceExecuted(ResourceExecutedContext context)
+    public int Order => OrderBeforeRequireHttps;
+
+    /// <inheritdoc />
+    public void OnAuthorization(AuthorizationFilterContext context)
     {
-        // Nothing to do after the action: the refusal is decided before it.
+        if (HostRequirement.IsUnmet(context.HttpContext))
+            context.Result = ErrorFactory.InvalidRequest([ErrorFactory.UnusableHost]).Format(StatusCodes.Status400BadRequest);
     }
 }

@@ -15,20 +15,26 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// An HTTP/1.0 request may carry no Host header, and Kestrel passes it on with an empty host. No address of this
-/// server can be built for it, so the MVC transport refuses it before an endpoint builds one.
+/// Kestrel passes on a request with no host, which HTTP/1.0 allows, and one whose Host header no URI can carry. No
+/// address of this server can be built for either, so each transport refuses it as an invalid request before an
+/// endpoint, or the HTTPS redirect of a cleartext request, builds one. Compiled into both E2E suites, so it drives
+/// the MVC host and the Minimal API host alike.
 /// </summary>
 public class HostlessRequestTests(TestFactory factory) : TestBase(factory)
 {
-    [Fact]
-    public async Task AHostlessRequest_IsRefusedAsInvalidRequest()
+    [Theory]
+    [InlineData("https", "")]
+    [InlineData("http", "")]
+    [InlineData("https", "auth..example.com")]
+    [InlineData("https", "auth.example.com:99999")]
+    public async Task ARequestWithNoUsableHost_IsRefusedAsInvalidRequest(string scheme, string host)
     {
         var context = await Factory.Server.SendAsync(
             http =>
             {
                 http.Request.Method = HttpMethods.Get;
-                http.Request.Scheme = Uri.UriSchemeHttps;
-                http.Request.Host = default;
+                http.Request.Scheme = scheme;
+                http.Request.Host = new HostString(host);
                 http.Request.Path = "/.well-known/openid-configuration";
             },
             TestContext.Current.CancellationToken);

@@ -43,10 +43,10 @@ public static class ErrorFactory
     public const string UnreadableForm = "The request body cannot be read as a form";
 
     /// <summary>
-    /// The validation message for a request that names no host, so that no address of this server can be built
-    /// for it.
+    /// The validation message for a request whose host is missing or cannot be part of a URI, so that no address of
+    /// this server can be built for it.
     /// </summary>
-    public const string NoHost = "The request names no host";
+    public const string UnusableHost = "The request names no host a URI can carry";
 
     /// <summary>
     /// Maps a flat sequence of model-validation messages onto an <see cref="OidcError"/> carrying the
