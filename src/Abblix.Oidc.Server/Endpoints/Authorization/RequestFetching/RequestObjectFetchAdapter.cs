@@ -112,13 +112,12 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         // is told about that one first
         // The request object is read past the adapters' models, whose declared value list refuses an unsupported
         // prompt in the query, so the same list refuses it here
-        if (merged.Prompt?.FirstOrDefault(value => !SupportedPrompts.Contains(value, StringComparer.Ordinal))
-            is { } unsupported)
+        if (merged.Prompt?.Any(value => !SupportedPrompts.Contains(value, StringComparer.Ordinal)) == true)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                $"The {AuthorizationRequest.Parameters.Prompt} value '{unsupported}' inside the request object " +
-                "is not supported");
+                $"The {AuthorizationRequest.Parameters.Prompt} inside the request object has a value that is " +
+                "not supported");
         }
 
         if (merged.ResponseMode is { } responseMode &&
@@ -126,8 +125,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                $"The {AuthorizationRequest.Parameters.ResponseMode} value '{responseMode}' inside the request " +
-                "object is not supported");
+                $"The {AuthorizationRequest.Parameters.ResponseMode} inside the request object has a value that is " +
+                "not supported");
         }
 
         return merged;

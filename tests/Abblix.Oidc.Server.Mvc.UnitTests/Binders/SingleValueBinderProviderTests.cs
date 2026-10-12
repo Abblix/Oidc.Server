@@ -22,8 +22,8 @@ using Parameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Binders;
 
 /// <summary>
-/// Which parameters the refusal of a repetition reaches, read off the binders MVC builds once the package is
-/// registered, and what the refusal counts.
+/// Which parameters the refusal of a repetition and the naming of a value that cannot be read reach, read off the
+/// binders MVC builds once the package is registered, and what the refusal counts.
 /// </summary>
 public class SingleValueBinderProviderTests
 {
@@ -45,11 +45,11 @@ public class SingleValueBinderProviderTests
         => Assert.IsType<SingleValueBinder>(BinderFor(typeof(AuthorizationRequest), property));
 
     /// <summary>
-    /// A parameter defined as repeatable is left to the binding it would get anyway.
+    /// A parameter defined as repeatable is not counted, and a value of it that cannot be read is still named.
     /// </summary>
     [Fact]
-    public void RepeatableParameterIsNotWrapped()
-        => Assert.IsNotType<SingleValueBinder>(BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)));
+    public void RepeatableParameterIsNamedButNotCounted()
+        => Assert.IsType<MalformedValueBinder>(BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)));
 
     /// <summary>
     /// A header, the client certificate and a route value bind as they would without this package: only a query or
@@ -62,7 +62,7 @@ public class SingleValueBinderProviderTests
     [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.ClientId))]
     [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.AuthorizationHeader))]
     public void ParameterOutsideTheQueryAndTheFormIsNotWrapped(Type container, string property)
-        => Assert.IsNotType<SingleValueBinder>(BinderFor(container, property));
+        => AssertNotWrapped(BinderFor(container, property));
 
     /// <summary>
     /// A host's own model binds as it would without this package, a culture list included.
@@ -71,7 +71,7 @@ public class SingleValueBinderProviderTests
     [InlineData(nameof(HostModel.Name))]
     [InlineData(nameof(HostModel.Languages))]
     public void HostModelIsNotWrapped(string property)
-        => Assert.IsNotType<SingleValueBinder>(BinderFor(typeof(HostModel), property));
+        => AssertNotWrapped(BinderFor(typeof(HostModel), property));
 
     /// <summary>
     /// A value sent twice is refused whether both copies travel in the query, or one in the query and one in the
@@ -97,6 +97,43 @@ public class SingleValueBinderProviderTests
 
         Assert.Equal("a", outcome.Result.Model);
         Assert.Equal(0, outcome.ModelState.ErrorCount);
+    }
+
+    /// <summary>
+    /// A value of a repeatable parameter that cannot be read is refused under the parameter's own name, whether it is
+    /// sent plainly or under an index, and no failure is left under the indexed key to carry the value.
+    /// </summary>
+    [Theory]
+    [InlineData("?resource=https://[%09")]
+    [InlineData("?resource[0]=https://[%09")]
+    public async Task UnreadableRepeatableValueIsRefusedUnderTheParameter(string query)
+    {
+        var modelState = await BindResourcesAsync(query, ModelStateDictionary.DefaultMaxAllowedErrors);
+
+        Assert.Equal(1, modelState.Values.Sum(entry => entry.Errors.Count));
+        Assert.Single(modelState[Parameters.Resource]!.Errors);
+    }
+
+    /// <summary>
+    /// A request carrying as many unreadable values as the model state takes errors still gets the parameter named,
+    /// sent with an index or repeated as RFC 8707 clients send it.
+    /// </summary>
+    [Theory]
+    [InlineData("?resource[0]=https://[%09&resource[1]=https://[%09", 2)]
+    [InlineData("?resource=https://[%09&resource=https://[%09&resource=https://[%09", 3)]
+    public async Task UnreadableValuesUpToTheErrorLimitAreStillRefusedUnderTheParameter(
+        string query,
+        int maxAllowedErrors)
+    {
+        var modelState = await BindResourcesAsync(query, maxAllowedErrors);
+
+        Assert.Single(modelState[Parameters.Resource]!.Errors);
+    }
+
+    private static void AssertNotWrapped(IModelBinder binder)
+    {
+        Assert.IsNotType<SingleValueBinder>(binder);
+        Assert.IsNotType<MalformedValueBinder>(binder);
     }
 
     private static IModelBinder BinderFor(Type container, string property)
@@ -142,6 +179,36 @@ public class SingleValueBinderProviderTests
 
         await BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.State)).BindModelAsync(context);
         return context;
+    }
+
+    private static async Task<ModelStateDictionary> BindResourcesAsync(
+        string query,
+        int maxAllowedErrors)
+    {
+        var httpContext = new DefaultHttpContext { RequestServices = Services };
+        httpContext.Request.QueryString = new QueryString(query);
+
+        var actionContext = new ActionContext(
+            httpContext, new RouteData(), new ActionDescriptor(), new ModelStateDictionary(maxAllowedErrors));
+        var valueProvider = new CompositeValueProvider(
+        [
+            new FormValueProvider(BindingSource.Form, FormCollection.Empty, CultureInfo.InvariantCulture),
+            new QueryStringValueProvider(BindingSource.Query, httpContext.Request.Query, CultureInfo.InvariantCulture),
+        ]);
+
+        var context = new DefaultModelBindingContext
+        {
+            ActionContext = actionContext,
+            ModelMetadata = Services.GetRequiredService<IModelMetadataProvider>()
+                .GetMetadataForProperty(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)),
+            FieldName = nameof(AuthorizationRequest.Resources),
+            ModelName = Parameters.Resource,
+            ModelState = actionContext.ModelState,
+            ValueProvider = valueProvider,
+        };
+
+        await BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)).BindModelAsync(context);
+        return context.ModelState;
     }
 
     /// <summary>A model a host declares itself.</summary>

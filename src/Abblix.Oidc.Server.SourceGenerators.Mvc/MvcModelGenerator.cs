@@ -49,6 +49,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
 	private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
 	private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
+	private const string DisplayAttributeName = "global::System.ComponentModel.DataAnnotations.Display";
 
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -337,6 +338,9 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var supportsGet = stub.SupportsGet ? "SupportsGet = true, " : string.Empty;
 			_writer.AppendLine(
 				$"\t[global::Microsoft.AspNetCore.Mvc.BindProperty({supportsGet}Name = \"{wireName}\")]");
+
+			// A validation message names the member by its display name, and the client knows it by the wire name
+			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = \"{wireName}\")]");
 
 			foreach (var attribute in property.GetAttributes())
 			{

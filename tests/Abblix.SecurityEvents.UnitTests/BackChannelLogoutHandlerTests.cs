@@ -187,6 +187,23 @@ public class BackChannelLogoutHandlerTests
         Assert.Empty(sink.Consumed);
     }
 
+    /// <summary>
+    /// A refusal quoting the request carries only the characters RFC 6749 section 5.2 allows in error_description,
+    /// %x20-21 / %x23-5B / %x5D-7E, which Back-Channel Logout 1.0 Section 2.8 refers to: the quote and the backslash
+    /// of a media type parameter do not come back.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalQuotingTheRequest_CarriesOnlyTheCharactersAllowed()
+    {
+        var result = await Handler(new StubValidator(), new RecordingSink()).HandleAsync(
+            "text/plain; a=\"x\\y\"", $"logout_token={Token}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.All(result.Error!.Description, character => Assert.True(
+            character is (>= '\x20' and <= '\x21') or (>= '\x23' and <= '\x5B') or (>= '\x5D' and <= '\x7E'),
+            $"U+{(int)character:X4} in '{result.Error.Description}'"));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("state=abc")]

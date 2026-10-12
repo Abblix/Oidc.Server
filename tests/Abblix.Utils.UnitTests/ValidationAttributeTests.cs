@@ -150,15 +150,20 @@ public class ValidationAttributeTests
         => Assert.Null(Validate(
             new AllowedValuesAttribute("code", "id_token"), null, nameof(Model.Undecorated)));
 
+    /// <summary>
+    /// A value outside the set is refused under the parameter's wire name, and the value itself, which is whatever the
+    /// client sent, stays out of the message.
+    /// </summary>
     [Fact]
-    public void AllowedValues_RefusesWhatIsNot_AndSaysWhich()
+    public void AllowedValues_RefusesWhatIsNot_AndNamesTheParameter()
     {
         var attribute = new AllowedValuesAttribute("code", "id_token");
 
-        var result = Validate(attribute, "token", nameof(Model.Undecorated));
+        var result = Validate(attribute, "token", nameof(Model.RedirectUri));
 
         Assert.NotNull(result);
-        Assert.Contains("token", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("redirect_uri", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("token", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     /// <summary>

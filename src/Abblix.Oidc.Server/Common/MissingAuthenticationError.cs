@@ -18,5 +18,5 @@ namespace Abblix.Oidc.Server.Common;
 /// status-code mapping; only the challenge attributes are suppressed by the builder. Mirrors
 /// <see cref="InvalidDPoPProofError"/> as a typed marker for deterministic pattern matching.
 /// </summary>
-public sealed record MissingAuthenticationError(string Description)
-    : OidcError(ErrorCodes.InvalidToken, Description);
+public sealed record MissingAuthenticationError(string ErrorDescription)
+    : OidcError(ErrorCodes.InvalidToken, ErrorDescription);

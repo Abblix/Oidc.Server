@@ -7,6 +7,7 @@
 
 using System.Net;
 using System.Net.Mime;
+using System.Text.Json.Nodes;
 using Abblix.SecurityEvents.BackChannelLogout;
 using Abblix.SecurityEvents.MinimalApi;
 using Microsoft.AspNetCore.Builder;
@@ -105,8 +106,11 @@ public sealed class BackChannelLogoutEndpointTests : IAsyncLifetime
 
         // Section 2.8 sends the reader to RFC 6749 Section 5.2 for the body's members.
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.Contains(BackChannelLogoutError.ParameterNames.Error, body, StringComparison.Ordinal);
-        Assert.Contains(BackChannelLogoutError.InvalidRequest, body, StringComparison.Ordinal);
+        var members = JsonNode.Parse(body)!.AsObject();
+        Assert.Equal(
+            BackChannelLogoutError.InvalidRequest,
+            members[BackChannelLogoutError.ParameterNames.Error]!.GetValue<string>());
+        Assert.NotEmpty(members[BackChannelLogoutError.ParameterNames.Description]!.GetValue<string>());
 
         // The header is on the refusal too: a cached 400 would keep answering for a token that was
         // only invalid the first time.

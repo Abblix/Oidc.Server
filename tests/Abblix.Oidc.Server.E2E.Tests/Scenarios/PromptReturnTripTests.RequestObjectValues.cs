@@ -101,6 +101,39 @@ public partial class PromptReturnTripTests
     }
 
     /// <summary>
+    /// A value inside a signed request object that is refused as unsupported is described by the parameter's name in
+    /// the characters RFC 6749 allows, as the same value in the query is, never by the value the client wrote.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationRequest.Parameters.ResponseMode, "query\t")]
+    [InlineData(AuthorizationRequest.Parameters.Prompt, "login\t")]
+    public async Task UnsupportedValue_InRequestObject_IsDescribedByItsName(string name, string value)
+    {
+        var served = new RequestObjectServer();
+        var (client, host) = StartServing(served);
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            Prompts.Login,
+            new Dictionary<string, string> { [name] = value },
+            requestUris: [RequestObjectServer.Address]);
+
+        using var response = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, RequestObjectPassing.ByValue, served);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOfAsync(response));
+        var description = await ParameterOfAsync(response, ResponseParameters.ErrorDescription);
+        Assert.NotNull(description);
+        Assert.All(description, character => Assert.True(
+            RefusalDescriptionTests.IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
+        Assert.Contains(name, description, StringComparison.Ordinal);
+        Assert.DoesNotContain(RefusalDescriptionTests.AsEchoed(value), description, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The response mode values that are no response mode: empty, or whitespace alone.
     /// </summary>
     private static readonly string[] BlankValues = [string.Empty, " ", "\t"];
@@ -252,12 +285,18 @@ public partial class PromptReturnTripTests
     /// <summary>
     /// The error an authorization response carries: in the redirect it sends, or in the body of a 400.
     /// </summary>
-    private static async Task<string?> ErrorOfAsync(HttpResponseMessage response)
+    private static Task<string?> ErrorOfAsync(HttpResponseMessage response)
+        => ParameterOfAsync(response, ResponseParameters.Error);
+
+    /// <summary>
+    /// Reads a parameter of an error response, delivered at the redirect URI or in the body.
+    /// </summary>
+    private static async Task<string?> ParameterOfAsync(HttpResponseMessage response, string name)
     {
         if (response.Headers.Location is { } location)
-            return QueryValue(location, ResponseParameters.Error);
+            return QueryValue(location, name);
 
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        return body[ResponseParameters.Error]?.GetValue<string>();
+        return body[name]?.GetValue<string>();
     }
 }

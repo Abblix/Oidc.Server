@@ -585,6 +585,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             foreach (var (name, type, initializer, validations) in _properties)
             {
                 _writer.AppendLine($"\t/// <inheritdoc cref=\"{coreType.ToDisplayString()}.{name}\"/>");
+
+                // A validation message names the member by its display name, and the client knows it by the wire name
+                var (wireName, _) = _wireMembers.FirstOrDefault(wire => wire.Member == name);
+                if (wireName != null)
+                    _writer.AppendLine($"\t[global::{DataAnnotationsNamespace}.Display(Name = {Literal(wireName)})]");
+
                 foreach (var validation in validations)
                     _writer.AppendLine($"\t[{validation}]");
                 _writer.AppendLine($"\tpublic {type} {name} {{ get; init; }}{initializer}");
