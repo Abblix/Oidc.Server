@@ -38,7 +38,7 @@ public class TenantEntityStorageTests
                 Tenant = new TenantDefinition
                 {
                     Id = id,
-                    Issuer = $"https://auth.example.com/tenants/{id}",
+                    Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
                     Generation = generation,
                 },
             };

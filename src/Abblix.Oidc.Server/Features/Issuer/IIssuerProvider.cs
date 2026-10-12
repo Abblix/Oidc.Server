@@ -20,6 +20,6 @@ public interface IIssuerProvider
 	/// This identifier is used in various OpenID Connect responses and tokens to
 	/// ensure the identity of the issuing server.
 	/// </summary>
-	/// <returns>A string representing the issuer identifier.</returns>
-	string GetIssuer();
+	/// <returns>The issuer identifier as configured; written and compared only through <see cref="Uri.OriginalString"/>.</returns>
+	Uri GetIssuer();
 }

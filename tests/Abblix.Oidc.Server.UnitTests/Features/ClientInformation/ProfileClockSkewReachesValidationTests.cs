@@ -151,7 +151,7 @@ public class ProfileClockSkewReachesValidationTests
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri("https://auth.example.com"));
 
         var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns("https://auth.example.com");
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri("https://auth.example.com"));
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys

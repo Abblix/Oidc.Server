@@ -52,7 +52,7 @@ public sealed class ConfigurationHandler(
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
 	public Task<ConfigurationResponse> HandleAsync() => Task.FromResult(new ConfigurationResponse
 	{
-		Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings),
+		Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings),
 
 		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,

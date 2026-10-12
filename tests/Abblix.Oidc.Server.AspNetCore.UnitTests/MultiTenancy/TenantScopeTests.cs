@@ -30,9 +30,9 @@ public sealed class TenantScopeTests : IDisposable
 {
     private const string Subject = "alice";
 
-    private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" };
-    private static readonly TenantDefinition Globex = new() { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
-    private static readonly TenantDefinition Initech = new() { Id = "initech", Issuer = "https://auth.example.com/tenants/initech" };
+    private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") };
+    private static readonly TenantDefinition Globex = new() { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+    private static readonly TenantDefinition Initech = new() { Id = "initech", Issuer = new Uri("https://auth.example.com/tenants/initech") };
 
     private readonly ServiceProvider _provider = new ServiceCollection()
         .AddServerStorage()

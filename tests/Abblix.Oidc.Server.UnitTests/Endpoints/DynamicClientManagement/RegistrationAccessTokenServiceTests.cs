@@ -40,7 +40,7 @@ public class RegistrationAccessTokenServiceTests
     public RegistrationAccessTokenServiceTests()
     {
         var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
 
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 

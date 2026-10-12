@@ -37,7 +37,7 @@ public class RegistrationAccessTokenService(
     public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
     {
         var signing = options.Value.ServiceTokens.RegistrationAccessToken.Signing;
-        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings);
+        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings);
 
         var token = new JsonWebToken
         {

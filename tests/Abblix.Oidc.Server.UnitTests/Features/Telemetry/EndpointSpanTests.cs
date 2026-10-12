@@ -158,7 +158,7 @@ public sealed class EndpointSpanTests : IDisposable
     [Fact]
     public async Task UnderMultiTenancy_TheSpanNamesTheTenant()
     {
-        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
+        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
         var tenants = Mock.Of<ITenantAccessor>(accessor => accessor.Current == served);
 
         var span = await SpanOf(() => EndpointObservation.RunAsync(

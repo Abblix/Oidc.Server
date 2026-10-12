@@ -52,7 +52,7 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
     {
         // The shared policy owns the status codes: invalid_client -> 401 with a Basic challenge (RFC 6749 section 5.2),
         // everything else -> 400 with the JSON envelope.
-        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer());
+        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer().OriginalString);
 
         // RFC 9449 section 8: a use_dpop_nonce error MUST carry the fresh nonce on a DPoP-Nonce header. section 8.2 asks such
         // responses to be uncacheable; the endpoint-level no-cache filter (see MapOidcEndpoints) covers that.

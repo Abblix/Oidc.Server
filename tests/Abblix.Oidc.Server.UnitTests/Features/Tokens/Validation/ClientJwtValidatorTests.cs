@@ -60,7 +60,7 @@ public class ClientJwtValidatorTests
             .Returns(new[] { _serverDecryptionKey }.ToAsyncEnumerable());
 
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(RequestUri));
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
 
         _validator = new ClientJwtValidator(
             logger.Object,

@@ -699,7 +699,7 @@ public class PrivateKeyJwtAuthenticatorTests
             logger.Object,
             replayCache.Object,
             serviceProvider,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == "https://issuer.example.com"),
+            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri("https://issuer.example.com")),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = profile })),
             TimeProvider.System);
 

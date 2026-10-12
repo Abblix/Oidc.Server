@@ -7,7 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -20,14 +22,24 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 /// </summary>
 public class TenantDefinitionsCheckTests
 {
-    private static string? FailureOf(params TenantDefinition[] tenants)
+    private static string? FailureOf(params TenantDefinition[] tenants) => FailureOf(allowHttp: false, tenants);
+
+    /// <summary>
+    /// The refusals of the tenant list, judged as the server judges it: the tenants' own definitions, and each
+    /// tenant's settings by the server's check of its issuer.
+    /// </summary>
+    private static string? FailureOf(bool allowHttp, params TenantDefinition[] tenants)
     {
-        var result = new TenantListValidator([new TenantDefinitionsCheck()])
+        var settings = new TenantSettingsCheck(
+            Options.Create(new OidcOptions { AllowHttpIssuer = allowHttp }),
+            [new IssuerOptionsValidator()]);
+        var result = new TenantListValidator([new TenantDefinitionsCheck(), settings])
             .Validate(null, new MultiTenancyOptions { Tenants = [..tenants] });
         return result.Failed ? result.FailureMessage : null;
     }
 
-    private static TenantDefinition Tenant(string id, string issuer) => new() { Id = id, Issuer = issuer };
+    private static TenantDefinition Tenant(string id, string issuer)
+        => new() { Id = id, Issuer = new Uri(issuer, UriKind.RelativeOrAbsolute) };
 
     [Fact]
     public void TenantsAtTheirOwnHostsAndUnderPathsOfOneHost_AreAccepted()
@@ -51,7 +63,7 @@ public class TenantDefinitionsCheckTests
     [InlineData("file:///tenants/acme")]
     [InlineData("ftp://auth.example.com/tenants/acme")]
     public void AnIssuerThatIsNotAnHttpAddressWithoutQueryOrFragment_IsRefused(string issuer)
-        => Assert.Contains("http or https URL", FailureOf(Tenant("acme", issuer)), StringComparison.Ordinal);
+        => Assert.NotNull(FailureOf(allowHttp: true, Tenant("acme", issuer)));
 
     /// <summary>
     /// A Host header is ASCII, so a host with no ASCII form under IDN rules - here one carrying a zero-width
@@ -63,11 +75,14 @@ public class TenantDefinitionsCheckTests
             StringComparison.Ordinal);
 
     /// <summary>
-    /// Plain http stays open, since a server run locally for development is reached that way.
+    /// An issuer is an https URL; plain http is let through only when the deployment allows it, for a server run
+    /// locally for development.
     /// </summary>
-    [Fact]
-    public void AnHttpIssuer_IsAccepted()
-        => Assert.Null(FailureOf(Tenant("acme", "http://localhost:5000/tenants/acme")));
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void AnHttpIssuer_IsAccepted_OnlyWhenTheDeploymentAllowsIt(bool allowHttp, bool accepted)
+        => Assert.Equal(accepted, FailureOf(allowHttp, Tenant("acme", "http://localhost:5000/tenants/acme")) is null);
 
     [Fact]
     public void ATenantIdDeclaredTwice_IsRefused()
@@ -90,8 +105,8 @@ public class TenantDefinitionsCheckTests
     [InlineData("https://auth.example.com/tenants/a%2fb", "https://auth.example.com/tenants/a%2Fb")]
     [InlineData("https://auth.example.com/tenants/a%20b", "https://auth.example.com/tenants/a b")]
     public void TwoIssuersAtOneAddress_AreRefused(string first, string second)
-        => Assert.Contains("served at the same address", FailureOf(Tenant("acme", first), Tenant("globex", second)),
-            StringComparison.Ordinal);
+        => Assert.Contains("served at the same address",
+            FailureOf(allowHttp: true, Tenant("acme", first), Tenant("globex", second)), StringComparison.Ordinal);
 
     /// <summary>
     /// The store of tenants is read again every period by a timer, so a period it cannot keep is refused at
@@ -119,7 +134,7 @@ public class TenantDefinitionsCheckTests
         [
             Tenant("acme", "https://auth.example.com/tenants/x"),
             Tenant("globex", "https://auth.example.com/tenants/x"),
-            Tenant("initech", "ftp://initech.example.com"),
+            Tenant("initech", "https://init\u200Dech.example.com"),
             Tenant("umbrella", "https://umbrella.example.com"),
         ]).ToArray();
 
@@ -141,7 +156,7 @@ public class TenantDefinitionsCheckTests
         => Assert.Contains("must be an absolute https URL with no path", FailureOf(new TenantDefinition
         {
             Id = "acme",
-            Issuer = "https://auth.example.com/tenants/acme",
+            Issuer = new Uri("https://auth.example.com/tenants/acme"),
             MtlsBaseUri = new Uri(mtls, UriKind.RelativeOrAbsolute),
         }), StringComparison.Ordinal);
 
@@ -155,10 +170,10 @@ public class TenantDefinitionsCheckTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = "https://auth.example.com/tenants/acme",
+                Issuer = new Uri("https://auth.example.com/tenants/acme"),
                 MtlsBaseUri = new Uri("https://mtls.example.com"),
             },
-            new TenantDefinition { Id = "globex", Issuer = "https://mtls.example.com/tenants/acme" }),
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://mtls.example.com/tenants/acme") }),
             StringComparison.Ordinal);
 
     [Fact]
@@ -167,13 +182,13 @@ public class TenantDefinitionsCheckTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = "https://auth.example.com/tenants/acme",
+                Issuer = new Uri("https://auth.example.com/tenants/acme"),
                 MtlsBaseUri = new Uri("https://mtls.example.com"),
             },
             new TenantDefinition
             {
                 Id = "globex",
-                Issuer = "https://auth.example.com/tenants/globex",
+                Issuer = new Uri("https://auth.example.com/tenants/globex"),
                 MtlsBaseUri = new Uri("https://mtls.example.com"),
             }));
 

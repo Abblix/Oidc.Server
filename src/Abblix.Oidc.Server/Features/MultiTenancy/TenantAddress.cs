@@ -29,7 +29,7 @@ public sealed record TenantAddress(string Host, string Path)
     /// </summary>
     public static IEnumerable<TenantAddress> AllOf(TenantDefinition tenant)
     {
-        var issuer = Of(tenant.Issuer);
+        var issuer = Of(tenant.Issuer.OriginalString);
         yield return issuer;
 
         if (tenant.MtlsBaseUri is { IsAbsoluteUri: true } mtls)

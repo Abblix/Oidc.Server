@@ -67,7 +67,7 @@ public sealed class TenantDefinition
     /// <c>https://auth.example.com/tenants/acme</c> a path on a shared one. Scheme and port are not compared,
     /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
     /// </remarks>
-    public required string Issuer { get; init; }
+    public required Uri Issuer { get; init; }
 
     /// <summary>
     /// The clients registered with this tenant. A client is known only at the tenant that lists it, or at which it

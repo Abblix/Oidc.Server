@@ -49,7 +49,7 @@ public class UserInfoRequestProcessor(
 		if (userInfo == null)
 			return new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found");
 
-		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings);
+		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings);
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}
 }

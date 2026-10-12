@@ -134,7 +134,7 @@ internal class IdentityTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
-				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer(), issuerSettings, authContext.ClientId),
+				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer().OriginalString, issuerSettings, authContext.ClientId),
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,

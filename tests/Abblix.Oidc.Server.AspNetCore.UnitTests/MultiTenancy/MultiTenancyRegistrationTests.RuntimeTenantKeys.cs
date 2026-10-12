@@ -135,7 +135,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = MintingRealKeys(store);
         Assert.Empty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
 
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
         var catalog = provider.GetRequiredService<StoreTenantCatalog>();
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
@@ -158,7 +158,7 @@ public partial class MultiTenancyRegistrationTests
     {
         var store = new ChangingTenantStore();
         using var provider = MintingRealKeys(store);
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         var catalog = provider.GetRequiredService<StoreTenantCatalog>();
         var partitions = provider.GetRequiredService<IKeyRingPartitions>();
 
@@ -205,7 +205,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task TheKeysOfAReleasedTenant_AreDeletedFromTheStore()
     {
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
         using var provider = MintingRealKeys(store);
         var catalog = provider.GetRequiredService<StoreTenantCatalog>();
@@ -257,7 +257,7 @@ public partial class MultiTenancyRegistrationTests
     public async Task ReleasingATenantWhoseIdSpellsAnothersPartition_LeavesThatPartitionsKeys()
     {
         var live = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "1" };
-        var spelling = new TenantDefinition { Id = "acme~1", Issuer = "https://auth.example.com/tenants/spelling" };
+        var spelling = new TenantDefinition { Id = "acme~1", Issuer = new Uri("https://auth.example.com/tenants/spelling") };
         var store = new ChangingTenantStore { Tenants = [new StoredTenant(live, "1"), new StoredTenant(spelling, "1")] };
         using var provider = MintingRealKeys(store);
         var catalog = provider.GetRequiredService<StoreTenantCatalog>();
@@ -279,7 +279,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task TheTenantsOfOneReading_AreDeletedWithOneReadOfTheStore()
     {
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
         using var provider = MintingRealKeys(store);
         var catalog = provider.GetRequiredService<StoreTenantCatalog>();
@@ -303,7 +303,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task APartitionThatCannotBeDeleted_IsReportedForItsTenant_AndTheOthersDeleted()
     {
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
         using var provider = MintingRealKeys(store);
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
@@ -326,7 +326,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task ADeletionAlreadyStopped_RemovesNothing_AndReportsEveryTenant()
     {
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
         using var provider = MintingRealKeys(store);
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);

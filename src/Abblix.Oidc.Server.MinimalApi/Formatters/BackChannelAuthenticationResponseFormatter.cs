@@ -61,6 +61,6 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
             ? TokenTypes.Basic
             : TokenTypes.Bearer;
 
-        return $"{scheme} realm=\"{issuerProvider.GetIssuer()}\"";
+        return $"{scheme} realm=\"{issuerProvider.GetIssuer().OriginalString}\"";
     }
 }

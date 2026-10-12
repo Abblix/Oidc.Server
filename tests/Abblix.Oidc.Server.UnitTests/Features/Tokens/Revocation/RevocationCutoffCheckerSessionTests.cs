@@ -63,7 +63,7 @@ public class RevocationCutoffCheckerSessionTests
     private IRevocationCutoffChecker Checker(TimeSpan? skew = null)
     {
         var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer.OriginalString);
+        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer);
 
         return new RevocationCutoffChecker(
             NullLogger<RevocationCutoffChecker>.Instance,

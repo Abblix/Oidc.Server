@@ -50,7 +50,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
     private static readonly TenantDefinition GlobexTenant = new()
     {
         Id = "globex",
-        Issuer = Host + Globex,
+        Issuer = new Uri(Host + Globex),
         DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
@@ -75,7 +75,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
             options.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
-                Issuer = Host + Acme,
+                Issuer = new Uri(Host + Acme),
                 Clients = [Client()],
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             });

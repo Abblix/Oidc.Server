@@ -115,7 +115,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             options.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
-                Issuer = Host + Acme,
+                Issuer = new Uri(Host + Acme),
                 Clients = [Client(ClientId), Client(AcmeOnlyClientId), PairwiseClient()],
                 PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) },
                 Scopes = [new ScopeDefinition(AcmeScope)],
@@ -133,7 +133,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             options.Tenants.Add(new TenantDefinition
             {
                 Id = "globex",
-                Issuer = Host + Globex,
+                Issuer = new Uri(Host + Globex),
                 Clients = [Client(ClientId), PairwiseClient()],
                 LoginUri = new Uri("/sign-in", UriKind.Relative),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],

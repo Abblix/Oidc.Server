@@ -21,5 +21,5 @@ internal class RequestBasedIssuerProvider(IRequestInfoProvider requestInfoProvid
 	/// Retrieves the issuer identifier based on the current HTTP request.
 	/// </summary>
 	/// <returns>The issuer identifier, constructed from the request's context.</returns>
-	public string GetIssuer() => requestInfoProvider.ApplicationUri.OriginalString;
+	public Uri GetIssuer() => requestInfoProvider.ApplicationUri;
 }

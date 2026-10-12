@@ -64,7 +64,7 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
     {
         // The shared formatter owns the status-code policy: invalid_client comes back as a 401
         // with a Basic challenge (RFC 6749 section 5.2), everything else as 400 with the JSON envelope.
-        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer());
+        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer().OriginalString);
 
         // Per RFC 9449 section 8 a use_dpop_nonce error MUST carry the fresh nonce on a
         // DPoP-Nonce response header alongside the standard error JSON envelope.

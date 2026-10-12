@@ -96,7 +96,7 @@ public class ClientMayTightenItselfTests
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(Issuer));
 
         var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys

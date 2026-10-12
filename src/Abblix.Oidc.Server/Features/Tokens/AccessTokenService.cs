@@ -125,7 +125,7 @@ internal class AccessTokenService(
 				ExpiresAt = expiresNoLaterThan is { } latest && latest < issuedAt + clientInfo.AccessTokenExpiresIn
 					? latest
 					: issuedAt + clientInfo.AccessTokenExpiresIn,
-				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer(), issuerSettings, authContext.ClientId),
+				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer().OriginalString, issuerSettings, authContext.ClientId),
 				GrantId = grantId,
 			},
 		};

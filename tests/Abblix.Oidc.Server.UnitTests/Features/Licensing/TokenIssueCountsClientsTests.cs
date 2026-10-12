@@ -80,7 +80,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
     private static Func<string, Task> Issuer(string kind)
     {
         var client = new ClientInfo("settings");
-        var issuerProvider = Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == TestLicense.Issuer);
+        var issuerProvider = Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == new Uri(TestLicense.Issuer));
         var options = Options.Create(new OidcOptions());
         var settings = SingleIssuer.SettingsOf(options);
         var clock = new FakeTimeProvider(new DateTimeOffset(2024, 1, 15, 12, 0, 0, TimeSpan.Zero));

@@ -45,7 +45,7 @@ public class AuthServiceJwtValidatorTests
         var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(ExpectedIssuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(ExpectedIssuer));
 
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
@@ -133,6 +133,32 @@ public class AuthServiceJwtValidatorTests
         // Verify issuer validation callback rejects invalid issuer
         var issuerValidationResult = await capturedParams!.ValidateIssuer!(invalidIssuer);
         Assert.False(issuerValidationResult);
+    }
+
+    /// <summary>
+    /// The issuer is compared as written (OpenID Connect Core 1.0 section 3.1.3.7 requires an exact match), so an
+    /// issuer or an audience naming this server in another spelling of the same address is not this server's.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/")]
+    [InlineData("https://AUTH.example.com")]
+    [InlineData("HTTPS://auth.example.com")]
+    [InlineData("https://auth.example.com:443")]
+    public async Task ValidateAsync_TheIssuerSpelledOtherwise_IsNotThisServer(string spelledOtherwise)
+    {
+        ValidationParameters? capturedParams = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid issuer"));
+
+        SetupKeyProviders();
+
+        await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.NotNull(capturedParams);
+        Assert.False(await capturedParams.ValidateIssuer!(spelledOtherwise));
+        Assert.False(await capturedParams.ValidateAudience!([spelledOtherwise]));
     }
 
     /// <summary>

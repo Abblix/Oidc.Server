@@ -39,7 +39,7 @@ public class TenantRoutingTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(
-            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" }));
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") }));
 
         await using var app = builder.Build();
         app.UseMultiTenancy();
@@ -65,7 +65,7 @@ public class TenantRoutingTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(
-            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" }));
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") }));
         var app = builder.Build();
         app.UseRouting();
 

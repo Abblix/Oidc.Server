@@ -26,5 +26,5 @@ internal class PreconfiguredIssuerProvider(IOptions<OidcOptions> options) : IIss
 	/// <exception cref="InvalidOperationException">
 	/// Thrown if the issuer identifier is not configured in OIDC options.
 	/// </exception>
-	public string GetIssuer() => options.Value.Issuer.NotNull(nameof(OidcOptions.Issuer));
+	public Uri GetIssuer() => options.Value.Issuer.NotNull(nameof(OidcOptions.Issuer));
 }

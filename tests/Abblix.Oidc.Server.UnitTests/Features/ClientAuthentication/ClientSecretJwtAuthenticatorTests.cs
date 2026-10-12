@@ -69,7 +69,7 @@ public class ClientSecretJwtAuthenticatorTests
             _requestInfoProvider.Object,
             _clock,
             _replayCache.Object,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == "https://issuer.example.com"),
+            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri("https://issuer.example.com")),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())));
     }
 

@@ -52,7 +52,7 @@ public class EnableImplicitFlowLifetimeTests
         // only a real web host can satisfy under ValidateOnBuild.
         services.AddOidcCore(opts =>
         {
-            opts.Issuer = TestConstants.DefaultIssuer.OriginalString;
+            opts.Issuer = TestConstants.DefaultIssuer;
             opts.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
         });
 
