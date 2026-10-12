@@ -190,6 +190,8 @@ public class ExternalKeysWiringTests
     {
         var window = TimeSpan.FromHours(24);
         var services = AnOidcHost();
+        services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" });
+        services.AddSingleton(new Mock<IKeyRingStore>(MockBehavior.Loose).Object);
         services.Configure<OidcOptions>(options => options.KeyRolloverPropagation = window);
         if (ringConfiguredByHost)
             services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromMinutes(5));

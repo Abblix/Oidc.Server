@@ -64,7 +64,7 @@ public static class JwtServiceCollectionExtensions
         services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
 
         // The JWKS endpoint is cached for OidcOptions.KeyRolloverPropagation, so a key the ring mints waits that
-        // window before it signs. Set after every configuration, the host's included: a ring window of its own
+        // window before it signs. Set after the ring's own configuration, the host's included: a ring window of its own
         // would let a client with a warm cache meet a key it has never seen.
         services.AddOptions<KeyRingOptions>().PostConfigure<IOptions<OidcOptions>>(
             (ring, oidc) => ring.KeyRolloverPropagation = oidc.Value.KeyRolloverPropagation);
