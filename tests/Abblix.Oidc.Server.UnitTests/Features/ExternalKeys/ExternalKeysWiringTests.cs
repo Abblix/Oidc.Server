@@ -177,4 +177,25 @@ public class ExternalKeysWiringTests
         var served = await keysProvider.GetSigningKeys().ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKey.KeyId, Assert.Single(served).KeyId);
     }
+
+    /// <summary>
+    /// The published key set is cached for the server's propagation window, so a key the server mints waits that
+    /// same window before it signs; a window set on the key ring alone would let a client with a warm cache meet a
+    /// key it has not seen.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MintedKeysWaitTheWindowTheKeySetIsCachedFor(bool ringConfiguredByHost)
+    {
+        var window = TimeSpan.FromHours(24);
+        var services = AnOidcHost();
+        services.Configure<OidcOptions>(options => options.KeyRolloverPropagation = window);
+        if (ringConfiguredByHost)
+            services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromMinutes(5));
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(window, provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.KeyRolloverPropagation);
+    }
 }

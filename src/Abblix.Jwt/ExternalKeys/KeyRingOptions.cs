@@ -23,7 +23,8 @@ public sealed class KeyRingOptions
     /// already seen it.
     ///
     /// The value is therefore a property of how long consumers cache, not of how often keys rotate. An hour
-    /// covers the caching most providers and clients default to.
+    /// covers the caching most providers and clients default to. The OIDC server sets it from its own propagation
+    /// window, the one its key set endpoint is cached for, after every other configuration.
     /// </remarks>
     public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 

@@ -63,6 +63,12 @@ public static class JwtServiceCollectionExtensions
         // reader (ISP), so read-only consumers never depend on persistence.
         services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
 
+        // The JWKS endpoint is cached for OidcOptions.KeyRolloverPropagation, so a key the ring mints waits that
+        // window before it signs. Set after every configuration, the host's included: a ring window of its own
+        // would let a client with a warm cache meet a key it has never seen.
+        services.AddOptions<KeyRingOptions>().PostConfigure<IOptions<OidcOptions>>(
+            (ring, oidc) => ring.KeyRolloverPropagation = oidc.Value.KeyRolloverPropagation);
+
         // Fail loud at startup when the resolved provider is the static one above and OidcOptions carries no
         // signing key: that host can never sign a token, and without this check the first symptom is an empty
         // JWKS cached by every relying party. A host-supplied provider is trusted, not probed - its store may
