@@ -104,8 +104,8 @@ public class SingleValueBinderProviderTests
     /// sent plainly or under an index, and no failure is left under the indexed key to carry the value.
     /// </summary>
     [Theory]
-    [InlineData("?resource=http://[%09")]
-    [InlineData("?resource[0]=http://[%09")]
+    [InlineData("?resource=https://[%09")]
+    [InlineData("?resource[0]=https://[%09")]
     public async Task UnreadableRepeatableValueIsRefusedUnderTheParameter(string query)
     {
         var modelState = await BindResourcesAsync(query, ModelStateDictionary.DefaultMaxAllowedErrors);
@@ -115,14 +115,17 @@ public class SingleValueBinderProviderTests
     }
 
     /// <summary>
-    /// A request carrying as many unreadable values as the model state takes errors still gets the parameter named.
+    /// A request carrying as many unreadable values as the model state takes errors still gets the parameter named,
+    /// sent with an index or repeated as RFC 8707 clients send it.
     /// </summary>
-    [Fact]
-    public async Task UnreadableValuesUpToTheErrorLimitAreStillRefusedUnderTheParameter()
+    [Theory]
+    [InlineData("?resource[0]=https://[%09&resource[1]=https://[%09", 2)]
+    [InlineData("?resource=https://[%09&resource=https://[%09&resource=https://[%09", 3)]
+    public async Task UnreadableValuesUpToTheErrorLimitAreStillRefusedUnderTheParameter(
+        string query,
+        int maxAllowedErrors)
     {
-        const string query = "?resource[0]=http://[%09&resource[1]=http://[%09";
-
-        var modelState = await BindResourcesAsync(query, maxAllowedErrors: 2);
+        var modelState = await BindResourcesAsync(query, maxAllowedErrors);
 
         Assert.Single(modelState[Parameters.Resource]!.Errors);
     }

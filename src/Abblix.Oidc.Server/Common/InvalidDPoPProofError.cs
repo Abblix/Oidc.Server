@@ -17,5 +17,5 @@ namespace Abblix.Oidc.Server.Common;
 /// <c>WWW-Authenticate: DPoP error="invalid_dpop_proof"</c> challenge instead of a Bearer
 /// challenge, without string-comparing the error code. Mirrors <see cref="UseDPoPNonceError"/>.
 /// </summary>
-public sealed record InvalidDPoPProofError(string Description)
-    : OidcError(ErrorCodes.InvalidDPoPProof, Description);
+public sealed record InvalidDPoPProofError(string ErrorDescription)
+    : OidcError(ErrorCodes.InvalidDPoPProof, ErrorDescription);

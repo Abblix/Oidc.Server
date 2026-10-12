@@ -52,10 +52,10 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
     }
 
     [Theory]
-    [InlineData(AuthorizationRequest.Parameters.RedirectUri, "http://[\t")]
+    [InlineData(AuthorizationRequest.Parameters.RedirectUri, "https://[\t")]
     [InlineData(AuthorizationRequest.Parameters.Claims, "{\t")]
-    [InlineData(AuthorizationRequest.Parameters.RequestUri, "http://[\t")]
-    [InlineData(AuthorizationRequest.Parameters.Resource, "http://[\t")]
+    [InlineData(AuthorizationRequest.Parameters.RequestUri, "https://[\t")]
+    [InlineData(AuthorizationRequest.Parameters.Resource, "https://[\t")]
     [InlineData(AuthorizationRequest.Parameters.ResponseMode, "query\t")]
     [InlineData(AuthorizationRequest.Parameters.Prompt, "login\t")]
     public async Task AnyParameterRefusedForItsValue_IsDescribedByItsName(string parameter, string value)
@@ -95,7 +95,7 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            [TokenRequest.Parameters.Resource] = "http://[\t",
+            [TokenRequest.Parameters.Resource] = "https://[\t",
         };
 
         using var response = await client.PostAsync(

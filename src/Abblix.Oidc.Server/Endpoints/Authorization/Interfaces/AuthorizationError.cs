@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
@@ -54,8 +55,8 @@ public record AuthorizationError(
 	/// A human-readable description of the error, made only of the characters RFC 6749 allows in it, as
 	/// <see cref="OidcError.ErrorDescription"/> is: this response is built directly as well as from a validation error.
 	/// </summary>
-	public string ErrorDescription { get; init => field = OidcError.WithAllowedCharacters(value); } =
-		OidcError.WithAllowedCharacters(ErrorDescription);
+	public string ErrorDescription { get; init => field = ErrorDescriptionText.WithAllowedCharacters(value); } =
+		ErrorDescriptionText.WithAllowedCharacters(ErrorDescription);
 
 	/// <summary>
 	/// Constructs an instance of <see cref="AuthorizationError"/> from an <see cref="AuthorizationRequest"/> and

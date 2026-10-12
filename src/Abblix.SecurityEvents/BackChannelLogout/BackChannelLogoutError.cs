@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.SecurityEvents.BackChannelLogout;
 
@@ -33,8 +34,16 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 /// its own.</param>
 public sealed record BackChannelLogoutError(
     [property: JsonPropertyName(BackChannelLogoutError.ParameterNames.Error)] string Error,
-    [property: JsonPropertyName(BackChannelLogoutError.ParameterNames.Description)] string Description)
+    string Description)
 {
+    /// <summary>
+    /// The human-readable account of what failed, made only of the characters RFC 6749 section 5.2 allows in
+    /// error_description: it may quote the request, such as the media type it arrived as.
+    /// </summary>
+    [JsonPropertyName(ParameterNames.Description)]
+    public string Description { get; init => field = ErrorDescriptionText.WithAllowedCharacters(value); } =
+        ErrorDescriptionText.WithAllowedCharacters(Description);
+
     /// <summary>
     /// The wire names of the error members (RFC 6749 Section 5.2, by the reference in
     /// OpenID Connect Back-Channel Logout 1.0 Section 2.8).
