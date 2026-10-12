@@ -39,23 +39,12 @@ public class CultureInfoConverter : JsonConverter<CultureInfo>
     }
 
     /// <summary>
-    /// The culture <paramref name="name"/> names, or a <see cref="JsonException"/> when it names none.
+    /// The culture <paramref name="name"/> names, or a <see cref="JsonException"/> when it names no language.
     /// </summary>
-    /// <remarks>
-    /// CultureInfo offers no way to ask whether a name is one without constructing it, and the serializer passes the
-    /// exception it throws through as it is, so it is told apart here.
-    /// </remarks>
     internal static CultureInfo FromName(string name)
-    {
-        try
-        {
-            return new CultureInfo(name);
-        }
-        catch (CultureNotFoundException failure)
-        {
-            throw new JsonException($"'{name}' names no culture", failure);
-        }
-    }
+        => LanguageTag.TryParse(name, out var culture)
+            ? culture
+            : throw new JsonException($"'{name}' names no language");
 
     /// <summary>
     /// Writes a specified <see cref="CultureInfo"/> object as JSON.

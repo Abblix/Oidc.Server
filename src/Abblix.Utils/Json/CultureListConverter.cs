@@ -42,8 +42,8 @@ public class CultureListConverter : JsonConverter<CultureInfo[]?>
         // The serializer answers a JSON null for this list itself, so the array converter only ever sees an array
         var cultures = Elements.Read(ref reader, typeToConvert, options).NotNull(nameof(Elements));
 
-        // An absent entry, or an empty one that would read as the invariant culture, names no language at all
-        var named = cultures.OfType<CultureInfo>().Where(culture => culture.Name.Length > 0).ToArray();
+        // An absent entry names no language at all
+        var named = cultures.OfType<CultureInfo>().ToArray();
         return named.Length == cultures.Length
             ? named
             : throw new JsonException("A list of language tags has an entry that names no culture");

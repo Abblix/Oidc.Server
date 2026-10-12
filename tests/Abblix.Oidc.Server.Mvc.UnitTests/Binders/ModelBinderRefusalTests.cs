@@ -54,6 +54,22 @@ public class ModelBinderRefusalTests
     }
 
     /// <summary>
+    /// A tag naming no language, one .NET builds a nameless culture from or one it does not know, is recorded as a
+    /// failure, as the request object path refuses it.
+    /// </summary>
+    [Theory]
+    [InlineData("und")]
+    [InlineData("en und")]
+    [InlineData("!")]
+    public async Task The_locale_binder_records_a_failure_for_a_tag_naming_no_language(string value)
+    {
+        var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo[]), value);
+
+        Assert.False(outcome.IsModelSet);
+        Assert.False(outcome.ModelState.IsValid);
+    }
+
+    /// <summary>
     /// Asking for one culture and receiving two: the two arrive joined, no culture is named "en-US,fr-FR", and
     /// the binder records the failure instead of binding one of them. Which one it might have picked is the
     /// point - a silent choice here decides the language the end user is shown.

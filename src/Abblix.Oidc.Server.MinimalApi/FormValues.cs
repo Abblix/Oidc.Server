@@ -184,17 +184,9 @@ internal static class FormValues
         if (string.IsNullOrEmpty(value))
             return null;
 
-        // An invalid BCP-47 tag throws; shape it as a 400 instead of a 500 escaping BindAsync.
-        try
-        {
-            return value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(culture => new CultureInfo(culture))
-                .ToArray();
-        }
-        catch (CultureNotFoundException)
-        {
-            throw MalformedValue();
-        }
+        return value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(tag => LanguageTag.TryParse(tag, out var culture) ? culture : throw MalformedValue())
+            .ToArray();
     }
 
     /// <summary>Deserializes a single field's JSON value (e.g. <c>claims</c>, <c>authorization_details</c>), or null.</summary>
