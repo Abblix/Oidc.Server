@@ -86,7 +86,8 @@ internal static class OidcEndpointFilters
     }
 
     /// <summary>
-    /// Group endpoint filter answering <c>invalid_request</c> to a request that names no host.
+    /// Group endpoint filter answering <c>invalid_request</c> to a request whose host no address of this server can be
+    /// built from.
     /// </summary>
     private static async ValueTask<object?> RequireHostAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
