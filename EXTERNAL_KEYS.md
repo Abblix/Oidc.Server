@@ -110,9 +110,9 @@ Rotation differs by placement, but both overlap old and new so a client with a s
 
 With `UseKeysInCustodian` you rotate in the custodian, and nothing redeploys. Every version of a key is published at `/jwks`, each under its own `kid`. The version the provider signs with is the newest one older than `OidcOptions.KeyRolloverPropagation` (default 1 hour): a new version is published immediately but starts signing only once that window has passed. Older versions keep verifying and unwrapping until you retire them, so remove one only after every token signed by it has expired.
 
-With `UseKeysInProcess` the server rotates on its own schedule: it mints the next key ahead of time, publishes it, and starts signing with it once the same propagation window has passed, then retires the previous one after it is no longer needed. You provision nothing per rotation. Pods do not elect a leader; the first to reach a new period wins it through the store's insert-if-absent write, and the rest read the winner's key. Rotating the key-encryption key needs no re-sealing either: each sealed entry names the version that sealed it, so a new version seals new keys while older entries keep opening under theirs.
+With `UseKeysInProcess` the server rotates on its own schedule: it mints the next key ahead of time, publishes it, and starts signing with it once the same propagation window has passed (the server sets the key ring's `KeyRingOptions.KeyRolloverPropagation` from `OidcOptions.KeyRolloverPropagation`, over the ring's own setting), then retires the previous one after it is no longer needed. You provision nothing per rotation. Pods do not elect a leader; the first to reach a new period wins it through the store's insert-if-absent write, and the rest read the winner's key. Rotating the key-encryption key needs no re-sealing either: each sealed entry names the version that sealed it, so a new version seals new keys while older entries keep opening under theirs.
 
-The `/jwks` response carries a `Cache-Control` max-age derived from the propagation window, so publication and signing cannot drift apart. Set the window to your slowest client's JWKS cache lifetime. Either way, every pod derives the same active version from the version creation times and this window, so the deployment needs no coordination beyond the store `UseKeysInProcess` already relies on.
+The `/jwks` response carries a `Cache-Control` max-age derived from the propagation window, so publication and signing cannot drift apart. Set the window to your slowest client's JWKS cache lifetime. With `UseKeysInProcess` each pod re-reads the store at half the window, never more often than once a second and never less often than once a day, which is what lets a key minted on one pod be loaded by every other before it signs; a window under two seconds gives up that margin. Either way, every pod derives the same active version from the version creation times and this window, so the deployment needs no coordination beyond the store `UseKeysInProcess` already relies on.
 
 ### Watching that rotation is still happening
 
@@ -122,7 +122,7 @@ Read it for a role the ring actually rotates. A role served by a key you adopted
 
 No answer at all means the ring holds no key for that role: a pod that has not loaded yet, a custodian that has never answered, and a role nothing mints for are one answer between them. It says the ring cannot speak about the role, not that the role is well or unwell.
 
-With `UseKeysInProcess` the ring mints when it is asked for a key rather than on a timer, so the age it reports is the age of what it has been asked for. A health check reading it as a schedule wants the custodian placement, where a background service keeps the ring current.
+With `UseKeysInProcess` a background service refreshes the ring on a timer and mints the next key when its period comes, so the age it reports follows the rotation schedule and a health check can read it as one. The in-memory ring, whose keys never leave the process, mints when it is asked for a key instead, so the age it reports is the age of what it has been asked for.
 
 ## Bringing your own custodian
 

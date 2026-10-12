@@ -23,16 +23,27 @@ public sealed class KeyRingOptions
     /// already seen it.
     ///
     /// The value is therefore a property of how long consumers cache, not of how often keys rotate. An hour
-    /// covers the caching most providers and clients default to.
+    /// covers the caching most providers and clients default to. The OIDC server sets it from its own propagation
+    /// window, the one its key set endpoint is cached for, over the value configured here.
     /// </remarks>
     public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// How often the ring is refreshed: half the propagation window. A freshly minted key is announced for that
-    /// window before it signs, so refreshing twice per window means no pod meets a token signed by a key it has not
-    /// loaded.
+    /// How often the ring is refreshed: half the propagation window, kept between a second and a day. A freshly
+    /// minted key is announced for that window before it signs, so refreshing twice per window means no pod meets a
+    /// token signed by a key it has not loaded.
     /// </summary>
-    internal TimeSpan RefreshPeriod => KeyRolloverPropagation / 2;
+    /// <remarks>
+    /// Kept between a second and a day, so that every window a host may choose gives a period the refresh timer
+    /// accepts: no window at all, for consumers that do not cache, still refreshes, and a window of months still
+    /// picks up keys the other pods minted. A window under two seconds is shorter than two refreshes, so another
+    /// pod may meet a token signed by a key it loads only at its next refresh.
+    /// </remarks>
+    internal TimeSpan RefreshPeriod => TimeSpan.FromTicks(
+        Math.Clamp((KeyRolloverPropagation / 2).Ticks, ShortestRefreshPeriod.Ticks, LongestRefreshPeriod.Ticks));
+
+    private static readonly TimeSpan ShortestRefreshPeriod = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan LongestRefreshPeriod = TimeSpan.FromDays(1);
 
     /// <summary>
     /// The partition a ring serving one issuer keeps, whose entries are stored under their own ids.
