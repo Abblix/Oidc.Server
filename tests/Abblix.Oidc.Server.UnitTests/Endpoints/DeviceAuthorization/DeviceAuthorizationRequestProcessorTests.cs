@@ -129,7 +129,7 @@ public class DeviceAuthorizationRequestProcessorTests
         });
 
         var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(issuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(issuer));
 
         var processor = new DeviceAuthorizationRequestProcessor(
             storage.Object,

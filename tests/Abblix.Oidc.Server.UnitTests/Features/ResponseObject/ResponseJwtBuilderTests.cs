@@ -55,7 +55,7 @@ public class ResponseJwtBuilderTests
     public ResponseJwtBuilderTests()
     {
         _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
-        _issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        _issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
         _timeProvider = new FakeTimeProvider(_now);
         _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 

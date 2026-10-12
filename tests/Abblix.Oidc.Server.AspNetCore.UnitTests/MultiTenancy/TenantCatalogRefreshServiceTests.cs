@@ -96,7 +96,7 @@ public class TenantCatalogRefreshServiceTests
         => new(_logger, _catalog, Options.Create(new MultiTenancyOptions { RefreshEvery = Period }), _time);
 
     private static StoredTenant Stored(string id)
-        => new(new TenantDefinition { Id = id, Issuer = $"https://{id}.example.com" }, "1");
+        => new(new TenantDefinition { Id = id, Issuer = new Uri($"https://{id}.example.com") }, "1");
 
     /// <summary>
     /// A store that cannot be read at startup stops the process: there is nobody yet to serve.

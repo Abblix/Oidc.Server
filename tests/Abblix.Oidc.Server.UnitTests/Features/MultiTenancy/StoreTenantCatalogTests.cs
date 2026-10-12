@@ -170,7 +170,7 @@ public class StoreTenantCatalogTests
         _time);
 
     private static StoredTenant Stored(string id, string issuer, string version = Version)
-        => new(new TenantDefinition { Id = id, Issuer = issuer, Generation = "g1" }, version);
+        => new(new TenantDefinition { Id = id, Issuer = new Uri(issuer), Generation = "g1" }, version);
 
     /// <summary>
     /// A tenant the checks refuse is left out and logged by name, and the others are served.
@@ -179,7 +179,7 @@ public class StoreTenantCatalogTests
     public async Task ATenantTheChecksRefuse_IsLeftOut_AndTheOthersServed()
     {
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
-        _store.Tenants.Add(Stored("broken", "ftp://broken.example.com"));
+        _store.Tenants.Add(Stored("broken", "https://bro\u200Dken.example.com"));
         var catalog = Catalog();
         var ct = TestContext.Current.CancellationToken;
 
@@ -216,7 +216,7 @@ public class StoreTenantCatalogTests
     [Fact]
     public async Task ARefusalStandingAcrossReadings_IsLoggedOnce()
     {
-        _store.Tenants.Add(Stored("broken", "ftp://broken.example.com"));
+        _store.Tenants.Add(Stored("broken", "https://bro\u200Dken.example.com"));
         var catalog = Catalog();
         var ct = TestContext.Current.CancellationToken;
 
@@ -304,7 +304,7 @@ public class StoreTenantCatalogTests
         var ct = TestContext.Current.CancellationToken;
         var declared = new MultiTenancyOptions
         {
-            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }],
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }],
         };
         _opening.Failing.Add("acme");
         var catalog = Catalog(new OptionsTenantStore(Options.Create(declared)));
@@ -351,7 +351,7 @@ public class StoreTenantCatalogTests
         var ct = TestContext.Current.CancellationToken;
         var declared = new MultiTenancyOptions
         {
-            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }],
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }],
         };
         _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
         var hold = new TaskCompletionSource();
@@ -591,7 +591,7 @@ public class StoreTenantCatalogTests
         _store.Tenants.Clear();
         await catalog.RefreshAsync(ct);
         _store.Tenants.Add(new StoredTenant(
-            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com", Generation = "g2" }, "2"));
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), Generation = "g2" }, "2"));
         await catalog.RefreshAsync(ct);
         _store.Tenants.Clear();
         await catalog.RefreshAsync(ct);
@@ -683,7 +683,7 @@ public class StoreTenantCatalogTests
 
         _store.Tenants.Clear();
         _store.Tenants.Add(new StoredTenant(
-            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.org", Generation = "g2" }, "3"));
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.org"), Generation = "g2" }, "3"));
         await catalog.RefreshAsync(ct);
         await ReadAfterAPeriodAsync(catalog, ct);
 
@@ -750,7 +750,7 @@ public class StoreTenantCatalogTests
 
         _store.Tenants.Clear();
         _store.Tenants.Add(new StoredTenant(
-            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com", Generation = "g2" },
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), Generation = "g2" },
             Version));
         await catalog.RefreshAsync(ct);
         await ReadAfterAPeriodAsync(catalog, ct);
@@ -777,7 +777,7 @@ public class StoreTenantCatalogTests
         await ReadAfterAPeriodAsync(catalog, ct);
 
         Assert.True(catalog.Released(acme).IsCancellationRequested);
-        Assert.False(catalog.Released(new TenantDefinition { Id = "globex", Issuer = "https://globex.example.com" })
+        Assert.False(catalog.Released(new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") })
             .CanBeCanceled);
 
         // Released already through every reading of one pause, however often the store is read, and forgotten
@@ -959,7 +959,7 @@ public class StoreTenantCatalogTests
                     cancellationToken.ThrowIfCancellationRequested();
 
                 Closed.Add($"{tenant.Id}/{tenant.Generation}");
-                Issuers.Add(tenant.Issuer);
+                Issuers.Add(tenant.Issuer.OriginalString);
             }
 
             return failures;

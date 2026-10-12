@@ -57,7 +57,7 @@ public class ResponseJwtBuilder(
             {
                 IssuedAt = now,
                 ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
-                Issuer = issuerProvider.GetIssuer(),
+                Issuer = issuerProvider.GetIssuer().OriginalString,
                 Audiences = [clientInfo.ClientId],
             },
         };

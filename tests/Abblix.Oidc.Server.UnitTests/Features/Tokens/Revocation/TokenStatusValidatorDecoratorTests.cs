@@ -62,7 +62,7 @@ public class TokenStatusValidatorDecoratorTests
     {
         // The real converter, not a mock: what has to hold is that a pairwise pseudonym opens back into the
         // subject a host revoked, and a stub told to return the right answer proves nothing about that.
-        _issuers.Setup(p => p.GetIssuer()).Returns(Issuer);
+        _issuers.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
 
         _decorator = new TokenStatusValidatorDecorator(
             _registry.Object,

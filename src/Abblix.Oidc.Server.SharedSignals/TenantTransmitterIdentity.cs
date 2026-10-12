@@ -27,13 +27,13 @@ public sealed class TenantTransmitterIdentity(
     SharedSignalsTransmitterOptions options) : ITransmitterIdentity
 {
     /// <inheritdoc />
-    public string Issuer => Tenant.Issuer;
+    public string Issuer => Tenant.Issuer.OriginalString;
 
     /// <inheritdoc />
     public Uri? JwksUri => options.JwksUri is { } jwksUri ? Under(jwksUri.PathAndQuery) : null;
 
     /// <inheritdoc />
-    public Uri EndpointsBase => new(Tenant.Issuer, UriKind.Absolute);
+    public Uri EndpointsBase => Tenant.Issuer;
 
     /// <inheritdoc />
     public bool Serves => tenantAccessor.Current is not null;
@@ -42,7 +42,7 @@ public sealed class TenantTransmitterIdentity(
     /// <remarks>
     /// The tenant's issuer: its receivers are clients of that tenant, and their credentials come from it.
     /// </remarks>
-    public string? ReceiverIssuer => Tenant.Issuer;
+    public string? ReceiverIssuer => Tenant.Issuer.OriginalString;
 
     /// <inheritdoc />
     /// <remarks>
@@ -53,5 +53,5 @@ public sealed class TenantTransmitterIdentity(
 
     private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 
-    private Uri Under(string pathAndQuery) => new(Tenant.Issuer.TrimEnd('/') + pathAndQuery, UriKind.Absolute);
+    private Uri Under(string pathAndQuery) => new(Tenant.Issuer.OriginalString.TrimEnd('/') + pathAndQuery, UriKind.Absolute);
 }

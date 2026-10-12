@@ -62,6 +62,7 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         typeof(ClientIdsOptionsValidator).FullName!,
         typeof(ClientSecretsOptionsValidator).FullName!,
         typeof(ClockSkewCeilingValidator).FullName!,
+        typeof(IssuerOptionsValidator).FullName!,
         typeof(DefaultResourceIndicatorValidator).FullName!,
         typeof(OidcOptionsSecurityProfileValidator).FullName!,
         typeof(PairwiseClientsOptionsValidator).FullName!,

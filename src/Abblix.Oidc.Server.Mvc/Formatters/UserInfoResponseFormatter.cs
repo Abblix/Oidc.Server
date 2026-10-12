@@ -54,7 +54,7 @@ public class UserInfoResponseFormatter(
             onFailure: error => Task.FromResult(
                 error.Format(
                     StatusCodes.Status401Unauthorized,
-                    issuerProvider.GetIssuer(),
+                    issuerProvider.GetIssuer().OriginalString,
                     DPoPAlgorithms.Allowed,
                     advertiseBearer: true)));
     }

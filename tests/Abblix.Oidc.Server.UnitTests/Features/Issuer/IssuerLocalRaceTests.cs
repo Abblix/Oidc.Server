@@ -79,7 +79,7 @@ public class IssuerLocalRaceTests
     {
         public TenantContext? Current { get; } = new()
         {
-            Tenant = new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" },
+            Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") },
         };
     }
 }

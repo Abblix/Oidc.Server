@@ -62,7 +62,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                 Tenant = new TenantDefinition
                 {
                     Id = tenantId,
-                    Issuer = $"https://auth.example.com/tenants/{tenantId}",
+                    Issuer = new Uri($"https://auth.example.com/tenants/{tenantId}"),
                     Generation = generation,
                 },
             });
@@ -176,7 +176,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
         var declared = new MultiTenancyOptions
         {
-            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" }],
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") }],
         };
         var catalog = new StoreTenantCatalog(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<StoreTenantCatalog>.Instance,
@@ -222,7 +222,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
         var declared = new MultiTenancyOptions
         {
-            Tenants = [new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/acme" }],
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") }],
         };
         var catalog = new StoreTenantCatalog(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<StoreTenantCatalog>.Instance,
@@ -494,7 +494,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         var context = new DefaultHttpContext();
         context.Features.Set(new TenantContext
         {
-            Tenant = new TenantDefinition { Id = tenantId, Issuer = $"https://auth.example.com/tenants/{tenantId}" },
+            Tenant = new TenantDefinition { Id = tenantId, Issuer = new Uri($"https://auth.example.com/tenants/{tenantId}") },
         });
         return context;
     }

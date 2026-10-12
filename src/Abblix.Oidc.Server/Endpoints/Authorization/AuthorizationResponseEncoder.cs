@@ -73,7 +73,7 @@ public class AuthorizationResponseEncoder(
 	/// The <c>iss</c> value to place on the response, or null when the server does not advertise it.
 	/// </summary>
 	private string? Issuer => authorizationMetadata.AuthorizationResponseIssParameterSupported
-		? issuerProvider.GetIssuer()
+		? issuerProvider.GetIssuer().OriginalString
 		: null;
 
 	/// <summary>

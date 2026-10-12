@@ -147,7 +147,7 @@ public sealed class TenantManagerTests : IDisposable
 
     public void Dispose() => TestLicense.ResetChecker();
 
-    private static TenantDefinition Tenant(string id, string issuer) => new() { Id = id, Issuer = issuer };
+    private static TenantDefinition Tenant(string id, string issuer) => new() { Id = id, Issuer = new Uri(issuer) };
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -237,7 +237,7 @@ public sealed class TenantManagerTests : IDisposable
         var missing = await _manager.UpdateAsync(Tenant("globex", "https://globex.example.com"), "1", Ct);
 
         Assert.Equal(created.Tenant.Generation, changed.Tenant.Generation);
-        Assert.Equal("https://acme.example.com/changed", (await _catalog.FindByIdAsync("acme", Ct))?.Issuer);
+        Assert.Equal("https://acme.example.com/changed", (await _catalog.FindByIdAsync("acme", Ct))?.Issuer.OriginalString);
         Assert.Equal(TenantChangeRefusalReason.Conflict, Refused(stale));
         Assert.Equal(TenantChangeRefusalReason.NotFound, Refused(missing));
     }

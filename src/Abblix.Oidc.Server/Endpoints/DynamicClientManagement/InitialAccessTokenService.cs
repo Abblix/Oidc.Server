@@ -30,7 +30,7 @@ public class InitialAccessTokenService(
     public Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
     {
         var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
-        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings);
+        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings);
 
         var token = new JsonWebToken
         {

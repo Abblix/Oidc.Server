@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed class TenantIssuerProvider(ITenantAccessor tenantAccessor) : IIssuerProvider
 {
     /// <inheritdoc />
-    public string GetIssuer()
+    public Uri GetIssuer()
         => tenantAccessor.Current?.Tenant.Issuer
            ?? throw new InvalidOperationException(
                "The request was not resolved to a tenant, so it has no issuer. Reach the server at an address " +

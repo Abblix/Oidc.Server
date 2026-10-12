@@ -40,7 +40,7 @@ public sealed class TenantNonceTests : IDisposable
         var context = new DefaultHttpContext();
         context.Features.Set(new TenantContext
         {
-            Tenant = new TenantDefinition { Id = tenantId, Issuer = $"https://auth.example.com/tenants/{tenantId}" },
+            Tenant = new TenantDefinition { Id = tenantId, Issuer = new Uri($"https://auth.example.com/tenants/{tenantId}") },
         });
         _provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
     }

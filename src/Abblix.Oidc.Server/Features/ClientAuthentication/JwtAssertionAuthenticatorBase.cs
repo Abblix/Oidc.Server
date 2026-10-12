@@ -133,7 +133,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        var issuerIdentifier = issuerProvider.GetIssuer();
+        var issuerIdentifier = issuerProvider.GetIssuer().OriginalString;
         var audiences = token.Payload.Audiences.ToArray();
         if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
         {

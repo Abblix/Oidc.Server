@@ -35,7 +35,7 @@ public partial class MultiTenancyRegistrationTests
     private static TenantDefinition TenantSigning(string id) => new()
     {
         Id = id,
-        Issuer = "https://auth.example.com/tenants/" + id,
+        Issuer = new Uri("https://auth.example.com/tenants/" + id),
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
     };
 
@@ -117,7 +117,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = SigningEvents(null, UseTenantSigner, id => new TenantDefinition
         {
             Id = id,
-            Issuer = "https://auth.example.com/tenants/" + id,
+            Issuer = new Uri("https://auth.example.com/tenants/" + id),
             SigningKeys =
             [
                 JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),

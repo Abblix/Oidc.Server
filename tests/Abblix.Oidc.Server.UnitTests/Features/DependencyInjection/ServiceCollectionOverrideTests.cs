@@ -421,7 +421,7 @@ public class ServiceCollectionOverrideTests
         services.AddRevocation();
         services.AddOidcCore(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
+            options.Issuer = TestConstants.DefaultIssuer;
 
             // Resolving a limiter reads the options, and the options refuse a server that could issue no token
             // at all - so the composition needs a signing key before it will hand out anything.

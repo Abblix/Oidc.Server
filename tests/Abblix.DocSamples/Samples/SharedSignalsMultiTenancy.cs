@@ -49,7 +49,7 @@ internal static class SharedSignalsMultiTenancySample
             .AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
-                Issuer = "https://idp.example.com/acme",
+                Issuer = new Uri("https://idp.example.com/acme"),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
             }))
             .AddSharedSignals();

@@ -104,7 +104,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     {
         Id = id,
         Generation = generation,
-        Issuer = Host + path,
+        Issuer = new Uri(Host + path),
         Clients =
         [
             new ClientInfo(clientId)

@@ -40,7 +40,7 @@ public partial class MultiTenancyRegistrationTests
         var tooShort = new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[16]) },
         };
         var services = new ServiceCollection().AddServerStorage();
@@ -113,7 +113,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
         }));
         using var provider = services.BuildServiceProvider();
@@ -141,7 +141,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
         }));
@@ -181,7 +181,7 @@ public partial class MultiTenancyRegistrationTests
             services.AddServerStorage().AddMultiTenancy(tenants => tenants.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 SigningKeys =
                 [
                     JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
@@ -202,7 +202,7 @@ public partial class MultiTenancyRegistrationTests
         TenantDefinition TenantWithKeys(string id) => new()
         {
             Id = id,
-            Issuer = $"https://auth.example.com/tenants/{id}",
+            Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
         };
@@ -225,7 +225,7 @@ public partial class MultiTenancyRegistrationTests
             new JsonWebToken
             {
                 Header = { Algorithm = SigningAlgorithms.RS256 },
-                Payload = { Subject = "user123", Issuer = acme.Issuer },
+                Payload = { Subject = "user123", Issuer = acme.Issuer.OriginalString },
             },
             new ServiceJwtEncryption(
                 Encrypt: true,
@@ -270,7 +270,7 @@ public partial class MultiTenancyRegistrationTests
         TenantDefinition TenantWithKeys(string id) => new()
         {
             Id = id,
-            Issuer = $"https://auth.example.com/tenants/{id}",
+            Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { KeyId = $"{id}-sig" }],
             EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = $"{id}-enc" }],
         };
@@ -321,7 +321,7 @@ public partial class MultiTenancyRegistrationTests
     private static TenantDefinition NamingInTheCustodian(string id, string signingKeyName) => new()
     {
         Id = id,
-        Issuer = $"https://auth.example.com/tenants/{id}",
+        Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
         CustodianKeys = new CustodianHeldKeys { SigningKeyName = signingKeyName },
     };
 
@@ -425,7 +425,7 @@ public partial class MultiTenancyRegistrationTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 CustodianKeys = new CustodianHeldKeys { SigningKeyName = "acme-rsa", EncryptionKeyName = "acme-rsa" },
             },
         ]);
@@ -443,7 +443,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = KeysFromSettings(new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             CustodianKeys = new CustodianHeldKeys { SigningKeyName = "acme-sign" },
         });
@@ -468,7 +468,7 @@ public partial class MultiTenancyRegistrationTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
                 CustodianKeys = new CustodianHeldKeys { SigningKeyName = "acme-sign" },
             },
@@ -546,7 +546,7 @@ public partial class MultiTenancyRegistrationTests
         var globex = new TenantDefinition
         {
             Id = "globex",
-            Issuer = "https://auth.example.com/tenants/globex",
+            Issuer = new Uri("https://auth.example.com/tenants/globex"),
             Generation = "2",
         };
         using var provider = MintingKeys(Acme, globex);
@@ -602,9 +602,9 @@ public partial class MultiTenancyRegistrationTests
 
         var failures = await opening.OpenAsync(
             [
-                new TenantDefinition { Id = "acme~g1", Issuer = AcmeIssuer },
-                new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Generation = "g1" },
-                new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
+                new TenantDefinition { Id = "acme~g1", Issuer = new Uri(AcmeIssuer) },
+                new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Generation = "g1" },
+                new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") },
             ],
             TestContext.Current.CancellationToken);
 
@@ -620,7 +620,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = MintingKeys(new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
         });
 
@@ -642,7 +642,7 @@ public partial class MultiTenancyRegistrationTests
     [InlineData("acme~eu")] // the separator of a generation, which would let this id name another tenant's partition
     public void ATenantIdTheKeyRingCannotNameAPartitionBy_IsRefusedAtStartup(string id)
     {
-        using var provider = MintingKeys(new TenantDefinition { Id = id, Issuer = AcmeIssuer });
+        using var provider = MintingKeys(new TenantDefinition { Id = id, Issuer = new Uri(AcmeIssuer) });
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
@@ -664,7 +664,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
         }));
         using var provider = services.BuildServiceProvider();

@@ -31,7 +31,7 @@ public class EnabledEndpointsRegistrationValidatorTests
         var services = new ServiceCollection();
         services.AddOidcServices(o =>
         {
-            o.Issuer = TestConstants.DefaultIssuer.OriginalString;
+            o.Issuer = TestConstants.DefaultIssuer;
             o.EnabledEndpoints = OidcEndpoints.All;
         });
 
@@ -56,7 +56,7 @@ public class EnabledEndpointsRegistrationValidatorTests
             .AddDeviceAuthorization()
             .AddOidcServices(o =>
             {
-                o.Issuer = TestConstants.DefaultIssuer.OriginalString;
+                o.Issuer = TestConstants.DefaultIssuer;
                 // A signing key, because a host with none is refused at startup by
                 // SigningKeysPresenceValidator and this test is about endpoint registration.
                 o.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];

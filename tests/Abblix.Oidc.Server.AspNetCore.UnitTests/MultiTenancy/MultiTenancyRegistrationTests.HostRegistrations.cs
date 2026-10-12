@@ -41,7 +41,7 @@ public partial class MultiTenancyRegistrationTests
     private static TenantDefinition Tenant(string id, string generation, params string[] configured) => new()
     {
         Id = id,
-        Issuer = id == "acme" ? AcmeIssuer : GlobexIssuer,
+        Issuer = new Uri(id == "acme" ? AcmeIssuer : GlobexIssuer),
         Generation = generation,
         Clients = [..configured.Select(clientId => new ClientInfo(clientId) { ClientName = "configured" })],
     };

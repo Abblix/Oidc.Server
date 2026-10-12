@@ -52,7 +52,7 @@ public sealed class ConfigurationHandler(
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
 	public Task<ConfigurationResponse> HandleAsync() => Task.FromResult(new ConfigurationResponse
 	{
-		Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings),
+		Issuer = Licensed(issuerProvider.GetIssuer()),
 
 		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
@@ -124,4 +124,13 @@ public sealed class ConfigurationHandler(
 
 		AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
 	});
+
+	/// <summary>
+	/// The issuer, once the license has counted it as written.
+	/// </summary>
+	private Uri Licensed(Uri issuer)
+	{
+		LicenseChecker.CheckIssuer(issuer.OriginalString, issuerSettings);
+		return issuer;
+	}
 }

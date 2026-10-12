@@ -35,27 +35,27 @@ public class TenantResolutionMiddlewareTests
     {
         Tenants =
         [
-            new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" },
-            new TenantDefinition { Id = "muenchen", Issuer = "https://münchen.example.com/" },
-            new TenantDefinition { Id = "shared", Issuer = "https://auth.example.com" },
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") },
+            new TenantDefinition { Id = "muenchen", Issuer = new Uri("https://münchen.example.com/") },
+            new TenantDefinition { Id = "shared", Issuer = new Uri("https://auth.example.com") },
             new TenantDefinition
             {
                 Id = "globex",
-                Issuer = "https://auth.example.com/tenants/globex",
+                Issuer = new Uri("https://auth.example.com/tenants/globex"),
                 MtlsBaseUri = new Uri("https://mtls.example.com"),
             },
-            new TenantDefinition { Id = "globex-eu", Issuer = "https://auth.example.com/tenants/globex/eu/" },
-            new TenantDefinition { Id = "initech", Issuer = "https://idp.example.com/idp/initech" },
-            new TenantDefinition { Id = "societe", Issuer = "https://auth.example.com/tenants/société" },
-            new TenantDefinition { Id = "spaced", Issuer = "https://auth.example.com/tenants/a b" },
-            new TenantDefinition { Id = "slashed", Issuer = "https://auth.example.com/tenants/a%2Fb" },
-            new TenantDefinition { Id = "slashed-lower", Issuer = "https://auth.example.com/tenants/c%2fd" },
-            new TenantDefinition { Id = "mounted", Issuer = "https://idp.example.com/x%2fy/mounted" },
-            new TenantDefinition { Id = "proxied", Issuer = "https://proxy.example.com/idp" },
-            new TenantDefinition { Id = "proxy-root", Issuer = "https://proxy-root.example.com" },
-            new TenantDefinition { Id = "proxy-root-acme", Issuer = "https://proxy-root.example.com/tenants/acme" },
-            new TenantDefinition { Id = "loopback6", Issuer = "https://[::1]:8443/" },
-            new TenantDefinition { Id = "loopback4", Issuer = "https://127.0.0.1/tenants/local" },
+            new TenantDefinition { Id = "globex-eu", Issuer = new Uri("https://auth.example.com/tenants/globex/eu/") },
+            new TenantDefinition { Id = "initech", Issuer = new Uri("https://idp.example.com/idp/initech") },
+            new TenantDefinition { Id = "societe", Issuer = new Uri("https://auth.example.com/tenants/société") },
+            new TenantDefinition { Id = "spaced", Issuer = new Uri("https://auth.example.com/tenants/a b") },
+            new TenantDefinition { Id = "slashed", Issuer = new Uri("https://auth.example.com/tenants/a%2Fb") },
+            new TenantDefinition { Id = "slashed-lower", Issuer = new Uri("https://auth.example.com/tenants/c%2fd") },
+            new TenantDefinition { Id = "mounted", Issuer = new Uri("https://idp.example.com/x%2fy/mounted") },
+            new TenantDefinition { Id = "proxied", Issuer = new Uri("https://proxy.example.com/idp") },
+            new TenantDefinition { Id = "proxy-root", Issuer = new Uri("https://proxy-root.example.com") },
+            new TenantDefinition { Id = "proxy-root-acme", Issuer = new Uri("https://proxy-root.example.com/tenants/acme") },
+            new TenantDefinition { Id = "loopback6", Issuer = new Uri("https://[::1]:8443/") },
+            new TenantDefinition { Id = "loopback4", Issuer = new Uri("https://127.0.0.1/tenants/local") },
         ],
     };
 
@@ -236,7 +236,7 @@ public class TenantResolutionMiddlewareTests
     [InlineData("https://other.example.org/tenants", "/.well-known/openid-configuration/tenants")]
     public async Task ATenantFromACatalogWhoseIssuerIsNotTheRequestsAddress_IsNotTaken(string issuer, string path)
     {
-        var acme = new TenantDefinition { Id = "acme", Issuer = issuer };
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri(issuer) };
         var catalog = new Mock<ITenantCatalog>();
         catalog
             .Setup(c => c.FindByAddressAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))

@@ -103,7 +103,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -165,7 +165,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -202,7 +202,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -233,7 +233,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -267,7 +267,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -300,7 +300,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -335,7 +335,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -370,7 +370,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -433,7 +433,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         var result1 = await _processor.ProcessAsync(validRequest1);
@@ -468,7 +468,7 @@ public class UserInfoRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(issuer);
+            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);

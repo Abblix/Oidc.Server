@@ -232,13 +232,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         TestLicense.InstallWithIssuerLimit(issuerLimit);
         var store = new WritableTenantStore();
-        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" }, ct);
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
         var catalog = Catalog(store);
         var manager = new TenantManager(
             NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], catalog, store);
 
         var result = await manager.CreateAsync(
-            new TenantDefinition { Id = "globex", Issuer = "https://globex.example.com" }, ct);
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, ct);
 
         Assert.Equal(created, result.TryGetSuccess(out _));
         Assert.Equal(created ? 2 : 1, store.Tenants.Count);
@@ -414,7 +414,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var listed = new List<StoredTenant>
         {
-            new(new TenantDefinition { Id = "acme", Issuer = TestLicense.Issuer, Generation = "g1" }, "1"),
+            new(new TenantDefinition { Id = "acme", Issuer = new Uri(TestLicense.Issuer), Generation = "g1" }, "1"),
         };
         var store = new Mock<ITenantStore>();
         store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed.ToArray());
@@ -596,7 +596,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         new TenantDefinition
         {
             Id = "acme",
-            Issuer = TestLicense.Issuer,
+            Issuer = new Uri(TestLicense.Issuer),
             Generation = "g1",
             Clients = clientIds.Select(clientId => new ClientInfo(clientId)).ToArray(),
         },
@@ -721,7 +721,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     public void A_tenant_a_catalog_of_the_hosts_own_resolved_is_counted_by_its_issuer()
     {
         ArrangeLicenceThatCountsIssuers();
-        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
+        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
         var settings = new TenantIssuerSettings(
             Mock.Of<ITenantAccessor>(accessor => accessor.Current == served),
             Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),

@@ -105,7 +105,7 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
     private static TenantDefinition Tenant(string id, string path) => new()
     {
         Id = id,
-        Issuer = Host + path,
+        Issuer = new Uri(Host + path),
         Clients =
         [
             new ClientInfo(ClientId)

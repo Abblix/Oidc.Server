@@ -41,7 +41,7 @@ public class TenantRequestAddressTests
         {
             context.Features.Set(new TenantContext
             {
-                Tenant = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" },
+                Tenant = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") },
             });
         }
 

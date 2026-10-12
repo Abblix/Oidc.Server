@@ -43,7 +43,7 @@ public class ConfigurationResponseFormatter(
 
 		var mvcResponse = new ModelResponse
 		{
-			Issuer = response.Issuer,
+			Issuer = response.Issuer.OriginalString,
 
 			JwksUri = Resolve<DiscoveryController>(nameof(DiscoveryController.KeysAsync), OidcEndpoints.Keys, response.Issuer),
 
@@ -169,7 +169,7 @@ public class ConfigurationResponseFormatter(
 	/// <param name="enablingFlag">The endpoint flag that must be enabled for the URL to be resolved.</param>
 	/// <param name="issuer">The issuer the document describes.</param>
 	/// <returns>The absolute URI to the endpoint if discovery and endpoint are enabled; otherwise, null.</returns>
-	private Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag, string issuer) where T : ControllerBase
+	private Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag, Uri issuer) where T : ControllerBase
 	{
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
 		       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
@@ -187,11 +187,11 @@ public class ConfigurationResponseFormatter(
 	/// is answered so. A server without tenants whose mutual-TLS host differs from its ordinary one only by port
 	/// therefore names the ordinary endpoints on the issuer's host on either.
 	/// </remarks>
-	private Uri? OnIssuersHost(Uri? endpoint, string issuer)
+	private Uri? OnIssuersHost(Uri? endpoint, Uri issuer)
 		=> endpoint is not null &&
 		   issuerSettings.MtlsBaseUri is { } mtlsBaseUri &&
 		   SameHost(endpoint, mtlsBaseUri)
-			? Rebase(endpoint, new Uri(new Uri(issuer).GetLeftPart(UriPartial.Authority)))
+			? Rebase(endpoint, new Uri(issuer.GetLeftPart(UriPartial.Authority)))
 			: endpoint;
 
 #pragma warning disable ABXMT001

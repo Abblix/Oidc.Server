@@ -66,7 +66,7 @@ public class RegisterClientHandlerIntegrationTests
 
         services.AddOidcServices(opts =>
         {
-            opts.Issuer = TestConstants.DefaultIssuer.OriginalString;
+            opts.Issuer = TestConstants.DefaultIssuer;
 
             // Generate an in-memory RS256 signing key for the registration access token the
             // success-path test asserts on. Production hosts feed real certificates in this

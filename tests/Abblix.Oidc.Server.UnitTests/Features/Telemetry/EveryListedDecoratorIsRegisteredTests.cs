@@ -96,7 +96,7 @@ public sealed class EveryListedDecoratorIsRegisteredTests
         services.AddCheckSession();
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
+            options.Issuer = TestConstants.DefaultIssuer;
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
         });
 

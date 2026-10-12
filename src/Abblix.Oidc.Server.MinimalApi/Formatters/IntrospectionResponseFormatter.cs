@@ -40,7 +40,7 @@ public class IntrospectionResponseFormatter(
         => response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer())));
+                error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer().OriginalString)));
 
     private async Task<IResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
@@ -67,7 +67,7 @@ public class IntrospectionResponseFormatter(
             Payload =
             {
                 IssuedAt = now,
-                Issuer = issuerProvider.GetIssuer(),
+                Issuer = issuerProvider.GetIssuer().OriginalString,
                 Audiences = [clientInfo.ClientId],
 
                 // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The

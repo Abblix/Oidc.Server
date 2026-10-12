@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -14,6 +15,10 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// Refuses a tenant with no id or no address it can be reached at, and tenants sharing an id or an address.
 /// </summary>
+/// <remarks>
+/// A tenant with no issuer is refused here; whether a given issuer can be an issuer is judged by the check of the
+/// server's own issuer, which <see cref="TenantSettingsCheck"/> applies to every tenant's settings.
+/// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantDefinitionsCheck : ITenantsCheck
 {
@@ -25,15 +30,13 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         failures.AddRange(
             from tenant in tenants
             where string.IsNullOrEmpty(tenant.Id)
-            select TenantRefusal.Of(tenant, $"A tenant with the issuer '{tenant.Issuer}' has no id."));
+            select TenantRefusal.Of(tenant, $"A tenant with the issuer '{tenant.Issuer?.OriginalString}' has no id."));
 
+        // Required by the compiler only: configuration without the key, or a store holding none, gives no issuer
         failures.AddRange(
             from tenant in tenants
-            where !IsIssuer(tenant.Issuer)
-            select TenantRefusal.Of(
-                tenant,
-                $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' must be an http or https URL with no " +
-                "query or fragment."));
+            where tenant.Issuer is null
+            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}' has no issuer."));
 
         // A Host header is ASCII, so a host with no ASCII form could never be requested.
         failures.AddRange(
@@ -41,7 +44,7 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
             where IsIssuer(tenant.Issuer) && !TenantAddress.Of(tenant.Issuer).Host.All(char.IsAscii)
             select TenantRefusal.Of(
                 tenant,
-                $"The issuer '{tenant.Issuer}' of tenant '{tenant.Id}' names a host with no ASCII form, " +
+                $"The issuer '{tenant.Issuer.OriginalString}' of tenant '{tenant.Id}' names a host with no ASCII form, " +
                 "which no request can carry."));
 
         // It is part of the names the tenant's data and keys are kept under, which every store accepts in this form
@@ -111,17 +114,11 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
            HasNoQueryOrFragment(value);
 
     /// <remarks>
-    /// OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 make the issuer an https URL; http is let
-    /// through for a server run locally. The scheme is checked by name because on Unix a bare path parses as an
-    /// absolute file address, whose empty host a request without a Host header would match.
+    /// The checks of addresses read the issuer's, so they skip a tenant whose issuer has none to read; that tenant
+    /// is refused for its issuer elsewhere. An http issuer has an address whether or not it is let through.
     /// </remarks>
-    private static bool IsIssuer(string? value)
-        => Uri.TryCreate(value, UriKind.Absolute, out var issuer) &&
-           IsWebScheme(issuer) &&
-           HasNoQueryOrFragment(issuer);
-
-    private static bool IsWebScheme(Uri value)
-        => value.Scheme == Uri.UriSchemeHttps || value.Scheme == Uri.UriSchemeHttp;
+    private static bool IsIssuer(Uri? issuer)
+        => issuer is not null && IssuerIdentifier.Refusal(issuer, allowHttp: true) is null;
 
     /// <remarks>
     /// Asked only of an absolute address, since a relative one throws on either read.

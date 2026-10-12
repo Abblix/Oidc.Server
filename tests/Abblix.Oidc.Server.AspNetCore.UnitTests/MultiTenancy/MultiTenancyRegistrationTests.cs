@@ -50,7 +50,7 @@ public partial class MultiTenancyRegistrationTests
 {
     private const string AcmeIssuer = "https://auth.example.com/tenants/acme";
 
-    private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = AcmeIssuer };
+    private static readonly TenantDefinition Acme = new() { Id = "acme", Issuer = new Uri(AcmeIssuer) };
 
     private static ServiceProvider BuildProvider()
     {
@@ -79,7 +79,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = BuildProvider();
         EnterTenant(provider, Acme);
 
-        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer());
+        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer().OriginalString);
     }
 
     /// <summary>
@@ -197,7 +197,7 @@ public partial class MultiTenancyRegistrationTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 DefaultResourceIndicator = new Uri("https://api.acme.example"),
             },
             nameof(OidcOptions.DefaultResourceIndicator)
@@ -206,7 +206,7 @@ public partial class MultiTenancyRegistrationTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
                 Clients = [new ClientInfo("public") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None }],
             },
@@ -216,7 +216,7 @@ public partial class MultiTenancyRegistrationTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 Clients = [new ClientInfo("App"), new ClientInfo("app")],
             },
             "2 clients are configured under the id 'App' and 'app'"
@@ -225,12 +225,35 @@ public partial class MultiTenancyRegistrationTests
             new TenantDefinition
             {
                 Id = "acme",
-                Issuer = AcmeIssuer,
+                Issuer = new Uri(AcmeIssuer),
                 Resources = [new ResourceDefinition(new Uri("api", UriKind.Relative))],
             },
             "The resource 'api' must be named by an absolute URI"
         },
     };
+
+    /// <summary>
+    /// A tenant's issuer is judged by the check the server registers for its own, so an http one is refused unless
+    /// the server lets http through, and the refusal names the tenant.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void ATenantsHttpIssuer_IsRefused_UnlessTheServerAllowsHttp(bool allowHttp, bool refused)
+    {
+        var tenant = new TenantDefinition { Id = "local", Issuer = new Uri("http://localhost:5000/tenants/local") };
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => options.AllowHttpIssuer = allowHttp);
+        services.AddIssuer();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        using var provider = services.BuildServiceProvider();
+
+        var read = Record.Exception(() => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+
+        Assert.Equal(refused, read is OptionsValidationException);
+        if (refused)
+            Assert.Contains($"Tenant '{tenant.Id}': ", read!.Message, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// What a tenant declares passes the checks the server's own settings pass at startup, so a tenant's mistake is
@@ -265,11 +288,11 @@ public partial class MultiTenancyRegistrationTests
     public void InvalidServerSettings_LeaveTheTenantListsOwnRefusalsVisible()
     {
         var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = "https://auth.example.com");
+        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = new Uri("https://auth.example.com"));
         services.AddServerStorage().AddMultiTenancy(options =>
         {
             options.Tenants.Add(Acme);
-            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = "https://auth.example.com/tenants/other" });
+            options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/other") });
         });
         using var provider = services.BuildServiceProvider();
 
@@ -435,7 +458,7 @@ public partial class MultiTenancyRegistrationTests
     public void AConfiguredIssuer_IsRefusedAtStartup()
     {
         var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = "https://auth.example.com");
+        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = new Uri("https://auth.example.com"));
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
@@ -464,7 +487,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public void UnderATenant_TheClientsAreTheOnesItDeclares()
     {
-        var acme = new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = [new ClientInfo("client")] };
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = [new ClientInfo("client")] };
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
         services.AddIssuer();
@@ -480,7 +503,7 @@ public partial class MultiTenancyRegistrationTests
     {
         using var provider = BuildProvider();
         var local = provider.GetRequiredService<IIssuerLocal<object>>();
-        var globex = new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex" };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
 
         EnterTenant(provider, Acme);
         var acmeValue = local.GetOrCreate(null, () => new object());
@@ -504,7 +527,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = BuildProvider();
         var local = provider.GetRequiredService<IIssuerLocal<object>>();
         TenantDefinition Acme(string generation)
-            => new() { Id = "acme", Issuer = AcmeIssuer, Generation = generation };
+            => new() { Id = "acme", Issuer = new Uri(AcmeIssuer), Generation = generation };
 
         EnterTenant(provider, Acme("1"));
         var former = local.GetOrCreate(null, () => new object());
@@ -523,7 +546,7 @@ public partial class MultiTenancyRegistrationTests
     {
         using var provider = MintingKeys(
             Acme,
-            new TenantDefinition { Id = "globex", Issuer = "https://auth.example.com/tenants/globex", Generation = "2" });
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex"), Generation = "2" });
 
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
 
@@ -539,7 +562,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = KeysFromSettings(new TenantDefinition
         {
             Id = "acme",
-            Issuer = AcmeIssuer,
+            Issuer = new Uri(AcmeIssuer),
             Generation = "a.b",
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
         });
@@ -671,7 +694,7 @@ public partial class MultiTenancyRegistrationTests
 
         Assert.False(TenantRequirement.IsUnmet(context));
         Assert.Same(Acme, TenantRequirement.CurrentTenant(context)?.Tenant);
-        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer());
+        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer().OriginalString);
     }
 
     private sealed class FixedTenantAccessor(TenantDefinition tenant) : ITenantAccessor

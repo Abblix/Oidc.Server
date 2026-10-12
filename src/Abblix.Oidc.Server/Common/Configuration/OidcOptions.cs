@@ -32,7 +32,22 @@ public record OidcOptions
 	/// It is recommended to use a URL controlled by the entity operating the OIDC server, and it should be
 	/// consistent across different environments to maintain trust with client applications.
 	/// </summary>
-	public string? Issuer { get; set; }
+	/// <remarks>
+	/// An https URL with no query or fragment (OpenID Connect Core 1.0 section 1.2), and no user name or password,
+	/// written well formed and with no whitespace, refused at startup otherwise. A
+	/// relying party compares it with the <c>iss</c> of every token exactly (section 3.1.3.7), so it is written as
+	/// configured, through <see cref="Uri.OriginalString"/>: a bare host stays without a trailing slash, and the
+	/// case and port stay as given. With no issuer configured, the server takes it from each request; an empty value
+	/// bound from configuration reads as none, so a placeholder left empty makes the issuer follow the request.
+	/// </remarks>
+	public Uri? Issuer { get; set; }
+
+	/// <summary>
+	/// Lets an http issuer through, for a server run locally for development. Off by default, so only an https issuer
+	/// is accepted, as OpenID Connect Core 1.0 section 1.2 requires. Applies to the server's issuer and to every
+	/// tenant's.
+	/// </summary>
+	public bool AllowHttpIssuer { get; set; }
 
 	/// <summary>
 	/// A collection of client configurations supported by this OIDC server. Each <see cref="ClientInfo"/> object

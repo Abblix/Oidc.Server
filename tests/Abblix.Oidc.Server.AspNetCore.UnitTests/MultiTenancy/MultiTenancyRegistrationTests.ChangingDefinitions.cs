@@ -34,7 +34,7 @@ public partial class MultiTenancyRegistrationTests
     public async Task TenantsChangedDefinition_ServesClientsItNowDeclares()
     {
         TenantDefinition Acme(string clientId)
-            => new() { Id = "acme", Issuer = AcmeIssuer, Clients = [new ClientInfo(clientId)] };
+            => new() { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = [new ClientInfo(clientId)] };
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -160,12 +160,12 @@ public partial class MultiTenancyRegistrationTests
     }
 
     // Declares no clients at all, so it hands out the empty list every such definition shares
-    private static TenantDefinition AcmeWithoutClients() => new() { Id = "acme", Issuer = AcmeIssuer };
+    private static TenantDefinition AcmeWithoutClients() => new() { Id = "acme", Issuer = new Uri(AcmeIssuer) };
 
     private static TenantDefinition AcmeWith(params string[] clientIds) => new()
     {
         Id = "acme",
-        Issuer = AcmeIssuer,
+        Issuer = new Uri(AcmeIssuer),
         Clients =
         [
             ..clientIds.Select(id => new ClientInfo(id) { TokenEndpointAuthMethod = ClientAuthenticationMethods.None }),
@@ -316,7 +316,7 @@ public partial class MultiTenancyRegistrationTests
         var held = new HeldClients(
             new ClientInfo("taken") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
         var current = await Served(
-            provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
+            provider, store, new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = held }, "2");
         held.Armed = true;
         var building = Task.Run(async () =>
         {
@@ -399,7 +399,7 @@ public partial class MultiTenancyRegistrationTests
         var held = new HeldClients(
             new ClientInfo("freed") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
         var former = await Served(
-            provider, store, new TenantDefinition { Id = "acme", Issuer = AcmeIssuer, Clients = held }, "2");
+            provider, store, new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = held }, "2");
         held.Armed = true;
         var building = Task.Run(async () =>
         {
@@ -572,7 +572,7 @@ public partial class MultiTenancyRegistrationTests
             ?
             [
                 new StoredTenant(last, "2"),
-                new StoredTenant(new TenantDefinition { Id = "globex", Issuer = AcmeIssuer }, "1"),
+                new StoredTenant(new TenantDefinition { Id = "globex", Issuer = new Uri(AcmeIssuer) }, "1"),
             ]
             : [];
         await catalog.RefreshAsync(CancellationToken.None);
@@ -600,7 +600,7 @@ public partial class MultiTenancyRegistrationTests
         store.Tenants =
         [
             new StoredTenant(held, "1"),
-            new StoredTenant(new TenantDefinition { Id = "globex", Issuer = AcmeIssuer }, "1"),
+            new StoredTenant(new TenantDefinition { Id = "globex", Issuer = new Uri(AcmeIssuer) }, "1"),
         ];
         await catalog.RefreshAsync(CancellationToken.None);
         Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
@@ -634,7 +634,7 @@ public partial class MultiTenancyRegistrationTests
         store.Tenants =
         [
             new StoredTenant(former, "3"),
-            new StoredTenant(new TenantDefinition { Id = "globex", Issuer = AcmeIssuer }, "1"),
+            new StoredTenant(new TenantDefinition { Id = "globex", Issuer = new Uri(AcmeIssuer) }, "1"),
         ];
         await catalog.RefreshAsync(CancellationToken.None);
         Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));

@@ -158,13 +158,13 @@ public class PairwiseClientsOptionsValidatorTests
                 new TenantDefinition
                 {
                     Id = "acme",
-                    Issuer = "https://auth.example.com/tenants/acme",
+                    Issuer = new Uri("https://auth.example.com/tenants/acme"),
                     Clients = [PairwiseClient("pairwise")],
                 },
                 new TenantDefinition
                 {
                     Id = "globex",
-                    Issuer = "https://auth.example.com/tenants/globex",
+                    Issuer = new Uri("https://auth.example.com/tenants/globex"),
                     Clients = [PairwiseClient("pairwise")],
                     PairwiseSubject = Key,
                 },

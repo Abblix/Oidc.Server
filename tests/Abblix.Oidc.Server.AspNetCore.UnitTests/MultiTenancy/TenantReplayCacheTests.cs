@@ -46,7 +46,7 @@ public sealed class TenantReplayCacheTests : IDisposable
         {
             context.Features.Set(new TenantContext
             {
-                Tenant = new TenantDefinition { Id = tenantId, Issuer = $"https://auth.example.com/tenants/{tenantId}" },
+                Tenant = new TenantDefinition { Id = tenantId, Issuer = new Uri($"https://auth.example.com/tenants/{tenantId}") },
             });
         }
 

@@ -81,7 +81,7 @@ public class GrantRevocationTests
     {
         _registry = new ExpiringRegistry(_clock);
         var issuer = new Mock<IIssuerProvider>();
-        issuer.Setup(provider => provider.GetIssuer()).Returns(TestConstants.DefaultIssuer.OriginalString);
+        issuer.Setup(provider => provider.GetIssuer()).Returns(TestConstants.DefaultIssuer);
         var ids = new Mock<ITokenIdGenerator>();
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => "jti_" + ++_next);
         var formatter = new Mock<IAuthServiceJwtFormatter>();

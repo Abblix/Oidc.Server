@@ -154,7 +154,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         // Act
         var result = await _processor.ProcessAsync(request);
@@ -190,7 +190,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _tokenRevoker
             .Setup(r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()))
@@ -227,7 +227,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         // Act
         var result = await _processor.ProcessAsync(request);
@@ -343,7 +343,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -389,7 +389,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -438,7 +438,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -482,7 +482,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -531,7 +531,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -574,7 +574,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -642,7 +642,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))
@@ -685,7 +685,7 @@ public class EndSessionRequestProcessorTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
+            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync("client_1"))

@@ -34,7 +34,7 @@ public partial class SessionLogoutNotifier(
     /// <inheritdoc />
     public async Task<LogoutContext> NotifyClientsAsync(string sessionId, string subject)
     {
-        var context = new LogoutContext(sessionId, subject, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer(), issuerSettings));
+        var context = new LogoutContext(sessionId, subject, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings));
 
         // Every notification is awaited, so the back-channel POST is actually sent before the request ends.
         var tasks = new List<Task>();

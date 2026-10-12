@@ -101,7 +101,7 @@ public class DeviceAuthorizationRequestProcessor(
     /// </exception>
     private Uri VerificationUri(Uri configured)
     {
-        var issuer = new Uri(issuerProvider.GetIssuer().AppendTrailingSlash());
+        var issuer = new Uri(issuerProvider.GetIssuer().OriginalString.AppendTrailingSlash());
         var resolved = new Uri(issuer, configured);
 
         if (configured.IsAbsoluteUri)

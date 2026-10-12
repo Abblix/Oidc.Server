@@ -28,6 +28,6 @@ public class RequestBasedIssuerProviderTests
         var requestInfo = new Mock<IRequestInfoProvider>();
         requestInfo.Setup(r => r.ApplicationUri).Returns(new Uri(address));
 
-        Assert.Equal(address, new RequestBasedIssuerProvider(requestInfo.Object).GetIssuer());
+        Assert.Equal(address, new RequestBasedIssuerProvider(requestInfo.Object).GetIssuer().OriginalString);
     }
 }

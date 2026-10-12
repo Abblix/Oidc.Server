@@ -41,7 +41,7 @@ public class IntrospectionResponseFormatterTests
     private async Task<ActionResult> FormatAsync(IntrospectionSuccess success, string? acceptHeader)
     {
         var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
 
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());

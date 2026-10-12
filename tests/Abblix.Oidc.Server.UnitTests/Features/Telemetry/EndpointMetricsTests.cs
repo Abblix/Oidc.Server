@@ -158,7 +158,7 @@ public sealed class EndpointMetricsTests : IDisposable
     [Fact]
     public async Task UnderMultiTenancy_TheRequestNamesTheTenant()
     {
-        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
+        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
 
         await Token(Issued, Mock.Of<ITenantAccessor>(accessor => accessor.Current == served));
 
@@ -270,7 +270,7 @@ public sealed class EndpointMetricsTests : IDisposable
     [Fact]
     public async Task UnderMultiTenancy_ATokenNamesTheTenant()
     {
-        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = "https://acme.example.com" } };
+        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
         var measured = new MeasuredTokenRequestProcessor(
             Issuing().Object, _instruments, Grants, Mock.Of<ITenantAccessor>(accessor => accessor.Current == served));
 

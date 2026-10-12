@@ -41,7 +41,7 @@ public class InitialAccessTokenServiceTests
 
         _issuerProvider
             .Setup(p => p.GetIssuer())
-            .Returns(TestConstants.DefaultIssuer.OriginalString);
+            .Returns(new Uri(TestConstants.DefaultIssuer.OriginalString));
 
         _service = new InitialAccessTokenService(
             _jwtFormatter.Object,

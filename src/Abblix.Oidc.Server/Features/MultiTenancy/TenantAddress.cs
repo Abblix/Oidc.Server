@@ -44,11 +44,8 @@ public sealed record TenantAddress(string Host, string Path)
     /// server decodes a request path - every escape except an encoded slash, which would otherwise split a
     /// segment - since that is the form each is compared with.
     /// </remarks>
-    public static TenantAddress Of(string issuer)
-    {
-        var uri = new Uri(issuer, UriKind.Absolute);
-        return new TenantAddress(TenantHost.Normalize(uri.Host), DecodePath(uri.AbsolutePath).TrimEnd('/'));
-    }
+    public static TenantAddress Of(Uri issuer)
+        => new(TenantHost.Normalize(issuer.Host), DecodePath(issuer.AbsolutePath).TrimEnd('/'));
 
     /// <summary>
     /// <paramref name="path"/> with every encoded slash in one case, the form both an issuer's path and a request

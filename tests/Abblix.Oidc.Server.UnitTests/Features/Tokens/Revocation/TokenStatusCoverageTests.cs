@@ -108,7 +108,7 @@ public class TokenStatusCoverageTests
             .ReturnsAsync((DateTimeOffset?)null);
 
         var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer.OriginalString);
+        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer);
 
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients

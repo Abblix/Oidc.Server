@@ -147,7 +147,7 @@ public sealed class SharedSignalsReceiverTenantTests
     private static TenantDefinition TenantAt(string id, string path) => new()
     {
         Id = id,
-        Issuer = Host + path,
+        Issuer = new Uri(Host + path),
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
     };
 

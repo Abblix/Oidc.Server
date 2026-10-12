@@ -177,7 +177,7 @@ public partial class ClientJwtValidator(
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
         var requestUri = requestInfoProvider.RequestUri.OriginalString;
-        var issuer = issuerProvider.GetIssuer();
+        var issuer = issuerProvider.GetIssuer().OriginalString;
 
         var materializedAudiences = audiences.Materialize();
         var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);

@@ -38,6 +38,7 @@ public static class IssuerServiceCollectionExtensions
                 : sp.CreateService<RequestBasedIssuerProvider>();
         });
         services.TryAddSingleton<IIssuerSettings, OptionsIssuerSettings>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, IssuerOptionsValidator>());
 
         // Transient, so each service holding values gets its own holder
         services.TryAddTransient(typeof(IIssuerLocal<>), typeof(SingleIssuerLocal<>));
