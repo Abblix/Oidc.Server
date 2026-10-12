@@ -45,6 +45,8 @@ public class IssuerOptionsValidatorTests
     [InlineData("https://auth.example.com/a b")]
     [InlineData("https://auth.example.com/a\tb")]
     [InlineData("https://user:pw@auth.example.com")]
+    [InlineData("https://auth.example.com/a|b")]
+    [InlineData("https://auth.example.com/a%zz")]
     public void AnIssuerThatIsNoHttpsUrlWithoutQueryOrFragment_IsRefused(string issuer)
         => Assert.True(Refused(issuer));
 

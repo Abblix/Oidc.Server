@@ -67,7 +67,8 @@ public sealed class TenantDefinition
     /// <c>https://auth.example.com/tenants/acme</c> a path on a shared one. Scheme and port are not compared,
     /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
     /// <para>
-    /// The issuer is judged as the server's own is: an https URL with no query or fragment, http only when
+    /// The issuer is judged as the server's own is: an https URL with no query, fragment, user name or password,
+    /// written with no whitespace and well formed, http only when
     /// <see cref="Common.Configuration.OidcOptions.AllowHttpIssuer"/> lets it through. It is written into tokens and
     /// discovery as configured, through <see cref="Uri.OriginalString"/>.
     /// </para>

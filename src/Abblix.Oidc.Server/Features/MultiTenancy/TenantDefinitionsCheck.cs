@@ -16,8 +16,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// Refuses a tenant with no id or no address it can be reached at, and tenants sharing an id or an address.
 /// </summary>
 /// <remarks>
-/// Whether a tenant's issuer can be an issuer at all is judged by the check of the server's own issuer, which
-/// <see cref="TenantSettingsCheck"/> applies to every tenant's settings.
+/// A tenant with no issuer is refused here; whether a given issuer can be an issuer is judged by the check of the
+/// server's own issuer, which <see cref="TenantSettingsCheck"/> applies to every tenant's settings.
 /// </remarks>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantDefinitionsCheck : ITenantsCheck

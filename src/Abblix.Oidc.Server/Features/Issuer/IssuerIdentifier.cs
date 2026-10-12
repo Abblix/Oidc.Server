@@ -32,8 +32,8 @@ internal static class IssuerIdentifier
         if (!issuer.IsAbsoluteUri)
             return "must be an absolute URL";
 
-        if (TryRefuseScheme(issuer, allowHttp, out var scheme))
-            return scheme;
+        if (TryRefuseScheme(issuer, allowHttp, out var refusal))
+            return refusal;
 
         if (!string.IsNullOrEmpty(issuer.Query) || !string.IsNullOrEmpty(issuer.Fragment))
             return "must have no query or fragment";

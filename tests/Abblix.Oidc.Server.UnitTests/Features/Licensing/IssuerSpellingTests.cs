@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -82,7 +83,8 @@ public sealed class IssuerSpellingTests : IDisposable
         Assert.Equal(configured, issued.Payload.Issuer);
 
         // The license already counts the issuer as configured, so another spelling of it is a second issuer
-        Assert.Throws<LicenseViolationException>(
+        var refusal = Assert.Throws<LicenseViolationException>(
             () => LicenseChecker.CheckIssuer(new Uri(configured).ToString(), SingleIssuer.SettingsOf(options)));
+        Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 }
