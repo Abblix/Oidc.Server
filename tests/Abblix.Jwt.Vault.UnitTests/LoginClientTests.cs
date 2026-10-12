@@ -136,7 +136,8 @@ public sealed class LoginClientTests : IDisposable
 
         var lease = await client.LoginAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(TimeSpan.Zero, lease!.LeaseDuration);
+        Assert.NotNull(lease);
+        Assert.Equal(TimeSpan.Zero, lease.LeaseDuration);
     }
 
     [Fact]
