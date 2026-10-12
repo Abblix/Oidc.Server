@@ -56,7 +56,7 @@ public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
 
         if (type == typeof(CultureInfo))
         {
-            result = new CultureInfo(stringValue);
+            result = Culture(stringValue);
             return true;
         }
 
@@ -83,6 +83,17 @@ public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
     /// <returns>An enumerable of <see cref="CultureInfo"/>.</returns>
     private static IEnumerable<CultureInfo> GetCultureInfos(StringValues values) =>
         from value in values.OfType<string>()
-        from culture in value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        select new CultureInfo(culture);
+        from culture in LanguageTag.TryParseList(value, out var cultures)
+            ? cultures
+            : throw new FormatException($"'{value}' has a tag that names no language")
+        select culture;
+
+    /// <summary>
+    /// The culture <paramref name="tag"/> names; a tag naming no language fails the binding, which the base binder
+    /// records against the parameter.
+    /// </summary>
+    private static CultureInfo Culture(string tag)
+        => LanguageTag.TryParse(tag, out var culture)
+            ? culture
+            : throw new FormatException($"'{tag}' names no language");
 }

@@ -180,21 +180,11 @@ internal static class FormValues
     /// <summary>A single space-separated locale list (e.g. <c>ui_locales</c>) as cultures, or null.</summary>
     public static CultureInfo[]? Cultures(StringValues values)
     {
-        var value = Value(values);
-        if (string.IsNullOrEmpty(value))
+        var value = Sent(values);
+        if (value is null)
             return null;
 
-        // An invalid BCP-47 tag throws; shape it as a 400 instead of a 500 escaping BindAsync.
-        try
-        {
-            return value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(culture => new CultureInfo(culture))
-                .ToArray();
-        }
-        catch (CultureNotFoundException)
-        {
-            throw MalformedValue();
-        }
+        return LanguageTag.TryParseList(value, out var cultures) ? cultures : throw MalformedValue();
     }
 
     /// <summary>Deserializes a single field's JSON value (e.g. <c>claims</c>, <c>authorization_details</c>), or null.</summary>

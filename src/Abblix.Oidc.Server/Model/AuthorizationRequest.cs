@@ -153,7 +153,7 @@ public record AuthorizationRequest
 	/// that the client wishes the authorization UI to be rendered in.
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
-	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[JsonConverter(typeof(CultureListConverter))]
 	[CultureList]
     public CultureInfo[]? UiLocales { get; init; }
 
@@ -162,7 +162,7 @@ public record AuthorizationRequest
 	/// the client prefers when claims are returned in localized form.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClaimsLocales)]
-	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[JsonConverter(typeof(CultureListConverter))]
 	[CultureList]
     public CultureInfo[]? ClaimsLocales { get; init; }
 
