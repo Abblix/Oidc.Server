@@ -207,7 +207,7 @@ public record TokenRequest
 	/// one of <see cref="TokenExchangeTokenTypes"/>. Required for <see cref="GrantTypes.TokenExchange"/>.
 	/// </summary>
 	[JsonPropertyName(Parameters.SubjectTokenType)]
-	public string? SubjectTokenType { get; set; }
+	public Uri? SubjectTokenType { get; set; }
 
 	/// <summary>
 	/// RFC 8693 section 2.1 <c>actor_token</c> -- security token representing the acting party in delegation
@@ -221,7 +221,7 @@ public record TokenRequest
 	/// one of <see cref="TokenExchangeTokenTypes"/>. Required when <see cref="ActorToken"/> is present.
 	/// </summary>
 	[JsonPropertyName(Parameters.ActorTokenType)]
-	public string? ActorTokenType { get; set; }
+	public Uri? ActorTokenType { get; set; }
 
 	/// <summary>
 	/// RFC 8693 section 2.1 <c>requested_token_type</c> -- identifier of the token type the client would like

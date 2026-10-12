@@ -107,6 +107,9 @@ public static class ServiceCollectionExtensions
         // refusing at the first login names nothing and retries forever.
         services.AddOptions<VaultTransitOptions>()
             .Validate(
+                options => options.Address is { IsAbsoluteUri: true },
+                $"{nameof(VaultTransitOptions.Address)} must be the absolute address of the Vault server.")
+            .Validate(
                 options => options.Authentication is not { Kubernetes: null, AppRole: null },
                 $"{nameof(VaultTransitOptions.Authentication)} is configured without an auth method: set either " +
                 $"{nameof(VaultAuthenticationOptions.Kubernetes)} or {nameof(VaultAuthenticationOptions.AppRole)}.")
@@ -139,7 +142,7 @@ public static class ServiceCollectionExtensions
             // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
             // different ones, so each spells its own into every path.
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
-            http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/");
+            http.BaseAddress = new Uri($"{options.Address.OriginalString.TrimEnd('/')}/v1/");
         })
         .AddHttpMessageHandler<TokenHandler>()
 

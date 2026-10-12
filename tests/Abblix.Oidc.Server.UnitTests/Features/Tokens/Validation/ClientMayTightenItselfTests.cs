@@ -93,7 +93,7 @@ public class ClientMayTightenItselfTests
             .ReturnsAsync(token);
 
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(Issuer);
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(Issuer));
 
         var issuerProvider = new Mock<IIssuerProvider>();
         issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);

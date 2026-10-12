@@ -94,7 +94,7 @@ public sealed class EndpointSpanTests : IDisposable
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
         TokenTypes.Bearer,
         TimeSpan.FromMinutes(5),
-        TokenTypeIdentifiers.AccessToken);
+        new Uri(TokenExchangeTokenTypes.AccessToken));
 
     [Fact]
     public async Task ASuccess_ClosesTheSpanOk()

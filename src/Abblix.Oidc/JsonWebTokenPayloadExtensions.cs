@@ -247,14 +247,15 @@ public static class JsonWebTokenPayloadExtensions
 		}
 
 		/// <summary>
-		/// The HTTP URI bound by a DPoP proof (RFC 9449 section 4.2 <c>htu</c>). Returned as the
-		/// raw claim string so callers keep the three-way "missing / unparseable / mismatched"
-		/// distinction; parsing into a <see cref="Uri"/> belongs to the comparison step.
+		/// The HTTP URI bound by a DPoP proof (RFC 9449 section 4.2 <c>htu</c>), or null when the claim is absent or
+		/// is not an absolute URI. A caller telling the two apart looks for the claim itself.
 		/// </summary>
-		public string? DPoPHttpUri
+		public Uri? DPoPHttpUri
 		{
-			get => payload.Json.GetProperty<string>(IanaClaimTypes.Htu);
-			set => payload.Json.SetProperty(IanaClaimTypes.Htu, value);
+			get => Uri.TryCreate(payload.Json.GetProperty<string>(IanaClaimTypes.Htu), UriKind.Absolute, out var uri)
+				? uri
+				: null;
+			set => payload.Json.SetProperty(IanaClaimTypes.Htu, value?.OriginalString);
 		}
 
 		/// <summary>

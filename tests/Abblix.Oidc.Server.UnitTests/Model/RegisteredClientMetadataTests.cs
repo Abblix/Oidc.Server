@@ -196,7 +196,7 @@ public class RegisteredClientMetadataTests
         RequireSignedRequestObject = true,
         TlsClientCertificateBoundAccessTokens = true,
         AuthorizationDetailsTypes = ["payment_initiation"],
-        TokenExchangeSubjectTokenTypes = [TokenTypeIdentifiers.AccessToken.OriginalString],
+        TokenExchangeSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
         TokenExchangeAudiences = ["https://api.example.com"],
         BackChannelLogoutUri = new Uri("https://client.example.com/bc-logout"),
         BackChannelLogoutSessionRequired = false,

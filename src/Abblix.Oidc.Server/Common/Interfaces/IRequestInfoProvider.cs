@@ -18,12 +18,12 @@ public interface IRequestInfoProvider
     /// <summary>
     /// The base URI of the application.
     /// </summary>
-    string ApplicationUri { get; }
+    Uri ApplicationUri { get; }
 
     /// <summary>
     /// The request URI.
     /// </summary>
-    string RequestUri { get; }
+    Uri RequestUri { get; }
 
     /// <summary>
     /// The HTTP method of the current request (e.g. <c>GET</c>, <c>POST</c>) in upper case

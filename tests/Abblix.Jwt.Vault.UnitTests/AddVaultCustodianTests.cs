@@ -34,7 +34,7 @@ public class AddVaultCustodianTests
 
         services.AddVaultCustodian(options =>
         {
-            options.Address = "https://vault.test:8200";
+            options.Address = new Uri("https://vault.test:8200");
             options.Token = "s.test-token";
             options.TransitMount = "transit";
         });

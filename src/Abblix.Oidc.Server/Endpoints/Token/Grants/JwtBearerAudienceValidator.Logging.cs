@@ -22,5 +22,5 @@ partial class JwtBearerAudienceValidator
 		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedPermissive,
 		Level = LogLevel.Warning,
 		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {ApplicationUri}, got {Audiences}")]
-	private partial void LogAudienceFailedPermissive(Uri TokenEndpoint, string ApplicationUri, string Audiences);
+	private partial void LogAudienceFailedPermissive(Uri TokenEndpoint, Uri ApplicationUri, string Audiences);
 }

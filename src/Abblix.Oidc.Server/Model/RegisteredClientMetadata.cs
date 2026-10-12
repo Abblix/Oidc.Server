@@ -332,7 +332,7 @@ public record RegisteredClientMetadata
     /// </summary>
     [JsonPropertyOrder(158)]
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
-    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+    public Uri[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>The audiences the client may request in token exchange (an extension of this server).</summary>
     [JsonPropertyOrder(159)]

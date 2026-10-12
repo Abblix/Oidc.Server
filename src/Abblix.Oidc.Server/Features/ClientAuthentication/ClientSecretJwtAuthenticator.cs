@@ -110,7 +110,7 @@ public partial class ClientSecretJwtAuthenticator(
     /// <returns>True if the audience is valid; otherwise, false.</returns>
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
-        var requestUri = requestInfoProvider.RequestUri;
+        var requestUri = requestInfoProvider.RequestUri.OriginalString;
         var materialized = audiences.Materialize();
         var result = materialized.Contains(requestUri);
         if (!result)

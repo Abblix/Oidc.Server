@@ -236,7 +236,7 @@ public class ClientAssertionMayTightenItselfTests
             .ReturnsAsync(true);
 
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(Issuer);
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(Issuer));
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),

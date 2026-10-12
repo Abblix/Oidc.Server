@@ -47,7 +47,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
-        string tokenType,
+        Uri tokenType,
         CancellationToken cancellationToken)
     {
         var validation = await jwtValidator.ValidateAsync(subjectToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));

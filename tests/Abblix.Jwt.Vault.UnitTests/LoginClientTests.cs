@@ -115,6 +115,31 @@ public sealed class LoginClientTests : IDisposable
             transport.LastRequest.Options.TryGetValue(TokenHandler.SelfAuthenticated, out var marked) && marked);
     }
 
+    /// <summary>
+    /// A lease Vault states in a number of seconds no duration can have runs for no time at all, so the token is
+    /// renewed at once rather than trusted for a negative or overflowing lease.
+    /// </summary>
+    [Theory]
+    [InlineData(-5L)]
+    [InlineData(long.MaxValue)]
+    public async Task Login_ALeaseNoDurationHolds_RunsForNoTime(long leaseSeconds)
+    {
+        var (client, _) = ClientOver(
+            new VaultTransitOptions
+            {
+                Authentication = new VaultAuthenticationOptions
+                {
+                    AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+                },
+            },
+            (_, _) => AuthResponse("s.token", leaseSeconds, renewable: true));
+
+        var lease = await client.LoginAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(lease);
+        Assert.Equal(TimeSpan.Zero, lease.LeaseDuration);
+    }
+
     [Fact]
     public async Task Login_RefusedByVault_AnswersNull()
     {

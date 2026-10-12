@@ -38,7 +38,7 @@ public class JsonWebTokenPayloadClaimNamesTests
         { "email", p => p.Email = "e@example.com" },
         { "email_verified", p => p.EmailVerified = true },
         { "htm", p => p.DPoPHttpMethod = "POST" },
-        { "htu", p => p.DPoPHttpUri = "https://example.com/token" },
+        { "htu", p => p.DPoPHttpUri = new Uri("https://example.com/token") },
         { "ath", p => p.DPoPAccessTokenHash = "h" },
         {
             "authorization_details",

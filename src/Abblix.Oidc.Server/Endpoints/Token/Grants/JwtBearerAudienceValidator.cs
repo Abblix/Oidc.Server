@@ -42,8 +42,7 @@ internal sealed partial class JwtBearerAudienceValidator(
 		var options = issuerProvider.Options;
 		var audienceList = audiences.Materialize();
 
-		if (!Uri.TryCreate(requestInfoProvider.RequestUri, UriKind.Absolute, out var tokenEndpoint))
-			return Task.FromResult(false);
+		var tokenEndpoint = requestInfoProvider.RequestUri;
 
 		var isValid = options.StrictAudienceValidation
 			? ValidateStrict(audienceList, tokenEndpoint)
@@ -72,13 +71,12 @@ internal sealed partial class JwtBearerAudienceValidator(
 			NormalizedUriEquals(audience, tokenEndpoint));
 	}
 
-	private static bool ValidatePermissive(IEnumerable<string> audiences, Uri tokenEndpoint, string applicationUri)
+	private static bool ValidatePermissive(IEnumerable<string> audiences, Uri tokenEndpoint, Uri applicationUri)
 	{
-		return Uri.TryCreate(applicationUri, UriKind.Absolute, out var appUri) &&
-		       audiences.Any(aud =>
-			       Uri.TryCreate(aud, UriKind.Absolute, out var audience) &&
-			       (NormalizedUriEquals(audience, tokenEndpoint) ||
-			        NormalizedUriEquals(audience, appUri)));
+		return audiences.Any(aud =>
+			Uri.TryCreate(aud, UriKind.Absolute, out var audience) &&
+			(NormalizedUriEquals(audience, tokenEndpoint) ||
+			 NormalizedUriEquals(audience, applicationUri)));
 	}
 
 	/// <summary>

@@ -71,10 +71,10 @@ public sealed class JwtSubjectTokenResolver(
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
-        string tokenType,
+        Uri tokenType,
         CancellationToken cancellationToken)
     {
-        if (TokenTypesOf(tokenType) is not { } accepted)
+        if (TokenTypesOf(tokenType.OriginalString) is not { } accepted)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");

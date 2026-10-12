@@ -38,30 +38,34 @@ internal static class ProofBindingClaims
 
     /// <summary>
     /// Compares the proof's <c>htu</c> claim against the current request URI after
-    /// RFC 3986 section 6.2 canonicalisation.
+    /// RFC 3986 section 6.2 canonicalization.
     /// </summary>
+    /// <remarks>
+    /// The claim has to match the URI of the request the proof arrived with (RFC 9449 section 4.3), and that URI is
+    /// http or https, so a value of any other scheme is reported as invalid rather than as a mismatch. That also
+    /// reports a bare path alike on every platform: on Unix it parses as an absolute file URI.
+    /// </remarks>
     public static ProofError? HttpUri(JsonWebTokenPayload payload, Uri requestUri)
     {
-        var httpUri = payload.DPoPHttpUri;
-        if (httpUri is null)
+        if (!payload.Json.ContainsKey(IanaClaimTypes.Htu))
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriMissing,
                 $"{IanaClaimTypes.Htu} claim is required.");
         }
 
-        if (!Uri.TryCreate(httpUri, UriKind.Absolute, out var uri))
+        if (payload.DPoPHttpUri is not { } uri || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriInvalid,
-                $"{IanaClaimTypes.Htu} is not a valid absolute URI.");
+                $"{IanaClaimTypes.Htu} is not an absolute http or https URI.");
         }
 
         if (uri.Normalize() != requestUri.Normalize())
         {
             return new ProofError(
                 ProofErrorReasons.HttpUriMismatch,
-                $"{IanaClaimTypes.Htu} does not match the request URI after canonicalisation.");
+                $"{IanaClaimTypes.Htu} does not match the request URI after canonicalization.");
         }
 
         return null;

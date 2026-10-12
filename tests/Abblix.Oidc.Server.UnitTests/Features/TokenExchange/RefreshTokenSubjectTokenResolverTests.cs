@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -68,7 +69,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-9", ctx.Subject);
@@ -98,7 +99,7 @@ public class RefreshTokenSubjectTokenResolverTests
                 new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
                 new AuthorizationContext("client-1", ["openid"], null)));
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(grantId, ctx.GrantId);
@@ -122,7 +123,7 @@ public class RefreshTokenSubjectTokenResolverTests
                 new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
                 new AuthorizationContext("client-1", ["openid"], null)));
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(jwt.Payload.ExpiresAt);
@@ -147,7 +148,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(adWire, ctx.AuthorizationDetails!.ToJsonString());
@@ -161,7 +162,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "expired"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -180,7 +181,7 @@ public class RefreshTokenSubjectTokenResolverTests
                 TokenWire, TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)), ValidationOptions.Default))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -198,7 +199,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "token revoked"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, TokenExchangeTokenTypes.RefreshToken, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

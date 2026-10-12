@@ -148,7 +148,7 @@ public class ProfileClockSkewReachesValidationTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
 
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns("https://auth.example.com");
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri("https://auth.example.com"));
 
         var issuerProvider = new Mock<IIssuerProvider>();
         issuerProvider.Setup(p => p.GetIssuer()).Returns("https://auth.example.com");

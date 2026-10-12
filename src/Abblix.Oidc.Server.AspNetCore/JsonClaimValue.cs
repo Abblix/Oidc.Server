@@ -67,9 +67,10 @@ internal static class JsonClaimValue
 	/// kinds, each tagged distinctly so the read side reconstructs the exact CLR/JSON type.
 	/// </summary>
 	/// <remarks>
-	/// Dates use the ISO 8601 round-trip format ("O") with full precision. DateTime and DateTimeOffset are tagged
-	/// distinctly so the read side rebuilds the same CLR type: a DateTime keeps its Kind, a DateTimeOffset keeps its
-	/// offset, neither is silently coerced into the other (which would otherwise bake in the server's local offset).
+	/// An instant is written as a <see cref="System.DateTimeOffset"/> in the ISO 8601 round-trip format ("O"), which
+	/// keeps its offset, and a date without a time as a <see cref="DateOnly"/> ("yyyy-MM-dd"), which no time zone can
+	/// move to the day before. A claim a sign-in or an earlier release tagged as a DateTime is still read, as the
+	/// instant it names, an instant written without an offset being UTC; nothing is written as one.
 	/// </remarks>
 	private static readonly PrimitiveClaimFormat[] PrimitiveFormats =
 	[
@@ -80,8 +81,9 @@ internal static class JsonClaimValue
 		new(CustomValueTypes.Float, WriteFloat, ReadFloat),
 		new(ClaimValueTypes.Double, WriteDouble, ReadDouble),
 		new(CustomValueTypes.Decimal, WriteDecimal, ReadDecimal),
-		new(ClaimValueTypes.DateTime, WriteDateTime, ReadDateTime),
+		new(ClaimValueTypes.Date, WriteDate, ReadDate),
 		new(CustomValueTypes.DateTimeOffset, WriteDateTimeOffset, ReadDateTimeOffset),
+		new(ClaimValueTypes.DateTime, WriteNothing, ReadUtcInstant),
 	];
 
 	private static readonly FrozenDictionary<string, PrimitiveClaimFormat> FormatsByValueType =
@@ -217,12 +219,21 @@ internal static class JsonClaimValue
 	private static JsonNode? ReadDecimal(string text)
 		=> decimal.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
 
-	// For DateTime: "2009-06-15T13:45:30.0000000" or "2009-06-15T13:45:30.0000000Z"
-	private static string? WriteDateTime(JsonValue value)
-		=> value.TryGetValue<DateTime>(out var instant) ? instant.ToString("O", InvariantCulture) : null;
+	// For DateOnly: "2009-06-15"
+	private static string? WriteDate(JsonValue value)
+		=> value.TryGetValue<DateOnly>(out var date) ? date.ToString("O", InvariantCulture) : null;
 
-	private static JsonNode? ReadDateTime(string text)
-		=> DateTime.TryParse(text, InvariantCulture, RoundtripKind, out var instant) ? JsonValue.Create(instant) : null;
+	private static JsonNode? ReadDate(string text)
+		=> DateOnly.TryParseExact(text, "O", InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? JsonValue.Create(date) : null;
+
+	// A value type only read: the chain passes over it when writing
+	private static string? WriteNothing(JsonValue value) => null;
+
+	// For a claim tagged DateTime: "2009-06-15T13:45:30.0000000Z", or without an offset, which is read as UTC
+	private static JsonNode? ReadUtcInstant(string text)
+		=> System.DateTimeOffset.TryParse(text, InvariantCulture, AssumeUniversal | AdjustToUniversal, out var instant)
+			? JsonValue.Create(instant)
+			: null;
 
 	// For DateTimeOffset: "2009-06-15T13:45:30.0000000-07:00"
 	private static string? WriteDateTimeOffset(JsonValue value)
