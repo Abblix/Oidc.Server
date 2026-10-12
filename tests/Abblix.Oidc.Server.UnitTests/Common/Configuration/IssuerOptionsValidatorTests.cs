@@ -40,6 +40,11 @@ public class IssuerOptionsValidatorTests
     [InlineData("https://auth.example.com#x")]
     [InlineData("ftp://auth.example.com")]
     [InlineData("file:///issuer")]
+    [InlineData("https://auth.example.com\n")]
+    [InlineData(" https://auth.example.com")]
+    [InlineData("https://auth.example.com/a b")]
+    [InlineData("https://auth.example.com/a\tb")]
+    [InlineData("https://user:pw@auth.example.com")]
     public void AnIssuerThatIsNoHttpsUrlWithoutQueryOrFragment_IsRefused(string issuer)
         => Assert.True(Refused(issuer));
 
@@ -68,8 +73,7 @@ public class IssuerOptionsValidatorTests
     }
 
     /// <summary>
-    /// With no issuer configured the server takes it from each request, which the HTTPS gate on every endpoint keeps
-    /// to https.
+    /// With no issuer configured the server takes it from each request, so there is nothing to judge at startup.
     /// </summary>
     [Fact]
     public void NoIssuer_IsAccepted()

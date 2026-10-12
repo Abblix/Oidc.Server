@@ -30,12 +30,18 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         failures.AddRange(
             from tenant in tenants
             where string.IsNullOrEmpty(tenant.Id)
-            select TenantRefusal.Of(tenant, $"A tenant with the issuer '{tenant.Issuer.OriginalString}' has no id."));
+            select TenantRefusal.Of(tenant, $"A tenant with the issuer '{tenant.Issuer?.OriginalString}' has no id."));
+
+        // Required by the compiler only: configuration without the key, or a store holding none, gives no issuer
+        failures.AddRange(
+            from tenant in tenants
+            where tenant.Issuer is null
+            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}' has no issuer."));
 
         // A Host header is ASCII, so a host with no ASCII form could never be requested.
         failures.AddRange(
             from tenant in tenants
-            where IsIssuer(tenant.Issuer) && !TenantAddress.Of(tenant.Issuer.OriginalString).Host.All(char.IsAscii)
+            where IsIssuer(tenant.Issuer) && !TenantAddress.Of(tenant.Issuer).Host.All(char.IsAscii)
             select TenantRefusal.Of(
                 tenant,
                 $"The issuer '{tenant.Issuer.OriginalString}' of tenant '{tenant.Id}' names a host with no ASCII form, " +
@@ -111,7 +117,8 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     /// The checks of addresses read the issuer's, so they skip a tenant whose issuer has none to read; that tenant
     /// is refused for its issuer elsewhere. An http issuer has an address whether or not it is let through.
     /// </remarks>
-    private static bool IsIssuer(Uri issuer) => IssuerIdentifier.Refusal(issuer, allowHttp: true) is null;
+    private static bool IsIssuer(Uri? issuer)
+        => issuer is not null && IssuerIdentifier.Refusal(issuer, allowHttp: true) is null;
 
     /// <remarks>
     /// Asked only of an absolute address, since a relative one throws on either read.

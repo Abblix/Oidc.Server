@@ -72,7 +72,7 @@ public class DiscoverySignedMetadataTests
     /// </summary>
     private static EndpointResponse MinimalResponse() => new()
     {
-        Issuer = Issuer,
+        Issuer = new Uri(Issuer),
         ResponseTypesSupported = ["code"],
         IdTokenSigningAlgValuesSupported = ["RS256"],
         SubjectTypesSupported = ["public"],

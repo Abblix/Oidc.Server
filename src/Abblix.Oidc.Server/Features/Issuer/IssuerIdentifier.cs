@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.Issuer;
@@ -31,17 +32,39 @@ internal static class IssuerIdentifier
         if (!issuer.IsAbsoluteUri)
             return "must be an absolute URL";
 
-        if (issuer.Scheme != Uri.UriSchemeHttps && !(allowHttp && issuer.Scheme == Uri.UriSchemeHttp))
-        {
-            return allowHttp
-                ? "must use the https or http scheme"
-                : $"must use the https scheme; {nameof(OidcOptions.AllowHttpIssuer)} lets http through for local " +
-                  "development";
-        }
+        if (TryRefuseScheme(issuer, allowHttp, out var scheme))
+            return scheme;
 
         if (!string.IsNullOrEmpty(issuer.Query) || !string.IsNullOrEmpty(issuer.Fragment))
             return "must have no query or fragment";
 
+        if (issuer.UserInfo.Length > 0)
+            return "must have no user name or password";
+
+        if (!IsWrittenAsUrl(issuer.OriginalString))
+            return "must be written as a URL with no whitespace or control characters";
+
         return null;
     }
+
+    private static bool TryRefuseScheme(Uri issuer, bool allowHttp, [NotNullWhen(true)] out string? refusal)
+    {
+        refusal = (issuer.Scheme, allowHttp) switch
+        {
+            (var scheme, _) when scheme == Uri.UriSchemeHttps => null,
+            (var scheme, true) when scheme == Uri.UriSchemeHttp => null,
+            (_, true) => "must use the https or http scheme",
+            (_, false) => $"must use the https scheme; {nameof(OidcOptions.AllowHttpIssuer)} lets http through " +
+                          "for local development",
+        };
+        return refusal is not null;
+    }
+
+    /// <remarks>
+    /// The string is what every token carries, and the parser forgives what a token must not: it trims surrounding
+    /// whitespace and accepts an unescaped space or tab in the path.
+    /// </remarks>
+    private static bool IsWrittenAsUrl(string written)
+        => !written.Any(character => char.IsWhiteSpace(character) || char.IsControl(character)) &&
+           Uri.IsWellFormedUriString(written, UriKind.Absolute);
 }

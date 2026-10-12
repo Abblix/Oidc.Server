@@ -33,7 +33,7 @@ public sealed class TenantTransmitterIdentity(
     public Uri? JwksUri => options.JwksUri is { } jwksUri ? Under(jwksUri.PathAndQuery) : null;
 
     /// <inheritdoc />
-    public Uri EndpointsBase => new(Tenant.Issuer.OriginalString, UriKind.Absolute);
+    public Uri EndpointsBase => Tenant.Issuer;
 
     /// <inheritdoc />
     public bool Serves => tenantAccessor.Current is not null;

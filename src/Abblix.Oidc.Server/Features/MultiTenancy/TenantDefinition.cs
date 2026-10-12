@@ -66,6 +66,11 @@ public sealed class TenantDefinition
     /// Discovery 1.0 section 4.3 requires: <c>https://acme.example.com</c> serves a whole host,
     /// <c>https://auth.example.com/tenants/acme</c> a path on a shared one. Scheme and port are not compared,
     /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
+    /// <para>
+    /// The issuer is judged as the server's own is: an https URL with no query or fragment, http only when
+    /// <see cref="Common.Configuration.OidcOptions.AllowHttpIssuer"/> lets it through. It is written into tokens and
+    /// discovery as configured, through <see cref="Uri.OriginalString"/>.
+    /// </para>
     /// </remarks>
     public required Uri Issuer { get; init; }
 

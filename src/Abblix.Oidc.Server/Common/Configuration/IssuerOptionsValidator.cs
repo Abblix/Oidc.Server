@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// <remarks>
 /// Every token the server issues carries the issuer, so a wrong one is refused before the first token rather than
 /// discovered by every relying party that rejects it. With no issuer configured the server takes it from each
-/// request, which the HTTPS gate on every endpoint keeps to https.
+/// request, and the library's endpoints serve only https.
 /// </remarks>
 public sealed class IssuerOptionsValidator : IValidateOptions<OidcOptions>
 {

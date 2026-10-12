@@ -36,7 +36,8 @@ public record OidcOptions
 	/// An https URL with no query or fragment (OpenID Connect Core 1.0 section 1.2), refused at startup otherwise. A
 	/// relying party compares it with the <c>iss</c> of every token exactly (section 3.1.3.7), so it is written as
 	/// configured, through <see cref="Uri.OriginalString"/>: a bare host stays without a trailing slash, and the
-	/// case and port stay as given. With no issuer configured, the server takes it from each request.
+	/// case and port stay as given. With no issuer configured, the server takes it from each request; an empty value
+	/// bound from configuration reads as none, so a placeholder left empty makes the issuer follow the request.
 	/// </remarks>
 	public Uri? Issuer { get; set; }
 

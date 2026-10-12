@@ -233,6 +233,29 @@ public partial class MultiTenancyRegistrationTests
     };
 
     /// <summary>
+    /// A tenant's issuer is judged by the check the server registers for its own, so an http one is refused unless
+    /// the server lets http through, and the refusal names the tenant.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void ATenantsHttpIssuer_IsRefused_UnlessTheServerAllowsHttp(bool allowHttp, bool refused)
+    {
+        var tenant = new TenantDefinition { Id = "local", Issuer = new Uri("http://localhost:5000/tenants/local") };
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(options => options.AllowHttpIssuer = allowHttp);
+        services.AddIssuer();
+        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        using var provider = services.BuildServiceProvider();
+
+        var read = Record.Exception(() => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+
+        Assert.Equal(refused, read is OptionsValidationException);
+        if (refused)
+            Assert.Contains($"Tenant '{tenant.Id}': ", read!.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// What a tenant declares passes the checks the server's own settings pass at startup, so a tenant's mistake is
     /// refused there, naming the tenant, rather than surfacing on the first request that meets it.
     /// </summary>

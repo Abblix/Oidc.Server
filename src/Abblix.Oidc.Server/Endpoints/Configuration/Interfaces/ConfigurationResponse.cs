@@ -33,7 +33,7 @@ public record ConfigurationResponse
 	/// The issuer identifier, which uniquely identifies the OpenID Provider.
 	/// REQUIRED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>
-	public required string Issuer { init; get; }
+	public required Uri Issuer { init; get; }
 
 	/// <summary>
 	/// Indicates whether the OpenID Provider supports front channel logout.

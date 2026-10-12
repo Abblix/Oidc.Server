@@ -42,7 +42,7 @@ public class ConfigurationResponseFormatter(
 
         var modelResponse = new ModelResponse
         {
-            Issuer = response.Issuer,
+            Issuer = response.Issuer.OriginalString,
 
             JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys, response.Issuer),
 
@@ -156,7 +156,7 @@ public class ConfigurationResponseFormatter(
     /// active. Resolves through <see cref="LinkGenerator"/> so the URL carries any MapOidcEndpoints group prefix and
     /// the request's PathBase - the Minimal API counterpart of the MVC adapter's IUriResolver route resolution.
     /// </summary>
-    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag, string issuer)
+    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag, Uri issuer)
     {
         if (!options.Value.Discovery.AllowEndpointPathsDiscovery ||
             !options.Value.EnabledEndpoints.HasFlag(enablingFlag))
@@ -177,11 +177,11 @@ public class ConfigurationResponseFormatter(
     /// is answered so. A server without tenants whose mutual-TLS host differs from its ordinary one only by port
     /// therefore names the ordinary endpoints on the issuer's host on either.
     /// </remarks>
-    private Uri? OnIssuersHost(Uri? endpoint, string issuer)
+    private Uri? OnIssuersHost(Uri? endpoint, Uri issuer)
         => endpoint is not null &&
            issuerSettings.MtlsBaseUri is { } mtlsBaseUri &&
            SameHost(endpoint, mtlsBaseUri)
-            ? Rebase(endpoint, new Uri(new Uri(issuer).GetLeftPart(UriPartial.Authority)))
+            ? Rebase(endpoint, new Uri(issuer.GetLeftPart(UriPartial.Authority)))
             : endpoint;
 
 #pragma warning disable ABXMT001
