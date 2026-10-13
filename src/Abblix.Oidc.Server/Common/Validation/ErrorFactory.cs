@@ -43,6 +43,15 @@ public static class ErrorFactory
     public const string UnreadableForm = "The request body cannot be read as a form";
 
     /// <summary>
+    /// The refusal of a registration or update body that cannot be read as client metadata, on either host. RFC 7591
+    /// section 3.2.2 defines invalid_client_metadata for "The value of one of the client metadata fields is invalid
+    /// and the server has rejected this request", and the body is the metadata as a whole. The description is fixed,
+    /// since the parser's own account of the failure quotes the body and names the server's types.
+    /// </summary>
+    public static OidcError UnreadableClientMetadata { get; } =
+        new(ErrorCodes.InvalidClientMetadata, "The request body cannot be read as client metadata");
+
+    /// <summary>
     /// The validation message for a request whose host is missing or cannot be part of a URI, so that no address of
     /// this server can be built for it.
     /// </summary>

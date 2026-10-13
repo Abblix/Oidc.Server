@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Http.Headers;
+using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
@@ -32,6 +33,7 @@ internal static class ClientRegistrationEndpoints
             oidcGroup
                 .MapPost(routes.Register, RegisterClientAsync)
                 .WithName(EndpointNames.Register)
+                .Accepts<Core.ClientRegistrationRequest>(MediaTypeNames.Application.Json)
                 .BoundBy(options.MaxRegistrationRequestSize);
 
             oidcGroup
@@ -42,6 +44,7 @@ internal static class ClientRegistrationEndpoints
             // registration access token check, so it carries the same bound.
             oidcGroup
                 .MapPut(routes.RegisterClient, UpdateClientAsync)
+                .Accepts<Core.ClientRegistrationRequest>(MediaTypeNames.Application.Json)
                 .BoundBy(options.MaxRegistrationRequestSize);
 
             oidcGroup.MapDelete(routes.RegisterClient, RemoveClientAsync);
@@ -53,11 +56,14 @@ internal static class ClientRegistrationEndpoints
     /// token, the only value the body cannot carry, is merged from the Authorization header.
     /// </summary>
     private static async Task<IResult> RegisterClientAsync(
-        Core.ClientRegistrationRequest request,
+        ClientMetadataBody body,
         HttpContext context,
         IRegisterClientHandler handler,
         IRegisterClientResponseFormatter formatter)
     {
+        if (body is not { Request: { } request })
+            return body.Refusal!;
+
         var clientRegistrationRequest = request with { AuthorizationHeader = ParseAuthorizationHeader(context.Request) };
         var response = await handler.HandleAsync(clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
@@ -77,10 +83,13 @@ internal static class ClientRegistrationEndpoints
     /// <summary>Updates a registered client's configuration (RFC 7592 section 2.2).</summary>
     private static async Task<IResult> UpdateClientAsync(
         ClientAuthorizationRequest authorizationRequest,
-        Core.ClientRegistrationRequest registrationRequest,
+        ClientMetadataBody body,
         IUpdateClientHandler handler,
         IUpdateClientResponseFormatter formatter)
     {
+        if (body is not { Request: { } registrationRequest })
+            return body.Refusal!;
+
         var updateRequest = new UpdateClientRequest(authorizationRequest, registrationRequest);
         var response = await handler.HandleAsync(updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
