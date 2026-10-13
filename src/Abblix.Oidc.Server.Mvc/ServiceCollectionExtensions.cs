@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
@@ -25,6 +24,9 @@ public static class ServiceCollectionExtensions
 	/// This method allows for configuring OIDC options to tailor the authentication server to your specific needs.
 	/// </summary>
 	/// <remarks>
+	/// The endpoints are mapped by <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/>, which the
+	/// request pipeline calls in place of relying on <c>app.MapControllers()</c>: the library's controllers carry
+	/// no route of their own.
 	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>. The protocol
 	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
 	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
@@ -77,18 +79,19 @@ public static class ServiceCollectionExtensions
 			TransportAdapterConflict.MinimalApiAdapterAssemblyName,
 			"Both OIDC transport adapters are registered in this application: the MVC adapter was added " +
 			"after the Minimal API adapter's own AddOidcServices()/AddOidcMinimalApi(). Only one of them may " +
-			"serve the OIDC endpoints - with both in place they claim the same paths and every OIDC request " +
-			"fails with AmbiguousMatchException. Keep one: remove either the Minimal API registration " +
+			"serve the OIDC endpoints, since both map the same paths. Keep one: remove either the Minimal API " +
+			"registration " +
 			"together with the Abblix.OIDC.Server.MinimalApi package reference, or this one together with " +
 			"the Abblix.OIDC.Server.MVC package reference.");
 
 		services
 			.AddOidcControllers()
-			.ConfigureRoutesFallback()
 			.AddHttpContextAccessor()
 			.AddOidcMvcInfrastructure()
 			.AddOidcProtocolFormatters()
 			.AddOidcInteractionFormatters();
+
+		services.AddOptions<OidcRouteOptions>();
 
 		// AddOidcCors registers the shared, host-overridable default so the CORS policy the controllers
 		// reference with [EnableCors] resolves out of the box instead of only when the host defined it. Same

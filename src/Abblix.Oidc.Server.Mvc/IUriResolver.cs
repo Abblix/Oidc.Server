@@ -34,24 +34,17 @@ public interface IUriResolver
     /// Generates an absolute URI for a given content path. This method is useful for creating links to static resources
     /// stored within the application, such as images, CSS files, and JavaScript files. It supports:
     /// - Application root-relative paths using the '~' symbol (e.g., "~/images/logo.png")
-    /// - Route template constants from <see cref="Path"/> class (e.g., <see cref="Path.Authorize"/>)
     /// - Regular relative paths
     /// </summary>
     /// <param name="path">The path to the content. This can be:
     /// - A virtual path (e.g., "~/images/logo.png") indicating the application root
-    /// - A route template constant (e.g., Path.Authorize = "[route:authorize?~/connect/authorize]")
     /// - A relative path from the current executing location
     /// </param>
     /// <returns>An absolute URI as a <see cref="Uri"/> object for the specified content path.</returns>
     /// <example>
     /// <code>
-    /// // Static content
-    /// var uri1 = uriResolver.Content("~/content/site.css");
+    /// var uri = uriResolver.Content("~/content/site.css");
     /// // Result: "https://example.com/content/site.css"
-    ///
-    /// // Route template constant (uses configured or default path)
-    /// var uri2 = uriResolver.Content(Path.Authorize);
-    /// // Result: "https://example.com/connect/authorize"
     /// </code>
     /// </example>
     Uri Content(string path);

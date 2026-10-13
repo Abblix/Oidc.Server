@@ -13,7 +13,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -37,7 +36,7 @@ public class DiscoverySignedMetadataTests
     private const string SignedJws = "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ4In0.sig";
 
     private readonly Mock<IOptionsSnapshot<OidcOptions>> _optionsMock = new();
-    private readonly Mock<IEndpointResolver> _endpointResolverMock = new();
+    private readonly Mock<IOidcEndpointResolver> _endpointResolverMock = new();
     private readonly Mock<IJsonWebTokenCreator> _jwtCreatorMock = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _keysProviderMock = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 5, 19, 10, 0, 0, TimeSpan.Zero));
@@ -55,7 +54,7 @@ public class DiscoverySignedMetadataTests
         _optionsMock.Setup(x => x.Value).Returns(_oidcOptions);
 
         _endpointResolverMock
-            .Setup(x => x.Resolve("Token", "Token"))
+            .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri("https://example.com/token"));
 
         _formatter = new ConfigurationResponseFormatter(

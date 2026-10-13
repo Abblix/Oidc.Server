@@ -33,7 +33,6 @@ Add a certified OpenID Connect provider to your own ASP.NET Core app, one you em
 ## Table of Contents
 - [About](#-about)
 - [Quickstart](#-quickstart)
-- [What's New](#-whats-new)
 - [Certification](#-certification)
 - [How to Install](#-how-to-install)
 - [Documentation](#-documentation)
@@ -57,39 +56,33 @@ Under the hood, the library leans on modular and hexagonal architecture and the 
 
 ## ⚡ Quickstart
 
-Install the adapter for your hosting model and register the server in `Program.cs`:
+Install the Minimal API adapter, then register the server and map its endpoints in `Program.cs`:
 
 ```shell
-dotnet add package Abblix.OIDC.Server.MVC
+dotnet add package Abblix.OIDC.Server.MinimalApi
 ```
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.MinimalApi;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllersWithViews();
 
 // Turn your ASP.NET Core app into an OpenID Connect provider
 builder.Services.AddOidcServices(options =>
 {
     options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
+    options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
 });
+
+var app = builder.Build();
+app.MapOidcEndpoints();
+app.Run();
 ```
 
-That registers the full set of certified OpenID Connect endpoints. Logout notification is the one thing your application chooses: add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, from `Abblix.Oidc.Server.Features`, and your configuration document advertises what you chose. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead.
 
-## ✨ What's New
-
-### Version 2.4 (Latest)
-
-🚀 Features
-- Minimal API integration: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
-- External signing keys: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
-- Security events and Shared Signals: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
-
-> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.4) for full details.
+This is the outline, not a complete application: the server also needs a cache, the CORS middleware, a login page and your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 

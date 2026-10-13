@@ -35,7 +35,6 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// retrieving authenticated user information, managing user logout processes, and checking the status
 /// of user sessions for OIDC compliance.
 /// </remarks>
-[ApiController]
 [ReturnsOidcInvalidRequest]
 [ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -43,7 +42,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [RequireHttps]
 [RequireHost]
 [RequireTenant]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public sealed class AuthenticationController : ControllerBase
 {
     /// <summary>
@@ -62,10 +62,10 @@ public sealed class AuthenticationController : ControllerBase
     /// OpenID Connect Authorization Endpoint Documentation
     /// </see>
     /// </remarks>
-    [HttpGetOrPost(Path.Authorize)]
+    [HttpGetOrPost]
+    [ActionName(nameof(AuthorizeAsync))]
     //[Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
-    [EnabledBy(OidcEndpoints.Authorize)]
     public async Task<ActionResult<Core.AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
         [FromServices] IAuthorizationResponseFormatter formatter,
@@ -92,9 +92,9 @@ public sealed class AuthenticationController : ControllerBase
     /// OpenID Connect UserInfo Endpoint Documentation
     /// </see>
     /// </remarks>
-    [HttpGetOrPost(Path.UserInfo)]
+    [HttpGetOrPost]
+    [ActionName(nameof(UserInfoAsync))]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.UserInfo)]
     public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
@@ -122,11 +122,11 @@ public sealed class AuthenticationController : ControllerBase
     /// OpenID Connect EndSession Endpoint Documentation
     /// </see>
     /// </remarks>
-    [HttpGetOrPost(Path.EndSession)]
+    [HttpGetOrPost]
+    [ActionName(nameof(EndSessionAsync))]
     //[Consumes(MediaTypes.FormUrlEncoded, IsOptional = true)]
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.EndSession)]
     public async Task<ActionResult> EndSessionAsync(
         [FromServices] IEndSessionHandler handler,
         [FromServices] IEndSessionResponseFormatter formatter,
@@ -153,13 +153,13 @@ public sealed class AuthenticationController : ControllerBase
     /// OpenID Connect Check Session Documentation
     /// </see>
     /// </remarks>
-    [HttpGet(Path.CheckSession)]
+    [HttpGet]
+    [ActionName(nameof(CheckSessionAsync))]
     // The frame is an HTML document loaded in an iframe, and the result writes text/html itself. The
     // attribute never reaches the response, so its only readers are generated OpenAPI documents and content
     // negotiation - which is exactly why it has to agree with what is sent.
     [Produces(MediaTypeNames.Text.Html)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.CheckSession)]
     public async Task<ActionResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
         [FromServices] ICheckSessionResponseFormatter formatter)

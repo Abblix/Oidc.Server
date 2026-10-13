@@ -118,7 +118,7 @@ public static class Enrolment
     /// names a fragment calls into, and a stub for whatever the integrator's own half invents.
     /// </para>
     /// </remarks>
-    public const int Unenrolled = 11;
+    public const int Unenrolled = 9;
 
     /// <summary>
     /// The README samples whose text is compiled, each with a copy under <c>Samples/</c>.
@@ -133,6 +133,7 @@ public static class Enrolment
     [
         new("README.md", 0, "ReadmeQuickstart.cs"),
         new("src/Abblix.Oidc.Server.SharedSignals/README.md", 0, "SharedSignalsMultiTenancy.cs"),
+        new("src/Abblix.Oidc.Server.Mvc/README.md", 1, "MvcRoutes.cs"),
     ];
 
     /// <summary>

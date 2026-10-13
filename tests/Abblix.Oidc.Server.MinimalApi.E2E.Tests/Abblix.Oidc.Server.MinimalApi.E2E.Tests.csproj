@@ -38,6 +38,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.TestHost\Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" />
+    <!-- The adapter embeds this assembly rather than passing the reference on, and the tests read OidcRouteOptions. -->
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

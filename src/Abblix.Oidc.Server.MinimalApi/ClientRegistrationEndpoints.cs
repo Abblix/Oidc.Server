@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using System.Net.Http.Headers;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;

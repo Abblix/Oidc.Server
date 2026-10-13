@@ -8,6 +8,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore.SessionManagement;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;

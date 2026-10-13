@@ -57,7 +57,7 @@ builder.Services.AddBackChannelLogout();
 
 builder.Services.AddOidcServices(options =>
 {
-    options.Issuer = new Uri(TestConstants.Issuer);
+    options.Issuer = TestConstants.IssuerUri;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
     // A host that configures only LoginUri leaves the other arms of the authorization response formatter
     // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.
@@ -94,6 +94,12 @@ builder.Services.AddOidcServices(options =>
         {
             ClientSecrets = [secret],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
+        new ClientInfo(TestConstants.ClientSecretBasicClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
 
@@ -203,7 +209,11 @@ app.UseMiddleware<TestConsentOverrideMiddleware>();
 
 app.UseCors();
 app.UseAuthorization();
-app.MapControllers();
+app.MapOidcControllers(app.Configuration[TestConstants.RoutePrefixConfigKey] ?? string.Empty);
+
+// A host's own conventional route: the library's controllers stay out of its reach, which the routing tests
+// check.
+app.MapDefaultControllerRoute();
 
 // Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs
 // the ambient request to build an absolute URL, so the only way to exercise it end to end is from inside one.

@@ -59,7 +59,7 @@ builder.Services.AddBackChannelLogout();
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
 builder.Services.AddOidcServices(options =>
 {
-    options.Issuer = new Uri(TestConstants.Issuer);
+    options.Issuer = TestConstants.IssuerUri;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
     // A host that configures only LoginUri leaves the other arms of the authorization response formatter
     // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.
@@ -97,6 +97,12 @@ builder.Services.AddOidcServices(options =>
         {
             ClientSecrets = [secret],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
+        new ClientInfo(TestConstants.ClientSecretBasicClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
 
@@ -213,9 +219,9 @@ app.UseMiddleware<TestConsentOverrideMiddleware>();
 app.UseCors();
 app.UseAuthorization();
 
-// The Minimal API counterpart of MVC's app.MapControllers(): maps every OIDC endpoint as a route handler.
+// The Minimal API counterpart of MVC's app.MapOidcControllers(): maps every OIDC endpoint as a route handler.
 // The prefix is empty by default; the routing test sets it through configuration to verify MapOidcEndpoints(prefix).
-var routePrefix = app.Configuration[MinimalApiTestConstants.RoutePrefixConfigKey] ?? string.Empty;
+var routePrefix = app.Configuration[TestConstants.RoutePrefixConfigKey] ?? string.Empty;
 app.MapOidcEndpoints(routePrefix);
 
 // Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs

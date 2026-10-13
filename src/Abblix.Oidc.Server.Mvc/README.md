@@ -14,7 +14,7 @@ Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, 
 
 ## Key Features
 
-- Standard MVC Integration: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
+- Standard MVC Integration: Uses ASP.NET controller classes and model binding on routes the package maps itself - no custom middleware required
 - OIDC Endpoint Controllers: Authorization, token, userinfo, introspection, revocation, device authorization, and more
 - Session Management: Check session iframe and RP-initiated logout with CSP nonce support
 - Front-Channel & Back-Channel Logout: Complete logout notification via both channels
@@ -44,8 +44,20 @@ builder.Services.AddOidcServices(options =>
 var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
+app.MapOidcControllers();
 app.Run();
+```
+
+The library's controllers carry no route of their own, so `app.MapControllers()` and a conventional route such as `{controller}/{action}` never reach them. `MapOidcControllers()` maps each enabled endpoint at the path `OidcRouteOptions` gives it, and a disabled endpoint is not mapped at all, so it answers 404. The call returns a convention builder for the endpoints it mapped, so cross-cutting conventions apply to all of them at once and to none of the host's routes, and an optional prefix mounts every endpoint under a sub-path:
+
+```csharp
+using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.Mvc;
+
+builder.Services.Configure<OidcRouteOptions>(routes => routes.Token = "/oauth2/token");
+
+app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-known/jwks
+    .RequireRateLimiting("oidc");
 ```
 
 ## Endpoint URLs

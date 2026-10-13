@@ -7,11 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Mvc.Controllers;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -25,7 +24,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
-	IEndpointResolver endpointResolver,
+	IOidcEndpointResolver endpointResolver,
 	ISignedMetadataProvider signedMetadataProvider,
 	IIssuerSettings issuerSettings) : IConfigurationResponseFormatter
 {
@@ -36,41 +35,32 @@ public class ConfigurationResponseFormatter(
 	/// <returns>An action result with the MVC-enriched configuration response including URLs.</returns>
 	public async Task<ActionResult<ModelResponse>> FormatResponseAsync(EndpointResponse response)
 	{
-		var tokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token, response.Issuer);
-		var revocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation, response.Issuer);
-		var introspectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection, response.Issuer);
-		var userInfoEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.UserInfoAsync), OidcEndpoints.UserInfo, response.Issuer);
+		var tokenEndpoint = Resolve(OidcEndpoints.Token, response.Issuer);
+		var revocationEndpoint = Resolve(OidcEndpoints.Revocation, response.Issuer);
+		var introspectionEndpoint = Resolve(OidcEndpoints.Introspection, response.Issuer);
+		var userInfoEndpoint = Resolve(OidcEndpoints.UserInfo, response.Issuer);
 
 		var mvcResponse = new ModelResponse
 		{
 			Issuer = response.Issuer.OriginalString,
 
-			JwksUri = Resolve<DiscoveryController>(nameof(DiscoveryController.KeysAsync), OidcEndpoints.Keys, response.Issuer),
+			JwksUri = Resolve(OidcEndpoints.Keys, response.Issuer),
 
-			AuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.AuthorizeAsync), OidcEndpoints.Authorize, response.Issuer),
+			AuthorizationEndpoint = Resolve(OidcEndpoints.Authorize, response.Issuer),
 			UserInfoEndpoint = userInfoEndpoint,
-			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession, response.Issuer),
-			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession, response.Issuer),
-			PushedAuthorizationRequestEndpoint = Resolve<BackChannelAuthorizationController>(
-				nameof(BackChannelAuthorizationController.PushAuthorizeAsync),
-				OidcEndpoints.PushedAuthorizationRequest,
-				response.Issuer),
+			EndSessionEndpoint = Resolve(OidcEndpoints.EndSession, response.Issuer),
+			CheckSessionIframe = Resolve(OidcEndpoints.CheckSession, response.Issuer),
+			PushedAuthorizationRequestEndpoint = Resolve(OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
 
 			TokenEndpoint = tokenEndpoint,
 			RevocationEndpoint = revocationEndpoint,
 			IntrospectionEndpoint = introspectionEndpoint,
 
-			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient, response.Issuer),
+			RegistrationEndpoint = Resolve(OidcEndpoints.RegisterClient, response.Issuer),
 
-			BackChannelAuthenticationEndpoint = Resolve<BackChannelAuthorizationController>(
-				nameof(BackChannelAuthorizationController.BackChannelAuthenticationAsync),
-				OidcEndpoints.BackChannelAuthentication,
-				response.Issuer),
+			BackChannelAuthenticationEndpoint = Resolve(OidcEndpoints.BackChannelAuthentication, response.Issuer),
 
-			DeviceAuthorizationEndpoint = Resolve<BackChannelAuthorizationController>(
-				nameof(BackChannelAuthorizationController.DeviceAuthorizationAsync),
-				OidcEndpoints.DeviceAuthorization,
-				response.Issuer),
+			DeviceAuthorizationEndpoint = Resolve(OidcEndpoints.DeviceAuthorization, response.Issuer),
 
 			FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -162,18 +152,16 @@ public class ConfigurationResponseFormatter(
 	}
 
 	/// <summary>
-	/// Resolves the absolute URL for a controller action if endpoint path discovery is enabled and the endpoint is active.
+	/// Resolves the absolute URL of an endpoint if endpoint path discovery is enabled and the endpoint is active.
 	/// </summary>
-	/// <typeparam name="T">The controller type containing the action method.</typeparam>
-	/// <param name="actionName">The name of the action method to resolve.</param>
-	/// <param name="enablingFlag">The endpoint flag that must be enabled for the URL to be resolved.</param>
+	/// <param name="endpoint">The endpoint flag that must be enabled for the URL to be resolved.</param>
 	/// <param name="issuer">The issuer the document describes.</param>
 	/// <returns>The absolute URI to the endpoint if discovery and endpoint are enabled; otherwise, null.</returns>
-	private Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag, Uri issuer) where T : ControllerBase
+	private Uri? Resolve(OidcEndpoints endpoint, Uri issuer)
 	{
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
-		       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
-			? OnIssuersHost(endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName)), issuer)
+		       options.Value.EnabledEndpoints.HasFlag(endpoint)
+			? OnIssuersHost(endpointResolver.Resolve(endpoint), issuer)
 			: null;
 	}
 

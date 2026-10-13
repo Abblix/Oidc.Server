@@ -11,7 +11,6 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
 using Abblix.Utils.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -68,16 +67,15 @@ public static class ServiceCollectionExtensions
     {
         // Both adapters registered means both will serve the OIDC endpoints, and the host finds out only when
         // a request arrives and routing reports an ambiguity that names neither package. Caught here it names
-        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead,
-        // because a host can carry the package without ever calling its registration - and that is enough for
-        // AddControllers() to map its controllers.
+        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead, which
+        // also catches the MVC endpoints mapped without the MVC registration.
         TransportAdapterConflict.ThrowIfRegistered(
             services,
             TransportAdapterConflict.MvcAdapterAssemblyName,
             "Both OIDC transport adapters are registered in this application: the Minimal API adapter was " +
             "added after the MVC adapter's own AddOidcServices()/AddOidcMvc(). Only one of them may serve " +
-            "the OIDC endpoints - with both in place they claim the same paths and every OIDC request fails " +
-            "with AmbiguousMatchException. Keep one: remove either the MVC registration together with the " +
+            "the OIDC endpoints, since both map the same paths. Keep one: remove either the MVC registration " +
+            "together with the " +
             "Abblix.OIDC.Server.MVC package reference, or this one together with the " +
             "Abblix.OIDC.Server.MinimalApi package reference.");
 

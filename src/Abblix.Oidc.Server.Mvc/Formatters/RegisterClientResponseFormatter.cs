@@ -6,24 +6,23 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Controllers;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
 /// Provides a response formatter for client registration responses.
 /// </summary>
-/// <param name="uriResolver">The action URI provider used for generating URIs for client management actions.</param>
-public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegisterClientResponseFormatter
+/// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
+public class RegisterClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IRegisterClientResponseFormatter
 {
     /// <summary>
     /// Formats a client registration response asynchronously, converting the response model to an appropriate
@@ -72,11 +71,5 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
         return new ObjectResult(modelResponse) { StatusCode = StatusCodes.Status201Created };
     }
 
-    private Uri GetClientReadUrl(string clientId) => uriResolver.Action(
-        MvcUtils.TrimAsync(nameof(ClientManagementController.ReadClientAsync)),
-        MvcUtils.NameOf<ClientManagementController>(),
-        new RouteValueDictionary
-        {
-            { "clientId", clientId },
-        });
+    private Uri GetClientReadUrl(string clientId) => clientUriBuilder.Build(clientId);
 }

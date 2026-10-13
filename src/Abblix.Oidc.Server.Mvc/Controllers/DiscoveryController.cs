@@ -39,7 +39,6 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// For more details, refer to the OpenID Connect Discovery specification:
 /// <see href="https://openid.net/specs/openid-connect-discovery-1_0.html"/>.
 /// </remarks>
-[ApiController]
 // Discovery and JWKS are public, unauthenticated metadata, but they are still gated on HTTPS like the credential-
 // bearing controllers: over cleartext a man-in-the-middle could rewrite the advertised endpoints or jwks_uri and
 // steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
@@ -50,7 +49,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ReturnsLibraryRefusalStatus]
 [SkipStatusCodePages]
 [EnableCors(OidcConstants.CorsPolicyName)]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public sealed class DiscoveryController : ControllerBase
 {
 	/// <summary>
@@ -67,11 +67,10 @@ public sealed class DiscoveryController : ControllerBase
 	/// <param name="formatter">The service responsible for enriching the response with endpoint URLs.</param>
 	/// <returns>A task that results in an action result containing the provider's configuration details
 	/// in JSON format.</returns>
-	[HttpGet(Path.Configuration)]
-	[HttpGet(Path.OAuthAuthorizationServer)]
+	[HttpGet]
+	[ActionName(nameof(ConfigurationAsync))]
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
-	[EnabledBy(OidcEndpoints.Configuration)]
 	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<ActionResult<Abblix.Oidc.Server.Model.ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IConfigurationHandler handler,
@@ -94,8 +93,8 @@ public sealed class DiscoveryController : ControllerBase
 	/// containing the public keys used by the provider. The response conforms to the application/json media type.
 	/// If the Keys endpoint is disabled, a 404 Not Found response is returned.
 	/// </returns>
-	[HttpGet(Path.Keys)]
-	[EnabledBy(OidcEndpoints.Keys)]
+	[HttpGet]
+	[ActionName(nameof(KeysAsync))]
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
 		[FromServices] IAuthServiceKeysProvider serviceKeysProvider,
 		[FromServices] IOptions<OidcOptions> options,

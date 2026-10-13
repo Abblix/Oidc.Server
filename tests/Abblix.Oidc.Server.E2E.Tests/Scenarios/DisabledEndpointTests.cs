@@ -23,23 +23,31 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// An endpoint the host has not enabled answers 404 at the path it would have, on either host, whether the switch
-/// marks one action or a whole controller.
+/// An endpoint the host has not enabled answers 404 at the path it would have, on either host, whatever the method
+/// and the media type of the request, and whether the endpoint is one action or a whole controller.
 /// </summary>
 public class DisabledEndpointTests(TestFactory factory) : TestBase(factory)
 {
-    [Fact]
-    public async Task ADisabledActionAnswers404()
+    public enum RequestShape
+    {
+        PostedForm,
+        PostedJson,
+        Get,
+    }
+
+    [Theory]
+    [InlineData(RequestShape.PostedForm)]
+    [InlineData(RequestShape.PostedJson)]
+    [InlineData(RequestShape.Get)]
+    public async Task ADisabledActionAnswers404(RequestShape shape)
     {
         var discovery = await FetchDiscoveryAsync(CreateClient());
         Assert.NotNull(discovery.IntrospectionEndpoint);
 
         await using var host = Factory.WithWebHostBuilder(Without(OidcEndpoints.Introspection));
         using var client = host.CreateClient(ClientOptions);
-        using var response = await client.PostAsync(
-            discovery.IntrospectionEndpoint.AbsolutePath,
-            new FormUrlEncodedContent(new Dictionary<string, string> { [IntrospectionRequest.Parameters.Token] = "any" }),
-            TestContext.Current.CancellationToken);
+        using var request = Request(shape, discovery.IntrospectionEndpoint.AbsolutePath);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -59,6 +67,21 @@ public class DisabledEndpointTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    private static HttpRequestMessage Request(RequestShape shape, string path) => shape switch
+    {
+        RequestShape.PostedForm => new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new FormUrlEncodedContent(
+                new Dictionary<string, string> { [IntrospectionRequest.Parameters.Token] = "any" }),
+        },
+        RequestShape.PostedJson => new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, MediaTypeNames.Application.Json),
+        },
+        RequestShape.Get => new HttpRequestMessage(HttpMethod.Get, path),
+        _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, null),
+    };
 
     private static readonly WebApplicationFactoryClientOptions ClientOptions = new()
     {
