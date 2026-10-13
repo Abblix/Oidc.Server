@@ -26,6 +26,11 @@ public static class TestConstants
     public const string Issuer = "https://auth.example.com";
 
     /// <summary>
+    /// <see cref="Issuer"/> as the server's options take it.
+    /// </summary>
+    public static readonly Uri IssuerUri = new(Issuer);
+
+    /// <summary>
     /// Pre-seeded confidential client with RAR enabled
     /// (<c>authorization_details_types = ["payment_initiation"]</c>),
     /// id_token RAR-emission toggle off (default). Baseline RAR scenarios.

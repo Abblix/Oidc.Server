@@ -59,7 +59,7 @@ builder.Services.AddBackChannelLogout();
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
 builder.Services.AddOidcServices(options =>
 {
-    options.Issuer = new Uri(TestConstants.Issuer);
+    options.Issuer = TestConstants.IssuerUri;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
     // A host that configures only LoginUri leaves the other arms of the authorization response formatter
     // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.

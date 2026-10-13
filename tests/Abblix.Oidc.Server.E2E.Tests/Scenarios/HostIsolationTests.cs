@@ -67,7 +67,7 @@ public sealed class HostIsolationTests : IAsyncLifetime
             builder.Services.AddOidcServices(options =>
             {
                 // The issuer of the rest of the suite: the license counts issuers across the process
-                options.Issuer = new Uri(TestConstants.Issuer);
+                options.Issuer = TestConstants.IssuerUri;
                 options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
             });
 
