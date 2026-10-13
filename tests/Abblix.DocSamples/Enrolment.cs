@@ -118,7 +118,7 @@ public static class Enrolment
     /// names a fragment calls into, and a stub for whatever the integrator's own half invents.
     /// </para>
     /// </remarks>
-    public const int Unenrolled = 12;
+    public const int Unenrolled = 11;
 
     /// <summary>
     /// The README samples whose text is compiled, each with a copy under <c>Samples/</c>.
