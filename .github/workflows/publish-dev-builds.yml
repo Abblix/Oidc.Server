@@ -107,9 +107,28 @@ jobs:
           global-json-file: global.json
 
         timeout-minutes: 3
+      # Looked up, never downloaded: the packages this job builds and publishes come from the feed, not from a
+      # cache any job on the branch can write. The lookup only tells whether develop's entry exists already
+      - name: Look up the NuGet packages cache
+        id: nuget-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json') }}
+          lookup-only: true
+        timeout-minutes: 3
       - name: Restore
         run: dotnet restore
 
+        timeout-minutes: 3
+      # The one place the NuGet cache is written: develop's entry is visible to every pull request against it,
+      # while an entry saved by a pull request is visible to that pull request alone
+      - name: Save NuGet packages cache
+        if: github.ref == 'refs/heads/develop' && steps.nuget-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
         timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release
