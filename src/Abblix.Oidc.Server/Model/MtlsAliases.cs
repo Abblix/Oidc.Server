@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Utils.Json;
 using System.Text.Json.Serialization;
 
 namespace Abblix.Oidc.Server.Model;
@@ -19,7 +18,6 @@ namespace Abblix.Oidc.Server.Model;
 /// <see cref="ConfigurationResponse"/>.
 /// Properties are omitted from the serialized JSON when null.
 /// </summary>
-[JsonIgnoreNulls]
 public record MtlsAliases
 {
     /// <summary>
@@ -27,6 +25,7 @@ public record MtlsAliases
     /// with <c>tls_client_auth</c> or <c>self_signed_tls_client_auth</c>.
     /// </summary>
     [JsonPropertyName("token_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? TokenEndpoint { get; init; }
 
     /// <summary>
@@ -34,12 +33,14 @@ public record MtlsAliases
     /// reachable on the mTLS host so that revocation calls reuse the same client certificate.
     /// </summary>
     [JsonPropertyName("revocation_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? RevocationEndpoint { get; init; }
 
     /// <summary>
     /// The mTLS-bound introspection endpoint URL (<c>introspection_endpoint</c>) per RFC 7662.
     /// </summary>
     [JsonPropertyName("introspection_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? IntrospectionEndpoint { get; init; }
 
     /// <summary>
@@ -47,5 +48,6 @@ public record MtlsAliases
     /// are certificate-bound and must be presented over the same client certificate context.
     /// </summary>
     [JsonPropertyName("userinfo_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? UserInfoEndpoint { get; init; }
 }

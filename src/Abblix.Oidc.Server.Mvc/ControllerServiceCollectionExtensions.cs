@@ -36,17 +36,6 @@ public static class ControllerServiceCollectionExtensions
 		services.TryAddEnumerable(
 			ServiceDescriptor.Singleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>());
 
-		services
-			.PostConfigure<JsonOptions>(options =>
-			{
-				// WithAddedModifier attaches to the resolver already in place (set up by AddControllers),
-				// so the modifier runs within that resolver rather than in a separate chained one.
-				// A chained resolver would never be reached because the default resolver handles all types first.
-				options.JsonSerializerOptions.TypeInfoResolver =
-					(options.JsonSerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
-					.WithAddedModifier(JsonIgnoreNullsModifier.Apply);
-			});
-
 		return services;
 	}
 }
