@@ -80,10 +80,12 @@ public sealed class HostIsolationTests : IAsyncLifetime
         if (withLibrary)
         {
 #if MINIMAL_API_TRANSPORT
-            app.MapOidcEndpoints().WithMetadata(LibraryConvention);
+            IEndpointConventionBuilder mapping = app.MapOidcEndpoints();
 #else
-            app.MapOidcControllers().WithMetadata(LibraryConvention);
+            var mapping = app.MapOidcControllers();
 #endif
+            mapping.WithMetadata(LibraryConvention);
+            mapping.Finally(endpoint => endpoint.Metadata.Add(FinalLibraryConvention));
         }
 
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -147,10 +149,6 @@ public sealed class HostIsolationTests : IAsyncLifetime
             .OfType<RouteEndpoint>()
             .ToList();
 
-        Assert.Contains(endpoints, endpoint =>
-            PathOf(endpoint) == "/.well-known/openid-configuration" &&
-            endpoint.Metadata.Contains(LibraryConvention));
-
         var hostEndpoints = endpoints
             .Where(endpoint => PathOf(endpoint) is var path &&
                                (path.StartsWith(HostController.ItemsPath, StringComparison.Ordinal) ||
@@ -160,7 +158,22 @@ public sealed class HostIsolationTests : IAsyncLifetime
         // Both kinds of the host's endpoints are in the sample, or the assertion below says nothing about one of them
         Assert.Contains(hostEndpoints, endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null);
         Assert.Contains(hostEndpoints, endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() == null);
-        Assert.All(hostEndpoints, endpoint => Assert.DoesNotContain(LibraryConvention, endpoint.Metadata));
+        Assert.All(hostEndpoints, endpoint =>
+        {
+            Assert.DoesNotContain(LibraryConvention, endpoint.Metadata);
+            Assert.DoesNotContain(FinalLibraryConvention, endpoint.Metadata);
+        });
+
+        // Every other endpoint of this host is the library's: more than the discovery document alone, each one
+        // carrying both conventions
+        var libraryEndpoints = endpoints.Except(hostEndpoints).ToList();
+        Assert.Contains(libraryEndpoints, endpoint => PathOf(endpoint) == "/.well-known/openid-configuration");
+        Assert.Contains(libraryEndpoints, endpoint => PathOf(endpoint) == "/connect/token");
+        Assert.All(libraryEndpoints, endpoint =>
+        {
+            Assert.Contains(LibraryConvention, endpoint.Metadata);
+            Assert.Contains(FinalLibraryConvention, endpoint.Metadata);
+        });
     }
 
     /// <summary>
@@ -193,6 +206,9 @@ public sealed class HostIsolationTests : IAsyncLifetime
 
     /// <summary>Metadata the host puts on the library's endpoints through what the mapping call returns.</summary>
     private static readonly object LibraryConvention = new();
+
+    /// <summary>Metadata the host adds last, through the finishing convention of what the mapping call returns.</summary>
+    private static readonly object FinalLibraryConvention = new();
 
     /// <summary>A pattern of the host's that two-segment paths of the library also match.</summary>
     private const string HostPagePattern = "/{section}/{page}";
