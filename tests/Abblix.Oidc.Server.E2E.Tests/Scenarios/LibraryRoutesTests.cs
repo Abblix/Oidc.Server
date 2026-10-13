@@ -73,6 +73,29 @@ public class LibraryRoutesTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A configured path written without its leading slash still lands one segment under the prefix.
+    /// </summary>
+    [Fact]
+    public async Task APathWithoutALeadingSlashLandsUnderThePrefix()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder
+            .UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix)
+            .ConfigureTestServices(services => services.Configure<OidcRouteOptions>(routes =>
+                routes.Introspection = MovedIntrospectionPath.TrimStart('/'))));
+        using var client = host.CreateClient(ClientOptions);
+
+        using var discovery = await client.GetAsync(
+            RoutePrefix + "/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+        var document = JsonNode.Parse(await discovery.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(
+            RoutePrefix + MovedIntrospectionPath,
+            new Uri(document[ConfigurationResponse.Parameters.IntrospectionEndpoint]!.GetValue<string>()).AbsolutePath);
+
+        using var introspection = await PostIntrospectionAsync(client, RoutePrefix + MovedIntrospectionPath);
+        Assert.NotEqual(HttpStatusCode.NotFound, introspection.StatusCode);
+    }
+
+    /// <summary>
     /// A client authenticating with HTTP Basic gets its token, so the token endpoint reads the Authorization header.
     /// </summary>
     [Fact]

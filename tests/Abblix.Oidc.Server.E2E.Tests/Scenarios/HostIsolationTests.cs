@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,9 +80,9 @@ public sealed class HostIsolationTests : IAsyncLifetime
         if (withLibrary)
         {
 #if MINIMAL_API_TRANSPORT
-            app.MapOidcEndpoints();
+            app.MapOidcEndpoints().WithMetadata(LibraryConvention);
 #else
-            app.MapOidcControllers();
+            app.MapOidcControllers().WithMetadata(LibraryConvention);
 #endif
         }
 
@@ -134,6 +135,40 @@ public sealed class HostIsolationTests : IAsyncLifetime
         Assert.NotNull(body?[Abblix.Oidc.Server.Model.ConfigurationResponse.Parameters.Issuer]);
     }
 
+    /// <summary>
+    /// A convention the host applies through what the mapping call returns reaches the library's endpoints and none
+    /// of the host's own.
+    /// </summary>
+    [Fact]
+    public void AConventionOnTheMappingReachesTheLibrarysEndpointsAlone()
+    {
+        var endpoints = ((IEndpointRouteBuilder)_withLibrary).DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .ToList();
+
+        Assert.Contains(endpoints, endpoint =>
+            PathOf(endpoint) == "/.well-known/openid-configuration" &&
+            endpoint.Metadata.Contains(LibraryConvention));
+
+        var hostEndpoints = endpoints
+            .Where(endpoint => PathOf(endpoint) is var path &&
+                               (path.StartsWith(HostController.ItemsPath, StringComparison.Ordinal) ||
+                                path is MinimalEchoPath or HostPagePattern))
+            .ToList();
+
+        // Both kinds of the host's endpoints are in the sample, or the assertion below says nothing about one of them
+        Assert.Contains(hostEndpoints, endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null);
+        Assert.Contains(hostEndpoints, endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() == null);
+        Assert.All(hostEndpoints, endpoint => Assert.DoesNotContain(LibraryConvention, endpoint.Metadata));
+    }
+
+    /// <summary>
+    /// The path an endpoint answers, written with its leading slash, which an attribute route template drops.
+    /// </summary>
+    private static string PathOf(RouteEndpoint endpoint)
+        => "/" + (endpoint.RoutePattern.RawText ?? string.Empty).TrimStart('/');
+
     public static TheoryData<Type> ApplicationWideSettings => new()
     {
         typeof(MvcOptions),
@@ -155,6 +190,9 @@ public sealed class HostIsolationTests : IAsyncLifetime
             _withLibrary.Services.GetServices<IStartupFilter>().Select(filter => filter.GetType()));
 
     private const string MinimalEchoPath = "/host/minimal";
+
+    /// <summary>Metadata the host puts on the library's endpoints through what the mapping call returns.</summary>
+    private static readonly object LibraryConvention = new();
 
     /// <summary>A pattern of the host's that two-segment paths of the library also match.</summary>
     private const string HostPagePattern = "/{section}/{page}";
@@ -213,6 +251,11 @@ public sealed class HostIsolationTests : IAsyncLifetime
                         $"{name}.Modifiers: {modifier.Method.DeclaringType?.FullName}.{modifier.Method.Name}"));
                     break;
 
+                case IDictionary entries:
+                    shape.Add($"{name} = {{{string.Join(", ", entries.Keys.Cast<object>().Order().Select(key =>
+                        $"{key}: {Describe(entries[key])}"))}}}");
+                    break;
+
                 case IEnumerable items:
                     shape.Add($"{name} = [{string.Join(", ", items.Cast<object?>().Select(item => item?.GetType().FullName))}]");
                     break;
@@ -230,6 +273,8 @@ public sealed class HostIsolationTests : IAsyncLifetime
 
         return shape;
     }
+
+    private static string? Describe(object? value) => value is Type type ? type.FullName : value?.GetType().FullName;
 
     private static async Task<(int Status, string? ContentType, JsonNode? Body)> SendAsync(
         WebApplication app, string method, string path, string? json)

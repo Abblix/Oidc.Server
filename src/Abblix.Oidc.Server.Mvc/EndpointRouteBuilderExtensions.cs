@@ -31,6 +31,7 @@ public static class EndpointRouteBuilderExtensions
     private const string ControllerRouteKey = "controller";
     private const string ActionRouteKey = "action";
     private const int AttributeRouteOrder = 0;
+    private const char PathSeparator = '/';
 
     /// <summary>
     /// One route of the library: the endpoint flag that enables it, the path it takes from
@@ -134,7 +135,8 @@ public static class EndpointRouteBuilderExtensions
 
         var enabled = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.EnabledEndpoints;
         var routes = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
-        var basePath = prefix.TrimEnd('/');
+        // One slash between the prefix and the path, whichever of them carries one, as a route group joins them
+        var basePath = prefix.Trim(PathSeparator) is { Length: > 0 } segment ? PathSeparator + segment : string.Empty;
 
         // The route name is what OidcEndpointResolver finds the URL by. An endpoint name (WithName) would be copied
         // onto the link-generation entry MVC makes for a named route as well, and refused as a duplicate.
@@ -142,7 +144,7 @@ public static class EndpointRouteBuilderExtensions
             .Where(route => enabled.HasFlag(route.Endpoint))
             .Select(route => (IEndpointConventionBuilder)endpoints.MapControllerRoute(
                 route.Name,
-                basePath + route.Pattern(routes),
+                basePath + PathSeparator + route.Pattern(routes).TrimStart(PathSeparator),
                 new RouteValueDictionary
                 {
                     [ControllerRouteKey] = route.Controller,
