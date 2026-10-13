@@ -118,8 +118,10 @@ jobs:
           # builds carry the same band, so comparing them says nothing happened.
           global-json-file: global.json
         timeout-minutes: 3
-      - name: Cache NuGet packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      # Restored only: the entry is saved by the build of develop, so every pull request reads that one copy
+      # instead of writing its own into the repository's shared cache allowance
+      - name: Restore NuGet packages cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
