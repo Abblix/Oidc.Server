@@ -7,17 +7,23 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Mime;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
+using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 
 /// <summary>
-/// A registration body whose read fails gets the status the framework's own body binding gives it. These failures
-/// come from the server and the connection, which the in-memory host of the end-to-end suites never produces: only
-/// Kestrel enforces the size bound, and only a real client breaks a read off. So the read is driven here with a body
-/// that fails the way each of them does.
+/// A registration body whose read fails for a reason outside the document: past the size bound it keeps the status
+/// the server gave it, and broken off or cancelled it gets the bare 400 the framework's own body binding gives it.
+/// These failures come from the server and the connection, which the in-memory host of the end-to-end suites never
+/// produces: only Kestrel enforces the size bound, and only a real client breaks a read off. So the read is driven
+/// here with a body that fails the way each of them does.
 /// </summary>
 public class ClientMetadataBodyTests
 {
@@ -45,6 +51,34 @@ public class ClientMetadataBodyTests
         Assert.Null(body.Request);
         var status = Assert.IsAssignableFrom<IStatusCodeHttpResult>(body.Refusal);
         Assert.Equal(expected, status.StatusCode);
+    }
+
+    /// <summary>
+    /// A fault in the host's own JSON configuration stays a server fault: it is not taken for a body in a character
+    /// set nobody can decode, which the reader reports with the same exception.
+    /// </summary>
+    [Fact]
+    public async Task AFaultInTheHostsConvertersIsNotAnsweredAsAnUnsupportedMediaType()
+    {
+        var services = new ServiceCollection().AddOptions();
+        services.Configure<JsonOptions>(options => options.SerializerOptions.Converters.Add(new FaultyUriConverter()));
+
+        var context = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
+        context.Request.ContentType = MediaTypeNames.Application.Json;
+        context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(
+            $$"""{"{{RegistrationMembers.RedirectUris}}": ["https://client.example/cb"]}"""));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ClientMetadataBody.BindAsync(context).AsTask());
+    }
+
+    /// <summary>A host converter that cannot read what it was registered for.</summary>
+    private sealed class FaultyUriConverter : JsonConverter<Uri>
+    {
+        public override Uri Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => throw new InvalidOperationException("The host's converter is misconfigured.");
+
+        public override void Write(Utf8JsonWriter writer, Uri value, JsonSerializerOptions options)
+            => throw new NotSupportedException();
     }
 
     /// <summary>A request body whose first read fails as the server fails it.</summary>

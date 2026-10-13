@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Validation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Core = Abblix.Oidc.Server.Model;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
@@ -40,7 +41,9 @@ internal sealed record ClientMetadataBody(Core.ClientRegistrationRequest? Reques
     /// <param name="context">The request whose body is read.</param>
     public static async ValueTask<ClientMetadataBody> BindAsync(HttpContext context)
     {
-        if (!context.Request.HasJsonContentType())
+        // Decided before the read, as the MVC host decides it: the reader reports a character set it cannot decode
+        // with the same exception a fault in the host's own converters raises, and that fault must stay one
+        if (!context.Request.HasJsonContentType() || !HasDecodableCharset(context.Request))
             return new ClientMetadataBody(null, Results.StatusCode(StatusCodes.Status415UnsupportedMediaType));
 
         var options = context.RequestServices.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
@@ -55,12 +58,6 @@ internal sealed record ClientMetadataBody(Core.ClientRegistrationRequest? Reques
         {
             return Unreadable;
         }
-        catch (InvalidOperationException)
-        {
-            // What the reader throws for a character set it cannot decode, the one failure of a JSON media type
-            // that gets here
-            return new ClientMetadataBody(null, Results.StatusCode(StatusCodes.Status415UnsupportedMediaType));
-        }
         catch (BadHttpRequestException exception)
         {
             return new ClientMetadataBody(null, Results.StatusCode(exception.StatusCode));
@@ -70,4 +67,9 @@ internal sealed record ClientMetadataBody(Core.ClientRegistrationRequest? Reques
             return new ClientMetadataBody(null, Results.StatusCode(StatusCodes.Status400BadRequest));
         }
     }
+
+    private static bool HasDecodableCharset(HttpRequest request)
+        => !MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaType)
+           || !mediaType.Charset.HasValue
+           || mediaType.Encoding is not null;
 }
