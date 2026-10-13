@@ -25,7 +25,9 @@ namespace Abblix.Oidc.Server.MinimalApi.Model;
 /// read here, through the host's JSON options, and an unreadable document is answered as
 /// <see cref="ErrorFactory.UnreadableClientMetadata"/>, as the MVC host answers it. A body of another media type never
 /// gets here, since the route accepts JSON only, but one declaring no media type does and is answered 415 as the
-/// framework answers it. A body past the size bound keeps the status the server gives it.
+/// framework answers it, and so is one declaring a character set nobody can decode, as the MVC host answers it. A
+/// body past the size bound keeps the status the server gives it, and a read the client broke off or the server
+/// cancelled gets the bare 400 the framework gives it.
 /// </remarks>
 /// <param name="Request">The metadata read from the body, or <c>null</c> when it could not be read.</param>
 /// <param name="Refusal">The answer to a body that could not be read, or <c>null</c> when it was read.</param>
@@ -53,9 +55,19 @@ internal sealed record ClientMetadataBody(Core.ClientRegistrationRequest? Reques
         {
             return Unreadable;
         }
+        catch (InvalidOperationException)
+        {
+            // What the reader throws for a character set it cannot decode, the one failure of a JSON media type
+            // that gets here
+            return new ClientMetadataBody(null, Results.StatusCode(StatusCodes.Status415UnsupportedMediaType));
+        }
         catch (BadHttpRequestException exception)
         {
             return new ClientMetadataBody(null, Results.StatusCode(exception.StatusCode));
+        }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        {
+            return new ClientMetadataBody(null, Results.StatusCode(StatusCodes.Status400BadRequest));
         }
     }
 }

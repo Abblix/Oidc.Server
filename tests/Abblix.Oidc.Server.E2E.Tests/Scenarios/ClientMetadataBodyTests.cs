@@ -33,6 +33,7 @@ public class ClientMetadataBodyTests(TestFactory factory) : TestBase(factory)
         $$"""{"{{RegistrationMembers.RedirectUris}}": ["https://client.example/cb\q"]}""",
         $$"""{"{{RegistrationMembers.RedirectUris}}": 5}""",
         "not json",
+        "null",
         string.Empty,
     ];
 
@@ -76,11 +77,12 @@ public class ClientMetadataBodyTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// A body of another media type, or of none, is not client metadata the server can read at all, and both hosts
-    /// answer it 415 rather than with the metadata refusal.
+    /// A body of another media type, of none, or in a character set nobody can decode is not client metadata the
+    /// server can read at all, and both hosts answer it 415 rather than with the metadata refusal.
     /// </summary>
     [Theory]
     [InlineData(MediaTypeNames.Text.Plain)]
+    [InlineData(MediaTypeNames.Application.Json + "; charset=bogus")]
     [InlineData(null)]
     public async Task ARegistrationBodyOfAnotherMediaType_IsUnsupported(string? mediaType)
     {
@@ -90,7 +92,7 @@ public class ClientMetadataBodyTests(TestFactory factory) : TestBase(factory)
         var content = new ByteArrayContent(Encoding.UTF8.GetBytes(
             $$"""{"{{RegistrationMembers.RedirectUris}}": ["{{TestConstants.RedirectUri}}"]}"""));
         if (mediaType is not null)
-            content.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse(mediaType);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.RegistrationEndpoint) { Content = content };
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
@@ -112,5 +114,6 @@ public class ClientMetadataBodyTests(TestFactory factory) : TestBase(factory)
         Assert.All(description, character => Assert.True(
             RefusalDescriptionTests.IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.DoesNotContain(nameof(System), description, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(Abblix), description, StringComparison.Ordinal);
     }
 }
