@@ -32,7 +32,10 @@ public class RequiredBindingMetadataProvider : IBindingMetadataProvider
 	/// </remarks>
 	public void CreateBindingMetadata(BindingMetadataProviderContext context)
 	{
-		if (context is { PropertyAttributes: { } attributes } &&
+		// Only this package's models: the provider is registered for the whole application, and a host's own
+		// model with a [Required] property binds as it would without this package
+		if (context is { Key.ContainerType: { } container, PropertyAttributes: { } attributes } &&
+		    container.Assembly == typeof(RequiredBindingMetadataProvider).Assembly &&
 		    attributes.OfType<RequiredAttribute>().Any())
 		{
 			context.BindingMetadata.IsBindingRequired = true;
