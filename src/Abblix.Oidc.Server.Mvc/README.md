@@ -14,7 +14,7 @@ Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, 
 
 ## Key Features
 
-- Standard MVC Integration: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
+- Standard MVC Integration: Uses ASP.NET controller classes and model binding on routes the package maps itself - no custom middleware required
 - OIDC Endpoint Controllers: Authorization, token, userinfo, introspection, revocation, device authorization, and more
 - Session Management: Check session iframe and RP-initiated logout with CSP nonce support
 - Front-Channel & Back-Channel Logout: Complete logout notification via both channels
