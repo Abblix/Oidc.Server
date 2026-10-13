@@ -31,8 +31,7 @@ public static class ControllerServiceCollectionExtensions
 	{
 		services
 			.AddControllers()
-			.AddApplicationPart(typeof(ControllerServiceCollectionExtensions).Assembly)
-			.AddControllersAsServices();
+			.AddApplicationPart(typeof(ControllerServiceCollectionExtensions).Assembly);
 
 		services.TryAddEnumerable(
 			ServiceDescriptor.Singleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>());
