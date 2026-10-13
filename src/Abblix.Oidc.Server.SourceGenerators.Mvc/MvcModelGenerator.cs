@@ -50,6 +50,8 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
 	private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
 	private const string DisplayAttributeName = "global::System.ComponentModel.DataAnnotations.Display";
+	private const string RequiredAttributeName = "System.ComponentModel.DataAnnotations.RequiredAttribute";
+	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
 
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -399,6 +401,12 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 				default:
 					_writer.AppendLine($"\t{RenderAttribute(attribute, attributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))}");
+
+					// A required parameter is also required at binding, so a request without it is refused before
+					// validation runs; the flag is set on the property itself, where only this model's binding reads it
+					if (attributeClass.ToDisplayString() == RequiredAttributeName)
+						_writer.AppendLine($"\t[{BindRequiredAttributeName}]");
+
 					return;
 			}
 		}

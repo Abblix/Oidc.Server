@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using AuthorizationRequest = Abblix.Oidc.Server.Mvc.Model.AuthorizationRequest;
 using Parameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
+using IntrospectionRequest = Abblix.Oidc.Server.Mvc.Model.IntrospectionRequest;
+using RevocationRequest = Abblix.Oidc.Server.Mvc.Model.RevocationRequest;
 using TokenRequest = Abblix.Oidc.Server.Mvc.Model.TokenRequest;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Binders;
@@ -37,9 +39,13 @@ public class HostModelBindingTests
     public void ARequiredPropertyOfAHostModelIsNotMadeBindingRequired()
         => Assert.False(MetadataFor(typeof(HostModel), nameof(HostModel.Name)).IsBindingRequired);
 
-    [Fact]
-    public void ARequiredPropertyOfAPackageModelIsBindingRequired()
-        => Assert.True(MetadataFor(typeof(TokenRequest), nameof(TokenRequest.GrantType)).IsBindingRequired);
+    /// <summary>Every required parameter of this package's models, each from its own generated model.</summary>
+    [Theory]
+    [InlineData(typeof(TokenRequest), nameof(TokenRequest.GrantType))]
+    [InlineData(typeof(IntrospectionRequest), nameof(IntrospectionRequest.Token))]
+    [InlineData(typeof(RevocationRequest), nameof(RevocationRequest.Token))]
+    public void ARequiredPropertyOfAPackageModelIsBindingRequired(Type container, string property)
+        => Assert.True(MetadataFor(container, property).IsBindingRequired);
 
     [Fact]
     public void ACultureListOfAHostModelGetsTheBindingItWouldGetAnyway()
