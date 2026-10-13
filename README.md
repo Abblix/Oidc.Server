@@ -57,28 +57,34 @@ Under the hood, the library leans on modular and hexagonal architecture and the 
 
 ## ⚡ Quickstart
 
-Install the adapter for your hosting model and register the server in `Program.cs`:
+Install the Minimal API adapter, then register the server and map its endpoints in `Program.cs`:
 
 ```shell
-dotnet add package Abblix.OIDC.Server.MVC
+dotnet add package Abblix.OIDC.Server.MinimalApi
 ```
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.MinimalApi;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllersWithViews();
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddMemoryCache();
 
 // Turn your ASP.NET Core app into an OpenID Connect provider
 builder.Services.AddOidcServices(options =>
 {
     options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
+    options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
 });
+
+var app = builder.Build();
+app.UseCors();
+app.MapOidcEndpoints();
+app.Run();
 ```
 
-That registers the full set of certified OpenID Connect endpoints. Logout notification is the one thing your application chooses: add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, from `Abblix.Oidc.Server.Features`, and your configuration document advertises what you chose. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+That maps the full set of certified OpenID Connect endpoints. An MVC application installs `Abblix.OIDC.Server.MVC` instead, imports `Abblix.Oidc.Server.Mvc`, and calls `app.MapOidcControllers()` in place of `app.MapOidcEndpoints()`. Logout notification is the one thing your application chooses: add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, from `Abblix.Oidc.Server.Features`, and your configuration document advertises what you chose. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
 
 ## ✨ What's New
 

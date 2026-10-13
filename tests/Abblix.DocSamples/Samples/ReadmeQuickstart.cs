@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 // </ambient>
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.MinimalApi;
 
 namespace Abblix.DocSamples.Samples;
 
@@ -30,14 +30,20 @@ internal static class ReadmeQuickstartSample
     {
         // <sample>
         var builder = WebApplication.CreateBuilder(args);
-        builder.Services.AddControllersWithViews();
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddMemoryCache();
 
         // Turn your ASP.NET Core app into an OpenID Connect provider
         builder.Services.AddOidcServices(options =>
         {
             options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-            options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
         });
+
+        var app = builder.Build();
+        app.UseCors();
+        app.MapOidcEndpoints();
+        app.Run();
         // </sample>
     }
 }
