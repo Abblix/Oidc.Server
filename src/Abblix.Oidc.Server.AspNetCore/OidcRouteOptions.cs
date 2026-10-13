@@ -6,19 +6,16 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Microsoft.AspNetCore.Routing;
-
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
-/// Route templates for the OpenID Connect and OAuth 2.0 endpoints mapped by
-/// <see cref="EndpointRouteBuilderExtensions.MapOidcEndpoints(IEndpointRouteBuilder,string)"/>.
+/// Route templates for the OpenID Connect and OAuth 2.0 endpoints, mapped by <c>MapOidcEndpoints</c> in the Minimal
+/// API integration and by <c>MapOidcControllers</c> in the MVC one.
 /// </summary>
 /// <remarks>
-/// The MVC integration encodes these paths as tokenized templates resolved through the MVC application model.
-/// Minimal API has no application-model hook, so the same configurability is expressed as a plain options object:
-/// a host overrides any path through the options pattern, and the endpoints are mapped against the resolved literals
-/// at startup. Defaults mirror the MVC fallbacks (<c>/connect/*</c> and <c>/.well-known/*</c>).
+/// A host overrides any path through the options pattern, and the endpoints are mapped against the resolved values
+/// at startup, so a path changed after mapping has no effect. A disabled endpoint is not mapped at all, whatever
+/// its path says.
 /// </remarks>
 public sealed class OidcRouteOptions
 {
@@ -58,7 +55,10 @@ public sealed class OidcRouteOptions
     /// <summary>
     /// The client configuration endpoint (RFC 7592). Must contain the <c>{clientId}</c> route parameter.
     /// </summary>
-    public string RegisterClient { get; set; } = "/connect/register/{clientId}";
+    public string RegisterClient { get; set; } = "/connect/register/{" + ClientIdRouteParameter + "}";
+
+    /// <summary>The route parameter <see cref="RegisterClient"/> carries the client identifier in.</summary>
+    public const string ClientIdRouteParameter = "clientId";
 
     /// <summary>The OpenID Provider configuration document (OpenID Connect Discovery 4).</summary>
     public string Configuration { get; set; } = "/.well-known/openid-configuration";

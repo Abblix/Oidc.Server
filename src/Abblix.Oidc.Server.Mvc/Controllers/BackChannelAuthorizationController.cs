@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// pushed authorization requests, client-initiated backchannel authentication (CIBA) and the device authorization
 /// grant.
 /// </summary>
-[ApiController]
 [ReturnsOidcInvalidRequest]
 [ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -34,7 +33,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [RequireHttps]
 [RequireHost]
 [RequireTenant]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public sealed class BackChannelAuthorizationController : ControllerBase
 {
     /// <summary>
@@ -54,10 +54,10 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// If the request is valid, it is processed and stored, and a response containing the request URI is returned.
     /// If the request is invalid, an error response is generated.
     /// </remarks>
-    [HttpPost(Path.PushAuthorizationRequest)]
+    [HttpPost]
+    [ActionName(nameof(PushAuthorizeAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Application.Json)]
-    [EnabledBy(OidcEndpoints.PushedAuthorizationRequest)]
     public async Task<ActionResult<Core.AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
         [FromServices] IPushedAuthorizationResponseFormatter formatter,
@@ -97,9 +97,9 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// An <see cref="ActionResult"/> representing the HTTP response to the backchannel authentication request.
     /// The response may indicate successful initiation of the process or an error if the request fails validation.
     /// </returns>
-    [HttpPost(Path.BackChannelAuthentication)]
+    [HttpPost]
+    [ActionName(nameof(BackChannelAuthenticationAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    [EnabledBy(OidcEndpoints.BackChannelAuthentication)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,
         [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
@@ -120,9 +120,9 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// OAuth 2.0 Device Authorization Grant Documentation
     /// </see>
     /// </remarks>
-    [HttpPost(Path.DeviceAuthorization)]
+    [HttpPost]
+    [ActionName(nameof(DeviceAuthorizationAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    [EnabledBy(OidcEndpoints.DeviceAuthorization)]
     public async Task<ActionResult> DeviceAuthorizationAsync(
         [FromServices] IDeviceAuthorizationHandler handler,
         [FromServices] IDeviceAuthorizationResponseFormatter formatter,

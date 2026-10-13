@@ -20,9 +20,9 @@ namespace Abblix.Oidc.Server.MinimalApi;
 /// Maps the Abblix OpenID Connect server endpoints onto an ASP.NET Core Minimal API route builder.
 /// </summary>
 /// <remarks>
-/// This is the Minimal API counterpart of the MVC integration's <c>app.MapControllers()</c>. Each endpoint is mapped
-/// only when its <see cref="OidcEndpoints"/> flag is enabled in <see cref="OidcOptions.EnabledEndpoints"/>, reproducing
-/// the MVC behavior where a disabled endpoint is never registered and therefore returns 404.
+/// This is the Minimal API counterpart of the MVC integration's <c>app.MapOidcControllers()</c>. Each endpoint is
+/// mapped only when its <see cref="OidcEndpoints"/> flag is enabled in <see cref="OidcOptions.EnabledEndpoints"/>, so a
+/// disabled endpoint is never registered and answers 404.
 /// </remarks>
 public static class EndpointRouteBuilderExtensions
 {
@@ -36,20 +36,15 @@ public static class EndpointRouteBuilderExtensions
     /// cross-cutting conventions (rate limiting, host filtering, metadata) to all of them at once.</returns>
     public static RouteGroupBuilder MapOidcEndpoints(this IEndpointRouteBuilder endpoints, string prefix = "")
     {
-        // Refuse at startup rather than let both adapters map the same paths and fail on every request with a
-        // routing error that names neither package. Referencing the MVC package is enough for the conflict:
-        // AddControllers() finds its controllers in the dependency graph with or without a call of its own,
-        // which is why the presence of the assembly is the signal here rather than a registration.
+        // Refuse at startup rather than let both adapters map the same paths under the same endpoint names and fail
+        // on every request with a routing error that names neither package.
         TransportAdapterConflict.ThrowIfLoaded(
             TransportAdapterConflict.MvcAdapterAssemblyName,
             "Both OIDC transport adapters are present in this application: MapOidcEndpoints() maps the " +
             "Minimal API endpoints, and the MVC adapter (Abblix.OIDC.Server.MVC) is loaded as well. Only one " +
-            "of them may serve the OIDC endpoints. Referencing the MVC package is enough to bring its " +
-            "controllers in - AddControllers() finds them in the dependency graph whether or not " +
-            "AddOidcServices() was ever called - so both transports would claim /connect/* and " +
-            "/.well-known/*, and every OIDC request would fail with AmbiguousMatchException. " +
+            "of them may serve the OIDC endpoints, since both map the same paths under the same endpoint names. " +
             "To stay on Minimal API, remove the Abblix.OIDC.Server.MVC package reference together with any " +
-            "AddOidcServices() or AddOidcMvc() call. To stay on MVC, remove the " +
+            "AddOidcServices(), AddOidcMvc() or MapOidcControllers() call. To stay on MVC, remove the " +
             "Abblix.OIDC.Server.MinimalApi package reference together with this MapOidcEndpoints() call.");
 
         var options = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcOptions>>().Value;

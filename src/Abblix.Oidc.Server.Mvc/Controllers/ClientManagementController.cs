@@ -30,7 +30,6 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// and removing clients. This is crucial for systems where client applications need to be managed programmatically without manual intervention.
 /// For detailed protocol specifications, refer to <see href="https://openid.net/specs/openid-connect-registration-1_0.html"/>.
 /// </remarks>
-[ApiController]
 [ReturnsOidcInvalidRequest]
 [ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -38,8 +37,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [RequireHttps]
 [RequireHost]
 [RequireTenant]
-[EnabledBy(OidcEndpoints.RegisterClient)]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public class ClientManagementController : ControllerBase
 {
     /// <summary>
@@ -58,7 +57,8 @@ public class ClientManagementController : ControllerBase
     /// to register dynamically. It validates the request, processes it if valid, and formats a response that
     /// can include either the successful registration details or an error message.
     /// </remarks>
-    [HttpPost(Path.Register)]
+    [HttpPost]
+    [ActionName(nameof(RegisterClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
@@ -90,7 +90,8 @@ public class ClientManagementController : ControllerBase
     /// Per RFC 7592 Section 2.1, the endpoint URL format is /connect/register/{client_id}.
     /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpGet(Path.RegisterClient)]
+    [HttpGet]
+    [ActionName(nameof(ReadClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
@@ -117,7 +118,8 @@ public class ClientManagementController : ControllerBase
     /// The request body must contain all client metadata including the client_id and client_secret.
     /// Returns 200 OK with updated configuration on success.
     /// </remarks>
-    [HttpPut(Path.RegisterClient)]
+    [HttpPut]
+    [ActionName(nameof(UpdateClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
@@ -149,7 +151,8 @@ public class ClientManagementController : ControllerBase
     /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
     /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpDelete(Path.RegisterClient)]
+    [HttpDelete]
+    [ActionName(nameof(RemoveClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,

@@ -14,10 +14,11 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
-using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 
 using Moq;
 
@@ -43,16 +44,35 @@ public class RegisterClientResponseFormatterTests
 
     private static readonly DateTimeOffset IssuedAt = new(2026, 5, 10, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly Mock<IUriResolver> _uriResolver = new(MockBehavior.Strict);
-    private readonly RegisterClientResponseFormatter _formatter;
+    private readonly RegisterClientResponseFormatter _formatter = new(
+        new RegistrationClientUriBuilder(
+            new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
+            new FixedLinkGenerator(ConfigurationEndpoint)));
 
-    public RegisterClientResponseFormatterTests()
+    /// <summary>Answers every address with one URL, so the configuration endpoint is known without routing.</summary>
+    private sealed class FixedLinkGenerator(Uri uri) : LinkGenerator
     {
-        _uriResolver
-            .Setup(r => r.Action(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object?>()))
-            .Returns(ConfigurationEndpoint);
+        public override string GetPathByAddress<TAddress>(
+            HttpContext httpContext, TAddress address, RouteValueDictionary values,
+            RouteValueDictionary? ambientValues = null, PathString? pathBase = null,
+            FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsolutePath;
 
-        _formatter = new RegisterClientResponseFormatter(_uriResolver.Object);
+        public override string GetPathByAddress<TAddress>(
+            TAddress address, RouteValueDictionary values, PathString pathBase = default,
+            FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsolutePath;
+
+        public override string GetUriByAddress<TAddress>(
+            HttpContext httpContext, TAddress address, RouteValueDictionary values,
+            RouteValueDictionary? ambientValues = null, string? scheme = null, HostString? host = null,
+            PathString? pathBase = null, FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsoluteUri;
+
+        public override string GetUriByAddress<TAddress>(
+            TAddress address, RouteValueDictionary values, string scheme, HostString host,
+            PathString pathBase = default, FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsoluteUri;
     }
 
     [Fact]

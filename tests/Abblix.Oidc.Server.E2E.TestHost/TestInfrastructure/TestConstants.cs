@@ -62,6 +62,11 @@ public static class TestConstants
     /// used to verify RFC 8707 resource indicators reach the issued access token's audience.</summary>
     public const string ClientCredentialsClientId = "e2e-client-credentials";
 
+    /// <summary>Client restricted to the client_credentials grant that authenticates with HTTP Basic
+    /// (<c>client_secret_basic</c>, RFC 6749 section 2.3.1), so a test can see the token endpoint read the
+    /// Authorization header.</summary>
+    public const string ClientSecretBasicClientId = "e2e-client-secret-basic";
+
     /// <summary>Client restricted to the OAuth 2.0 <c>none</c> response type (OAuth 2.0 Multiple
     /// Response Type Encoding Practices section 4): the authorization endpoint authorizes the request but
     /// returns no code or token - only state and iss.</summary>
@@ -102,4 +107,9 @@ public static class TestConstants
     /// can only be exercised from inside one. Both test hosts mount it here, which is what lets the suites
     /// compare what the two adapters answer.</summary>
     public const string EndpointResolverProbePath = "/test/oidc-endpoint";
+
+    /// <summary>Configuration key both hosts read to mount all OIDC endpoints under a route prefix. The routing
+    /// tests set it through <c>WebApplicationFactory</c> to verify the prefix of <c>MapOidcControllers</c> and
+    /// <c>MapOidcEndpoints</c>.</summary>
+    public const string RoutePrefixConfigKey = "OidcRoutePrefix";
 }

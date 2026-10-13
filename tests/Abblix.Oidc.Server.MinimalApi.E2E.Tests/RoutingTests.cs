@@ -60,7 +60,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Custom_prefix_mounts_all_endpoints_under_the_prefix()
     {
         await using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
+            builder.UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // MapOidcEndpoints(RoutePrefix) mounts the whole surface under the prefix.
@@ -175,7 +175,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Discovery_document_urls_carry_the_route_prefix()
     {
         await using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
+            builder.UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // MapOidcEndpoints(RoutePrefix) mounts the token endpoint at /oauth/connect/token, so discovery must advertise
@@ -199,7 +199,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Registration_client_uri_carries_the_route_prefix()
     {
         await using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
+            builder.UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // Post directly to the known prefixed path (before the #10 fix the discovery registration_endpoint is wrong,

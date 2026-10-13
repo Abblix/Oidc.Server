@@ -9,8 +9,8 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -25,14 +25,14 @@ namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 public class DiscoveryControllerMtlsTests
 {
     private readonly Mock<IOptionsSnapshot<OidcOptions>> _optionsMock;
-    private readonly Mock<IEndpointResolver> _endpointResolverMock;
+    private readonly Mock<IOidcEndpointResolver> _endpointResolverMock;
     private readonly ConfigurationResponseFormatter _formatter;
     private readonly OidcOptions _oidcOptions;
 
     public DiscoveryControllerMtlsTests()
     {
         _optionsMock = new Mock<IOptionsSnapshot<OidcOptions>>();
-        _endpointResolverMock = new Mock<IEndpointResolver>();
+        _endpointResolverMock = new Mock<IOidcEndpointResolver>();
 
         _oidcOptions = new OidcOptions
         {
@@ -103,7 +103,7 @@ public class DiscoveryControllerMtlsTests
     {
         _oidcOptions.Discovery.MtlsBaseUri = new Uri(mtlsBaseUri);
         _endpointResolverMock
-            .Setup(x => x.Resolve("Token", "Token"))
+            .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri(resolved));
 
         var result = await _formatter.FormatResponseAsync(MinimalResponse());
@@ -339,19 +339,19 @@ public class DiscoveryControllerMtlsTests
     {
         // Setup endpoint resolver to return predictable URIs
         _endpointResolverMock
-            .Setup(x => x.Resolve("Token", "Token"))
+            .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri("https://example.com/token"));
 
         _endpointResolverMock
-            .Setup(x => x.Resolve("Token", "Revocation"))
+            .Setup(x => x.Resolve(OidcEndpoints.Revocation))
             .Returns(new Uri("https://example.com/revocation"));
 
         _endpointResolverMock
-            .Setup(x => x.Resolve("Token", "Introspection"))
+            .Setup(x => x.Resolve(OidcEndpoints.Introspection))
             .Returns(new Uri("https://example.com/introspection"));
 
         _endpointResolverMock
-            .Setup(x => x.Resolve("Authentication", "UserInfo"))
+            .Setup(x => x.Resolve(OidcEndpoints.UserInfo))
             .Returns(new Uri("https://example.com/userinfo"));
     }
 }

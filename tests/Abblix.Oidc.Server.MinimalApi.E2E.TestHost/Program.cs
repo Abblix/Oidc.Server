@@ -99,6 +99,12 @@ builder.Services.AddOidcServices(options =>
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
+        new ClientInfo(TestConstants.ClientSecretBasicClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
 
         // Client restricted to the none response type (OAuth 2.0 Multiple Response Type Encoding
         // Practices section 4): /authorize authorizes the request but returns no code or token, so the
@@ -213,9 +219,9 @@ app.UseMiddleware<TestConsentOverrideMiddleware>();
 app.UseCors();
 app.UseAuthorization();
 
-// The Minimal API counterpart of MVC's app.MapControllers(): maps every OIDC endpoint as a route handler.
+// The Minimal API counterpart of MVC's app.MapOidcControllers(): maps every OIDC endpoint as a route handler.
 // The prefix is empty by default; the routing test sets it through configuration to verify MapOidcEndpoints(prefix).
-var routePrefix = app.Configuration[MinimalApiTestConstants.RoutePrefixConfigKey] ?? string.Empty;
+var routePrefix = app.Configuration[TestConstants.RoutePrefixConfigKey] ?? string.Empty;
 app.MapOidcEndpoints(routePrefix);
 
 // Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs

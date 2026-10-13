@@ -44,8 +44,20 @@ builder.Services.AddOidcServices(options =>
 var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
+app.MapOidcControllers();
 app.Run();
+```
+
+The library's controllers carry no route of their own, so `app.MapControllers()` and a conventional route such as `{controller}/{action}` never reach them. `MapOidcControllers()` maps each enabled endpoint at the path `OidcRouteOptions` gives it, and a disabled endpoint is not mapped at all, so it answers 404. The call returns the `RouteGroupBuilder` the endpoints were mapped onto, so cross-cutting conventions apply to all of them at once, and an optional prefix mounts every endpoint under a sub-path:
+
+```csharp
+using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.Mvc;
+
+builder.Services.Configure<OidcRouteOptions>(routes => routes.Token = "/oauth2/token");
+
+app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-known/jwks
+    .RequireRateLimiting("oidc");
 ```
 
 ## Endpoint URLs

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Http;
 using Core = Abblix.Oidc.Server.Model;
@@ -27,7 +28,7 @@ public sealed record ClientAuthorizationRequest
     /// <summary>Binds the model from the route value and the <c>Authorization</c> header.</summary>
     public static ValueTask<ClientAuthorizationRequest?> BindAsync(HttpContext context)
     {
-        var clientId = context.Request.RouteValues.TryGetValue("clientId", out var value)
+        var clientId = context.Request.RouteValues.TryGetValue(OidcRouteOptions.ClientIdRouteParameter, out var value)
             ? value?.ToString() ?? string.Empty
             : string.Empty;
 

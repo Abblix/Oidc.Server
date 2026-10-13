@@ -12,12 +12,11 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
-/// Answers <see cref="IOidcEndpointResolver"/> from the endpoints
-/// <see cref="EndpointRouteBuilderExtensions.MapOidcEndpoints(IEndpointRouteBuilder,string)"/> actually mapped,
-/// found by the stable name each one carries.
+/// Answers <see cref="IOidcEndpointResolver"/> from the endpoints <c>MapOidcEndpoints</c> or <c>MapOidcControllers</c>
+/// actually mapped, found by the stable name each one carries.
 /// </summary>
 /// <remarks>
 /// Going through <see cref="LinkGenerator"/> rather than reading <see cref="OidcRouteOptions"/> is what makes
@@ -40,7 +39,7 @@ public class OidcEndpointResolver(
         if (!NamesByEndpoint.TryGetValue(endpoint, out var endpointName))
             return null;
 
-        var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
+        var url = linkGenerator.GetUriByRouteValues(httpContext, endpointName, values: null);
         return url == null ? null : new Uri(url, UriKind.Absolute);
     }
 

@@ -27,7 +27,6 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// Manages OAuth 2.0 and OpenID Connect token-related endpoints, including token issuance, revocation, and introspection.
 /// Serves as the primary interface between clients and the authorization server for managing tokens' lifecycle.
 /// </summary>
-[ApiController]
 [ReturnsOidcInvalidRequest]
 [ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -35,7 +34,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [RequireHttps]
 [RequireHost]
 [RequireTenant]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public class TokenController : ControllerBase
 {
     /// <summary>
@@ -58,11 +58,11 @@ public class TokenController : ControllerBase
     // RFC 6749 section 3.2: the token endpoint MUST accept POST with application/x-www-form-urlencoded.
     // GET is rejected so credentials (code, client_secret, refresh_token) never travel in the URL,
     // where they would be logged by proxies, servers and browser history.
-    [HttpPost(Path.Token)]
+    [HttpPost]
+    [ActionName(nameof(TokenAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.Token)]
     public async Task<ActionResult<TokenResponse>> TokenAsync(
         [FromServices] ITokenHandler handler,
         [FromServices] ITokenResponseFormatter formatter,
@@ -91,10 +91,10 @@ public class TokenController : ControllerBase
     /// securely.
     /// <see href="https://www.rfc-editor.org/rfc/rfc7009#section-2">OAuth 2.0 Token Revocation Documentation</see>
     /// </remarks>
-    [HttpPost(Path.Revocation)]
+    [HttpPost]
+    [ActionName(nameof(RevocationAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.Revocation)]
     public async Task<ActionResult> RevocationAsync(
         [FromServices] IRevocationHandler handler,
         [FromServices] IRevocationResponseFormatter formatter,
@@ -124,9 +124,9 @@ public class TokenController : ControllerBase
     /// securely.
     /// <see href="https://www.rfc-editor.org/rfc/rfc7662#section-2">OAuth 2.0 Token Introspection Documentation</see>
     /// </remarks>
-    [HttpPost(Path.Introspection)]
+    [HttpPost]
+    [ActionName(nameof(IntrospectionAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    [EnabledBy(OidcEndpoints.Introspection)]
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
         [FromServices] IIntrospectionResponseFormatter formatter,

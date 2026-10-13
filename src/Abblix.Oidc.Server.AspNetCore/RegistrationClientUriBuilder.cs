@@ -10,12 +10,11 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
 /// Builds the RFC 7592 <c>registration_client_uri</c> - the absolute URL of a client's configuration endpoint - from
-/// the current request's base URL and the configured client-management route, replacing the MVC integration's
-/// <c>IUriResolver</c>.
+/// the current request's base URL and the configured client-management route.
 /// </summary>
 public sealed class RegistrationClientUriBuilder(
     IHttpContextAccessor httpContextAccessor,
@@ -26,9 +25,9 @@ public sealed class RegistrationClientUriBuilder(
     {
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
 
-        // Resolving through the named endpoint keeps the MapOidcEndpoints group prefix (and PathBase) in the URL and
+        // Resolving through the named endpoint keeps the mapping prefix (and PathBase) in the URL and
         // lets LinkGenerator URL-encode the client_id into the {clientId} route slot.
-        var url = linkGenerator.GetUriByName(httpContext, EndpointNames.RegisterClient, new { clientId })
+        var url = linkGenerator.GetUriByRouteValues(httpContext, EndpointNames.RegisterClient, new { clientId })
             ?? throw new InvalidOperationException(
                 "The client configuration endpoint could not be resolved. " +
                 "Ensure the dynamic client registration endpoint is enabled.");

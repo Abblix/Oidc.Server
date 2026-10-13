@@ -11,7 +11,6 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
 using Abblix.Utils.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -68,9 +67,8 @@ public static class ServiceCollectionExtensions
     {
         // Both adapters registered means both will serve the OIDC endpoints, and the host finds out only when
         // a request arrives and routing reports an ambiguity that names neither package. Caught here it names
-        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead,
-        // because a host can carry the package without ever calling its registration - and that is enough for
-        // AddControllers() to map its controllers.
+        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead, which
+        // also catches the MVC endpoints mapped without the MVC registration.
         TransportAdapterConflict.ThrowIfRegistered(
             services,
             TransportAdapterConflict.MvcAdapterAssemblyName,

@@ -63,9 +63,9 @@ Endpoints that allow cross-origin requests (discovery, jwks, checksession, token
 
 ## Migrating from the MVC integration
 
-Remove the `Abblix.OIDC.Server.MVC` package reference. Referencing it is enough for its controllers to be mapped: `AddControllers()` finds controller assemblies in the dependency graph on its own, whether or not `AddOidcServices()` was ever called. With both packages in place the two transports claim the same paths and every OIDC request fails with `AmbiguousMatchException`. `MapOidcEndpoints()` refuses to start an application in that state and says which package to drop.
+Remove the `Abblix.OIDC.Server.MVC` package reference. Both transports map the same paths under the same endpoint names, so `MapOidcEndpoints()` refuses to start an application that still loads the MVC adapter and says which package to drop.
 
-The rest of the swap is small on purpose: `AddOidcServices` is named and shaped exactly as in the MVC integration, and so are the response formatter interfaces, down to the namespace suffix. What changes is `app.MapControllers()`, which becomes `app.MapOidcEndpoints()`, and the return type of any formatter the host replaced or decorated: `IResult` here, `ActionResult` there.
+The rest of the swap is small on purpose: `AddOidcServices` is named and shaped exactly as in the MVC integration, and so are the response formatter interfaces, down to the namespace suffix. What changes is `app.MapOidcControllers()`, which becomes `app.MapOidcEndpoints()` with the same optional prefix and the same `OidcRouteOptions` paths, and the return type of any formatter the host replaced or decorated: `IResult` here, `ActionResult` there.
 
 ## Endpoint URLs
 

@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
@@ -25,6 +24,9 @@ public static class ServiceCollectionExtensions
 	/// This method allows for configuring OIDC options to tailor the authentication server to your specific needs.
 	/// </summary>
 	/// <remarks>
+	/// The endpoints are mapped by <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/>, which the
+	/// request pipeline calls in place of relying on <c>app.MapControllers()</c>: the library's controllers carry
+	/// no route of their own.
 	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>. The protocol
 	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
 	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
@@ -84,11 +86,12 @@ public static class ServiceCollectionExtensions
 
 		services
 			.AddOidcControllers()
-			.ConfigureRoutesFallback()
 			.AddHttpContextAccessor()
 			.AddOidcMvcInfrastructure()
 			.AddOidcProtocolFormatters()
 			.AddOidcInteractionFormatters();
+
+		services.AddOptions<OidcRouteOptions>();
 
 		// AddOidcCors registers the shared, host-overridable default so the CORS policy the controllers
 		// reference with [EnableCors] resolves out of the box instead of only when the host defined it. Same

@@ -96,6 +96,12 @@ builder.Services.AddOidcServices(options =>
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
+        new ClientInfo(TestConstants.ClientSecretBasicClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
 
         // Client restricted to the none response type (OAuth 2.0 Multiple Response Type Encoding
         // Practices section 4): /authorize authorizes the request but returns no code or token, so the
@@ -203,7 +209,11 @@ app.UseMiddleware<TestConsentOverrideMiddleware>();
 
 app.UseCors();
 app.UseAuthorization();
-app.MapControllers();
+app.MapOidcControllers(app.Configuration[TestConstants.RoutePrefixConfigKey] ?? string.Empty);
+
+// A host's own conventional route: the library's controllers stay out of its reach, which the routing tests
+// check.
+app.MapDefaultControllerRoute();
 
 // Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs
 // the ambient request to build an absolute URL, so the only way to exercise it end to end is from inside one.

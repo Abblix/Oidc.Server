@@ -6,16 +6,16 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-namespace Abblix.Oidc.Server.MinimalApi;
+namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
-/// Stable endpoint names assigned to each mapped route via <c>WithName</c>.
+/// Stable route names each mapped route carries: the name <c>MapControllerRoute</c> takes under MVC, and the one
+/// <c>WithName</c> assigns under Minimal API.
 /// </summary>
 /// <remarks>
-/// The discovery document advertises absolute URLs for the provider's endpoints. The MVC integration resolves those
-/// URLs from controller/action descriptors; Minimal API resolves them from named endpoints through
-/// <see cref="Microsoft.AspNetCore.Routing.LinkGenerator"/>, so each endpoint carries a name that stays stable across
-/// route reconfiguration.
+/// The discovery document advertises absolute URLs for the provider's endpoints, resolved from these names through
+/// <see cref="Microsoft.AspNetCore.Routing.LinkGenerator"/>, so a URL follows the route as mapped, prefix and path
+/// base included, whatever path the host configured.
 /// </remarks>
 internal static class EndpointNames
 {
@@ -33,6 +33,8 @@ internal static class EndpointNames
     public const string DeviceAuthorization = Prefix + nameof(DeviceAuthorization);
     public const string Register = Prefix + nameof(Register);
     public const string RegisterClient = Prefix + nameof(RegisterClient);
+    public const string UpdateClient = Prefix + nameof(UpdateClient);
+    public const string RemoveClient = Prefix + nameof(RemoveClient);
     public const string Configuration = Prefix + nameof(Configuration);
     public const string OAuthAuthorizationServer = Prefix + nameof(OAuthAuthorizationServer);
     public const string Keys = Prefix + nameof(Keys);

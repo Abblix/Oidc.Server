@@ -8,15 +8,14 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
+namespace Abblix.Oidc.Server.AspNetCore.UnitTests;
 
 /// <summary>
-/// What the Minimal API adapter answers for <c>IOidcEndpointResolver</c>, the contract the MVC adapter answers
-/// too so that host code needing an OIDC endpoint's URL survives a change of adapter.
+/// What both adapters answer for <c>IOidcEndpointResolver</c>, so that host code needing an OIDC endpoint's URL
+/// survives a change of adapter.
 /// </summary>
 /// <remarks>
 /// The twin of the MVC suite's file of the same name, asserting the same behaviors through the other
@@ -27,7 +26,7 @@ namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 public class OidcEndpointResolverTests
 {
     /// <summary>
-    /// Records the endpoint name asked for and answers with a URL derived from it, so a test can tell both
+    /// Records the route name asked for and answers with a URL derived from it, so a test can tell both
     /// that the resolver asked and what it asked for.
     /// </summary>
     private sealed class RecordingLinkGenerator : LinkGenerator
@@ -40,7 +39,7 @@ public class OidcEndpointResolverTests
             PathString? pathBase = null, FragmentString fragment = new(),
             LinkOptions? options = null)
         {
-            RequestedName = address as string;
+            RequestedName = (address as RouteValuesAddress)?.RouteName;
             return $"https://example.com/resolved/{RequestedName}";
         }
 
