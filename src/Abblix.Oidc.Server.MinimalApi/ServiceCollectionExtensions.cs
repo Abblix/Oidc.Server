@@ -74,8 +74,8 @@ public static class ServiceCollectionExtensions
             TransportAdapterConflict.MvcAdapterAssemblyName,
             "Both OIDC transport adapters are registered in this application: the Minimal API adapter was " +
             "added after the MVC adapter's own AddOidcServices()/AddOidcMvc(). Only one of them may serve " +
-            "the OIDC endpoints - with both in place they claim the same paths and every OIDC request fails " +
-            "with AmbiguousMatchException. Keep one: remove either the MVC registration together with the " +
+            "the OIDC endpoints, since both map the same paths. Keep one: remove either the MVC registration " +
+            "together with the " +
             "Abblix.OIDC.Server.MVC package reference, or this one together with the " +
             "Abblix.OIDC.Server.MinimalApi package reference.");
 

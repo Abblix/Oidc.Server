@@ -18,10 +18,9 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests;
 /// survives a change of adapter.
 /// </summary>
 /// <remarks>
-/// The twin of the MVC suite's file of the same name, asserting the same behaviors through the other
-/// mechanism. Where MVC resolves a tokenized route template, this side asks <see cref="LinkGenerator"/> for the
-/// endpoint the route was mapped under - which is why the name it asks for is what these tests pin. A wrong
-/// name does not fail loudly; it returns null, or worse, another endpoint's address.
+/// Both adapters ask <see cref="LinkGenerator"/> for the route each endpoint was mapped under, which is why the
+/// name asked for is what these tests pin. A wrong name does not fail loudly; it returns null, or worse, another
+/// endpoint's address.
 /// </remarks>
 public class OidcEndpointResolverTests
 {

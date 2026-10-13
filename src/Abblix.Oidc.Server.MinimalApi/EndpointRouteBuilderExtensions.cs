@@ -36,13 +36,13 @@ public static class EndpointRouteBuilderExtensions
     /// cross-cutting conventions (rate limiting, host filtering, metadata) to all of them at once.</returns>
     public static RouteGroupBuilder MapOidcEndpoints(this IEndpointRouteBuilder endpoints, string prefix = "")
     {
-        // Refuse at startup rather than let both adapters map the same paths under the same endpoint names and fail
-        // on every request with a routing error that names neither package.
+        // Refuse at startup rather than let both adapters map the same paths and fail on the first request with a
+        // routing error that names neither package.
         TransportAdapterConflict.ThrowIfLoaded(
             TransportAdapterConflict.MvcAdapterAssemblyName,
             "Both OIDC transport adapters are present in this application: MapOidcEndpoints() maps the " +
             "Minimal API endpoints, and the MVC adapter (Abblix.OIDC.Server.MVC) is loaded as well. Only one " +
-            "of them may serve the OIDC endpoints, since both map the same paths under the same endpoint names. " +
+            "of them may serve the OIDC endpoints, since both map the same paths. " +
             "To stay on Minimal API, remove the Abblix.OIDC.Server.MVC package reference together with any " +
             "AddOidcServices(), AddOidcMvc() or MapOidcControllers() call. To stay on MVC, remove the " +
             "Abblix.OIDC.Server.MinimalApi package reference together with this MapOidcEndpoints() call.");

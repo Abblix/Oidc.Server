@@ -30,6 +30,7 @@ public static class EndpointRouteBuilderExtensions
 {
     private const string ControllerRouteKey = "controller";
     private const string ActionRouteKey = "action";
+    private const int AttributeRouteOrder = 0;
 
     /// <summary>
     /// One route of the library: the endpoint flag that enables it, the path it takes from
@@ -107,42 +108,58 @@ public static class EndpointRouteBuilderExtensions
     /// <summary>
     /// Maps the enabled OpenID Connect and OAuth 2.0 endpoints at the paths <see cref="OidcRouteOptions"/> gives them.
     /// </summary>
+    /// <remarks>
+    /// The routes are added beside the host's own rather than to a route group: MVC gives a route group a source of
+    /// endpoints of its own, which would map every attribute-routed controller of the host a second time, under the
+    /// group's prefix as well. Mapped beside the host's routes, they share one source with the host's
+    /// <c>MapControllers()</c>, which ASP.NET Core also implies for any conventional route, so the host's
+    /// attribute-routed controllers are mapped as <c>MapControllers()</c> maps them.
+    /// </remarks>
     /// <param name="endpoints">The endpoint route builder to map the endpoints onto.</param>
     /// <param name="prefix">An optional route prefix to mount all OIDC endpoints under (default: none).</param>
-    /// <returns>The <see cref="RouteGroupBuilder"/> the OIDC endpoints were mapped onto, so the host can apply
-    /// cross-cutting conventions (rate limiting, host filtering, metadata) to all of them at once.</returns>
-    public static RouteGroupBuilder MapOidcControllers(this IEndpointRouteBuilder endpoints, string prefix = "")
+    /// <returns>A builder that applies a convention (rate limiting, host filtering, metadata) to every OIDC endpoint
+    /// at once, and to no route of the host's.</returns>
+    public static IEndpointConventionBuilder MapOidcControllers(this IEndpointRouteBuilder endpoints, string prefix = "")
     {
-        // Refuse at startup rather than let both adapters map the same paths under the same endpoint names and fail
-        // on every request with a routing error that names neither package.
+        // Refuse at startup rather than let both adapters map the same paths and fail on the first request with a
+        // routing error that names neither package.
         TransportAdapterConflict.ThrowIfLoaded(
             TransportAdapterConflict.MinimalApiAdapterAssemblyName,
             "Both OIDC transport adapters are present in this application: MapOidcControllers() maps the MVC " +
             "endpoints, and the Minimal API adapter (Abblix.OIDC.Server.MinimalApi) is loaded as well. Only one " +
-            "of them may serve the OIDC endpoints, since both map the same paths under the same endpoint names. " +
+            "of them may serve the OIDC endpoints, since both map the same paths. " +
             "To stay on MVC, remove the Abblix.OIDC.Server.MinimalApi package reference together with any " +
             "MapOidcEndpoints() call. To stay on Minimal API, remove the Abblix.OIDC.Server.MVC package reference " +
             "together with this MapOidcControllers() call.");
 
         var enabled = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.EnabledEndpoints;
         var routes = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
-        var oidcGroup = endpoints.MapGroup(prefix);
+        var basePath = prefix.TrimEnd('/');
 
-        foreach (var route in Routes.Where(route => enabled.HasFlag(route.Endpoint)))
-        {
-            // The route name is what OidcEndpointResolver finds the URL by. An endpoint name (WithName) would be
-            // copied onto the link-generation entry MVC makes for a named route as well, and refused as a duplicate.
-            oidcGroup.MapControllerRoute(
+        // The route name is what OidcEndpointResolver finds the URL by. An endpoint name (WithName) would be copied
+        // onto the link-generation entry MVC makes for a named route as well, and refused as a duplicate.
+        var mapped = Routes
+            .Where(route => enabled.HasFlag(route.Endpoint))
+            .Select(route => (IEndpointConventionBuilder)endpoints.MapControllerRoute(
                 route.Name,
-                route.Pattern(routes),
+                basePath + route.Pattern(routes),
                 new RouteValueDictionary
                 {
                     [ControllerRouteKey] = route.Controller,
                     [ActionRouteKey] = route.Action,
                     [OidcRouteValueAttribute.Key] = OidcRouteValueAttribute.Value,
-                });
-        }
+                }))
+            .ToList();
 
-        return oidcGroup;
+        // MVC orders a conventional route after every attribute route and Minimal API endpoint, and order is
+        // compared before how literal a path is, so a host pattern such as /{a}/{b} would take /connect/token. The
+        // order attribute routes have puts the library's literal paths back ahead of such a pattern.
+        var builder = new OidcControllersConventionBuilder(mapped);
+        builder.Add(endpoint =>
+        {
+            if (endpoint is RouteEndpointBuilder route)
+                route.Order = AttributeRouteOrder;
+        });
+        return builder;
     }
 }
