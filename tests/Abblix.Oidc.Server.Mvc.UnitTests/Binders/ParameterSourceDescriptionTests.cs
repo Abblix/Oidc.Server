@@ -9,13 +9,15 @@
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Net.Http.Headers;
 using Parameters = Abblix.Oidc.Server.Model.TokenRequest.Parameters;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Binders;
 
 /// <summary>
 /// The binder each parameter names leaves its source to the action, so a host that describes its API, the library's
-/// endpoints included, sees the parameters of the token request as form fields rather than as custom-bound ones.
+/// endpoints included, sees the parameters of the token request as form fields and its Authorization header as a
+/// header rather than as custom-bound values.
 /// </summary>
 public class ParameterSourceDescriptionTests
 {
@@ -24,6 +26,13 @@ public class ParameterSourceDescriptionTests
     [InlineData(Parameters.Code)]
     [InlineData(Parameters.Scope)]
     public void ATokenRequestParameterIsDescribedAsAFormField(string parameter)
+        => Assert.Equal(BindingSource.Form, SourceOf(parameter));
+
+    [Fact]
+    public void TheAuthorizationHeaderIsDescribedAsAHeader()
+        => Assert.Equal(BindingSource.Header, SourceOf(HeaderNames.Authorization));
+
+    private static BindingSource? SourceOf(string parameter)
     {
         var services = new ServiceCollection().AddLogging().AddOidcMvc();
         services.AddMvcCore().AddApiExplorer();
@@ -33,8 +42,6 @@ public class ParameterSourceDescriptionTests
             .SelectMany(group => group.Items)
             .Single(description => description.RelativePath == "connect/token");
 
-        Assert.Equal(
-            BindingSource.Form,
-            token.ParameterDescriptions.Single(description => description.Name == parameter).Source);
+        return token.ParameterDescriptions.Single(description => description.Name == parameter).Source;
     }
 }

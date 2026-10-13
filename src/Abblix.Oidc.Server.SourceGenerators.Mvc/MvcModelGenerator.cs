@@ -55,6 +55,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
 	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
 	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
+	private const string HeaderBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.HeaderBinder";
 
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -303,7 +304,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 					// "Authorization" is the standard HTTP header name implied by the marker's
 					// semantics (RFC 9110 section 11.6.2), not binder-specific knowledge.
 					_writer.AppendLine(
-						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), Name = \"Authorization\")]");
+						$"\t[{HeaderBinderAttributeName}(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), \"Authorization\")]");
 					break;
 
 				case ClientCertificateMarkerName

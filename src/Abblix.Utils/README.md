@@ -39,7 +39,7 @@ The stripping runs in `ToString()`, so it protects the formatted message; a sink
 
 ### JSON converters for wire formats
 
-Custom `System.Text.Json` converters for the shapes protocol messages actually use: unix-seconds timestamps (`DateTimeOffsetUnixTimeSecondsConverter`), durations as integer seconds (`TimeSpanSecondsConverter`), space-separated lists such as OAuth scopes (`SpaceSeparatedValuesConverter`), values that arrive as either a single item or an array (`SingleOrArrayConverter`), base64url binary (`Base64UrlTextEncoderConverter`), and null-dropping serialization (`JsonIgnoreNullsAttribute`).
+Custom `System.Text.Json` converters for the shapes protocol messages actually use: unix-seconds timestamps (`DateTimeOffsetUnixTimeSecondsConverter`), durations as integer seconds (`TimeSpanSecondsConverter`), space-separated lists such as OAuth scopes (`SpaceSeparatedValuesConverter`), values that arrive as either a single item or an array (`SingleOrArrayConverter`), and base64url binary (`Base64UrlTextEncoderConverter`).
 
 ### Distributed cache helpers
 
