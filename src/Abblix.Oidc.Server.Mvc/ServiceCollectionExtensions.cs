@@ -97,7 +97,6 @@ public static class ServiceCollectionExtensions
 		{
 			options.OutputFormatters.Add(new StringOutputFormatter());
 			options.ModelBinderProviders.Insert(0, new SingleValueBinderProvider());
-			options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
 		});
 
 		// AddOidcCors registers the shared, host-overridable default so the CORS policy the controllers
