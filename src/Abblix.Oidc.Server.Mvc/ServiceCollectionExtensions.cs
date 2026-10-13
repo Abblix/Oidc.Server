@@ -11,7 +11,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
@@ -95,7 +94,6 @@ public static class ServiceCollectionExtensions
 
 		services.Configure<MvcOptions>(options =>
 		{
-			options.OutputFormatters.Add(new StringOutputFormatter());
 			options.ModelBinderProviders.Insert(0, new SingleValueBinderProvider());
 		});
 
