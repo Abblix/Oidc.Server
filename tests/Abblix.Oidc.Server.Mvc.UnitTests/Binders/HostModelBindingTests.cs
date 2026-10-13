@@ -8,7 +8,6 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
-using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -30,6 +29,10 @@ public class HostModelBindingTests
     private static readonly IServiceProvider Services =
         new ServiceCollection().AddLogging().AddOidcMvc().BuildServiceProvider();
 
+    /// <summary>The same application without this package.</summary>
+    private static readonly IServiceProvider PlainMvc =
+        new ServiceCollection().AddLogging().AddMvc().Services.BuildServiceProvider();
+
     [Fact]
     public void ARequiredPropertyOfAHostModelIsNotMadeBindingRequired()
         => Assert.False(MetadataFor(typeof(HostModel), nameof(HostModel.Name)).IsBindingRequired);
@@ -40,7 +43,9 @@ public class HostModelBindingTests
 
     [Fact]
     public void ACultureListOfAHostModelGetsTheBindingItWouldGetAnyway()
-        => Assert.IsNotType<CultureInfoBinder>(BinderFor(typeof(HostModel), nameof(HostModel.Languages)));
+        => Assert.Equal(
+            BinderFor(PlainMvc, typeof(HostModel), nameof(HostModel.Languages)).GetType(),
+            BinderFor(Services, typeof(HostModel), nameof(HostModel.Languages)).GetType());
 
     /// <summary>
     /// ui_locales is "a space-separated list of BCP47 language tag values" (OIDC Core 1.0 section 3.1.2.1), which the
@@ -67,21 +72,25 @@ public class HostModelBindingTests
             ]),
         };
 
-        await BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.UiLocales)).BindModelAsync(context);
+        await BinderFor(Services, typeof(AuthorizationRequest), nameof(AuthorizationRequest.UiLocales))
+            .BindModelAsync(context);
 
         var cultures = Assert.IsType<CultureInfo[]>(context.Result.Model);
         Assert.Equal(["en", "fr"], cultures.Select(culture => culture.Name));
     }
 
     private static ModelMetadata MetadataFor(Type container, string property)
-        => Services.GetRequiredService<IModelMetadataProvider>().GetMetadataForProperty(container, property);
+        => MetadataFor(Services, container, property);
 
-    private static IModelBinder BinderFor(Type container, string property)
+    private static ModelMetadata MetadataFor(IServiceProvider services, Type container, string property)
+        => services.GetRequiredService<IModelMetadataProvider>().GetMetadataForProperty(container, property);
+
+    private static IModelBinder BinderFor(IServiceProvider services, Type container, string property)
     {
-        var metadata = MetadataFor(container, property);
+        var metadata = MetadataFor(services, container, property);
         var attributes = container.GetProperty(property)!.GetCustomAttributes(inherit: true);
 
-        return Services.GetRequiredService<IModelBinderFactory>().CreateBinder(new ModelBinderFactoryContext
+        return services.GetRequiredService<IModelBinderFactory>().CreateBinder(new ModelBinderFactoryContext
         {
             Metadata = metadata,
             BindingInfo = BindingInfo.GetBindingInfo(attributes, metadata),
