@@ -54,6 +54,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
 	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
 	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
+	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
 
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -351,8 +352,8 @@ public class MvcModelGenerator : IIncrementalGenerator
 			// model's binding and nothing else in the host
 			var markerBinder = MarkerBinderOf(property);
 			_writer.AppendLine(markerBinder is null
-				? $"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({RequestParameterBinderName}))]"
-				: $"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({CustomParameterBinderName}<{markerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>))]");
+				? $"\t[{ParameterBinderAttributeName}(typeof({RequestParameterBinderName}))]"
+				: $"\t[{ParameterBinderAttributeName}(typeof({CustomParameterBinderName}<{markerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>))]");
 
 			foreach (var attribute in property.GetAttributes())
 			{

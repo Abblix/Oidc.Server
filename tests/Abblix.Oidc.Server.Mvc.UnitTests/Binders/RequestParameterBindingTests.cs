@@ -138,7 +138,8 @@ public class RequestParameterBindingTests
     }
 
     private static Type? BinderTypeOf(Type container, string property)
-        => container.GetProperty(property)!.GetCustomAttribute<ModelBinderAttribute>()?.BinderType;
+        => container.GetProperty(property)!.GetCustomAttributes().OfType<IBinderTypeProviderMetadata>()
+            .Select(metadata => metadata.BinderType).SingleOrDefault(binderType => binderType != null);
 
     private static bool IsParameterBinder(Type? binderType)
         => binderType == typeof(RequestParameterBinder)
