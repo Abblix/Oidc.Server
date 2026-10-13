@@ -30,8 +30,6 @@ internal static class ReadmeQuickstartSample
     {
         // <sample>
         var builder = WebApplication.CreateBuilder(args);
-        builder.Services.AddDistributedMemoryCache();
-        builder.Services.AddMemoryCache();
 
         // Turn your ASP.NET Core app into an OpenID Connect provider
         builder.Services.AddOidcServices(options =>
@@ -41,7 +39,6 @@ internal static class ReadmeQuickstartSample
         });
 
         var app = builder.Build();
-        app.UseCors();
         app.MapOidcEndpoints();
         app.Run();
         // </sample>

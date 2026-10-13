@@ -67,8 +67,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.MinimalApi;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddDistributedMemoryCache();
-builder.Services.AddMemoryCache();
 
 // Turn your ASP.NET Core app into an OpenID Connect provider
 builder.Services.AddOidcServices(options =>
@@ -78,12 +76,13 @@ builder.Services.AddOidcServices(options =>
 });
 
 var app = builder.Build();
-app.UseCors();
 app.MapOidcEndpoints();
 app.Run();
 ```
 
-That maps the full set of certified OpenID Connect endpoints. An MVC application installs `Abblix.OIDC.Server.MVC` instead, imports `Abblix.Oidc.Server.Mvc`, and calls `app.MapOidcControllers()` in place of `app.MapOidcEndpoints()`. Logout notification is the one thing your application chooses: add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, from `Abblix.Oidc.Server.Features`, and your configuration document advertises what you chose. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead.
+
+This is the outline, not a complete application: the server also needs a cache, the CORS middleware, a login page and your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 
