@@ -83,6 +83,7 @@ public class ClientMetadataBodyTests(TestFactory factory) : TestBase(factory)
     [Theory]
     [InlineData(MediaTypeNames.Text.Plain)]
     [InlineData(MediaTypeNames.Application.Json + "; charset=bogus")]
+    [InlineData(MediaTypeNames.Application.Json + "; charset=utf-7")]
     [InlineData(null)]
     public async Task ARegistrationBodyOfAnotherMediaType_IsUnsupported(string? mediaType)
     {

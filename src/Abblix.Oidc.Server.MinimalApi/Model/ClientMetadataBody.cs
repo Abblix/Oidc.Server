@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text;
 using System.Text.Json;
 using Abblix.Oidc.Server.Common.Validation;
 using Microsoft.AspNetCore.Http;
@@ -69,7 +70,20 @@ internal sealed record ClientMetadataBody(Core.ClientRegistrationRequest? Reques
     }
 
     private static bool HasDecodableCharset(HttpRequest request)
-        => !MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaType)
-           || !mediaType.Charset.HasValue
-           || mediaType.Encoding is not null;
+    {
+        if (!MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaType) || !mediaType.Charset.HasValue)
+            return true;
+
+        // The name as sent, quotes included, since the reader resolves it so; and both exceptions Encoding.GetEncoding
+        // documents for a name it cannot resolve, a disabled encoding such as UTF-7 being the second
+        try
+        {
+            Encoding.GetEncoding(mediaType.Charset.Value);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 }
