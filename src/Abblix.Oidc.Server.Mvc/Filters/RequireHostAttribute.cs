@@ -24,7 +24,8 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// request to an address with no host; so the MVC transport answers such a request as the Minimal API one does,
 /// whatever its scheme.
 /// </remarks>
-internal sealed class RequireHostFilter : IAuthorizationFilter, IOrderedFilter
+[AttributeUsage(AttributeTargets.Class)]
+internal sealed class RequireHostAttribute : Attribute, IAuthorizationFilter, IOrderedFilter
 {
     private static readonly int OrderBeforeRequireHttps = new RequireHttpsAttribute().Order - 1;
 

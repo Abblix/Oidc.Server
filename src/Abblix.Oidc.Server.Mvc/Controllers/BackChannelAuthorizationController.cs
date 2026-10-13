@@ -32,6 +32,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]
+[RequireHost]
+[RequireTenant]
 [SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
 public sealed class BackChannelAuthorizationController : ControllerBase
 {

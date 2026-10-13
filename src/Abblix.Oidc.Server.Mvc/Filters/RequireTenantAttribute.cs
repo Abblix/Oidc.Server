@@ -19,7 +19,8 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// A resource filter: it runs after the authorization filters an OpenID controller carries - the HTTPS
 /// requirement and CORS - and before model binding and the action, so nothing the action would store is stored.
 /// </remarks>
-internal sealed class RequireTenantFilter : IResourceFilter
+[AttributeUsage(AttributeTargets.Class)]
+internal sealed class RequireTenantAttribute : Attribute, IResourceFilter
 {
     /// <inheritdoc />
     public void OnResourceExecuting(ResourceExecutingContext context)
