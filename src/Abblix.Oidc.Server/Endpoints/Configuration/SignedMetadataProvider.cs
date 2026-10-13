@@ -8,12 +8,10 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
@@ -29,16 +27,11 @@ public class SignedMetadataProvider(
     TimeProvider clock) : ISignedMetadataProvider
 {
     /// <summary>
-    /// Serializes the metadata into the <c>signed_metadata</c> JWS payload with the same null-omission
-    /// semantics the wire JSON uses (see <see cref="JsonIgnoreNullsModifier"/>, wired by each adapter).
-    /// Without re-attaching the modifier here the signed copy would carry <c>"field": null</c> entries the
-    /// plain JSON omits, and RFC 8414 section 2.1 "signed values take precedence" would then assert those nulls
-    /// onto clients.
+    /// Serializes the metadata into the <c>signed_metadata</c> JWS payload. The members of the metadata leave
+    /// themselves out when null, so the signed copy omits what the plain JSON omits, and RFC 8414 section 2.1
+    /// "signed values take precedence" cannot assert a null onto clients.
     /// </summary>
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        TypeInfoResolver = new DefaultJsonTypeInfoResolver().WithAddedModifier(JsonIgnoreNullsModifier.Apply),
-    };
+    private static readonly JsonSerializerOptions SerializerOptions = new();
 
     /// <inheritdoc />
     public async Task<string> SignAsync(Model.ConfigurationResponse metadata)

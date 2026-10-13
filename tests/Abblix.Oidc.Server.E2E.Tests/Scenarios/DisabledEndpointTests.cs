@@ -7,10 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Mime;
+using System.Text;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,28 +23,19 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// An endpoint the host has not enabled answers 404 at the path it would have, on either host.
+/// An endpoint the host has not enabled answers 404 at the path it would have, on either host, whether the switch
+/// marks one action or a whole controller.
 /// </summary>
 public class DisabledEndpointTests(TestFactory factory) : TestBase(factory)
 {
     [Fact]
-    public async Task ADisabledEndpointAnswers404()
+    public async Task ADisabledActionAnswers404()
     {
         var discovery = await FetchDiscoveryAsync(CreateClient());
         Assert.NotNull(discovery.IntrospectionEndpoint);
 
-        await using var disabled = Factory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
-                        Options.DefaultName,
-                        options => options.EnabledEndpoints &= ~OidcEndpoints.Introspection))));
-        using var client = disabled.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-            BaseAddress = TestServerAddress.BaseAddress,
-        });
-
+        await using var host = Factory.WithWebHostBuilder(Without(OidcEndpoints.Introspection));
+        using var client = host.CreateClient(ClientOptions);
         using var response = await client.PostAsync(
             discovery.IntrospectionEndpoint.AbsolutePath,
             new FormUrlEncodedContent(new Dictionary<string, string> { [IntrospectionRequest.Parameters.Token] = "any" }),
@@ -49,4 +43,33 @@ public class DisabledEndpointTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Fact]
+    public async Task ADisabledControllerAnswers404()
+    {
+        var discovery = await FetchDiscoveryAsync(CreateClient());
+        Assert.NotNull(discovery.RegistrationEndpoint);
+
+        await using var host = Factory.WithWebHostBuilder(Without(OidcEndpoints.RegisterClient));
+        using var client = host.CreateClient(ClientOptions);
+        using var response = await client.PostAsync(
+            discovery.RegistrationEndpoint.AbsolutePath,
+            new StringContent("{}", Encoding.UTF8, MediaTypeNames.Application.Json),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static readonly WebApplicationFactoryClientOptions ClientOptions = new()
+    {
+        AllowAutoRedirect = false,
+        BaseAddress = TestServerAddress.BaseAddress,
+    };
+
+    private static Action<IWebHostBuilder> Without(OidcEndpoints endpoint)
+        => builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                new PostConfigureOptions<OidcOptions>(
+                    Options.DefaultName,
+                    options => options.EnabledEndpoints &= ~endpoint)));
 }
