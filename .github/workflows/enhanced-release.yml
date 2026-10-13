@@ -180,9 +180,9 @@ jobs:
           path: |
             nupkg/*.nupkg
             nupkg/*.snupkg
-          # Read only by the later jobs of this same run, two of them behind the release-approval gate, so it
-          # lives long enough for that approval or a re-run of a failed publish, and not the 90-day default that
-          # holds the organization's shared artifact storage
+          # Read only by the later jobs of this same run, behind the release-approval gate and, for the two
+          # publishes, the publish-packages gate after it, so it lives long enough for both approvals and a re-run
+          # of a failed publish, and not the 90-day default that holds the organization's shared artifact storage
           retention-days: 3
 
         timeout-minutes: 3

@@ -107,13 +107,15 @@ jobs:
           global-json-file: global.json
 
         timeout-minutes: 3
-      - name: Restore NuGet packages cache
+      # Looked up, never downloaded: the packages this job builds and publishes come from the feed, not from a
+      # cache any job on the branch can write. The lookup only tells whether develop's entry exists already
+      - name: Look up the NuGet packages cache
         id: nuget-cache
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
-          restore-keys: ${{ runner.os }}-nuget-
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json') }}
+          lookup-only: true
         timeout-minutes: 3
       - name: Restore
         run: dotnet restore
@@ -126,7 +128,7 @@ jobs:
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
         timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release
