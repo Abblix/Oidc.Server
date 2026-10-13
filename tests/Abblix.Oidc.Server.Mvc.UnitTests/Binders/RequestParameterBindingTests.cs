@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Globalization;
+using System.Reflection;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,16 +24,16 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.Binders;
 
 /// <summary>
 /// Which parameters the refusal of a repetition and the naming of a value that cannot be read reach, read off the
-/// binders MVC builds once the package is registered, and what the refusal counts.
+/// model binder each property of this package's models names, and what the refusal counts.
 /// </summary>
-public class SingleValueBinderProviderTests
+public class RequestParameterBindingTests
 {
     private static readonly IServiceProvider Services =
         new ServiceCollection().AddLogging().AddOidcMvc().BuildServiceProvider();
 
     /// <summary>
-    /// A parameter of this package's models that takes one value, whether it binds by default or through a binder of
-    /// its own, is wrapped.
+    /// A query or form parameter of this package's models, whether it binds by default or through a binder of its own,
+    /// names the binder that counts it and names an unreadable value.
     /// </summary>
     [Theory]
     [InlineData(nameof(AuthorizationRequest.State))]
@@ -41,15 +42,30 @@ public class SingleValueBinderProviderTests
     [InlineData(nameof(AuthorizationRequest.Claims))]
     [InlineData(nameof(AuthorizationRequest.MaxAge))]
     [InlineData(nameof(AuthorizationRequest.Scope))]
-    public void SingleValuedParameterOfThePackageIsWrapped(string property)
-        => Assert.IsType<SingleValueBinder>(BinderFor(typeof(AuthorizationRequest), property));
+    public void SingleValuedParameterOfThePackageNamesTheParameterBinder(string property)
+        => Assert.True(IsParameterBinder(BinderTypeOf(typeof(AuthorizationRequest), property)));
 
     /// <summary>
-    /// A parameter defined as repeatable is not counted, and a value of it that cannot be read is still named.
+    /// A parameter defined as repeatable names the same binder, which leaves it uncounted, and a value of it that
+    /// cannot be read is still named.
     /// </summary>
     [Fact]
-    public void RepeatableParameterIsNamedButNotCounted()
-        => Assert.IsType<MalformedValueBinder>(BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)));
+    public void RepeatableParameterNamesTheParameterBinder()
+        => Assert.Equal(
+            typeof(RequestParameterBinder),
+            BinderTypeOf(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)));
+
+    /// <summary>
+    /// A parameter defined as repeatable is bound from every copy rather than refused for being sent twice.
+    /// </summary>
+    [Fact]
+    public async Task RepeatableParameterSentTwiceIsBound()
+    {
+        var modelState = await BindResourcesAsync(
+            "?resource=https://a.example&resource=https://b.example", ModelStateDictionary.DefaultMaxAllowedErrors);
+
+        Assert.Equal(0, modelState.Values.Sum(entry => entry.Errors.Count));
+    }
 
     /// <summary>
     /// A header, the client certificate and a route value bind as they would without this package: only a query or
@@ -62,16 +78,7 @@ public class SingleValueBinderProviderTests
     [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.ClientId))]
     [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.AuthorizationHeader))]
     public void ParameterOutsideTheQueryAndTheFormIsNotWrapped(Type container, string property)
-        => AssertNotWrapped(BinderFor(container, property));
-
-    /// <summary>
-    /// A host's own model binds as it would without this package, a culture list included.
-    /// </summary>
-    [Theory]
-    [InlineData(nameof(HostModel.Name))]
-    [InlineData(nameof(HostModel.Languages))]
-    public void HostModelIsNotWrapped(string property)
-        => AssertNotWrapped(BinderFor(typeof(HostModel), property));
+        => Assert.False(IsParameterBinder(BinderTypeOf(container, property)));
 
     /// <summary>
     /// A value sent twice is refused whether both copies travel in the query, or one in the query and one in the
@@ -130,11 +137,12 @@ public class SingleValueBinderProviderTests
         Assert.Single(modelState[Parameters.Resource]!.Errors);
     }
 
-    private static void AssertNotWrapped(IModelBinder binder)
-    {
-        Assert.IsNotType<SingleValueBinder>(binder);
-        Assert.IsNotType<MalformedValueBinder>(binder);
-    }
+    private static Type? BinderTypeOf(Type container, string property)
+        => container.GetProperty(property)!.GetCustomAttribute<ModelBinderAttribute>()?.BinderType;
+
+    private static bool IsParameterBinder(Type? binderType)
+        => binderType == typeof(RequestParameterBinder)
+           || binderType is { IsGenericType: true } && binderType.GetGenericTypeDefinition() == typeof(CustomParameterBinder<>);
 
     private static IModelBinder BinderFor(Type container, string property)
     {
@@ -209,13 +217,5 @@ public class SingleValueBinderProviderTests
 
         await BinderFor(typeof(AuthorizationRequest), nameof(AuthorizationRequest.Resources)).BindModelAsync(context);
         return context.ModelState;
-    }
-
-    /// <summary>A model a host declares itself.</summary>
-    public sealed class HostModel
-    {
-        public string? Name { get; set; }
-
-        public CultureInfo[]? Languages { get; set; }
     }
 }
