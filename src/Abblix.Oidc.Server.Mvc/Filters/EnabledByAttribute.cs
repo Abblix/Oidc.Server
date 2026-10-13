@@ -15,11 +15,13 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 
 /// <summary>
 /// Makes a controller or action match a request only while its endpoint is enabled in
-/// <see cref="OidcOptions.EnabledEndpoints"/>, so a disabled endpoint answers 404 as an unmapped path does.
+/// <see cref="OidcOptions.EnabledEndpoints"/>, so a disabled endpoint answers 404 to a request it would otherwise
+/// serve.
 /// </summary>
 /// <remarks>
 /// An action constraint on the controller or action it marks, so it is consulted for this library's endpoints and
-/// no others; nothing is registered in the host's MVC options to apply it.
+/// no others; nothing is registered in the host's MVC options to apply it. Routing checks the method and the media
+/// type before any action constraint, so a request with another method or media type still gets 405 or 415.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public class EnabledByAttribute : Attribute, IActionConstraint
