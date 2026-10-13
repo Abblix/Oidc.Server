@@ -21,25 +21,12 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// <remarks>
 /// This binder is capable of handling culture-specific data by converting string values into <see cref="CultureInfo"/> objects.
 /// It supports binding single <see cref="CultureInfo"/> objects, arrays, and lists of <see cref="CultureInfo"/>.
+/// It reaches a property only through the binder the model generator puts on a property marked
+/// <see cref="CultureListAttribute"/>, so a host's own culture properties bind as they would without this package.
 /// </remarks>
 [Binds(typeof(CultureListAttribute))]
-public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
+public class CultureInfoBinder : ModelBinderBase
 {
-    /// <summary>
-    /// Gets the model binder based on the provided context.
-    /// </summary>
-    /// <param name="context">The context for the model binding.</param>
-    /// <returns>The model binder for <see cref="CultureInfo"/>, or null if the model type is not supported.</returns>
-    public IModelBinder? GetBinder(ModelBinderProviderContext context)
-    {
-        var type = context.Metadata.ModelType;
-
-        return type == typeof(CultureInfo) ||
-                type.IsAssignableFrom(typeof(CultureInfo[])) ||
-                type.IsAssignableFrom(typeof(List<CultureInfo>))
-            ? this
-            : null;
-    }
 
     /// <summary>
     /// Tries to parse the provided values into a <see cref="CultureInfo"/> object or a collection of <see cref="CultureInfo"/>.
