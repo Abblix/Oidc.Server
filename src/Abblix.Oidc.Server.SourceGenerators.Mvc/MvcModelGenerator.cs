@@ -52,6 +52,10 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string DisplayAttributeName = "global::System.ComponentModel.DataAnnotations.Display";
 	private const string RequiredAttributeName = "System.ComponentModel.DataAnnotations.RequiredAttribute";
 	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
+	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
+	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
+	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
+	private const string HeaderBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.HeaderBinder";
 
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -300,7 +304,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 					// "Authorization" is the standard HTTP header name implied by the marker's
 					// semantics (RFC 9110 section 11.6.2), not binder-specific knowledge.
 					_writer.AppendLine(
-						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), Name = \"Authorization\")]");
+						$"\t[{HeaderBinderAttributeName}(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), \"Authorization\")]");
 					break;
 
 				case ClientCertificateMarkerName
@@ -344,6 +348,14 @@ public class MvcModelGenerator : IIncrementalGenerator
 			// A validation message names the member by its display name, and the client knows it by the wire name
 			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = \"{wireName}\")]");
 
+			// A property names one model binder, so the one that counts the parameter and names an unreadable value
+			// carries the binder a wire-format marker asks for, if any. Set here on the property, it reaches this
+			// model's binding and nothing else in the host
+			var markerBinder = MarkerBinderOf(property);
+			_writer.AppendLine(markerBinder is null
+				? $"\t[{ParameterBinderAttributeName}(typeof({RequestParameterBinderName}))]"
+				: $"\t[{ParameterBinderAttributeName}(typeof({CustomParameterBinderName}<{markerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>))]");
+
 			foreach (var attribute in property.GetAttributes())
 			{
 				EmitPropertyAttribute(attribute, property);
@@ -354,6 +366,15 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 			_mappedProperties.Add(property);
 		}
+
+		private INamedTypeSymbol? MarkerBinderOf(IPropertySymbol property)
+			=> property.GetAttributes()
+				.Select(attribute => attribute.AttributeClass)
+				.Where(attributeClass =>
+					attributeClass?.ContainingNamespace.ToDisplayString() == _declarativeNamespace)
+				.Select(attributeClass =>
+					_binderMap.TryGetValue(attributeClass!.ToDisplayString(), out var binder) ? binder : null)
+				.FirstOrDefault(binder => binder != null);
 
 		private void EmitPropertyAttribute(AttributeData attribute, IPropertySymbol property)
 		{
@@ -373,10 +394,9 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 			switch (attributeNamespace)
 			{
+				// Realised by the property's model binder, written with the property
 				case { } when attributeNamespace == _declarativeNamespace
-					&& _binderMap.TryGetValue(attributeClass.ToDisplayString(), out var binder):
-					_writer.AppendLine(
-						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({binder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
+					&& _binderMap.ContainsKey(attributeClass.ToDisplayString()):
 					return;
 
 				case { } when attributeNamespace == _declarativeNamespace:

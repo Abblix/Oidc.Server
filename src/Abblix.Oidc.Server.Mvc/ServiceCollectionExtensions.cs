@@ -8,9 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
@@ -91,11 +89,6 @@ public static class ServiceCollectionExtensions
 			.AddOidcMvcInfrastructure()
 			.AddOidcProtocolFormatters()
 			.AddOidcInteractionFormatters();
-
-		services.Configure<MvcOptions>(options =>
-		{
-			options.ModelBinderProviders.Insert(0, new SingleValueBinderProvider());
-		});
 
 		// AddOidcCors registers the shared, host-overridable default so the CORS policy the controllers
 		// reference with [EnableCors] resolves out of the box instead of only when the host defined it. Same

@@ -7,21 +7,24 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.AspNetCore.Mvc.ActionConstraints;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc.Filters;
 
 /// <summary>
-/// Marker attribute that indicates a controller or action is enabled by a specific OIDC endpoint configuration.
-/// Controllers or actions marked with this attribute will be removed from the application model if the specified
-/// endpoint is not enabled in <see cref="OidcOptions.EnabledEndpoints"/>.
+/// Makes a controller or action match a request only while its endpoint is enabled in
+/// <see cref="OidcOptions.EnabledEndpoints"/>, so a disabled endpoint answers 404 to a request it would otherwise
+/// serve.
 /// </summary>
 /// <remarks>
-/// This attribute is processed at application startup by <see cref="Conventions.EnabledByConvention"/>,
-/// which removes controllers or actions from the application model if their endpoint is disabled. This prevents
-/// the controller/action from being registered at all, rather than checking at runtime.
+/// An action constraint on the controller or action it marks, so it is consulted for this library's endpoints and
+/// no others; nothing is registered in the host's MVC options to apply it. Routing checks the method and the media
+/// type before any action constraint, so a request with another method or media type still gets 405 or 415.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-public class EnabledByAttribute : Attribute
+public class EnabledByAttribute : Attribute, IActionConstraint
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="EnabledByAttribute"/> class.
@@ -36,4 +39,12 @@ public class EnabledByAttribute : Attribute
     /// The OIDC endpoint configuration flag.
     /// </summary>
     public OidcEndpoints Endpoint { get; }
+
+    /// <inheritdoc />
+    public int Order => 0;
+
+    /// <inheritdoc />
+    public bool Accept(ActionConstraintContext context)
+        => context.RouteContext.HttpContext.RequestServices.GetRequiredService<IOptions<OidcOptions>>()
+            .Value.EnabledEndpoints.HasFlag(Endpoint);
 }

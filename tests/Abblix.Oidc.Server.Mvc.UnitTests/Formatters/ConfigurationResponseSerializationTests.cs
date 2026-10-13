@@ -7,21 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 
 public class ConfigurationResponseSerializationTests
 {
-    private static JsonSerializerOptions BuildOptions()
-    {
-        var options = new JsonSerializerOptions();
-        options.TypeInfoResolverChain.Add(
-            new DefaultJsonTypeInfoResolver { Modifiers = { JsonIgnoreNullsModifier.Apply } });
-        return options;
-    }
+    private static JsonSerializerOptions BuildOptions() => new();
 
     [Fact]
     public void ConfigurationResponse_NullableFieldsOmittedWhenNull()

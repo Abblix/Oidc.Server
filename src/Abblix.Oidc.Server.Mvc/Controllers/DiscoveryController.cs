@@ -44,6 +44,8 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 // bearing controllers: over cleartext a man-in-the-middle could rewrite the advertised endpoints or jwks_uri and
 // steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
 [RequireHttps]
+[RequireHost]
+[RequireTenant]
 [ReturnsOidcInvalidRequest]
 [ReturnsLibraryRefusalStatus]
 [SkipStatusCodePages]

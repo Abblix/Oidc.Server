@@ -104,16 +104,6 @@ public static class ServiceCollectionExtensions
             .AddOidcProtocolFormatters()
             .AddOidcInteractionFormatters();
 
-        // Results.Json serializes through Http.Json options (not MVC's), so the null-omission modifier the OIDC
-        // wire format relies on is attached there. WithAddedModifier extends the resolver already in place rather
-        // than chaining a new one, which would never be reached because the first resolver handles every type.
-        services.Configure<JsonOptions>(options =>
-        {
-            options.SerializerOptions.TypeInfoResolver =
-                (options.SerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
-                .WithAddedModifier(JsonIgnoreNullsModifier.Apply);
-        });
-
         // Every OIDC endpoint is tagged with RequireCors(OidcConstants.CorsPolicyName). The MVC host inherited
         // CORS services from AddControllersWithViews; AddOidcCors gives the Minimal API host the same reach and
         // the shared, host-overridable default policy the endpoints require, so app.UseCors() no longer throws

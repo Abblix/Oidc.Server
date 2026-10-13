@@ -6,13 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Text.Json.Serialization.Metadata;
-using Abblix.Oidc.Server.Mvc.Conventions;
-using Abblix.Utils.Json;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -32,20 +26,6 @@ public static class ControllerServiceCollectionExtensions
 		services
 			.AddControllers()
 			.AddApplicationPart(typeof(ControllerServiceCollectionExtensions).Assembly);
-
-		services.TryAddEnumerable(
-			ServiceDescriptor.Singleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>());
-
-		services
-			.PostConfigure<JsonOptions>(options =>
-			{
-				// WithAddedModifier attaches to the resolver already in place (set up by AddControllers),
-				// so the modifier runs within that resolver rather than in a separate chained one.
-				// A chained resolver would never be reached because the default resolver handles all types first.
-				options.JsonSerializerOptions.TypeInfoResolver =
-					(options.JsonSerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
-					.WithAddedModifier(JsonIgnoreNullsModifier.Apply);
-			});
 
 		return services;
 	}

@@ -8,7 +8,6 @@
 
 using System.Reflection;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -16,46 +15,30 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Mvc.Controllers;
-using Abblix.Oidc.Server.Mvc.Conventions;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApplicationModels;
-using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.Mvc.UnitTests.Conventions;
+namespace Abblix.Oidc.Server.Mvc.UnitTests.Filters;
 
 /// <summary>
-/// Every controller of the package is put behind <see cref="RequireHostFilter"/> and <see cref="RequireTenantFilter"/>, and nobody else's is.
+/// Every controller of the package carries <see cref="RequireHostAttribute"/> and <see cref="RequireTenantAttribute"/>
+/// itself, so the requirements reach this library's endpoints through its own controllers and no host's.
 /// </summary>
-public class EntryRequirementsConventionTests
+public class EntryRequirementsTests
 {
-    private static ControllerModel Controller(System.Type type)
-        => new(type.GetTypeInfo(), []);
-
     [Fact]
-    public void EveryControllerOfThePackage_GetsBothFilters_AndTheHostsDoNot()
+    public void EveryControllerOfThePackageCarriesBothRequirements()
     {
         var packageControllers = typeof(TokenController).Assembly.GetTypes()
             .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
             .ToArray();
         Assert.NotEmpty(packageControllers);
 
-        var application = new ApplicationModel();
-        foreach (var type in packageControllers)
-            application.Controllers.Add(Controller(type));
-        var hostController = Controller(typeof(EntryRequirementsConventionTests));
-        application.Controllers.Add(hostController);
-
-        new EntryRequirementsConvention().Apply(application);
-
-        Assert.All(
-            application.Controllers.Where(controller => controller != hostController),
-            controller =>
-            {
-                Assert.Single(controller.Filters.OfType<RequireHostFilter>());
-                Assert.Single(controller.Filters.OfType<RequireTenantFilter>());
-            });
-        Assert.Empty(hostController.Filters);
+        Assert.All(packageControllers, controller =>
+        {
+            Assert.True(controller.IsDefined(typeof(RequireHostAttribute)), controller.Name);
+            Assert.True(controller.IsDefined(typeof(RequireTenantAttribute)), controller.Name);
+        });
     }
 
     /// <summary>
@@ -80,24 +63,11 @@ public class EntryRequirementsConventionTests
         var context = new ResourceExecutingContext(
             new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), [], []);
 
-        new RequireTenantFilter().OnResourceExecuting(context);
+        new RequireTenantAttribute().OnResourceExecuting(context);
 
         if (refused)
             Assert.IsType<NotFoundResult>(context.Result);
         else
             Assert.Null(context.Result);
-    }
-
-    /// <summary>
-    /// The convention is part of what the package configures, not something a host has to add.
-    /// </summary>
-    [Fact]
-    public void ThePackageRegistersTheConvention()
-    {
-        var mvcOptions = new MvcOptions();
-
-        new ConfigureEndpointConventions(Options.Create(new OidcOptions())).PostConfigure(null, mvcOptions);
-
-        Assert.Single(mvcOptions.Conventions.OfType<EntryRequirementsConvention>());
     }
 }

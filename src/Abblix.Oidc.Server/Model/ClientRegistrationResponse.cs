@@ -18,7 +18,6 @@ namespace Abblix.Oidc.Server.Model;
 /// of the client configuration endpoint (RFC 7592) for subsequent management operations.
 /// Unregistered metadata is omitted from the JSON per RFC 7591 section 3.2.1, not emitted as an explicit null.
 /// </summary>
-[JsonIgnoreNulls]
 public record ClientRegistrationResponse : RegisteredClientMetadata
 {
     /// <summary>
@@ -42,24 +41,28 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     /// </summary>
     [Required]
     [JsonPropertyName(Parameters.ClientId)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required string ClientId { get; init; }
 
     /// <summary>
     /// The client secret. This value must not be assigned to multiple clients and is used for authenticating the client with the server.
     /// </summary>
     [JsonPropertyName(Parameters.ClientSecret)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClientSecret { get; init; }
 
     /// <summary>
     /// The registration access token that can be used at the Client Configuration Endpoint to perform subsequent operations on the client registration.
     /// </summary>
     [JsonPropertyName(Parameters.RegistrationAccessToken)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? RegistrationAccessToken { get; init; }
 
     /// <summary>
     /// The location of the Client Configuration Endpoint where the registration access token can be used for subsequent operations.
     /// </summary>
     [JsonPropertyName(Parameters.RegistrationClientUri)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? RegistrationClientUri { get; init; }
 
     /// <summary>
@@ -67,6 +70,7 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     /// </summary>
     [JsonPropertyName(Parameters.ClientIdIssuedAt)]
     [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? ClientIdIssuedAt { get; init; }
 
     /// <summary>
@@ -82,6 +86,7 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     /// The software statement JWT echoed back per RFC 7591 Section 3.2.1.
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareStatement)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SoftwareStatement { get; init; }
 
     /// <summary>
