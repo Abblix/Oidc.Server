@@ -60,6 +60,8 @@ app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-
     .RequireRateLimiting("oidc");
 ```
 
+The mapped endpoints appear in your API description, so in an OpenAPI document built by Swashbuckle or `Microsoft.AspNetCore.OpenApi`, with their form fields, route parameters and headers. Call `.ExcludeFromDescription()` on what `MapOidcControllers()` returns to keep them out, or `.WithGroupName("oidc")` to give them a document of their own.
+
 ## Endpoint URLs
 
 A host that needs an OIDC endpoint's URL - to point an external identity provider's callback back at the authorization endpoint, say - asks `IOidcEndpointResolver`:

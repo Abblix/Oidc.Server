@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
@@ -51,6 +52,7 @@ internal sealed class OidcApiDescriptionProvider(
     {
         var mapped = endpoints.Endpoints
             .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IExcludeFromDescriptionMetadata>() is not { ExcludeFromDescription: true })
             .Select(endpoint => (Endpoint: endpoint, Action: endpoint.Metadata.GetMetadata<ControllerActionDescriptor>()))
             .Where(entry => entry.Action?.ControllerTypeInfo.Assembly == LibraryAssembly)
             .Select(entry => Describable(entry.Action!, entry.Endpoint))
@@ -59,7 +61,27 @@ internal sealed class OidcApiDescriptionProvider(
         var library = new ApiDescriptionProviderContext(mapped);
         _platform.OnProvidersExecuting(library);
         foreach (var description in library.Results)
+        {
+            KeepOneParameterPerNameAndSource(description);
             context.Results.Add(description);
+        }
+    }
+
+    /// <summary>
+    /// An action reading two models from the form, as the pushed authorization request reads the authorization
+    /// request and the client's credentials, is described with every field of both, and a field both carry,
+    /// <c>client_id</c>, twice. A request carries such a field once, and a document generator keys the fields of a
+    /// form by name, so a repeated one stops it building the host's whole document.
+    /// </summary>
+    private static void KeepOneParameterPerNameAndSource(ApiDescription description)
+    {
+        var seen = new HashSet<(string, string?)>();
+        var repeated = description.ParameterDescriptions
+            .Where(parameter => !seen.Add((parameter.Name, parameter.Source?.Id)))
+            .ToList();
+
+        foreach (var parameter in repeated)
+            description.ParameterDescriptions.Remove(parameter);
     }
 
     /// <inheritdoc />
@@ -83,7 +105,9 @@ internal sealed class OidcApiDescriptionProvider(
             Parameters = action.Parameters,
             BoundProperties = action.BoundProperties,
             ActionConstraints = action.ActionConstraints,
-            EndpointMetadata = action.EndpointMetadata,
+            // The endpoint's metadata, not the action's: a convention the host applied through what the mapping call
+            // returned, such as a group name, is there and only there
+            EndpointMetadata = endpoint.Metadata.ToList(),
             FilterDescriptors = action.FilterDescriptors,
             RouteValues = action.RouteValues,
             AttributeRouteInfo = new AttributeRouteInfo { Template = endpoint.RoutePattern.RawText },
@@ -92,6 +116,7 @@ internal sealed class OidcApiDescriptionProvider(
         foreach (var (key, value) in action.Properties)
             describable.Properties[key] = value;
 
+        // No group name of its own: the platform takes one a host applied to the mapping from the endpoint's metadata
         describable.SetProperty(new ApiDescriptionActionData());
         return describable;
     }
