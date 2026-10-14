@@ -29,9 +29,11 @@ internal sealed class RouteTemplateResolver(string prefix, IConfigurationSection
     private static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(10);
 
     // The fallback ends at the bracket closing its own token: brackets inside it pair up, so a nested token stays
-    // part of it while "[route:ApiPrefix?v1]/[controller]" keeps "/[controller]" as the rest of the template
+    // part of it while "[route:ApiPrefix?v1]/[controller]" keeps "/[controller]" as the rest of the template. Outside
+    // a nested token, a doubled bracket is MVC's escaped literal and stays in the fallback, so "[route:a?a]]b]" falls
+    // back to "a]]b", which MVC reads as "a]b"
     private readonly Regex _token = new(
-        $@"\[{Regex.Escape(prefix)}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>(?>[^\[\]]+|\[(?<{DepthGroup}>)|\](?<-{DepthGroup}>))*(?({DepthGroup})(?!))))?\]",
+        $@"\[{Regex.Escape(prefix)}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>(?>[^\[\]]+|(?({DepthGroup})(?!))(\[\[|\]\])|\[(?<{DepthGroup}>)|\](?<-{DepthGroup}>))*(?({DepthGroup})(?!))))?\]",
         RegexOptions.None,
         MatchTimeout);
 
@@ -46,35 +48,42 @@ internal sealed class RouteTemplateResolver(string prefix, IConfigurationSection
     public (string Template, bool Configured) Resolve(string template)
     {
         var configured = false;
-        var resolvedTokens = new HashSet<string>(StringComparer.Ordinal);
-        while (true)
+
+        // The tokens whose values are being expanded right now: a token met again among them is a cycle, while the
+        // same token written twice side by side is resolved twice
+        var expanding = new HashSet<string>(StringComparer.Ordinal);
+
+        var resolved = Expand(template);
+        return (resolved, configured);
+
+        string Expand(string text) => _token.Replace(text, match =>
         {
-            var original = template;
-            template = _token.Replace(original, match =>
+            var token = match.Groups[TokenGroup].Value;
+            if (!expanding.Add(token))
             {
-                var token = match.Groups[TokenGroup].Value;
-                if (!resolvedTokens.Add(token))
-                {
-                    throw new InvalidOperationException(
-                        $"The route token '{token}' refers back to itself in '{original}'.");
-                }
+                throw new InvalidOperationException(
+                    $"The route token '{token}' refers back to itself in '{template}'.");
+            }
 
-                if (section[token] is { } value)
-                {
-                    configured = true;
-                    return value;
-                }
-
-                var fallback = match.Groups[FallbackGroup];
-                if (fallback.Success)
-                    return fallback.Value;
-
+            string value;
+            if (section[token] is { } configuredValue)
+            {
+                configured = true;
+                value = configuredValue;
+            }
+            else if (match.Groups[FallbackGroup] is { Success: true } fallback)
+            {
+                value = fallback.Value;
+            }
+            else
+            {
                 throw new InvalidOperationException(
                     $"The route token '{token}' has no value in {section.Path} and no fallback.");
-            });
+            }
 
-            if (string.Equals(original, template, StringComparison.Ordinal))
-                return (template, configured);
-        }
+            var expanded = Expand(value);
+            expanding.Remove(token);
+            return expanded;
+        });
     }
 }
