@@ -60,6 +60,8 @@ app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-
     .RequireRateLimiting("oidc");
 ```
 
+A configuration section keyed as in version 2.4 (`base`, `token`, `introspect`, `jwks` and the rest, values such as `~/oauth2` or `[route:base]/issue`) still sets the paths, through `services.ConfigureRoutes(configuration.GetSection("Routes"))`. The same call resolves tokens such as `[route:ApiPrefix?v1]` in your own controllers' route templates; a controller carrying one needs the call even with an empty section, since nothing else resolves its fallback.
+
 ## Endpoint URLs
 
 A host that needs an OIDC endpoint's URL - to point an external identity provider's callback back at the authorization endpoint, say - asks `IOidcEndpointResolver`:
