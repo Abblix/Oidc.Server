@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
@@ -181,6 +182,24 @@ public sealed class HostIsolationTests : IAsyncLifetime
     /// </summary>
     private static string PathOf(RouteEndpoint endpoint)
         => "/" + (endpoint.RoutePattern.RawText ?? string.Empty).TrimStart('/');
+
+    /// <summary>
+    /// The host's own actions are described in its API description as without the library: the library adds the
+    /// descriptions of its endpoints and changes or repeats none of the host's.
+    /// </summary>
+    [Fact]
+    public void TheHostsOwnActionsAreDescribedAsWithoutTheLibrary()
+        => Assert.Equal(HostDescriptions(_plain), HostDescriptions(_withLibrary));
+
+    private static List<string> HostDescriptions(WebApplication app)
+        => app.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>()
+            .ApiDescriptionGroups.Items
+            .SelectMany(group => group.Items)
+            .Where(description => description.RelativePath?.StartsWith(HostController.ItemsPath.TrimStart('/'), StringComparison.Ordinal) == true)
+            .Select(description => $"{description.HttpMethod} {description.RelativePath} " +
+                                   string.Join(",", description.ParameterDescriptions.Select(parameter => $"{parameter.Name}:{parameter.Source?.Id}")))
+            .Order(StringComparer.Ordinal)
+            .ToList();
 
     public static TheoryData<Type> ApplicationWideSettings => new()
     {

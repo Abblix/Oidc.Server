@@ -8,6 +8,8 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
@@ -97,6 +99,10 @@ public static class ServiceCollectionExtensions
 		// reference with [EnableCors] resolves out of the box instead of only when the host defined it. Same
 		// policy and supplement/override contract as the Minimal API adapter. See AddOidcCors.
 		services.AddOidcCors();
+
+		// Beside the host's description providers, never in place of one: it describes the library's mapped
+		// endpoints and nothing else.
+		services.TryAddEnumerable(ServiceDescriptor.Transient<IApiDescriptionProvider, OidcApiDescriptionProvider>());
 
 	    return services;
     }
