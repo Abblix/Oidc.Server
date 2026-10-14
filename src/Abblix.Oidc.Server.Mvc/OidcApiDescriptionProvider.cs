@@ -62,26 +62,63 @@ internal sealed class OidcApiDescriptionProvider(
         _platform.OnProvidersExecuting(library);
         foreach (var description in library.Results)
         {
-            KeepOneParameterPerNameAndSource(description);
+            DescribeAsSentOnTheWire(description);
             context.Results.Add(description);
         }
     }
 
     /// <summary>
-    /// An action reading two models from the form, as the pushed authorization request reads the authorization
-    /// request and the client's credentials, is described with every field of both, and a field both carry,
-    /// <c>client_id</c>, twice. A request carries such a field once, and a document generator keys the fields of a
-    /// form by name, so a repeated one stops it building the host's whole document.
+    /// Describes each parameter the library reads through a binder of its own as the single string the request
+    /// carries, under its protocol name.
     /// </summary>
-    private static void KeepOneParameterPerNameAndSource(ApiDescription description)
+    /// <remarks>
+    /// The platform describes a parameter by its CLR type, which for these is not what travels: <c>claims</c> is one
+    /// field holding JSON, not the members of its type; <c>max_age</c> is a number of seconds, not a time span;
+    /// <c>scope</c> is one space-separated string, not an array. The client's certificate comes from the connection,
+    /// not from the request, so it is not a parameter at all. Each field is described once, which a document generator
+    /// keying a form's fields by name requires: the pushed authorization request reads <c>client_id</c> from both
+    /// models it binds.
+    /// </remarks>
+    private void DescribeAsSentOnTheWire(ApiDescription description)
     {
-        var seen = new HashSet<(string, string?)>();
-        var repeated = description.ParameterDescriptions
-            .Where(parameter => !seen.Add((parameter.Name, parameter.Source?.Id)))
-            .ToList();
+        var bound = description.ActionDescriptor.Parameters
+            .Where(parameter => parameter.BindingInfo?.BindingSource is { IsFromRequest: true })
+            .SelectMany(parameter => metadataProvider.GetMetadataForType(parameter.ParameterType).Properties)
+            .Where(property => property.BinderType != null);
 
-        foreach (var parameter in repeated)
-            description.ParameterDescriptions.Remove(parameter);
+        foreach (var property in bound)
+        {
+            var name = property.BinderModelName ?? property.Name!;
+            var described = description.ParameterDescriptions
+                .Where(parameter => parameter.Name == name || parameter.Name.StartsWith(name + ".", StringComparison.Ordinal))
+                .ToList();
+            if (described.Count == 0)
+                continue;
+
+            var position = description.ParameterDescriptions.IndexOf(described[0]);
+            foreach (var parameter in described)
+                description.ParameterDescriptions.Remove(parameter);
+
+            if (described[0].Source == BindingSource.Custom)
+                continue;
+
+            // A field of its own, string-typed both ways a generator reads a type: from the description and from the
+            // metadata. It stands apart from the model it was bound into, as the generators treat a top-level field.
+            description.ParameterDescriptions.Insert(position, new ApiParameterDescription
+            {
+                Name = name,
+                Source = described[0].Source,
+                Type = typeof(string),
+                ModelMetadata = metadataProvider.GetMetadataForType(typeof(string)),
+                IsRequired = property.IsBindingRequired,
+                ParameterDescriptor = new ParameterDescriptor
+                {
+                    Name = name,
+                    ParameterType = typeof(string),
+                    BindingInfo = described[0].ParameterDescriptor?.BindingInfo,
+                },
+            });
+        }
     }
 
     /// <inheritdoc />

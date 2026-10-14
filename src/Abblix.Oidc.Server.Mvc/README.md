@@ -60,7 +60,7 @@ app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-
     .RequireRateLimiting("oidc");
 ```
 
-The mapped endpoints appear in your API description, so in an OpenAPI document built by Swashbuckle or `Microsoft.AspNetCore.OpenApi`, with their form fields, route parameters and headers. Call `.ExcludeFromDescription()` on what `MapOidcControllers()` returns to keep them out, or `.WithGroupName("oidc")` to give them a document of their own.
+The mapped endpoints appear in your API description, and so in any OpenAPI document built from it, such as Swashbuckle's or Microsoft.AspNetCore.OpenApi's. Call `.ExcludeFromDescription()` on what `MapOidcControllers()` returns to leave them out, or `.WithGroupName("oidc")` and declare an "oidc" document to give them one of their own.
 
 ## Endpoint URLs
 

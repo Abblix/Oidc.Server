@@ -10,6 +10,8 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Mvc;
 using Microsoft.AspNetCore.Builder;
@@ -97,8 +99,9 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
 
         var document = host.Services.GetRequiredService<ISwaggerProvider>().GetSwagger(Document);
 
-        Assert.Contains("/connect/par", document.Paths.Keys);
         Assert.Contains("/connect/token", document.Paths.Keys);
+        AssertThePushedRequestIsDescribedAsSent(
+            await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
     }
 
     /// <summary>The OpenAPI generator ASP.NET Core ships builds the document with the library's endpoints in it.</summary>
@@ -111,9 +114,34 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
         var document = await host.Services.GetRequiredKeyedService<IOpenApiDocumentProvider>(Document)
             .GetOpenApiDocumentAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains("/connect/par", document.Paths.Keys);
         Assert.Contains("/connect/token", document.Paths.Keys);
+        AssertThePushedRequestIsDescribedAsSent(
+            await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
     }
+
+    /// <summary>
+    /// A field the library reads through a binder of its own is described as the string the request carries: the
+    /// claims request as one JSON field, the maximum authentication age in seconds, the scope space-separated.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationRequest.Parameters.Claims)]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge)]
+    [InlineData(AuthorizationRequest.Parameters.Scope)]
+    public void AFieldIsDescribedAsTheStringTheRequestCarries(string field)
+    {
+        var par = Single(Descriptions(Factory.Services), "POST", "connect/par");
+
+        var parameter = Assert.Single(par.ParameterDescriptions, parameter => parameter.Name == field);
+        Assert.Equal(typeof(string), parameter.Type);
+        Assert.Equal(BindingSource.Form, parameter.Source);
+        Assert.DoesNotContain(par.ParameterDescriptions, parameter => parameter.Name.StartsWith(field + ".", StringComparison.Ordinal));
+    }
+
+    /// <summary>The client's certificate comes from the connection, so no description asks the request for it.</summary>
+    [Fact]
+    public void TheClientCertificateIsNoParameter()
+        => Assert.All(Descriptions(Factory.Services).Where(IsLibrarys), description =>
+            Assert.DoesNotContain(description.ParameterDescriptions, parameter => parameter.Source == BindingSource.Custom));
 
     [Fact]
     public void NoLibraryDescriptionNamesAParameterTwiceFromOneSource()
@@ -138,6 +166,38 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
         var library = Descriptions(app.Services).Where(IsLibrarys).ToList();
         Assert.NotEmpty(library);
         Assert.All(library, description => Assert.Equal(Group, description.GroupName));
+    }
+
+    /// <summary>
+    /// The form of the pushed authorization request in a built document carries each field as the request does: the
+    /// claims request, the maximum authentication age and the scope as strings, nothing named after a member of the
+    /// types they are read into, and no client certificate.
+    /// </summary>
+    private static void AssertThePushedRequestIsDescribedAsSent(string json)
+    {
+        var document = JsonNode.Parse(json)!;
+        var content = document["paths"]!["/connect/par"]!["post"]!["requestBody"]!["content"]!.AsObject();
+        var schema = Assert.Single(content).Value!["schema"]!;
+
+        // Swashbuckle lists a form's fields under one object; the platform's generator gives each field an object of
+        // its own under allOf.
+        var fields = new[] { schema }
+            .Concat(schema["allOf"]?.AsArray() ?? [])
+            .SelectMany(part => part!["properties"]?.AsObject() ?? [])
+            .ToDictionary(field => field.Key, field => field.Value);
+
+        foreach (var field in new[]
+                 {
+                     AuthorizationRequest.Parameters.Claims,
+                     AuthorizationRequest.Parameters.MaxAge,
+                     AuthorizationRequest.Parameters.Scope,
+                 })
+        {
+            Assert.Equal("string", fields.GetValueOrDefault(field)?["type"]?.GetValue<string>());
+        }
+
+        Assert.DoesNotContain(fields, field => field.Key.Contains('.'));
+        Assert.DoesNotContain(nameof(X509Certificate2), json);
     }
 
     private const string Document = "v1";
