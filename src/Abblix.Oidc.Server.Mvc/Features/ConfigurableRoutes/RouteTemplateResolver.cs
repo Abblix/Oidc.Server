@@ -22,13 +22,16 @@ internal sealed class RouteTemplateResolver(string prefix, IConfigurationSection
 {
     private const string TokenGroup = "token";
     private const string FallbackGroup = "fallback";
+    private const string DepthGroup = "depth";
 
     // Templates and their values are written by the host's developer and read once at startup, so the timeout is a
     // backstop against a hang, generous enough that a loaded machine compiling the pattern does not trip it.
     private static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(10);
 
+    // The fallback ends at the bracket closing its own token: brackets inside it pair up, so a nested token stays
+    // part of it while "[route:ApiPrefix?v1]/[controller]" keeps "/[controller]" as the rest of the template
     private readonly Regex _token = new(
-        $@"\[{Regex.Escape(prefix)}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>.+))?\]",
+        $@"\[{Regex.Escape(prefix)}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>(?>[^\[\]]+|\[(?<{DepthGroup}>)|\](?<-{DepthGroup}>))*(?({DepthGroup})(?!))))?\]",
         RegexOptions.None,
         MatchTimeout);
 

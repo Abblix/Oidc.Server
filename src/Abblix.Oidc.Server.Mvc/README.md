@@ -60,7 +60,7 @@ app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-
     .RequireRateLimiting("oidc");
 ```
 
-A configuration section keyed as in version 2.4 (`base`, `token`, `introspect`, `jwks` and the rest, values such as `~/oauth2` or `[route:base]/issue`) still sets the paths, through `services.ConfigureRoutes(configuration.GetSection("Routes"))`. The same call resolves tokens such as `[route:ApiPrefix?v1]` in your own controllers' route templates, as it did in 2.4.
+A configuration section keyed as in version 2.4 (`base`, `token`, `introspect`, `jwks` and the rest, values such as `~/oauth2` or `[route:base]/issue`) still sets the paths, through `services.ConfigureRoutes(configuration.GetSection("Routes"))`. The same call resolves tokens such as `[route:ApiPrefix?v1]` in your own controllers' route templates; a controller carrying one needs the call even with an empty section, since nothing else resolves its fallback.
 
 ## Endpoint URLs
 

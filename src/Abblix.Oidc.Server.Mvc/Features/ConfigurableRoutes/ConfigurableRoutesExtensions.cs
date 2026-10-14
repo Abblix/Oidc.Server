@@ -32,13 +32,15 @@ public static class ConfigurableRoutesExtensions
     /// <c>par</c>, <c>jwks</c> and the rest), moves every <c>/connect</c> endpoint at once with <c>base</c> and every
     /// <c>/.well-known</c> one with <c>well_known</c>, and may build a value from other tokens, as in
     /// <c>[route:base]/issue</c>. A leading <c>~/</c> is read as <c>/</c>; the prefix given to
-    /// <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/> still comes before every path. An endpoint the
-    /// section says nothing about keeps the path it had, so a path set in code before this call stands.
+    /// <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/> still comes before every path. An endpoint keeps
+    /// the path it had, one set in code before this call included, unless the section names its token or the base it
+    /// falls under.
     /// </para>
     /// <para>
     /// A host's own controller may carry tokens too, as in <c>[Route("[route:ApiPrefix?v1]/users")]</c> with
     /// <c>"ApiPrefix": "v2"</c> in the section; the convention resolving them is added to <c>MvcOptions</c> and
-    /// changes no template without a token. A later call replaces an earlier one.
+    /// changes no template without a token. A host whose controllers carry tokens calls this method, with an empty
+    /// section if it sets no value, since nothing else resolves their fallbacks. A later call replaces an earlier one.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection the server is registered in.</param>

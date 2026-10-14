@@ -162,33 +162,87 @@ public class ConfigureRoutesTests
     [Fact]
     public void ATokenInAHostRouteIsResolvedAndARouteWithoutOneIsLeftAsItIs()
     {
-        var services = new ServiceCollection().AddLogging();
-        services.AddControllers()
-            .ConfigureApplicationPartManager(parts => parts.FeatureProviders.Add(new OnlyHostControllers()))
-            .AddApplicationPart(typeof(HostTokenizedController).Assembly);
-        services.ConfigureRoutes(SectionOf(("ApiPrefix", "v2")));
-
-        var actions = services.BuildServiceProvider()
-            .GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items
-            .OfType<ControllerActionDescriptor>()
-            .ToList();
+        var actions = HostActions(SectionOf(("ApiPrefix", "v2")));
 
         Assert.Equal("v2/users", RouteOf<HostTokenizedController>(actions));
         Assert.Equal("plain/HostPlain/items", RouteOf<HostPlainController>(actions));
     }
 
+    /// <summary>The form version 2.4 resolved: a token in an action's route, under a route of the controller.</summary>
+    [Theory]
+    [InlineData(null, "api/items/{id}")]
+    [InlineData("things", "api/things/{id}")]
+    public void ATokenInAnActionRouteIsResolved(string? item, string expected)
+    {
+        var actions = HostActions(item is null ? SectionOf() : SectionOf(("Item", item)));
+
+        Assert.Equal(expected, RouteOf<HostActionTokenController>(actions));
+    }
+
+    /// <summary>A fallback ends at its own closing bracket, so what follows the token stays in the route.</summary>
+    [Theory]
+    [InlineData(null, "v1/HostBracket")]
+    [InlineData("v2", "v2/HostBracket")]
+    public void WhatFollowsATokenStaysInTheRoute(string? prefix, string expected)
+    {
+        var actions = HostActions(prefix is null ? SectionOf() : SectionOf(("ApiPrefix", prefix)));
+
+        Assert.Equal(expected, RouteOf<HostBracketController>(actions));
+    }
+
+    [Theory]
+    [InlineData(false, "a/b")]
+    [InlineData(true, "aa/bb")]
+    public void TwoTokensInOneRouteAreBothResolved(bool configured, string expected)
+    {
+        var actions = HostActions(configured ? SectionOf(("First", "aa"), ("Second", "bb")) : SectionOf());
+
+        Assert.Equal(expected, RouteOf<HostTwoTokensController>(actions));
+    }
+
+    [Fact]
+    public void ALaterCallResolvesTheHostsRoutesFromItsSection()
+    {
+        var actions = HostActions(SectionOf(("ApiPrefix", "v2")), SectionOf(("ApiPrefix", "v3")));
+
+        Assert.Equal("v3/users", RouteOf<HostTokenizedController>(actions));
+    }
+
+    private static readonly Type[] HostControllers =
+    [
+        typeof(HostTokenizedController),
+        typeof(HostPlainController),
+        typeof(HostActionTokenController),
+        typeof(HostBracketController),
+        typeof(HostTwoTokensController),
+    ];
+
+    /// <summary>The host's actions as MVC built them, after one call of ConfigureRoutes per section, in order.</summary>
+    private static List<ControllerActionDescriptor> HostActions(params IConfigurationSection[] sections)
+    {
+        var services = new ServiceCollection().AddLogging();
+        services.AddControllers()
+            .ConfigureApplicationPartManager(parts => parts.FeatureProviders.Add(new OnlyHostControllers()))
+            .AddApplicationPart(typeof(HostTokenizedController).Assembly);
+        foreach (var section in sections)
+            services.ConfigureRoutes(section);
+
+        return services.BuildServiceProvider()
+            .GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items
+            .OfType<ControllerActionDescriptor>()
+            .ToList();
+    }
+
     private static string? RouteOf<TController>(IEnumerable<ControllerActionDescriptor> actions)
         => Assert.Single(actions, action => action.ControllerTypeInfo == typeof(TController)).AttributeRouteInfo?.Template;
 
-    /// <summary>Keeps the two host controllers of this assembly and no other type that might look like one.</summary>
+    /// <summary>Keeps the host controllers of this assembly and no other type that might look like one.</summary>
     private sealed class OnlyHostControllers : IApplicationFeatureProvider<ControllerFeature>
     {
         public void PopulateFeature(IEnumerable<ApplicationPart> parts, ControllerFeature feature)
         {
-            var kept = feature.Controllers
-                .Where(controller => controller != typeof(HostTokenizedController) && controller != typeof(HostPlainController))
-                .ToList();
-            foreach (var controller in kept)
+            var other = feature.Controllers.Where(controller => !HostControllers.Contains(controller.AsType())).ToList();
+            foreach (var controller in other)
                 feature.Controllers.Remove(controller);
         }
     }
