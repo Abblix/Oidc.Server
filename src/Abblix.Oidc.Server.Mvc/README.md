@@ -60,6 +60,8 @@ app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-
     .RequireRateLimiting("oidc");
 ```
 
+The mapped endpoints appear in your API description, and so in any OpenAPI document built from it, such as Swashbuckle's or Microsoft.AspNetCore.OpenApi's. Call `.ExcludeFromDescription()` on what `MapOidcControllers()` returns to leave them out, or `.WithGroupName("oidc")` and declare an "oidc" document to give them one of their own.
+
 A configuration section keyed as in version 2.4 (`base`, `token`, `introspect`, `jwks` and the rest, values such as `~/oauth2` or `[route:base]/issue`) still sets the paths, through `services.ConfigureRoutes(configuration.GetSection("Routes"))`. The same call resolves tokens such as `[route:ApiPrefix?v1]` in your own controllers' route templates; a controller carrying one needs the call even with an empty section, since nothing else resolves its fallback.
 
 ## Endpoint URLs
