@@ -196,10 +196,20 @@ public sealed class HostIsolationTests : IAsyncLifetime
             .ApiDescriptionGroups.Items
             .SelectMany(group => group.Items)
             .Where(description => description.RelativePath?.StartsWith(HostController.ItemsPath.TrimStart('/'), StringComparison.Ordinal) == true)
-            .Select(description => $"{description.HttpMethod} {description.RelativePath} " +
-                                   string.Join(",", description.ParameterDescriptions.Select(parameter => $"{parameter.Name}:{parameter.Source?.Id}")))
+            .Select(Snapshot)
             .Order(StringComparer.Ordinal)
             .ToList();
+
+    /// <summary>Everything a document generator reads from a description, written out to compare.</summary>
+    private static string Snapshot(ApiDescription description)
+        => string.Join(" | ",
+            $"{description.HttpMethod} {description.RelativePath} group={description.GroupName}",
+            string.Join(",", description.ParameterDescriptions.Select(parameter =>
+                $"{parameter.Name}:{parameter.Source?.Id}:{parameter.Type}:{parameter.IsRequired}")),
+            string.Join(",", description.SupportedRequestFormats.Select(format => format.MediaType)),
+            string.Join(",", description.SupportedResponseTypes.Select(response =>
+                $"{response.StatusCode}:{response.Type}:" +
+                string.Join("+", response.ApiResponseFormats.Select(format => format.MediaType)))));
 
     public static TheoryData<Type> ApplicationWideSettings => new()
     {

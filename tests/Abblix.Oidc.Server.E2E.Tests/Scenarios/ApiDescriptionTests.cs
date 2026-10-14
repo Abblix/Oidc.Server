@@ -100,7 +100,7 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
         var document = host.Services.GetRequiredService<ISwaggerProvider>().GetSwagger(Document);
 
         Assert.Contains("/connect/token", document.Paths.Keys);
-        AssertThePushedRequestIsDescribedAsSent(
+        AssertTheFormsAreDescribedAsSent(
             await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
     }
 
@@ -115,26 +115,48 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
             .GetOpenApiDocumentAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains("/connect/token", document.Paths.Keys);
-        AssertThePushedRequestIsDescribedAsSent(
+        AssertTheFormsAreDescribedAsSent(
             await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
-    /// A field the library reads through a binder of its own is described as the string the request carries: the
-    /// claims request as one JSON field, the maximum authentication age in seconds, the scope space-separated.
+    /// A field the library reads through a binder of its own is described as the value the request carries: the
+    /// claims request as one JSON string, the maximum authentication age as a number of seconds, the scope as one
+    /// space-separated string.
     /// </summary>
     [Theory]
-    [InlineData(AuthorizationRequest.Parameters.Claims)]
-    [InlineData(AuthorizationRequest.Parameters.MaxAge)]
-    [InlineData(AuthorizationRequest.Parameters.Scope)]
-    public void AFieldIsDescribedAsTheStringTheRequestCarries(string field)
+    [InlineData(AuthorizationRequest.Parameters.Claims, typeof(string))]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, typeof(int))]
+    [InlineData(AuthorizationRequest.Parameters.Scope, typeof(string))]
+    public void AFieldIsDescribedAsTheValueTheRequestCarries(string field, Type expected)
     {
         var par = Single(Descriptions(Factory.Services), "POST", "connect/par");
 
         var parameter = Assert.Single(par.ParameterDescriptions, parameter => parameter.Name == field);
-        Assert.Equal(typeof(string), parameter.Type);
+        Assert.Equal(expected, parameter.Type);
         Assert.Equal(BindingSource.Form, parameter.Source);
         Assert.DoesNotContain(par.ParameterDescriptions, parameter => parameter.Name.StartsWith(field + ".", StringComparison.Ordinal));
+    }
+
+    /// <summary>A field a client may send several times is described as a list, so a client can send each value.</summary>
+    [Theory]
+    [InlineData(TokenRequest.Parameters.Resource)]
+    [InlineData(TokenRequest.Parameters.Audience)]
+    public void ARepeatableFieldIsDescribedAsAList(string field)
+    {
+        var token = Single(Descriptions(Factory.Services), "POST", "connect/token");
+
+        var parameter = Assert.Single(token.ParameterDescriptions, parameter => parameter.Name == field);
+        Assert.True(parameter.Type.IsArray, $"{field} is described as {parameter.Type}");
+    }
+
+    [Fact]
+    public void TheGrantTypeIsARequiredField()
+    {
+        var token = Single(Descriptions(Factory.Services), "POST", "connect/token");
+
+        Assert.True(Assert.Single(token.ParameterDescriptions, parameter =>
+            parameter.Name == TokenRequest.Parameters.GrantType).IsRequired);
     }
 
     /// <summary>The client's certificate comes from the connection, so no description asks the request for it.</summary>
@@ -169,36 +191,42 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// The form of the pushed authorization request in a built document carries each field as the request does: the
-    /// claims request, the maximum authentication age and the scope as strings, nothing named after a member of the
-    /// types they are read into, and no client certificate.
+    /// The forms in a built document carry each field as the request does: the claims request and the scope as
+    /// strings, the maximum authentication age as a whole number, a resource indicator as a list, nothing named after a
+    /// member of the types they are read into, and no client certificate.
     /// </summary>
-    private static void AssertThePushedRequestIsDescribedAsSent(string json)
+    private static void AssertTheFormsAreDescribedAsSent(string json)
     {
         var document = JsonNode.Parse(json)!;
-        var content = document["paths"]!["/connect/par"]!["post"]!["requestBody"]!["content"]!.AsObject();
+
+        var par = FormFields(document, "/connect/par");
+        Assert.Equal("string", TypeOf(par, AuthorizationRequest.Parameters.Claims));
+        // The platform's generator leaves the type of a number out, so a client may send it as a string too, and says
+        // what it is through the format alone
+        Assert.Equal("int32", par.GetValueOrDefault(AuthorizationRequest.Parameters.MaxAge)?["format"]?.GetValue<string>());
+        Assert.Equal("string", TypeOf(par, AuthorizationRequest.Parameters.Scope));
+        Assert.DoesNotContain(par, field => field.Key.Contains('.'));
+
+        Assert.Equal("array", TypeOf(FormFields(document, "/connect/token"), TokenRequest.Parameters.Resource));
+        Assert.DoesNotContain(nameof(X509Certificate2), json);
+    }
+
+    /// <summary>The fields of the form an endpoint is posted.</summary>
+    private static Dictionary<string, JsonNode?> FormFields(JsonNode document, string path)
+    {
+        var content = document["paths"]![path]!["post"]!["requestBody"]!["content"]!.AsObject();
         var schema = Assert.Single(content).Value!["schema"]!;
 
         // Swashbuckle lists a form's fields under one object; the platform's generator gives each field an object of
         // its own under allOf.
-        var fields = new[] { schema }
+        return new[] { schema }
             .Concat(schema["allOf"]?.AsArray() ?? [])
             .SelectMany(part => part!["properties"]?.AsObject() ?? [])
             .ToDictionary(field => field.Key, field => field.Value);
-
-        foreach (var field in new[]
-                 {
-                     AuthorizationRequest.Parameters.Claims,
-                     AuthorizationRequest.Parameters.MaxAge,
-                     AuthorizationRequest.Parameters.Scope,
-                 })
-        {
-            Assert.Equal("string", fields.GetValueOrDefault(field)?["type"]?.GetValue<string>());
-        }
-
-        Assert.DoesNotContain(fields, field => field.Key.Contains('.'));
-        Assert.DoesNotContain(nameof(X509Certificate2), json);
     }
+
+    private static string? TypeOf(Dictionary<string, JsonNode?> fields, string field)
+        => fields.GetValueOrDefault(field)?["type"]?.GetValue<string>();
 
     private const string Document = "v1";
     private const string Group = "oidc";
