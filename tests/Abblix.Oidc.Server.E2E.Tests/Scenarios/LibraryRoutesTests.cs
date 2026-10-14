@@ -20,6 +20,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+#if !MINIMAL_API_TRANSPORT
+using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
+#endif
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -122,6 +125,28 @@ public class LibraryRoutesTests(TestFactory factory) : TestBase(factory)
     }
 
 #if !MINIMAL_API_TRANSPORT
+    /// <summary>
+    /// A configuration section written for version 2.4 moves the endpoints it names, and the discovery document
+    /// names them where they now answer.
+    /// </summary>
+    [Fact]
+    public async Task ASectionInTheVersion24FormMovesTheEndpoints()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder
+            .UseSetting("Routes:base", "~/oauth2")
+            .UseSetting("Routes:introspect", "[route:base]/inspect")
+            .ConfigureServices((context, services) =>
+                services.ConfigureRoutes(context.Configuration.GetSection("Routes"))));
+        using var client = host.CreateClient(ClientOptions);
+
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.Equal("/oauth2/token", discovery.TokenEndpoint.AbsolutePath);
+        Assert.Equal("/oauth2/inspect", discovery.IntrospectionEndpoint?.AbsolutePath);
+
+        using var introspection = await PostIntrospectionAsync(client, "/oauth2/inspect");
+        Assert.NotEqual(HttpStatusCode.NotFound, introspection.StatusCode);
+    }
+
     /// <summary>
     /// The host's own <c>{controller}/{action}</c> route reaches none of the library's actions: the test host maps
     /// one beside the library's routes.
