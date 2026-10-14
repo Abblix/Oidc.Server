@@ -8,6 +8,9 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -21,6 +24,13 @@ public class ConfigureRoutesTests
 {
     private const string Section = "Routes";
 
+    private static IConfigurationSection SectionOf(params (string Key, string Value)[] entries)
+        => new ConfigurationBuilder()
+            .AddInMemoryCollection(entries.Select(entry =>
+                new KeyValuePair<string, string?>($"{Section}:{entry.Key}", entry.Value)))
+            .Build()
+            .GetSection(Section);
+
     private static OidcRouteOptions Routes(params (string Key, string Value)[] entries)
         => Routes(ConfigurableRoutesExtensions.DefaultPrefix, null, entries);
 
@@ -29,21 +39,27 @@ public class ConfigureRoutesTests
         Action<IServiceCollection>? before,
         params (string Key, string Value)[] entries)
     {
-        var section = new ConfigurationBuilder()
-            .AddInMemoryCollection(entries.Select(entry =>
-                new KeyValuePair<string, string?>($"{Section}:{entry.Key}", entry.Value)))
-            .Build()
-            .GetSection(Section);
-
         var services = new ServiceCollection();
         before?.Invoke(services);
-        services.ConfigureRoutes(section, prefix);
+        services.ConfigureRoutes(SectionOf(entries), prefix);
         return services.BuildServiceProvider().GetRequiredService<IOptions<OidcRouteOptions>>().Value;
     }
 
     [Fact]
-    public void AnEmptySectionLeavesEveryPathAsItWas()
-        => Assert.Equivalent(new OidcRouteOptions(), Routes());
+    public void AnEmptySectionLeavesEveryPathSetInCode()
+    {
+        var inCode = typeof(OidcRouteOptions).GetProperties().Where(property => property.CanWrite).ToList();
+
+        var routes = Routes(
+            ConfigurableRoutesExtensions.DefaultPrefix,
+            services => services.Configure<OidcRouteOptions>(options =>
+            {
+                foreach (var property in inCode)
+                    property.SetValue(options, "/in-code/" + property.Name);
+            }));
+
+        Assert.All(inCode, property => Assert.Equal("/in-code/" + property.Name, property.GetValue(routes)));
+    }
 
     [Fact]
     public void TheBaseMovesEveryConnectEndpointAndNoWellKnownOne()
@@ -119,6 +135,62 @@ public class ConfigureRoutesTests
 
         Assert.Equal("/in-code/token", routes.Token);
         Assert.Equal("/moved/introspect", routes.Introspection);
+    }
+
+    [Theory]
+    [InlineData("[Route:base]/issue")]
+    [InlineData("~token")]
+    public void APathThatCannotBeARouteStopsTheOptions(string value)
+        => Assert.Throws<InvalidOperationException>(() => Routes(("token", value)));
+
+    [Fact]
+    public void ATildeAloneIsTheApplicationRoot()
+        => Assert.Equal("/", Routes(("token", "~")).Token);
+
+    [Fact]
+    public void ALaterCallReplacesAnEarlierOne()
+    {
+        var services = new ServiceCollection();
+        services.ConfigureRoutes(SectionOf(("token", "~/first/token")));
+        services.ConfigureRoutes(SectionOf(("introspect", "~/second/introspect")));
+        var routes = services.BuildServiceProvider().GetRequiredService<IOptions<OidcRouteOptions>>().Value;
+
+        Assert.Equal(new OidcRouteOptions().Token, routes.Token);
+        Assert.Equal("/second/introspect", routes.Introspection);
+    }
+
+    [Fact]
+    public void ATokenInAHostRouteIsResolvedAndARouteWithoutOneIsLeftAsItIs()
+    {
+        var services = new ServiceCollection().AddLogging();
+        services.AddControllers()
+            .ConfigureApplicationPartManager(parts => parts.FeatureProviders.Add(new OnlyHostControllers()))
+            .AddApplicationPart(typeof(HostTokenizedController).Assembly);
+        services.ConfigureRoutes(SectionOf(("ApiPrefix", "v2")));
+
+        var actions = services.BuildServiceProvider()
+            .GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items
+            .OfType<ControllerActionDescriptor>()
+            .ToList();
+
+        Assert.Equal("v2/users", RouteOf<HostTokenizedController>(actions));
+        Assert.Equal("plain/HostPlain/items", RouteOf<HostPlainController>(actions));
+    }
+
+    private static string? RouteOf<TController>(IEnumerable<ControllerActionDescriptor> actions)
+        => Assert.Single(actions, action => action.ControllerTypeInfo == typeof(TController)).AttributeRouteInfo?.Template;
+
+    /// <summary>Keeps the two host controllers of this assembly and no other type that might look like one.</summary>
+    private sealed class OnlyHostControllers : IApplicationFeatureProvider<ControllerFeature>
+    {
+        public void PopulateFeature(IEnumerable<ApplicationPart> parts, ControllerFeature feature)
+        {
+            var kept = feature.Controllers
+                .Where(controller => controller != typeof(HostTokenizedController) && controller != typeof(HostPlainController))
+                .ToList();
+            foreach (var controller in kept)
+                feature.Controllers.Remove(controller);
+        }
     }
 
     [Fact]

@@ -12,9 +12,9 @@ using Microsoft.Extensions.Configuration;
 namespace Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 
 /// <summary>
-/// Reads an endpoint path the way a configuration section written for version 2.4 gives it: a template such as
-/// <c>[route:token?[route:base?~/connect]/token]</c>, whose tokens the section's keys replace and whose fallback stands
-/// where the section is silent.
+/// Resolves a route template the way version 2.4 did: a token such as <c>[route:token?[route:base?~/connect]/token]</c>
+/// is replaced by the value the configuration section holds under its name, or by its fallback where the section is
+/// silent, until no token is left.
 /// </summary>
 /// <param name="prefix">The word that opens a token, <c>route</c> unless the host chose another.</param>
 /// <param name="section">The configuration section whose keys name the tokens.</param>
@@ -22,7 +22,6 @@ internal sealed class RouteTemplateResolver(string prefix, IConfigurationSection
 {
     private const string TokenGroup = "token";
     private const string FallbackGroup = "fallback";
-    private const string ApplicationRoot = "~";
 
     // Templates and their values are written by the host's developer and read once at startup, so the timeout is a
     // backstop against a hang, generous enough that a loaded machine compiling the pattern does not trip it.
@@ -37,11 +36,11 @@ internal sealed class RouteTemplateResolver(string prefix, IConfigurationSection
     public string Token(string name, string fallback) => $"[{prefix}:{name}?{fallback}]";
 
     /// <summary>
-    /// The path a template resolves to, as a route pattern, and whether the section gave any token on the way.
+    /// The template with every token replaced, and whether the section gave any token on the way.
     /// </summary>
     /// <exception cref="InvalidOperationException">A token refers back to itself, or has neither a value nor a
     /// fallback.</exception>
-    public (string Path, bool Configured) Resolve(string template)
+    public (string Template, bool Configured) Resolve(string template)
     {
         var configured = false;
         var resolvedTokens = new HashSet<string>(StringComparer.Ordinal);
@@ -72,10 +71,7 @@ internal sealed class RouteTemplateResolver(string prefix, IConfigurationSection
             });
 
             if (string.Equals(original, template, StringComparison.Ordinal))
-                break;
+                return (template, configured);
         }
-
-        // Version 2.4 wrote a path from the application root as "~/...", which a route pattern spells "/..."
-        return (template.StartsWith(ApplicationRoot, StringComparison.Ordinal) ? template[1..] : template, configured);
     }
 }
