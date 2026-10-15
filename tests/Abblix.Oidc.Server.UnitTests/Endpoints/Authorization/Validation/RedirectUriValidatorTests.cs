@@ -238,23 +238,20 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts URIs with different fragments.
-    /// Per RFC 6749 Section 3.1.2, fragment component is NOT included in redirect_uri.
-    /// Fragments are client-side only and not sent to server, so they're ignored in validation.
+    /// RFC 6749 section 3.1.2: "The endpoint URI MUST NOT include a fragment component." A redirect URI carrying a
+    /// fragment is refused, whether the registered URI carries none or another one.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithDifferentFragment_ShouldSucceed()
+    [Theory]
+    [InlineData("https://client.example.com/callback", "https://client.example.com/callback#section2")]
+    [InlineData("https://client.example.com/callback#section1", "https://client.example.com/callback#section2")]
+    public async Task ValidateAsync_WithFragment_ShouldReturnError(string registered, string requested)
     {
-        // Arrange
-        var registeredUri = new Uri("https://client.example.com/callback#section1");
-        var redirectUri = new Uri("https://client.example.com/callback#section2");
-        var context = CreateContext(redirectUri, registeredUri);
+        var context = CreateContext(new Uri(requested), new Uri(registered));
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -608,6 +605,26 @@ public class RedirectUriValidatorTests
     {
         var redirectUri = new Uri(requested);
         var context = CreateContext(redirectUri, new Uri(registered));
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Null(result);
+        Assert.Equal(redirectUri, context.ValidRedirectUri);
+    }
+
+    /// <summary>
+    /// A client registering several redirect URIs keeps the loopback rule for the loopback one among them, which is
+    /// how an app binding either IPv4 or IPv6 registers both literals (RFC 8252 section 7.3).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_LoopbackIpAmongSeveralRegistered_AcceptsAnotherPort()
+    {
+        var redirectUri = new Uri("http://[::1]:61024/oauth2redirect");
+        var context = CreateContext(
+            redirectUri,
+            new Uri(RegisteredUri),
+            new Uri("http://127.0.0.1:51004/oauth2redirect"),
+            new Uri("http://[::1]:61023/oauth2redirect"));
 
         var result = await _validator.ValidateAsync(context);
 

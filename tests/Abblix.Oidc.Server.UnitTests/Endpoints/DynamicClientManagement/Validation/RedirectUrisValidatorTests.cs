@@ -302,6 +302,7 @@ public class RedirectUrisValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
         Assert.Contains("127.0.0.1", result.ErrorDescription);
+        Assert.Contains("[::1]", result.ErrorDescription);
     }
 
     /// <summary>

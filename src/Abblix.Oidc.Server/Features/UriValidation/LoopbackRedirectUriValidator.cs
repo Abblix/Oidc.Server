@@ -16,11 +16,13 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 /// exactly (section 8.4).
 /// </summary>
 /// <remarks>
-/// User information and the fragment are compared too, so a candidate carrying either is refused.
-/// <see cref="Uri"/> equality ignores both, and a redirect URI has no use for them.
+/// User information and the fragment are compared too, as <see cref="ExactMatchUriValidator"/> compares them.
+/// The type is internal because it ignores the port of whatever URI it is given: only
+/// <see cref="UriValidatorFactory.CreateForRedirectUris"/> creates it, and only for a URI
+/// <see cref="IsLoopbackIpRedirectUri"/> accepts.
 /// </remarks>
 /// <param name="validUri">The registered loopback IP redirect URI to match against.</param>
-public sealed class LoopbackRedirectUriValidator(Uri validUri) : IUriValidator
+internal sealed class LoopbackRedirectUriValidator(Uri validUri) : IUriValidator
 {
 	private const UriComponents AllButPort = UriComponents.AbsoluteUri & ~UriComponents.Port;
 
@@ -31,8 +33,10 @@ public sealed class LoopbackRedirectUriValidator(Uri validUri) : IUriValidator
 	/// </summary>
 	/// <param name="uri">The registered redirect URI.</param>
 	public static bool IsLoopbackIpRedirectUri(Uri uri)
-		=> uri is { IsAbsoluteUri: true, Scheme: "http", HostNameType: UriHostNameType.IPv4 or UriHostNameType.IPv6 }
-		   && IPAddress.TryParse(uri.DnsSafeHost, out var address)
+		=> uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && IsLoopbackIpLiteral(uri.DnsSafeHost);
+
+	private static bool IsLoopbackIpLiteral(string host)
+		=> IPAddress.TryParse(host, out var address)
 		   && (address.Equals(IPAddress.Loopback) || address.Equals(IPAddress.IPv6Loopback));
 
 	/// <summary>

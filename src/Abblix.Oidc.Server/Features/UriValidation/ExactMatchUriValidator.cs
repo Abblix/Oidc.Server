@@ -41,6 +41,11 @@ public sealed class ExactMatchUriValidator : IUriValidator
 	/// <summary>
 	/// Validates the specified URI by checking for an exact match with the predefined URI.
 	/// </summary>
+	/// <remarks>
+	/// User information and the fragment take part in the comparison, so a candidate carrying either is refused
+	/// unless the registered URI carries the same. <see cref="Uri"/> equality ignores both, while RFC 6749 section
+	/// 3.1.2 forbids a fragment in a redirection endpoint and a registered URI carries no user information.
+	/// </remarks>
 	/// <param name="uri">The URI to validate.</param>
 	/// <returns><c>true</c> if the specified URI exactly matches the predefined URI, otherwise <c>false</c>.</returns>
 	public bool IsValid(Uri uri)
@@ -50,6 +55,7 @@ public sealed class ExactMatchUriValidator : IUriValidator
 			uri = new System.UriBuilder(uri) { Query = null, Fragment = null }.Uri;
 		}
 
-		return _validUri == uri;
+		return uri.IsAbsoluteUri
+		       && Uri.Compare(_validUri, uri, UriComponents.AbsoluteUri, UriFormat.SafeUnescaped, StringComparison.Ordinal) == 0;
 	}
 }

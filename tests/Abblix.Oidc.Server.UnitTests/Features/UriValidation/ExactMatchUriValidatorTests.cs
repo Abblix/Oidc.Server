@@ -68,19 +68,18 @@ public class ExactMatchUriValidatorTests
     }
 
     /// <summary>
-    /// Verifies that URI fragments are ignored by default (per OAuth 2.0 spec).
-    /// Fragments are never sent to the server, so they don't affect security.
+    /// A candidate carrying a fragment or user information the registered URI lacks is refused: RFC 6749 section
+    /// 3.1.2 forbids a fragment in a redirection endpoint, and <see cref="Uri"/> equality would ignore both.
     /// </summary>
-    [Fact]
-    public void ExactMatch_WithFragment_Default_ReturnsTrue()
+    [Theory]
+    [InlineData("https://example.com/callback#fragment")]
+    [InlineData("https://example.com/callback#")]
+    [InlineData("https://user@example.com/callback")]
+    public void ExactMatch_WithFragmentOrUserInfo_Default_ReturnsFalse(string candidate)
     {
-        var validUri = TestConstants.DefaultRedirectUri;
-        var validator = new ExactMatchUriValidator(validUri);
+        var validator = new ExactMatchUriValidator(TestConstants.DefaultRedirectUri);
 
-        var testUri = new Uri("https://example.com/callback#fragment");
-        var result = validator.IsValid(testUri);
-
-        Assert.True(result);
+        Assert.False(validator.IsValid(new Uri(candidate)));
     }
 
     /// <summary>
