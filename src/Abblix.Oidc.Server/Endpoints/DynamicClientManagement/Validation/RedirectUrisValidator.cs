@@ -80,10 +80,12 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                         return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.RedirectUris} must not use host name {uri.Host}");
 
-                    // Native Clients MUST only register redirect_uris using the http: scheme with localhost as the hostname
+                    // OpenID Connect Dynamic Client Registration 1.0 section 2: "loopback URLs use localhost or the IP
+                    // loopback literals 127.0.0.1 or [::1] as the hostname". The refusal names only the IP literals,
+                    // because only they accept any port at the authorization endpoint (RFC 8252 sections 7.3 and 8.3)
                     case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsLocalhost(uri):
                         return ErrorFactory.InvalidRedirectUri(
-                            $"Native Clients MUST only register {Parameters.RedirectUris} using the http: scheme with localhost as the hostname");
+                            $"Native Clients MUST only register {Parameters.RedirectUris} using the http: scheme with a loopback IP literal (127.0.0.1 or [::1]) as the host");
 
                     // Native Clients MUST only register redirect_uris using custom URI schemes
                     case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:

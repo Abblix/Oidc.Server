@@ -175,6 +175,26 @@ public class AuthorizationGrantValidatorTests
     }
 
     /// <summary>
+    /// The authorization endpoint accepts any port on a loopback IP redirect URI (RFC 8252 section 7.3), but the token
+    /// request must carry the very URI the authorization request did, port included (RFC 6749 section 4.1.3).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithLoopbackRedirectUriOnAnotherPort_ShouldReturnError()
+    {
+        var context = CreateContext(redirectUri: new Uri("http://127.0.0.1:51005/oauth2redirect"));
+        var authorizedGrant = CreateAuthorizedGrant(new Uri("http://127.0.0.1:51004/oauth2redirect"));
+
+        _grantHandler
+            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
     /// Verifies successful validation when both redirect URIs are null.
     /// Null redirect URIs should match.
     /// </summary>
