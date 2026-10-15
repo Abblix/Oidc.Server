@@ -80,7 +80,7 @@ public static class UriValidatorFactory
 
 	private static IUriValidator ForRedirectUri(Uri redirectUri)
 	{
-		if (LoopbackRedirectUriValidator.IsLoopbackIpRedirectUri(redirectUri))
+		if (LoopbackHosts.IsLoopbackIpRedirectUri(redirectUri))
 			return new LoopbackRedirectUriValidator(redirectUri);
 
 		return new ExactMatchUriValidator(redirectUri);

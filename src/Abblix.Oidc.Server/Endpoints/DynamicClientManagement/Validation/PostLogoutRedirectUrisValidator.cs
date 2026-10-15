@@ -48,7 +48,7 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                     return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.PostLogoutRedirectUris} must be secure ({Uri.UriSchemeHttps})");
 
-                case ApplicationTypes.Web when LoopbackRedirectUriValidator.IsAnyLoopbackHost(uri):
+                case ApplicationTypes.Web when LoopbackHosts.IsAnyLoopbackHost(uri):
                     // they MUST NOT use localhost as the hostname
                     return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.PostLogoutRedirectUris} must not use host name {uri.Host}");
@@ -57,7 +57,7 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                     break;
 
                 case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp
-                                                  && !LoopbackRedirectUriValidator.IsNativeLoopbackHost(uri):
+                                                  && !LoopbackHosts.IsNativeLoopbackHost(uri):
                     // The rule OpenID Connect Dynamic Client Registration 1.0 section 2 sets for redirect_uris, applied
                     // here as well: OpenID Connect RP-Initiated Logout 1.0 sets no loopback rule of its own
                     return ErrorFactory.InvalidRedirectUri(

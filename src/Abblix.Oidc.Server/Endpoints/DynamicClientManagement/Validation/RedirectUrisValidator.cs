@@ -77,7 +77,7 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                             $"{Parameters.RedirectUris} must be secure ({Uri.UriSchemeHttps})");
 
                     // Web Clients MUST NOT use localhost as the hostname
-                    case ApplicationTypes.Web when LoopbackRedirectUriValidator.IsAnyLoopbackHost(uri):
+                    case ApplicationTypes.Web when LoopbackHosts.IsAnyLoopbackHost(uri):
                         return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.RedirectUris} must not use host name {uri.Host}");
 
@@ -85,7 +85,7 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                     // loopback literals 127.0.0.1 or [::1] as the hostname". The refusal recommends the IP literals,
                     // because only they accept any port at the authorization endpoint (RFC 8252 sections 7.3 and 8.3)
                     case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp
-                                                      && !LoopbackRedirectUriValidator.IsNativeLoopbackHost(uri):
+                                                      && !LoopbackHosts.IsNativeLoopbackHost(uri):
                         return ErrorFactory.InvalidRedirectUri(
                             $"Native Clients MUST only register http: {Parameters.RedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1], which accept any port");
 
