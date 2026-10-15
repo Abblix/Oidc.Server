@@ -200,6 +200,52 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
+    /// A native client's <c>http</c> post-logout redirect URI is held to the hosts OpenID Connect Dynamic Client
+    /// Registration 1.0 section 2 names for its redirect URIs: <c>localhost</c>, <c>127.0.0.1</c> and <c>[::1]</c>.
+    /// Another address of the loopback range is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("http://localhost/logout", true)]
+    [InlineData("http://127.0.0.1:8080/logout", true)]
+    [InlineData("http://[::1]/logout", true)]
+    [InlineData("http://127.0.0.2/logout", false)]
+    [InlineData("http://127.255.255.254/logout", false)]
+    [InlineData("http://[::ffff:127.0.0.1]/logout", false)]
+    public async Task ValidateAsync_NativeClientHttpHost_AcceptsOnlyNamedLoopbackHosts(string uri, bool accepted)
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri(uri)],
+            applicationType: ApplicationTypes.Native);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Equal(accepted, result == null);
+        if (!accepted)
+        {
+            Assert.Equal(ErrorCodes.InvalidRedirectUri, result!.Error);
+            Assert.Contains("localhost", result.ErrorDescription);
+            Assert.Contains("127.0.0.1", result.ErrorDescription);
+            Assert.Contains("[::1]", result.ErrorDescription);
+        }
+    }
+
+    /// <summary>
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError()
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri("https://127.0.0.2/logout")],
+            applicationType: ApplicationTypes.Web);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+    }
+
+    /// <summary>
     /// Verifies error when native client uses HTTP with non-localhost.
     /// Per OAuth 2.0 for Native Apps, HTTP only allowed with localhost.
     /// </summary>

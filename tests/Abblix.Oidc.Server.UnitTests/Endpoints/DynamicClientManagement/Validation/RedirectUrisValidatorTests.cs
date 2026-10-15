@@ -200,6 +200,53 @@ public class RedirectUrisValidatorTests
     }
 
     /// <summary>
+    /// OpenID Connect Dynamic Client Registration 1.0 section 2: a native client's loopback URLs "use localhost or
+    /// the IP loopback literals 127.0.0.1 or [::1] as the hostname". Another address of the loopback range is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("http://localhost/callback", true)]
+    [InlineData("http://127.0.0.1:8080/callback", true)]
+    [InlineData("http://[::1]/callback", true)]
+    [InlineData("http://127.0.0.2/callback", false)]
+    [InlineData("http://127.255.255.254/callback", false)]
+    [InlineData("http://[::ffff:127.0.0.1]/callback", false)]
+    public async Task ValidateAsync_NativeClientHttpHost_AcceptsOnlyNamedLoopbackHosts(string uri, bool accepted)
+    {
+        var context = CreateContext(
+            redirectUris: [new Uri(uri)],
+            grantTypes: [GrantTypes.AuthorizationCode],
+            applicationType: ApplicationTypes.Native);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Equal(accepted, result == null);
+        if (!accepted)
+        {
+            Assert.Equal(ErrorCodes.InvalidRedirectUri, result!.Error);
+            Assert.Contains("localhost", result.ErrorDescription);
+            Assert.Contains("127.0.0.1", result.ErrorDescription);
+            Assert.Contains("[::1]", result.ErrorDescription);
+        }
+    }
+
+    /// <summary>
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError()
+    {
+        var context = CreateContext(
+            redirectUris: [new Uri("https://127.0.0.2/callback")],
+            grantTypes: [GrantTypes.AuthorizationCode],
+            applicationType: ApplicationTypes.Web);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+    }
+
+    /// <summary>
     /// Verifies error when web client uses localhost.
     /// Per OIDC DCR, web clients must not use localhost.
     /// </summary>
