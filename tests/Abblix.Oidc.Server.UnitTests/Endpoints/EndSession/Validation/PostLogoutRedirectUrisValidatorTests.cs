@@ -217,13 +217,15 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// A post-logout redirect URI carrying a fragment the registered one lacks is refused, since the comparison is
-    /// exact and takes the fragment into account.
+    /// A post-logout redirect URI carrying a fragment or user information the registered one lacks is refused, since
+    /// the comparison is exact and takes both into account.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithFragment_ShouldReturnError()
+    [Theory]
+    [InlineData("https://client.example.com/logout#fragment")]
+    [InlineData("https://user@client.example.com/logout")]
+    public async Task ValidateAsync_WithFragmentOrUserInfo_ShouldReturnError(string requested)
     {
-        var redirectUri = new Uri("https://client.example.com/logout#fragment");
+        var redirectUri = new Uri(requested);
         var clientInfo = CreateClientInfo("https://client.example.com/logout");
         var context = CreateContext(redirectUri, clientInfo);
 

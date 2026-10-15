@@ -33,18 +33,30 @@ public sealed class ExactMatchUriValidator : IUriValidator
 
 		_ignoreQueryAndFragment = ignoreQueryAndFragment;
 		_validUri = validUri;
+
+		// A registered request URI carries the hash of the file it names as its fragment, which changes with the
+		// file (OpenID Connect Dynamic Client Registration 1.0 section 2, request_uris), so in the ignoring mode the
+		// fragment is left out on the registered side as well
+		_components = ignoreQueryAndFragment switch
+		{
+			true => UriComponents.AbsoluteUri & ~UriComponents.Fragment,
+			false => UriComponents.AbsoluteUri,
+		};
 	}
 
 	private readonly bool _ignoreQueryAndFragment;
 	private readonly Uri _validUri;
+	private readonly UriComponents _components;
 
 	/// <summary>
 	/// Validates the specified URI by checking for an exact match with the predefined URI.
 	/// </summary>
 	/// <remarks>
-	/// User information and the fragment take part in the comparison, so a candidate carrying either is refused
-	/// unless the registered URI carries the same. <see cref="Uri"/> equality ignores both, while RFC 6749 section
-	/// 3.1.2 forbids a fragment in a redirection endpoint and a registered URI carries no user information.
+	/// By default user information and the fragment take part in the comparison, so a candidate carrying either is
+	/// refused unless the registered URI carries the same: <see cref="Uri"/> equality ignores both, while RFC 6749
+	/// section 3.1.2 forbids a fragment in a redirection endpoint and a registered URI carries no user information.
+	/// In the mode ignoring the query and fragment, the candidate's query and fragment are dropped and the registered
+	/// URI's fragment is not compared, so only user information is still refused there.
 	/// </remarks>
 	/// <param name="uri">The URI to validate.</param>
 	/// <returns><c>true</c> if the specified URI exactly matches the predefined URI, otherwise <c>false</c>.</returns>
@@ -56,6 +68,6 @@ public sealed class ExactMatchUriValidator : IUriValidator
 		}
 
 		return uri.IsAbsoluteUri
-		       && Uri.Compare(_validUri, uri, UriComponents.AbsoluteUri, UriFormat.SafeUnescaped, StringComparison.Ordinal) == 0;
+		       && Uri.Compare(_validUri, uri, _components, UriFormat.SafeUnescaped, StringComparison.Ordinal) == 0;
 	}
 }

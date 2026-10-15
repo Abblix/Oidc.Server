@@ -28,7 +28,7 @@ internal sealed class LoopbackRedirectUriValidator(Uri validUri) : IUriValidator
 
 	/// <summary>
 	/// Reports whether <paramref name="uri"/> is a loopback IP redirect URI in the sense of RFC 8252 section 7.3:
-	/// the <c>http</c> scheme with exactly <c>127.0.0.1</c> or <c>[::1]</c> as its host. <c>localhost</c> is not one,
+	/// the <c>http</c> scheme with a host that normalizes to <c>127.0.0.1</c> or <c>[::1]</c>. <c>localhost</c> is not one,
 	/// section 8.3 calling it NOT RECOMMENDED, and neither is any other address of the loopback range.
 	/// </summary>
 	/// <param name="uri">The registered redirect URI.</param>

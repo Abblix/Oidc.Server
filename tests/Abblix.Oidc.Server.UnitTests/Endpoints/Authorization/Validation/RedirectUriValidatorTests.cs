@@ -239,12 +239,14 @@ public class RedirectUriValidatorTests
 
     /// <summary>
     /// RFC 6749 section 3.1.2: "The endpoint URI MUST NOT include a fragment component." A redirect URI carrying a
-    /// fragment is refused, whether the registered URI carries none or another one.
+    /// fragment is refused, whether the registered URI carries none or another one, and so is one carrying user
+    /// information the registered URI lacks.
     /// </summary>
     [Theory]
     [InlineData("https://client.example.com/callback", "https://client.example.com/callback#section2")]
     [InlineData("https://client.example.com/callback#section1", "https://client.example.com/callback#section2")]
-    public async Task ValidateAsync_WithFragment_ShouldReturnError(string registered, string requested)
+    [InlineData("https://client.example.com/callback", "https://user@client.example.com/callback")]
+    public async Task ValidateAsync_WithFragmentOrUserInfo_ShouldReturnError(string registered, string requested)
     {
         var context = CreateContext(new Uri(requested), new Uri(registered));
 

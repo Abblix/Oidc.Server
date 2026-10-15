@@ -83,6 +83,24 @@ public class ExactMatchUriValidatorTests
     }
 
     /// <summary>
+    /// A request URI is registered with the hash of the file it names as its fragment, which changes whenever the
+    /// file does (OpenID Connect Dynamic Client Registration 1.0 section 2, <c>request_uris</c>), so the fragment
+    /// takes no part in matching it, on either side.
+    /// </summary>
+    [Theory]
+    [InlineData("https://rp.example.com/request.jwt#GkurKxf5T0Y")]
+    [InlineData("https://rp.example.com/request.jwt#AnotherHash")]
+    [InlineData("https://rp.example.com/request.jwt")]
+    public void ExactMatch_RegisteredFragment_IgnoreEnabled_ReturnsTrue(string candidate)
+    {
+        var validator = new ExactMatchUriValidator(
+            new Uri("https://rp.example.com/request.jwt#GkurKxf5T0Y"),
+            ignoreQueryAndFragment: true);
+
+        Assert.True(validator.IsValid(new Uri(candidate)));
+    }
+
+    /// <summary>
     /// Verifies that query strings are allowed when explicitly configured to ignore them.
     /// Useful for scenarios where dynamic query parameters are expected.
     /// </summary>
