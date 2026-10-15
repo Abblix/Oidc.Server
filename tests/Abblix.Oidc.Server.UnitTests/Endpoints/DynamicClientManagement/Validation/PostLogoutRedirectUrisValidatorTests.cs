@@ -230,13 +230,17 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// A web client keeps refusing every loopback host, not only the ones a native client may use.
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use, and
+    /// <c>localhost.</c> with the trailing dot names the same host as <c>localhost</c>.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError()
+    [Theory]
+    [InlineData("https://127.0.0.2/logout")]
+    [InlineData("https://localhost./logout")]
+    [InlineData("https://LOCALHOST./logout")]
+    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError(string uri)
     {
         var context = CreateContext(
-            postLogoutRedirectUris: [new Uri("https://127.0.0.2/logout")],
+            postLogoutRedirectUris: [new Uri(uri)],
             applicationType: ApplicationTypes.Web);
 
         var result = await _validator.ValidateAsync(context);

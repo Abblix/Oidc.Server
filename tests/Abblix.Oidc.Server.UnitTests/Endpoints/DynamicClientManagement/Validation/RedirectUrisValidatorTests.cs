@@ -230,13 +230,17 @@ public class RedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// A web client keeps refusing every loopback host, not only the ones a native client may use.
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use, and
+    /// <c>localhost.</c> with the trailing dot names the same host as <c>localhost</c>.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError()
+    [Theory]
+    [InlineData("https://127.0.0.2/callback")]
+    [InlineData("https://localhost./callback")]
+    [InlineData("https://LOCALHOST./callback")]
+    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError(string uri)
     {
         var context = CreateContext(
-            redirectUris: [new Uri("https://127.0.0.2/callback")],
+            redirectUris: [new Uri(uri)],
             grantTypes: [GrantTypes.AuthorizationCode],
             applicationType: ApplicationTypes.Web);
 

@@ -40,8 +40,12 @@ internal static class LoopbackHosts
 	/// Reports whether <paramref name="uri"/> names any loopback host, <c>localhost</c> included, the whole range a
 	/// web client must not register.
 	/// </summary>
+	/// <remarks>
+	/// <see cref="Uri.IsLoopback"/> is false for <c>localhost.</c>, the fully qualified spelling of the same name with
+	/// its trailing dot, so that spelling is matched here by name.
+	/// </remarks>
 	/// <param name="uri">The registered URI.</param>
-	public static bool IsAnyLoopbackHost(Uri uri) => uri.IsLoopback;
+	public static bool IsAnyLoopbackHost(Uri uri) => uri.IsLoopback || uri.Host == "localhost.";
 
 	private static bool IsLoopbackIpLiteral(string host)
 		=> IPAddress.TryParse(host, out var address)
