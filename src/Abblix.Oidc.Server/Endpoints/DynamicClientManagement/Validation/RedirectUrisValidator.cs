@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -18,7 +19,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// per-application-type rules of OIDC DCR 1.0 section 2: required when the client uses
 /// <c>authorization_code</c>, <c>implicit</c>, or <c>refresh_token</c>; absolute and
 /// fragment-free; Web clients use <c>https</c> and not localhost; Native clients use
-/// a custom scheme or <c>http</c> on a loopback host, <c>localhost</c> included.
+/// a custom scheme or <c>http</c> with <c>localhost</c>, <c>127.0.0.1</c> or <c>[::1]</c> as the host.
 /// </summary>
 internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
 {
@@ -83,9 +84,9 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                     // OpenID Connect Dynamic Client Registration 1.0 section 2: "loopback URLs use localhost or the IP
                     // loopback literals 127.0.0.1 or [::1] as the hostname". The refusal recommends the IP literals,
                     // because only they accept any port at the authorization endpoint (RFC 8252 sections 7.3 and 8.3)
-                    case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsLocalhost(uri):
+                    case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsNativeLoopbackHost(uri):
                         return ErrorFactory.InvalidRedirectUri(
-                            $"Native Clients MUST only register http: {Parameters.RedirectUris} on a loopback host; use 127.0.0.1 or [::1], which accept any port");
+                            $"Native Clients MUST only register http: {Parameters.RedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1], which accept any port");
 
                     // Native Clients MUST only register redirect_uris using custom URI schemes
                     case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
@@ -117,4 +118,9 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     // Helper method to determine if the provided URI uses localhost or loopback address
     private static bool IsLocalhost(Uri uri)
         => uri.IsLoopback || uri.Host == "localhost";
+
+    // The hosts OpenID Connect Dynamic Client Registration 1.0 section 2 names for a native client's loopback URLs,
+    // narrower than IsLocalhost, which refuses the whole loopback range to a web client
+    private static bool IsNativeLoopbackHost(Uri uri)
+        => uri.Host == "localhost" || LoopbackRedirectUriValidator.IsLoopbackIpRedirectUri(uri);
 }

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -18,7 +19,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Validates the OpenID Connect RP-Initiated Logout 1.0 <c>post_logout_redirect_uris</c>:
 /// each URI must be absolute, fragment-free, and consistent with the OIDC DCR 1.0 section 2
 /// scheme rules for the declared <c>application_type</c> (Web = <c>https</c>,
-/// non-localhost; Native = custom scheme or <c>http://localhost</c>).
+/// non-localhost; Native = custom scheme or <c>http</c> with <c>localhost</c>, <c>127.0.0.1</c> or <c>[::1]</c>).
 /// </summary>
 public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextValidator
 {
@@ -55,10 +56,11 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                 case ApplicationTypes.Web:
                     break;
 
-                case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsLocalhost(uri):
-                    // Native Clients MUST only register redirect_uris using the http: scheme with localhost as the hostname
+                case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsNativeLoopbackHost(uri):
+                    // The rule OpenID Connect Dynamic Client Registration 1.0 section 2 sets for redirect_uris, applied
+                    // here as well: OpenID Connect RP-Initiated Logout 1.0 sets no loopback rule of its own
                     return ErrorFactory.InvalidRedirectUri(
-                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using the http: scheme with localhost as the hostname");
+                        $"Native Clients MUST only register http: {Parameters.PostLogoutRedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1]");
 
                 case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
                     // Native Clients MUST only register redirect_uris using custom URI schemes
@@ -77,4 +79,9 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
     }
 
     private static bool IsLocalhost(Uri uri) => uri.IsLoopback || uri.Host == "localhost";
+
+    // The hosts OpenID Connect Dynamic Client Registration 1.0 section 2 names for a native client's loopback URLs,
+    // narrower than IsLocalhost, which refuses the whole loopback range to a web client
+    private static bool IsNativeLoopbackHost(Uri uri)
+        => uri.Host == "localhost" || LoopbackRedirectUriValidator.IsLoopbackIpRedirectUri(uri);
 }
