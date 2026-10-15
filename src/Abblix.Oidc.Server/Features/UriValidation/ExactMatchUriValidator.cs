@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 /// Implements the simple-string-comparison matching rule for redirect URIs (RFC 6749 section 3.1.2.2):
 /// the candidate URI must equal a single registered absolute URI. Optionally strips the query
 /// and fragment from the candidate before comparison to accommodate clients that append
-/// dynamic query parameters at runtime.
+/// dynamic query parameters at runtime, and then leaves the registered URI's fragment out of the comparison too.
 /// </summary>
 public sealed class ExactMatchUriValidator : IUriValidator
 {
@@ -23,8 +23,8 @@ public sealed class ExactMatchUriValidator : IUriValidator
 	/// </summary>
 	/// <param name="validUri">The single registered absolute URI to match against.</param>
 	/// <param name="ignoreQueryAndFragment">When <c>true</c>, the candidate URI's query and
-	/// fragment are stripped before comparison; otherwise comparison is exact, including those
-	/// components.</param>
+	/// fragment are stripped before comparison and the registered URI's fragment is not compared;
+	/// otherwise comparison is exact, including those components.</param>
 	/// <exception cref="ArgumentException"><paramref name="validUri"/> is not an absolute URI.</exception>
 	public ExactMatchUriValidator(Uri validUri, bool ignoreQueryAndFragment = false)
 	{
@@ -34,7 +34,7 @@ public sealed class ExactMatchUriValidator : IUriValidator
 		_ignoreQueryAndFragment = ignoreQueryAndFragment;
 		_validUri = validUri;
 
-		// A registered request URI carries the hash of the file it names as its fragment, which changes with the
+		// A registered request URI may carry the hash of the file it names as its fragment, which changes with the
 		// file (OpenID Connect Dynamic Client Registration 1.0 section 2, request_uris), so in the ignoring mode the
 		// fragment is left out on the registered side as well
 		_components = ignoreQueryAndFragment switch
@@ -56,7 +56,8 @@ public sealed class ExactMatchUriValidator : IUriValidator
 	/// refused unless the registered URI carries the same: <see cref="Uri"/> equality ignores both, while RFC 6749
 	/// section 3.1.2 forbids a fragment in a redirection endpoint and a registered URI carries no user information.
 	/// In the mode ignoring the query and fragment, the candidate's query and fragment are dropped and the registered
-	/// URI's fragment is not compared, so only user information is still refused there.
+	/// URI's fragment is not compared, while the registered URI's query still is, so a registered URI with a query
+	/// matches nothing there; user information is still refused.
 	/// </remarks>
 	/// <param name="uri">The URI to validate.</param>
 	/// <returns><c>true</c> if the specified URI exactly matches the predefined URI, otherwise <c>false</c>.</returns>

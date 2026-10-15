@@ -101,6 +101,22 @@ public class ExactMatchUriValidatorTests
     }
 
     /// <summary>
+    /// Leaving the query and fragment out of a request URI match still refuses user information the registered URI
+    /// lacks, with or without the registered hash.
+    /// </summary>
+    [Theory]
+    [InlineData("https://user@rp.example.com/request.jwt")]
+    [InlineData("https://user@rp.example.com/request.jwt#GkurKxf5T0Y")]
+    public void ExactMatch_WithUserInfo_IgnoreEnabled_ReturnsFalse(string candidate)
+    {
+        var validator = new ExactMatchUriValidator(
+            new Uri("https://rp.example.com/request.jwt#GkurKxf5T0Y"),
+            ignoreQueryAndFragment: true);
+
+        Assert.False(validator.IsValid(new Uri(candidate)));
+    }
+
+    /// <summary>
     /// Verifies that query strings are allowed when explicitly configured to ignore them.
     /// Useful for scenarios where dynamic query parameters are expected.
     /// </summary>
