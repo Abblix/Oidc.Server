@@ -27,9 +27,10 @@ internal static class LoopbackHosts
 		=> uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && IsLoopbackIpLiteral(uri.DnsSafeHost);
 
 	/// <summary>
-	/// Reports whether <paramref name="uri"/> is an <c>http</c> URI a native client may register: its host is
-	/// <c>localhost</c>, or it is a URI <see cref="IsLoopbackIpRedirectUri"/> accepts. These are the hosts
-	/// OpenID Connect Dynamic Client Registration 1.0 section 2 names for a native client's loopback URLs.
+	/// Reports whether the host of <paramref name="uri"/>, an <c>http</c> URI whose scheme the caller has checked, is
+	/// one a native client may register: <c>localhost</c>, or one <see cref="IsLoopbackIpRedirectUri"/> accepts.
+	/// These are the hosts OpenID Connect Dynamic Client Registration 1.0 section 2 names for a native client's
+	/// loopback URLs.
 	/// </summary>
 	/// <param name="uri">The registered <c>http</c> URI.</param>
 	public static bool IsNativeLoopbackHost(Uri uri)
