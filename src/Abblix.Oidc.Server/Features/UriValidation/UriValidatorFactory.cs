@@ -61,4 +61,28 @@ public static class UriValidatorFactory
 				from validUri in validUris
 				select new ExactMatchUriValidator(validUri, ignoreQueryAndFragment)),
 		};
+
+	/// <summary>
+	/// Creates the validator for the redirect URI of an authorization request. A registered loopback IP redirect URI
+	/// accepts any port, as RFC 8252 section 7.3 requires; every other registered URI must match exactly.
+	/// </summary>
+	/// <param name="redirectUris">The client's registered redirect URIs.</param>
+	/// <returns>
+	/// An <see cref="IUriValidator"/> for a single registered URI, or a <see cref="CompositeUriValidator"/> accepting
+	/// a URI any of them accepts.
+	/// </returns>
+	public static IUriValidator CreateForRedirectUris(params Uri[] redirectUris)
+		=> redirectUris.Length switch
+		{
+			1 => ForRedirectUri(redirectUris[0]),
+			_ => new CompositeUriValidator(redirectUris.Select(ForRedirectUri)),
+		};
+
+	private static IUriValidator ForRedirectUri(Uri redirectUri)
+	{
+		if (LoopbackRedirectUriValidator.IsLoopbackIpRedirectUri(redirectUri))
+			return new LoopbackRedirectUriValidator(redirectUri);
+
+		return new ExactMatchUriValidator(redirectUri);
+	}
 }

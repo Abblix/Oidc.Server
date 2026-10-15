@@ -10,8 +10,9 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
 /// Decides whether a URI received from a client is acceptable for a given OAuth/OIDC use,
-/// most commonly the redirect URI matching rules of RFC 6749 section 3.1.2 and the loopback /
-/// custom-scheme accommodations of RFC 8252 (OAuth 2.0 for Native Apps).
+/// most commonly a redirect URI: an exact match against a registered URI (<see cref="ExactMatchUriValidator"/>),
+/// except that a loopback IP redirect URI of an authorization request accepts any port, as RFC 8252 section 7.3
+/// requires (<see cref="UriValidatorFactory.CreateForRedirectUris"/>).
 /// </summary>
 public interface IUriValidator
 {

@@ -217,22 +217,22 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// Verifies validation with fragment in URI.
-    /// Per RFC 3986, fragments are stripped by Uri class before comparison.
+    /// A post-logout redirect URI carrying a fragment or user information the registered one lacks is refused, since
+    /// the comparison is exact and takes both into account.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithFragment_ShouldIgnoreFragment()
+    [Theory]
+    [InlineData("https://client.example.com/logout#fragment")]
+    [InlineData("https://user@client.example.com/logout")]
+    public async Task ValidateAsync_WithFragmentOrUserInfo_ShouldReturnError(string requested)
     {
-        // Arrange
-        var redirectUri = new Uri("https://client.example.com/logout#fragment");
+        var redirectUri = new Uri(requested);
         var clientInfo = CreateClientInfo("https://client.example.com/logout");
         var context = CreateContext(redirectUri, clientInfo);
 
-        // Act
         var error = await _validator.ValidateAsync(context);
 
-        // Assert - Fragment is ignored by Uri, so validation succeeds
-        Assert.Null(error);
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>

@@ -34,7 +34,7 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
     /// </returns>
     protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
     {
-        var uriValidator = UriValidatorFactory.Create(context.ClientInfo.RedirectUris);
+        var uriValidator = UriValidatorFactory.CreateForRedirectUris(context.ClientInfo.RedirectUris);
 
         var redirectUri = context.Request.RedirectUri;
         if (redirectUri == null || !uriValidator.IsValid(redirectUri))
