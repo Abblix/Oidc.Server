@@ -48,7 +48,7 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                     return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.PostLogoutRedirectUris} must be secure ({Uri.UriSchemeHttps})");
 
-                case ApplicationTypes.Web when IsLocalhost(uri):
+                case ApplicationTypes.Web when LoopbackRedirectUriValidator.IsAnyLoopbackHost(uri):
                     // they MUST NOT use localhost as the hostname
                     return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.PostLogoutRedirectUris} must not use host name {uri.Host}");
@@ -56,7 +56,8 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                 case ApplicationTypes.Web:
                     break;
 
-                case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp && !IsNativeLoopbackHost(uri):
+                case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp
+                                                  && !LoopbackRedirectUriValidator.IsNativeLoopbackHost(uri):
                     // The rule OpenID Connect Dynamic Client Registration 1.0 section 2 sets for redirect_uris, applied
                     // here as well: OpenID Connect RP-Initiated Logout 1.0 sets no loopback rule of its own
                     return ErrorFactory.InvalidRedirectUri(
@@ -77,11 +78,4 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
 
         return null;
     }
-
-    private static bool IsLocalhost(Uri uri) => uri.IsLoopback || uri.Host == "localhost";
-
-    // The hosts OpenID Connect Dynamic Client Registration 1.0 section 2 names for a native client's loopback URLs,
-    // narrower than IsLocalhost, which refuses the whole loopback range to a web client
-    private static bool IsNativeLoopbackHost(Uri uri)
-        => uri.Host == "localhost" || LoopbackRedirectUriValidator.IsLoopbackIpRedirectUri(uri);
 }

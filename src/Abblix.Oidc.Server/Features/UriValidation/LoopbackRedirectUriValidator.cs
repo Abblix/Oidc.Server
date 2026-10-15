@@ -35,6 +35,23 @@ internal sealed class LoopbackRedirectUriValidator(Uri validUri) : IUriValidator
 	public static bool IsLoopbackIpRedirectUri(Uri uri)
 		=> uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && IsLoopbackIpLiteral(uri.DnsSafeHost);
 
+	/// <summary>
+	/// Reports whether <paramref name="uri"/> names a host OpenID Connect Dynamic Client Registration 1.0 section 2
+	/// allows for a native client's loopback URL: <c>localhost</c>, or the IP literals
+	/// <see cref="IsLoopbackIpRedirectUri"/> accepts.
+	/// </summary>
+	/// <param name="uri">The registered <c>http</c> URI.</param>
+	public static bool IsNativeLoopbackHost(Uri uri)
+		=> uri.Host == "localhost" || IsLoopbackIpRedirectUri(uri);
+
+	/// <summary>
+	/// Reports whether <paramref name="uri"/> names <c>localhost</c> or any loopback address, the whole range a web
+	/// client must not register.
+	/// </summary>
+	/// <param name="uri">The registered URI.</param>
+	public static bool IsAnyLoopbackHost(Uri uri)
+		=> uri.IsLoopback || uri.Host == "localhost";
+
 	private static bool IsLoopbackIpLiteral(string host)
 		=> IPAddress.TryParse(host, out var address)
 		   && (address.Equals(IPAddress.Loopback) || address.Equals(IPAddress.IPv6Loopback));
