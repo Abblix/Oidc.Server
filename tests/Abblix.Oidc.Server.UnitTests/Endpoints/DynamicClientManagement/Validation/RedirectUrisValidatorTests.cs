@@ -230,14 +230,31 @@ public class RedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// A web client keeps refusing every loopback host, not only the ones a native client may use, and
-    /// <c>localhost.</c> with the trailing dot names the same host as <c>localhost</c>.
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use, however the name is
+    /// spelled: a trailing dot, full-width letters or an ideographic full stop name the same host once normalized.
     /// </summary>
     [Theory]
     [InlineData("https://127.0.0.2/callback")]
     [InlineData("https://localhost./callback")]
     [InlineData("https://LOCALHOST./callback")]
-    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError(string uri)
+    [InlineData("https://127.0.0.1./callback")]
+    [InlineData("https://ｌｏｃａｌｈｏｓｔ/callback")]
+    [InlineData("https://localhost。/callback")]
+    [InlineData("https://１２７.０.０.１/callback")]
+    public async Task ValidateAsync_WebClientWithLoopbackHost_ShouldReturnError(string uri)
+        => await AssertWebClientRedirectUri(uri, accepted: false);
+
+    /// <summary>
+    /// A name that only resembles a loopback host is an ordinary host for a web client.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com./callback")]
+    [InlineData("https://foo.localhost./callback")]
+    [InlineData("https://127.0.0.1.example.com/callback")]
+    public async Task ValidateAsync_WebClientWithNameResemblingLoopback_ShouldReturnNull(string uri)
+        => await AssertWebClientRedirectUri(uri, accepted: true);
+
+    private async Task AssertWebClientRedirectUri(string uri, bool accepted)
     {
         var context = CreateContext(
             redirectUris: [new Uri(uri)],
@@ -246,8 +263,9 @@ public class RedirectUrisValidatorTests
 
         var result = await _validator.ValidateAsync(context);
 
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(accepted, result == null);
+        if (!accepted)
+            Assert.Equal(ErrorCodes.InvalidRedirectUri, result!.Error);
     }
 
     /// <summary>

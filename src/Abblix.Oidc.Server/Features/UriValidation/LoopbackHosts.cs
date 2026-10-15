@@ -41,11 +41,16 @@ internal static class LoopbackHosts
 	/// web client must not register.
 	/// </summary>
 	/// <remarks>
-	/// <see cref="Uri.IsLoopback"/> is false for <c>localhost.</c>, the fully qualified spelling of the same name with
-	/// its trailing dot, so that spelling is matched here by name.
+	/// <see cref="Uri.IsLoopback"/> is false for other spellings a browser resolves to the same machine: a trailing
+	/// dot (<c>localhost.</c>, <c>127.0.0.1.</c>), full-width letters or digits, an ideographic full stop. So the host
+	/// is also compared after IDNA normalization (<see cref="Uri.IdnHost"/>) with its trailing dot removed.
 	/// </remarks>
 	/// <param name="uri">The registered URI.</param>
-	public static bool IsAnyLoopbackHost(Uri uri) => uri.IsLoopback || uri.Host == "localhost.";
+	public static bool IsAnyLoopbackHost(Uri uri)
+		=> uri.IsLoopback || IsLoopbackName(uri.IdnHost.TrimEnd('.'));
+
+	private static bool IsLoopbackName(string name)
+		=> name == "localhost" || (IPAddress.TryParse(name, out var address) && IPAddress.IsLoopback(address));
 
 	private static bool IsLoopbackIpLiteral(string host)
 		=> IPAddress.TryParse(host, out var address)
