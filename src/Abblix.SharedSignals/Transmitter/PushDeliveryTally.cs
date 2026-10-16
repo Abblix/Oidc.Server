@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net.Http.Headers;
 using Abblix.SecurityEvents.Delivery;
 
 namespace Abblix.SharedSignals.Transmitter;
@@ -30,6 +31,9 @@ internal sealed class PushDeliveryTally
     /// </summary>
     public DeliveryError? FirstRefusal { get; private set; }
 
+    /// <summary>The wait the receiver named on the answer that stopped the pass, if it named one.</summary>
+    public RetryConditionHeaderValue? RetryAfter { get; private set; }
+
     public void RecordDelivered() => Delivered++;
 
     public void RecordRejected(DeliveryError refusal)
@@ -38,5 +42,7 @@ internal sealed class PushDeliveryTally
         Rejected++;
     }
 
-    public PushDeliveryPassOutcome ToOutcome() => new(Delivered, Rejected);
+    public void RecordFailed(RetryConditionHeaderValue? retryAfter) => RetryAfter = retryAfter;
+
+    public PushDeliveryPassOutcome ToOutcome() => new(Delivered, Rejected, RetryAfter);
 }

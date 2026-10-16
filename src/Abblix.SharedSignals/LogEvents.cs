@@ -59,5 +59,8 @@ public static class LogEvents
 
         /// <summary>A new stream covers no subject, while a conformant receiver adds none.</summary>
         public const int NoSubjectsIncludedByDefault = Base + 12;
+
+        /// <summary>The receiver answered with "Retry-After", so its stream is held until then.</summary>
+        public const int PushStreamHeld = Base + 13;
     }
 }

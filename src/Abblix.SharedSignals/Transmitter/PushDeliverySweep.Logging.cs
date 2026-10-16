@@ -30,4 +30,16 @@ partial class PushDeliverySweep
         Message = "Delivery of stream {StreamId} outlived its {LeaseDuration} claim and was cut off; "
                   + "what it did not deliver goes out on a later pass")]
     private partial void LogStreamPassCutOff(string StreamId, TimeSpan LeaseDuration);
+
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.PushStreamHeld,
+        Level = LogLevel.Information,
+        Message = "The receiver of stream {StreamId} asked not to be sent to before {Until}; the stream is held")]
+    private partial void LogStreamHeldUntil(string StreamId, DateTimeOffset Until);
+
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.PushStreamHeld,
+        Level = LogLevel.Debug,
+        Message = "Stream {StreamId} is held at its receiver's request; skipped this round")]
+    private partial void LogStreamHeld(string StreamId);
 }

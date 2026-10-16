@@ -180,6 +180,7 @@ public sealed partial class PushDeliverySender(
 
         if (!response.IsSuccessStatusCode)
         {
+            tally.RecordFailed(response.Headers.RetryAfter);
             return PushTransmission.Failed();
         }
 

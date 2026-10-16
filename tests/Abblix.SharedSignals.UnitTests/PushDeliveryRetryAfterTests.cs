@@ -125,6 +125,26 @@ public sealed class PushDeliveryRetryAfterTests
         Assert.Equal(2, _receiver.Requests);
     }
 
+    /// <summary>
+    /// The wait is the receiver's to name, so it is bounded here: a receiver answering with a wait of a week would
+    /// otherwise hold its events for that week after it came back.
+    /// </summary>
+    [Fact]
+    public async Task ARetryAfterBeyondTheCeiling_HoldsTheStreamOnlyForTheCeiling()
+    {
+        var sweep = await SweepWithOneQueuedEventAsync();
+        _receiver.Answer(
+            HttpStatusCode.TooManyRequests,
+            retryAfter: new RetryConditionHeaderValue(PushDeliverySweep.RetryAfterCeiling + Wait));
+        await sweep.SweepAsync(TestContext.Current.CancellationToken);
+
+        _clock.Advance(PushDeliverySweep.RetryAfterCeiling);
+        _receiver.Answer(HttpStatusCode.Accepted);
+        await sweep.SweepAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, _receiver.Requests);
+    }
+
     /// <summary>A receiver answering each request with the next scripted status and "Retry-After".</summary>
     private sealed class ScriptedReceiver : HttpMessageHandler
     {
