@@ -117,6 +117,30 @@ internal static class TestLicense
     }
 
     /// <summary>
+    /// Puts the checker on a license capping the issuers at <paramref name="issuerLimit"/> in place of the one in
+    /// force, keeping what it has counted, as when the license a running server holds narrows or expires.
+    /// </summary>
+    internal static void ReplaceWithIssuerLimit(int issuerLimit)
+    {
+        var checker = typeof(LicenseChecker);
+        const BindingFlags Statics = BindingFlags.NonPublic | BindingFlags.Static;
+        const BindingFlags Instances = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        var manager = checker.GetField("LicenseManager", Statics)!.GetValue(null)!;
+        var managerType = manager.GetType();
+        if (managerType.GetField("_licenses", Instances)!.GetValue(manager) is IList licenses)
+            licenses.Clear();
+
+        managerType.GetField("_currentLicense", Instances)!.SetValue(manager, null);
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = issuerLimit,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
+    /// <summary>
     /// Empties the throttle window <see cref="LicenseLogger"/> keeps, so a test can observe a record that the
     /// logger would otherwise suppress.
     /// </summary>

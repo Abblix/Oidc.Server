@@ -328,6 +328,57 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     /// <summary>
+    /// A license narrowing under the issuers already served leaves the deployment beyond its terms, and every issuer
+    /// is refused, the ones counted before included.
+    /// </summary>
+    [Fact]
+    public void Issuers_served_under_a_license_that_narrows_beneath_them_are_all_refused()
+    {
+        TestLicense.InstallWithIssuerLimit(2);
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        TestLicense.ReplaceWithIssuerLimit(1);
+
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    /// <summary>
+    /// Issuers asking at once for the last place under the limit take it one at a time, so exactly one is served.
+    /// </summary>
+    [Fact]
+    public async Task Issuers_asking_at_once_for_the_last_place_are_served_one()
+    {
+        const int Asking = 8;
+        const int Rounds = 50;
+        for (var round = 0; round < Rounds; round++)
+        {
+            ArrangeLicenceThatCountsIssuers();
+            using var start = new Barrier(Asking);
+            var served = 0;
+            var asking = Enumerable.Range(0, Asking).Select(index => Task.Run(() =>
+            {
+                start.SignalAndWait(TestContext.Current.CancellationToken);
+                try
+                {
+                    LicenseChecker.CheckIssuer($"https://issuer-{index}.example.com", SingleIssuer.Settings);
+                    Interlocked.Increment(ref served);
+                }
+                catch (LicenseViolationException)
+                {
+                    // Every issuer but one is refused, which is what is being counted
+                }
+            }));
+
+            await Task.WhenAll(asking);
+            Assert.Equal(1, served);
+        }
+    }
+
+    /// <summary>
     /// An issuer refused past the limit takes no place, so the one freed by a tenant gone for good goes to whichever
     /// issuer asks next rather than to the one that was refused earlier.
     /// </summary>
