@@ -18,7 +18,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// is.
 /// </summary>
 /// <param name="outbox">The queues being served.</param>
-public sealed class PollEndpointHandler(IEventOutbox outbox)
+/// <param name="signer">Signs each SET as it is served, so a receiver that polls late still accepts its issue
+/// time.</param>
+public sealed class PollEndpointHandler(IEventOutbox outbox, QueuedEventSigner signer)
 {
     /// <summary>
     /// Handles one poll request for one stream.
@@ -82,7 +84,11 @@ public sealed class PollEndpointHandler(IEventOutbox outbox)
             page = page.Take(maxEvents);
         }
 
-        var sets = page.ToDictionary(item => item.JwtId, item => item.CompactToken, StringComparer.Ordinal);
+        var sets = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in page)
+        {
+            sets.Add(item.JwtId, await signer.SignAsync(item, cancellationToken));
+        }
 
         return new PollResponse
         {

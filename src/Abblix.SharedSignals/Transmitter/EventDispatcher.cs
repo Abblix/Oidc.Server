@@ -28,7 +28,6 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </summary>
 /// <param name="streams">The transmitter's streams.</param>
 /// <param name="outbox">Where minted SETs wait for delivery.</param>
-/// <param name="signer">Signs each minted SET.</param>
 /// <param name="identity">
 /// Names the transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
 /// configuration metadata asserts (SSF 1.0 Section 7.1) - each time a SET is minted.</param>
@@ -45,12 +44,11 @@ namespace Abblix.SharedSignals.Transmitter;
 /// builds, which is what a transmitter claiming no profile does.
 /// </param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency decides a different part of one dispatch: the logger, the streams, the outbox, the signer, the issuer identity, the instruments, the sharing and payload policies and the clock.")]
+    Justification = "Every dependency decides a different part of one dispatch: the logger, the streams, the outbox, the issuer identity, the instruments, the sharing and payload policies and the clock.")]
 public sealed partial class EventDispatcher(
     ILogger<EventDispatcher> logger,
     IStreamStore streams,
     IEventOutbox outbox,
-    ISecurityEventTokenSigner signer,
     ITransmitterIdentity identity,
     SharedSignalsInstruments instruments,
     IEventSharingPolicy? sharingPolicy = null,
@@ -261,11 +259,12 @@ public sealed partial class EventDispatcher(
             builder.WithEvent(descriptor.EventType);
         }
 
-        var compactToken = await builder.SignAsync(signer, cancellationToken);
+        // Queued unsigned: the SET is signed as it leaves, so its "iat" is the moment of each delivery rather
+        // than the moment it was queued.
         await outbox.EnqueueAsync(
             stream.ReceiverId,
             stream.StreamId,
-            new OutboxItem(jwtId, compactToken, asStatusAnnouncement),
+            new OutboxItem(jwtId, QueuedEventSigner.ToQueued(builder.Build()), asStatusAnnouncement),
             cancellationToken);
     }
 

@@ -31,6 +31,9 @@ public class EventDispatcherTests
     /// A signer that records what it was asked to sign and returns an inspectable stand-in:
     /// the dispatcher's contract is what it MINTS, and cryptography has its own tests.
     /// </summary>
+    /// <remarks>
+    /// The dispatcher queues a SET unsigned, so what it minted is read by signing what it queued.
+    /// </remarks>
     private sealed class CapturingSigner : ISecurityEventTokenSigner
     {
         public List<SecurityEventToken> Signed { get; } = [];
@@ -80,7 +83,20 @@ public class EventDispatcherTests
         Subject = subject ?? new EmailSubject("jdoe@example.com"),
     };
 
-    private static async Task<(EventDispatcher Dispatcher, InMemoryEventOutbox Outbox, CapturingSigner Signer)>
+    /// <summary>The SETs queued for <paramref name="streamId"/>, as they are signed when delivered.</summary>
+    private static async Task<List<SecurityEventToken>> MintedAsync(InMemoryEventOutbox outbox, string streamId)
+    {
+        var signer = new CapturingSigner();
+        var queued = new QueuedEventSigner(signer);
+        foreach (var item in await outbox.PendingAsync("receiver-a", streamId, null, TestContext.Current.CancellationToken))
+        {
+            Assert.Equal($"signed.{item.JwtId}", await queued.SignAsync(item, TestContext.Current.CancellationToken));
+        }
+
+        return signer.Signed;
+    }
+
+    private static async Task<(EventDispatcher Dispatcher, InMemoryEventOutbox Outbox)>
         CreateDispatcherAsync(IEventSharingPolicy? policy, params StreamState[] streams)
     {
         var store = new InMemoryStreamStore();
@@ -90,15 +106,13 @@ public class EventDispatcherTests
         }
 
         var outbox = new InMemoryEventOutbox();
-        var signer = new CapturingSigner();
         return (new EventDispatcher(
             NullLogger<EventDispatcher>.Instance,
             store,
             outbox,
-            signer,
             new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
             TestInstruments.Create(),
-            policy), outbox, signer);
+            policy), outbox);
     }
 
     /// <summary>
@@ -112,21 +126,21 @@ public class EventDispatcherTests
         var store = new InMemoryStreamStore();
         Assert.True(await store.TryCreateAsync(CreateStream("s-1", mode: StreamSubjectsMode.All), ct));
         var identity = new SwitchableTransmitterIdentity("https://first.example.com");
-        var signer = new CapturingSigner();
+        var outbox = new InMemoryEventOutbox();
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, new InMemoryEventOutbox(), signer, identity, TestInstruments.Create());
+            NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
 
         identity.Issuer = "https://second.example.com";
         Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));
 
-        Assert.Equal("https://second.example.com", Assert.Single(signer.Signed).Issuer);
+        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1")).Issuer);
     }
 
     [Fact]
     public async Task Dispatch_ReachesTheMatchingStream_AndMintsItsOwnSet()
     {
         var subject = new EmailSubject("jdoe@example.com");
-        var (dispatcher, outbox, signer) = await CreateDispatcherAsync(
+        var (dispatcher, outbox) = await CreateDispatcherAsync(
             policy: null,
             CreateStream("s-1", added: [new StreamSubject(subject, Verified: true)]));
 
@@ -134,10 +148,7 @@ public class EventDispatcherTests
             Descriptor(subject), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, reached);
-        var item = Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
-        Assert.Equal($"signed.{item.JwtId}", item.CompactToken);
-
-        var minted = Assert.Single(signer.Signed);
+        var minted = Assert.Single(await MintedAsync(outbox, "s-1"));
         Assert.Equal(Issuer, minted.Issuer);
         Assert.Equal(["https://receiver.example.com/s-1"], minted.Audiences);
         Assert.Equal("jdoe@example.com", Assert.IsType<EmailSubject>(minted.GetSubjectId()).Email);
@@ -163,7 +174,7 @@ public class EventDispatcherTests
     public async Task AStreamWithNoAddedSubjects_DeliversByItsMode(StreamSubjectsMode mode, int expected)
     {
         var subject = new EmailSubject("jdoe@example.com");
-        var (dispatcher, outbox, _) = await CreateDispatcherAsync(
+        var (dispatcher, outbox) = await CreateDispatcherAsync(
             policy: null,
             CreateStream("s-1", mode: mode));
 
@@ -181,7 +192,7 @@ public class EventDispatcherTests
     {
         var subject = new EmailSubject("jdoe@example.com");
         var covering = new StreamSubject(subject, Verified: true);
-        var (dispatcher, outbox, _) = await CreateDispatcherAsync(
+        var (dispatcher, outbox) = await CreateDispatcherAsync(
             policy: null,
             CreateStream("other-type", added: [covering], delivered: ["https://example.com/events/other"]),
             CreateStream("other-subject", added: [new StreamSubject(new EmailSubject("else@example.com"), true)]),
@@ -204,7 +215,7 @@ public class EventDispatcherTests
     public async Task AllMode_CoversEverything_ExceptTheRemoved()
     {
         var removed = new EmailSubject("optout@example.com");
-        var (dispatcher, outbox, _) = await CreateDispatcherAsync(
+        var (dispatcher, outbox) = await CreateDispatcherAsync(
             policy: null,
             CreateStream("s-all", mode: StreamSubjectsMode.All, removed: [removed]));
 
@@ -222,14 +233,13 @@ public class EventDispatcherTests
         // Section 9.2: an added subject is interest, not entitlement - the policy's silent "no"
         // must leave nothing behind that a receiver could observe.
         var subject = new EmailSubject("jdoe@example.com");
-        var (dispatcher, outbox, signer) = await CreateDispatcherAsync(
+        var (dispatcher, outbox) = await CreateDispatcherAsync(
             new DenyAllPolicy(),
             CreateStream("s-1", added: [new StreamSubject(subject, Verified: true)]));
 
         Assert.Equal(0, await dispatcher.DispatchAsync(
             Descriptor(subject), TestContext.Current.CancellationToken));
         Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
-        Assert.Empty(signer.Signed);
     }
 
     [Fact]
@@ -238,7 +248,7 @@ public class EventDispatcherTests
         // A stream-updated event precedes the stop and may be absent from events_delivered
         // (SSF 1.0 Sections 8.1.4, 8.1.5), so the targeted door skips every matching check.
         var stream = CreateStream("s-1", status: StreamStatuses.Disabled, delivered: []);
-        var (dispatcher, outbox, signer) = await CreateDispatcherAsync(policy: null, stream);
+        var (dispatcher, outbox) = await CreateDispatcherAsync(policy: null, stream);
 
         await dispatcher.DispatchToStreamAsync(
             stream,
@@ -250,8 +260,7 @@ public class EventDispatcherTests
             },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
-        var minted = Assert.Single(signer.Signed);
+        var minted = Assert.Single(await MintedAsync(outbox, "s-1"));
         Assert.Equal("s-1", Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
     }
 }

@@ -271,7 +271,6 @@ public class StreamAddressAtRegistrationTests
             NullLogger<EventDispatcher>.Instance,
             store,
             outbox,
-            new NeverSigner(),
             new OptionsTransmitterIdentity(options),
             TestInstruments.Create(),
             clock: clock);
@@ -286,11 +285,6 @@ public class StreamAddressAtRegistrationTests
             store, outbox, dispatcher, options, policy, PollEndpointsOf(options), clock);
     }
 
-    private sealed class NeverSigner : ISecurityEventTokenSigner
-    {
-        public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-            => Task.FromResult("signed");
-    }
     /// <summary>
     /// The poll address, taken from the options the way the container would. These fixtures name it
     /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the

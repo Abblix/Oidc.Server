@@ -215,7 +215,8 @@ public sealed class SharedSignalsTenantIsolationTests
                 provider.GetRequiredService<IEventOutbox>(),
                 provider.GetRequiredService<ReceiverAddressPolicy>(),
                 NullLogger<PushDeliverySender>.Instance,
-                provider.GetRequiredService<SharedSignalsInstruments>()))));
+                provider.GetRequiredService<SharedSignalsInstruments>(),
+                provider.GetRequiredService<QueuedEventSigner>()))));
 
         foreach (var tenant in (string[])[Acme, Globex])
         {

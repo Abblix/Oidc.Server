@@ -75,7 +75,6 @@ public class StreamManagementServiceTests
         StreamManagementService Service,
         InMemoryStreamStore Store,
         InMemoryEventOutbox Outbox,
-        StubSigner Signer,
         FakeTimeProvider Clock);
 
     private static SharedSignalsTransmitterOptions DefaultOptions() => new()
@@ -94,13 +93,11 @@ public class StreamManagementServiceTests
     {
         var store = new InMemoryStreamStore();
         var outbox = new InMemoryEventOutbox();
-        var signer = new StubSigner();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance,
             store,
             outbox,
-            signer,
             identity ?? new OptionsTransmitterIdentity(options),
             TestInstruments.Create(),
             clock: clock);
@@ -108,7 +105,7 @@ public class StreamManagementServiceTests
         return new Harness(
             new StreamManagementService(
                 store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock),
-            store, outbox, signer, clock);
+            store, outbox, clock);
     }
 
     private static async Task<StreamConfiguration> CreatedStreamAsync(
@@ -216,7 +213,6 @@ public class StreamManagementServiceTests
             NullLogger<EventDispatcher>.Instance,
             store,
             outbox,
-            new StubSigner(),
             new OptionsTransmitterIdentity(options),
             TestInstruments.Create(),
             clock: clock);
@@ -268,7 +264,6 @@ public class StreamManagementServiceTests
             NullLogger<EventDispatcher>.Instance,
             store,
             outbox,
-            new StubSigner(),
             new OptionsTransmitterIdentity(options),
             TestInstruments.Create(),
             clock: clock);
@@ -504,10 +499,12 @@ public class StreamManagementServiceTests
 
         // The SET's subject is the stream itself, opaque (Section 8.1.4.1), and the state is
         // echoed in the event payload.
-        var minted = Assert.Single(harness.Signer.Signed);
-        Assert.Equal(created.StreamId, Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
-        Assert.Single(await harness.Outbox.PendingAsync(
+        var queued = Assert.Single(await harness.Outbox.PendingAsync(
             Receiver, created.StreamId, null, TestContext.Current.CancellationToken));
+        var signer = new StubSigner();
+        await new QueuedEventSigner(signer).SignAsync(queued, TestContext.Current.CancellationToken);
+        var minted = Assert.Single(signer.Signed);
+        Assert.Equal(created.StreamId, Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
 
         var throttled = await harness.Service.RequestVerificationAsync(
             Receiver,

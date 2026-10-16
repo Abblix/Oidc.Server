@@ -59,6 +59,7 @@ public static class TransmitterServiceCollectionExtensions
         // Built through the factory so the sharing policy stays optional: a host that registered none runs
         // without one.
         services.TryAddSingleton(provider => provider.CreateService<EventDispatcher>());
+        services.TryAddSingleton(provider => provider.CreateService<QueuedEventSigner>());
 
         // A singleton because the address is declared once, at startup, by whatever maps the poll
         // route, and read afterwards by everything that mints a stream.

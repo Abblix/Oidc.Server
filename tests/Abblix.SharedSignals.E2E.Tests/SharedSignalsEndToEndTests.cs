@@ -404,7 +404,8 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
             _receiver.GetTestClient(),
             _transmitter.Services.GetRequiredService<IEventOutbox>(),
             _transmitter.Services.GetRequiredService<ReceiverAddressPolicy>(), NullLogger<PushDeliverySender>.Instance,
-            _transmitter.Services.GetRequiredService<SharedSignalsInstruments>());
+            _transmitter.Services.GetRequiredService<SharedSignalsInstruments>(),
+            _transmitter.Services.GetRequiredService<QueuedEventSigner>());
 
         return await sender.SendPendingAsync(stream!, cancellationToken);
     }

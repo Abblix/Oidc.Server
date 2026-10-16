@@ -11,13 +11,14 @@ using System.Text.Json.Serialization;
 namespace Abblix.SharedSignals.Transmitter;
 
 /// <summary>
-/// One SET waiting in a stream's outbox: minted, signed, addressed - everything but delivered.
+/// One SET waiting in a stream's outbox: minted and addressed, signed only when it is delivered.
 /// </summary>
 /// <param name="JwtId">
 /// The token's "jti", the identifier acknowledgements and error reports use
 /// (RFC 8936 Section 2.2).</param>
-/// <param name="CompactToken">The signed token in compact serialization, exactly as it will
-/// travel.</param>
+/// <param name="Token">The token as it waits: unsigned, in the form <see cref="QueuedEventSigner"/> keeps it and
+/// signs it from at every delivery. An item a version that signed on enqueue left in a durable outbox holds that
+/// compact token instead, which is delivered as it is.</param>
 /// <param name="IsStatusAnnouncement">
 /// True for the stream-updated event that escorts a transmitter-initiated status change: the
 /// one item delivery must carry even over a stream that is paused or disabled, because
@@ -32,5 +33,5 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </remarks>
 public sealed record OutboxItem(
     [property: JsonPropertyName("jti")] string JwtId,
-    [property: JsonPropertyName("token")] string CompactToken,
+    [property: JsonPropertyName("token")] string Token,
     [property: JsonPropertyName("is_status_announcement")] bool IsStatusAnnouncement = false);

@@ -116,6 +116,10 @@ public class SharedSignalsServiceCollectionTests
             asStatusAnnouncement: true,
             cancellationToken);
 
+        // Queued unsigned, so the issuer is read off what the delivery signs.
+        var queued = Assert.Single(await provider.GetRequiredService<IEventOutbox>().PendingAsync(
+            stream.ReceiverId, stream.Configuration.StreamId, null, cancellationToken));
+        await provider.GetRequiredService<QueuedEventSigner>().SignAsync(queued, cancellationToken);
         var minted = Assert.Single(signer.Signed);
 
         // Against the stream's own issuer as well as the literal: these two are the pair a receiver

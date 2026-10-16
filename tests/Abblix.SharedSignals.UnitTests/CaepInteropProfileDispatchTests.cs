@@ -478,7 +478,6 @@ public sealed class CaepInteropProfileDispatchTests
                 NullLogger<EventDispatcher>.Instance,
                 store,
                 outbox,
-                new StubSigner(),
                 new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
                 TestInstruments.Create(),
                 payloadPolicy: payloadPolicy),
@@ -488,10 +487,4 @@ public sealed class CaepInteropProfileDispatchTests
 
     /// <summary>A payload of the host's own, which this policy has no way to read.</summary>
     private sealed class HostsOwnPayload : IEventPayload;
-
-    private sealed class StubSigner : ISecurityEventTokenSigner
-    {
-        public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-            => Task.FromResult($"signed.{token.JwtId}");
-    }
 }
