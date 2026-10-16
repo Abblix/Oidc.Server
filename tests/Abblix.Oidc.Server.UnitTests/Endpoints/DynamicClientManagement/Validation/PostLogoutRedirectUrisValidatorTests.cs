@@ -241,6 +241,8 @@ public class PostLogoutRedirectUrisValidatorTests
     [InlineData("https://ｌｏｃａｌｈｏｓｔ/logout")]
     [InlineData("https://localhost。/logout")]
     [InlineData("https://１２７.０.０.１/logout")]
+    [InlineData("https://127.0.0.2./logout")]
+    [InlineData("https://[::ffff:127.0.0.2]/logout")]
     public async Task ValidateAsync_WebClientWithLoopbackHost_ShouldReturnError(string uri)
         => await AssertWebClientPostLogoutUri(uri, accepted: false);
 
