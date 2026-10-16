@@ -38,7 +38,7 @@ partial class PushDeliverySweep
     private partial void LogStreamHeldUntil(string StreamId, DateTimeOffset Until);
 
     [LoggerMessage(
-        EventId = LogEvents.Transmitter.PushStreamHeld,
+        EventId = LogEvents.Transmitter.PushStreamHeldSkipped,
         Level = LogLevel.Debug,
         Message = "Stream {StreamId} is held at its receiver's request; skipped this round")]
     private partial void LogStreamHeld(string StreamId);

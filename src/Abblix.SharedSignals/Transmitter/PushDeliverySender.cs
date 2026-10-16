@@ -182,6 +182,7 @@ public sealed partial class PushDeliverySender(
                 // later pass can deliver it once the credentials or the grant are put right.
                 // Non-null by construction: IsFinal answers false only for a code it recognizes.
                 LogReceiverObjected(stream.StreamId, verdict!.Error, ReceiverVerdict.Readable(verdict.Description));
+                tally.RecordStop(response.Headers.RetryAfter);
                 return PushTransmission.Refused(continues: false);
             }
 
@@ -193,7 +194,7 @@ public sealed partial class PushDeliverySender(
 
         if (!response.IsSuccessStatusCode)
         {
-            tally.RecordFailed(response.Headers.RetryAfter);
+            tally.RecordStop(response.Headers.RetryAfter);
             return PushTransmission.Failed();
         }
 

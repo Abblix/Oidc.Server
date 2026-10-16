@@ -65,5 +65,8 @@ public static class LogEvents
 
         /// <summary>A queued SET could not be signed for delivery, so the stream's queue is held.</summary>
         public const int SetSigningFailed = Base + 14;
+
+        /// <summary>A stream held at its receiver's request was passed by on this sweep.</summary>
+        public const int PushStreamHeldSkipped = Base + 15;
     }
 }

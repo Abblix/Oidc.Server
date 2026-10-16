@@ -42,7 +42,7 @@ internal sealed class PushDeliveryTally
         Rejected++;
     }
 
-    public void RecordFailed(RetryConditionHeaderValue? retryAfter) => RetryAfter = retryAfter;
+    public void RecordStop(RetryConditionHeaderValue? retryAfter) => RetryAfter = retryAfter;
 
     public PushDeliveryPassOutcome ToOutcome() => new(Delivered, Rejected, RetryAfter);
 }

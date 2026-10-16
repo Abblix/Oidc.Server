@@ -8,6 +8,9 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Mime;
+using System.Text;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
@@ -112,6 +115,25 @@ public sealed class PushDeliveryRetryAfterTests
         Assert.Equal(2, _receiver.Requests);
     }
 
+    /// <summary>
+    /// A 400 objecting to the transmitter rather than to the event keeps the event queued, so a wait it names holds
+    /// the stream as a 429 does.
+    /// </summary>
+    [Fact]
+    public async Task AnObjectionWithRetryAfter_HoldsTheStreamToo()
+    {
+        var sweep = await SweepWithOneQueuedEventAsync();
+        _receiver.Answer(
+            HttpStatusCode.BadRequest,
+            retryAfter: new RetryConditionHeaderValue(Wait),
+            json: $$"""{"err": "{{DeliveryErrorCodes.AccessDenied}}", "description": "-"}""");
+
+        await sweep.SweepAsync(TestContext.Current.CancellationToken);
+        await sweep.SweepAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, _receiver.Requests);
+    }
+
     [Fact]
     public async Task ARefusalWithoutRetryAfter_LeavesTheStreamToTheNextSweep()
     {
@@ -148,21 +170,27 @@ public sealed class PushDeliveryRetryAfterTests
     /// <summary>A receiver answering each request with the next scripted status and "Retry-After".</summary>
     private sealed class ScriptedReceiver : HttpMessageHandler
     {
-        private readonly Queue<(HttpStatusCode Status, RetryConditionHeaderValue? RetryAfter)> _answers = new();
+        private readonly Queue<(HttpStatusCode Status, RetryConditionHeaderValue? RetryAfter, string? Json)> _answers =
+            new();
 
         public int Requests { get; private set; }
 
-        public void Answer(HttpStatusCode status, RetryConditionHeaderValue? retryAfter = null)
-            => _answers.Enqueue((status, retryAfter));
+        public void Answer(HttpStatusCode status, RetryConditionHeaderValue? retryAfter = null, string? json = null)
+            => _answers.Enqueue((status, retryAfter, json));
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
             Requests++;
-            var (status, retryAfter) = _answers.Dequeue();
+            var (status, retryAfter, json) = _answers.Dequeue();
             var response = new HttpResponseMessage(status);
             response.Headers.RetryAfter = retryAfter;
+            if (json is not null)
+            {
+                response.Content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
+            }
+
             return Task.FromResult(response);
         }
     }
