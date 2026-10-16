@@ -70,10 +70,10 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// challenge confirmed, kept exactly as used whatever other addresses the account holds.
     /// </summary>
     /// <remarks>
-    /// It travels with the session: in the authentication cookie, in the refresh token, and in an access token only
-    /// when the client was granted the email scope, since every resource server that token reaches reads it. The
-    /// server does not put it in an ID token itself; the user-information provider receives the session and decides
-    /// which address it releases, in the ID token and at the user-information endpoint alike.
+    /// An access token carries it only when the client was granted the email claim, since every resource server
+    /// that token reaches reads it. The server does not put it in an ID token itself; the user-information provider
+    /// receives the session and decides which address it releases, in the ID token and at the user-information
+    /// endpoint alike.
     /// </remarks>
     public string? Email { get; init; }
 
@@ -82,7 +82,7 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// challenge the user completed.
     /// </summary>
     /// <remarks>
-    /// It travels exactly where <see cref="Email"/> does.
+    /// An access token carries it exactly when it carries <see cref="Email"/>.
     /// </remarks>
     public bool? EmailVerified { get; init; }
 

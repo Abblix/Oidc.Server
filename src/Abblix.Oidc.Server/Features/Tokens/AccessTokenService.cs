@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -47,8 +48,10 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// issued for when the request names none.</param>
 /// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
 /// token can be encrypted to the resource it is minted for.</param>
+/// <param name="scopeClaims">Names the claims the user-information endpoint releases for the token, which decides
+/// whether the session's email address travels in it.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, and the audience keys the encryption target.")]
+    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, the audience keys the encryption target, and the scope claims which of the session's claims the token carries.")]
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
@@ -57,7 +60,8 @@ internal class AccessTokenService(
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
 	IIssuerSettings issuerSettings,
-	IAudienceKeyResolver audienceKeys) : IAccessTokenService
+	IAudienceKeyResolver audienceKeys,
+	IScopeClaimsProvider scopeClaims) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
@@ -133,9 +137,9 @@ internal class AccessTokenService(
 		authSession.ApplyTo(accessToken.Payload);
 
 		// Every resource server the token reaches reads its claims, so the user's address travels in it only when
-		// the client was granted the scope that releases it. The user-information endpoint rebuilds the session
-		// from this token and answers for that scope alone, so it loses nothing without it.
-		if (!authContext.Scope.HasFlag(Scopes.Email))
+		// the client was granted the claim, by a scope or by naming it for the user-information endpoint. That
+		// endpoint rebuilds the session from this token and asks for the same claims, so it loses nothing.
+		if (!ReleasesEmail(authContext))
 		{
 			accessToken.Payload.Email = null;
 			accessToken.Payload.EmailVerified = null;
@@ -217,6 +221,15 @@ internal class AccessTokenService(
 			IanaClaimTypes.AuthorizationDetails,
 			kept is { Count: > 0 } ? kept : null);
 	}
+
+	/// <summary>
+	/// Whether the user-information endpoint releases the email address for <paramref name="authContext"/>, as
+	/// the same scopes and requested claims decide it there.
+	/// </summary>
+	private bool ReleasesEmail(AuthorizationContext authContext)
+		=> scopeClaims
+			.GetRequestedClaims(authContext.Scope, authContext.RequestedClaims?.UserInfo?.Select(claim => claim.Key))
+			.Contains(IanaClaimTypes.Email, StringComparer.Ordinal);
 
 	/// <summary>
 	/// Validates the provided access token and extracts the associated authentication session and authorization context.
