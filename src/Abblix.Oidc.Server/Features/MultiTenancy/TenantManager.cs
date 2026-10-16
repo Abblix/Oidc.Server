@@ -169,8 +169,12 @@ public sealed partial class TenantManager(
         if (Held(listed, tenant.Id, version) is not { } held)
             return Missing(listed, tenant.Id);
 
-        if (NotLicensed(tenant) is { } notLicensed)
+        // A tenant left on an issuer a narrower license no longer names can still have its keys or clients changed
+        if (!string.Equals(held.Tenant.Issuer?.OriginalString, tenant.Issuer?.OriginalString, StringComparison.Ordinal)
+            && NotLicensed(tenant) is { } notLicensed)
+        {
             return notLicensed;
+        }
 
         var changed = tenant.WithGeneration(held.Tenant.Generation);
         if (Refusal(listed, changed) is { } refusal)

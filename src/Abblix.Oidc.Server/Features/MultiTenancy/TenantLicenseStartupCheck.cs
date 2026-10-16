@@ -19,16 +19,27 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </summary>
 /// <remarks>
 /// A started service rather than a check of the settings, because those run before the license is loaded, under the
-/// limits of an installation with no license, and would refuse a deployment its license allows. It is registered
-/// after the service loading the license, which the hosting starts first.
+/// limits of an installation with no license, and would refuse a deployment its license allows; it waits for the
+/// license to be loaded. The settings are judged only where they are what the server serves.
 /// </remarks>
 /// <param name="options">The tenants the settings declare.</param>
+/// <param name="store">The store the tenants are served from.</param>
+/// <param name="loading">Tells when the license is loaded; absent where nothing loads one, and the limits of an
+/// installation with no license are the ones in force.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantLicenseStartupCheck(IOptions<MultiTenancyOptions> options) : IHostedService
+internal sealed class TenantLicenseStartupCheck(
+    IOptions<MultiTenancyOptions> options,
+    ITenantStore store,
+    LicenseLoading? loading = null) : IHostedService
 {
     /// <inheritdoc />
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
+        if (store is not OptionsTenantStore)
+            return;
+
+        if (loading is not null)
+            await loading.Loaded.WaitAsync(cancellationToken);
         var tenants = options.Value.Tenants;
         List<string> failures =
         [
@@ -45,9 +56,8 @@ public sealed class TenantLicenseStartupCheck(IOptions<MultiTenancyOptions> opti
                 "issuer(s).");
         }
 
-        return failures.Count == 0
-            ? Task.CompletedTask
-            : throw new OptionsValidationException(Options.DefaultName, typeof(MultiTenancyOptions), failures);
+        if (failures.Count > 0)
+            throw new OptionsValidationException(Options.DefaultName, typeof(MultiTenancyOptions), failures);
     }
 
     /// <inheritdoc />

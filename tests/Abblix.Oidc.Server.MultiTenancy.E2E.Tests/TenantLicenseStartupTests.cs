@@ -14,9 +14,7 @@ using Abblix.Oidc.Server.MinimalApi;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
-using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 #pragma warning disable ABXMT001
@@ -53,30 +51,6 @@ public sealed class TenantLicenseStartupTests
         using var discovery = await client.GetAsync(
             Host + "/tenants/globex/.well-known/openid-configuration", TestContext.Current.CancellationToken);
         Assert.Equal(System.Net.HttpStatusCode.OK, discovery.StatusCode);
-    }
-
-    /// <summary>
-    /// The check of the tenants against the license starts after the service loading the license: the hosting
-    /// starts its services in the order they are registered, and before the license is loaded the limits in force
-    /// are an installation's with no license, which would refuse a deployment its license allows.
-    /// </summary>
-    [Fact]
-    public void The_license_is_loaded_before_the_tenants_are_checked_against_it()
-    {
-        var licenseLoading = typeof(LicenseChecker).Assembly.GetType(
-            "Abblix.Oidc.Server.Features.Licensing.LicenseLoadingService",
-            throwOnError: true);
-        var services = new ServiceCollection();
-        services.AddOidcServices(_ => { });
-        services.AddMultiTenancy(_ => { });
-
-        var started = services
-            .Where(descriptor => descriptor.ServiceType == typeof(IHostedService))
-            .Select(descriptor => descriptor.ImplementationType)
-            .ToList();
-
-        var loaded = started.IndexOf(licenseLoading);
-        Assert.InRange(loaded, 0, started.IndexOf(typeof(TenantLicenseStartupCheck)) - 1);
     }
 
     private static WebApplication Build(params string[] issuerPaths)

@@ -311,21 +311,93 @@ public sealed class LicenseEnforcementTests : IDisposable
         bool starts)
     {
         TestLicense.InstallWithIssuerLimit(issuerLimit);
-        var check = new TenantLicenseStartupCheck(Options.Create(new MultiTenancyOptions
+        var loading = new LicenseLoading();
+        loading.Complete();
+
+        var refusal = await Record.ExceptionAsync(
+            () => StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken));
+
+        if (starts)
+            Assert.Null(refusal);
+        else
+            Assert.IsType<OptionsValidationException>(refusal);
+    }
+
+    /// <summary>
+    /// The check waits for the license to be loaded, so a host starting its services at once cannot have it judge the
+    /// tenants by the limits of an installation with no license.
+    /// </summary>
+    [Fact]
+    public async Task The_tenants_are_judged_once_the_license_is_loaded()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+
+        var started = StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken);
+        Assert.False(started.IsCompleted);
+
+        loading.Complete();
+        await Assert.ThrowsAsync<OptionsValidationException>(() => started);
+    }
+
+    /// <summary>
+    /// With a store of the host's own the tenants the settings declare are not served, so the license does not judge
+    /// them.
+    /// </summary>
+    [Fact]
+    public async Task Tenants_the_settings_declare_but_a_host_store_replaces_are_not_judged()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+        loading.Complete();
+
+        await StartupCheck(loading, new WritableTenantStore()).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static TenantLicenseStartupCheck StartupCheck(LicenseLoading loading, ITenantStore? store = null)
+    {
+        var options = Options.Create(new MultiTenancyOptions
         {
             Tenants =
             [
                 new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") },
                 new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") },
             ],
-        }));
+        });
+        return new TenantLicenseStartupCheck(options, store ?? new OptionsTenantStore(options), loading);
+    }
 
-        var refusal = await Record.ExceptionAsync(() => check.StartAsync(TestContext.Current.CancellationToken));
+    /// <summary>
+    /// A tenant left on an issuer a narrower license no longer names can still be changed in other ways, its keys or
+    /// clients, while the license is renewed.
+    /// </summary>
+    [Fact]
+    public async Task A_tenant_on_an_issuer_the_license_no_longer_names_can_still_be_changed_in_place()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ValidIssuers = ["https://globex.example.com"],
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var store = new WritableTenantStore();
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), store);
 
-        if (starts)
-            Assert.Null(refusal);
-        else
-            Assert.IsType<OptionsValidationException>(refusal);
+        var changed = await manager.UpdateAsync(
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = new Uri("https://acme.example.com"),
+                LoginUri = new Uri("/sign-in", UriKind.Relative),
+            },
+            Assert.Single(store.Tenants).Version,
+            ct);
+
+        Assert.True(changed.TryGetSuccess(out _));
     }
 
     [Fact]
