@@ -70,8 +70,8 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// challenge confirmed, kept exactly as used whatever other addresses the account holds.
     /// </summary>
     /// <remarks>
-    /// An access token carries it only when the client was granted the email claim, since every resource server
-    /// that token reaches reads it. The server does not put it in an ID token itself; the user-information provider
+    /// An access token carries it only when the user-information endpoint would ask the host's provider for it,
+    /// since every resource server that token reaches reads it. The server does not put it in an ID token itself; the user-information provider
     /// receives the session and decides which address it releases, in the ID token and at the user-information
     /// endpoint alike.
     /// </remarks>

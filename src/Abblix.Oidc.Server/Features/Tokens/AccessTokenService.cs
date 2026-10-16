@@ -48,10 +48,10 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// issued for when the request names none.</param>
 /// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
 /// token can be encrypted to the resource it is minted for.</param>
-/// <param name="scopeClaims">Names the claims the user-information endpoint releases for the token, which decides
-/// whether the session's email address travels in it.</param>
+/// <param name="scopeClaims">Names the claims the user-information endpoint asks the host's provider for, which
+/// decides whether the session's email address travels in the token.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, the audience keys the encryption target, and the scope claims which of the session's claims the token carries.")]
+    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
@@ -137,8 +137,9 @@ internal class AccessTokenService(
 		authSession.ApplyTo(accessToken.Payload);
 
 		// Every resource server the token reaches reads its claims, so the user's address travels in it only when
-		// the client was granted the claim, by a scope or by naming it for the user-information endpoint. That
-		// endpoint rebuilds the session from this token and asks for the same claims, so it loses nothing.
+		// the user-information endpoint would ask the host's provider for it, because of a scope or because the
+		// client named it for that endpoint. The endpoint rebuilds the session from this token and asks for the same
+		// claims, so it loses nothing.
 		if (!ReleasesEmail(authContext))
 		{
 			accessToken.Payload.Email = null;
@@ -223,8 +224,8 @@ internal class AccessTokenService(
 	}
 
 	/// <summary>
-	/// Whether the user-information endpoint releases the email address for <paramref name="authContext"/>, as
-	/// the same scopes and requested claims decide it there.
+	/// Whether the user-information endpoint would ask the host's provider for the email address under
+	/// <paramref name="authContext"/>, decided by the same scopes and requested claims as there.
 	/// </summary>
 	private bool ReleasesEmail(AuthorizationContext authContext)
 		=> scopeClaims

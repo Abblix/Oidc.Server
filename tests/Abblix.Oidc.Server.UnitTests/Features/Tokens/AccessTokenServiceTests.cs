@@ -157,6 +157,32 @@ public class AccessTokenServiceTests
     }
 
     /// <summary>
+    /// A client that names the email claim for the ID token alone has the user-information endpoint ask for nothing
+    /// more, so the address stays out of its access token.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_LeavesOutTheSessionEmailNamedForTheIdTokenAlone()
+    {
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = new AuthorizationContext(
+            ClientId,
+            [Scopes.OpenId],
+            new RequestedClaims { IdToken = new() { [IanaClaimTypes.Email] = new RequestedClaimDetails() } });
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Null(capturedToken!.Payload.Email);
+        Assert.Null(capturedToken.Payload.EmailVerified);
+    }
+
+    /// <summary>
     /// Verifies that CreateAccessTokenAsync generates a JWT with correct header fields:
     /// - Type: "at+jwt" (access token type per RFC 9068)
     /// - Algorithm: "RS256" (RSA-SHA256 signature)
