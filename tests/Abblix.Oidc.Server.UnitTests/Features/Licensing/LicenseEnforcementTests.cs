@@ -266,6 +266,37 @@ public sealed class LicenseEnforcementTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A tenant whose issuer the license does not name would be refused on every request, so the manager of the
+    /// tenants refuses to create it, or to move a tenant to such an issuer.
+    /// </summary>
+    [Fact]
+    public async Task A_tenant_whose_issuer_the_license_does_not_name_is_neither_created_nor_moved_there()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ValidIssuers = ["https://acme.example.com", "https://globex.example.com"],
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var store = new WritableTenantStore();
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), store);
+
+        var created = await manager.CreateAsync(
+            new TenantDefinition { Id = "initech", Issuer = new Uri("https://initech.example.com") }, ct);
+        var acme = Assert.Single(store.Tenants);
+        var moved = await manager.UpdateAsync(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://initech.example.com") }, acme.Version, ct);
+
+        Assert.False(created.TryGetSuccess(out _));
+        Assert.False(moved.TryGetSuccess(out _));
+        Assert.Equal(new Uri("https://acme.example.com"), Assert.Single(store.Tenants).Tenant.Issuer);
+    }
+
     [Fact]
     public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
     {
