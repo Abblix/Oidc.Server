@@ -8,6 +8,7 @@
 
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.SharedSignals.Transmitter;
 
@@ -17,10 +18,14 @@ namespace Abblix.SharedSignals.Transmitter;
 /// routing, authentication and any long-poll waiting; this type answers from the queue as it
 /// is.
 /// </summary>
+/// <param name="logger">Records an event this side could not serve.</param>
 /// <param name="outbox">The queues being served.</param>
 /// <param name="signer">Signs each SET as it is served, so a receiver that polls late still accepts its issue
 /// time.</param>
-public sealed class PollEndpointHandler(IEventOutbox outbox, QueuedEventSigner signer)
+public sealed partial class PollEndpointHandler(
+    ILogger<PollEndpointHandler> logger,
+    IEventOutbox outbox,
+    QueuedEventSigner signer)
 {
     /// <summary>
     /// Handles one poll request for one stream.
@@ -78,23 +83,55 @@ public sealed class PollEndpointHandler(IEventOutbox outbox, QueuedEventSigner s
             pending = [.. pending.Where(item => item.IsStatusAnnouncement)];
         }
 
-        IEnumerable<OutboxItem> page = pending;
-        if (request.MaxEvents is { } maxEvents)
-        {
-            page = page.Take(maxEvents);
-        }
-
-        var sets = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var item in page)
-        {
-            sets.Add(item.JwtId, await signer.SignAsync(item, cancellationToken));
-        }
+        var page = request.MaxEvents is { } maxEvents ? [.. pending.Take(maxEvents)] : pending;
 
         return new PollResponse
         {
-            Sets = sets,
+            Sets = await SignAsync(stream, page, cancellationToken),
             // Omitted means false (RFC 8936 Section 2.3), so false stays off the wire.
-            MoreAvailable = pending.Count > sets.Count ? true : null,
+            MoreAvailable = pending.Count > page.Count ? true : null,
         };
+    }
+
+    /// <summary>
+    /// The page's SETs, each signed now. An item holding nothing that can be sent is dropped from the queue rather
+    /// than served, since kept it would fail every poll after this one.
+    /// </summary>
+    private async Task<Dictionary<string, string>> SignAsync(
+        StreamState stream,
+        IReadOnlyList<OutboxItem> page,
+        CancellationToken cancellationToken)
+    {
+        var sets = new Dictionary<string, string>(StringComparer.Ordinal);
+        var unsendable = new List<string>();
+        foreach (var item in page)
+        {
+            string? token;
+            try
+            {
+                token = await signer.SignAsync(item, cancellationToken);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                LogSigningFailed(exception, stream.StreamId, item.JwtId);
+                throw;
+            }
+
+            if (token is null)
+            {
+                LogUnsendableItemDropped(stream.StreamId, item.JwtId);
+                unsendable.Add(item.JwtId);
+                continue;
+            }
+
+            sets.Add(item.JwtId, token);
+        }
+
+        if (unsendable.Count > 0)
+        {
+            await outbox.AcknowledgeAsync(stream.ReceiverId, stream.StreamId, unsendable, cancellationToken);
+        }
+
+        return sets;
     }
 }

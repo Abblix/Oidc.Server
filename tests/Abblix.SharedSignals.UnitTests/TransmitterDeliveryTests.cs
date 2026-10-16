@@ -141,7 +141,7 @@ public class TransmitterDeliveryTests
 
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"), new OutboxItem("jti-2", "b.b.b"), new OutboxItem("jti-3", "c.c.c"));
-        var logger = new CapturingLogger();
+        var logger = new CapturingLogger<PushDeliverySender>();
 
         var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create(), TestQueuedEventSigner.Create());
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
@@ -170,7 +170,7 @@ public class TransmitterDeliveryTests
         var handler = new StubHttpHandler();
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", CompactToken: null, Unsigned: """{"header": {}, "claims": {}}"""));
-        var logger = new CapturingLogger();
+        var logger = new CapturingLogger<PushDeliverySender>();
         var sender = new PushDeliverySender(
             handler.CreateClient(),
             outbox,
@@ -189,12 +189,113 @@ public class TransmitterDeliveryTests
         Assert.Equal(LogEvents.Transmitter.SetSigningFailed, written.Event.Id);
     }
 
+    /// <summary>
+    /// A key custodian that does not answer in time fails the signing with a cancellation nobody asked for, and that
+    /// is still a signing failure rather than the pass being stopped.
+    /// </summary>
+    [Fact]
+    public async Task Push_ASigningTimeout_IsASigningFailureToo()
+    {
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", CompactToken: null, Unsigned: """{"header": {}, "claims": {}}"""));
+        var logger = new CapturingLogger<PushDeliverySender>();
+        var sender = new PushDeliverySender(
+            new StubHttpHandler().CreateClient(),
+            outbox,
+            ReachingTheTestReceiver,
+            logger,
+            TestInstruments.Create(),
+            new QueuedEventSigner(new TimingOutSigner()));
+
+        await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(LogEvents.Transmitter.SetSigningFailed, Assert.Single(logger.Written).Event.Id);
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// An item holding nothing that can be sent - its unsigned member dropped by an earlier version rewriting the
+    /// outbox, or a form that is not a header and claims - would fail every pass and hold every event behind it, so
+    /// it is dropped as an error and the pass goes on.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not json")]
+    [InlineData("""{"header": {}}""")]
+    [InlineData("""{"claims": {}}""")]
+    [InlineData("[]")]
+    public async Task Push_AnItemWithNothingToSend_IsDropped_AndThePassGoesOn(string? unsigned)
+    {
+        var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", CompactToken: null, Unsigned: unsigned),
+            new OutboxItem("jti-2", "b.b.b"));
+        var logger = new CapturingLogger<PushDeliverySender>();
+        var sender = new PushDeliverySender(
+            handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create(),
+            TestQueuedEventSigner.Create());
+
+        var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new PushDeliveryPassOutcome(Delivered: 1, Rejected: 0), outcome);
+        Assert.Equal(["b.b.b"], handler.Requests.Select(request => request.Body));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
+        var written = Assert.Single(logger.Written);
+        Assert.Equal(LogLevel.Error, written.Level);
+        Assert.Equal(LogEvents.Transmitter.UnsendableItemDropped, written.Event.Id);
+    }
+
+    [Fact]
+    public async Task Poll_AnItemWithNothingToSend_IsDroppedRatherThanServed()
+    {
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", CompactToken: null),
+            new OutboxItem("jti-2", "b.b.b"));
+        var logger = new CapturingLogger<PollEndpointHandler>();
+
+        var response = await new PollEndpointHandler(logger, outbox, TestQueuedEventSigner.Create())
+            .HandleAsync(PushStream(), new PollRequest(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(["jti-2"], response.Sets.Keys);
+        Assert.Null(response.MoreAvailable);
+        Assert.Equal(
+            ["jti-2"],
+            (await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken))
+            .Select(item => item.JwtId));
+        Assert.Equal(LogEvents.Transmitter.UnsendableItemDropped, Assert.Single(logger.Written).Event.Id);
+    }
+
+    [Fact]
+    public async Task Poll_ASetThatCannotBeSigned_IsAnErrorAndTheQueueIsKept()
+    {
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", CompactToken: null, Unsigned: """{"header": {}, "claims": {}}"""));
+        var logger = new CapturingLogger<PollEndpointHandler>();
+        var handler = new PollEndpointHandler(logger, outbox, new QueuedEventSigner(new KeylessSigner()));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(
+            PushStream(), new PollRequest(), TestContext.Current.CancellationToken));
+
+        var written = Assert.Single(logger.Written);
+        Assert.Equal(LogLevel.Error, written.Level);
+        Assert.Equal(LogEvents.Transmitter.SetSigningFailed, written.Event.Id);
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
+    }
+
     private sealed class KeylessSigner : Abblix.SecurityEvents.Abstractions.ISecurityEventTokenSigner
     {
         public Task<string> SignAsync(
             Abblix.SecurityEvents.SecurityEventToken token,
             CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("No signing key.");
+    }
+
+    private sealed class TimingOutSigner : Abblix.SecurityEvents.Abstractions.ISecurityEventTokenSigner
+    {
+        public Task<string> SignAsync(
+            Abblix.SecurityEvents.SecurityEventToken token,
+            CancellationToken cancellationToken = default)
+            => throw new TaskCanceledException("The key custodian did not answer in time.");
     }
 
     /// <summary>An objection to the transmitter is its own event, and it holds the queue.</summary>
@@ -211,7 +312,7 @@ public class TransmitterDeliveryTests
             HttpStatusCode.BadRequest,
             $$"""{"err": "{{DeliveryErrorCodes.AccessDenied}}", "description": "no grant for this stream"}""");
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
-        var logger = new CapturingLogger();
+        var logger = new CapturingLogger<PushDeliverySender>();
 
         var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create(), TestQueuedEventSigner.Create());
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
@@ -239,7 +340,7 @@ public class TransmitterDeliveryTests
             HttpStatusCode.BadRequest,
             $$"""{"err": "invalid_request", "description": "{{forged}}"}""");
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
-        var logger = new CapturingLogger();
+        var logger = new CapturingLogger<PushDeliverySender>();
 
         var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create(), TestQueuedEventSigner.Create());
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
@@ -268,7 +369,7 @@ public class TransmitterDeliveryTests
     {
         var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
-        var logger = new CapturingLogger();
+        var logger = new CapturingLogger<PushDeliverySender>();
 
         var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger, TestInstruments.Create(), TestQueuedEventSigner.Create());
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
@@ -281,11 +382,11 @@ public class TransmitterDeliveryTests
     /// The level and the id are kept rather than discarded, because a level below the host's floor and an id
     /// nobody publishes both render the identical sentence while the line reaches nobody.
     /// </remarks>
-    private sealed class CapturingLogger : ILogger<PushDeliverySender>
+    private sealed class CapturingLogger<T> : ILogger<T>
     {
         public List<(LogLevel Level, EventId Event, string Text)> Written { get; } = [];
 
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -296,12 +397,6 @@ public class TransmitterDeliveryTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
             => Written.Add((logLevel, eventId, formatter(state, exception)));
-
-        private sealed class NullScope : IDisposable
-        {
-            public static readonly NullScope Instance = new();
-            public void Dispose() { }
-        }
     }
 
     /// <summary>
@@ -379,7 +474,7 @@ public class TransmitterDeliveryTests
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"),
             new OutboxItem("jti-3", "c.c.c"));
-        var handler = new PollEndpointHandler(outbox, TestQueuedEventSigner.Create());
+        var handler = new PollEndpointHandler(NullLogger<PollEndpointHandler>.Instance, outbox, TestQueuedEventSigner.Create());
 
         var response = await handler.HandleAsync(
             PushStream(),
@@ -406,7 +501,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"));
-        var handler = new PollEndpointHandler(outbox, TestQueuedEventSigner.Create());
+        var handler = new PollEndpointHandler(NullLogger<PollEndpointHandler>.Instance, outbox, TestQueuedEventSigner.Create());
 
         var ackOnly = await handler.HandleAsync(
             PushStream(), new PollRequest { MaxEvents = 0 }, TestContext.Current.CancellationToken);
@@ -425,7 +520,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b", IsStatusAnnouncement: true));
-        var handler = new PollEndpointHandler(outbox, TestQueuedEventSigner.Create());
+        var handler = new PollEndpointHandler(NullLogger<PollEndpointHandler>.Instance, outbox, TestQueuedEventSigner.Create());
 
         var response = await handler.HandleAsync(
             PushStream(StreamStatuses.Paused), new PollRequest(), TestContext.Current.CancellationToken);
@@ -462,7 +557,7 @@ public class TransmitterDeliveryTests
             },
             cancellationToken: ct);
 
-        var response = await new PollEndpointHandler(outbox, TestQueuedEventSigner.Create())
+        var response = await new PollEndpointHandler(NullLogger<PollEndpointHandler>.Instance, outbox, TestQueuedEventSigner.Create())
             .HandleAsync(stream, new PollRequest(), ct);
 
         var (jwtId, token) = Assert.Single(response.Sets);

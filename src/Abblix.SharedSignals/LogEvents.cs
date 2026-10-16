@@ -68,5 +68,8 @@ public static class LogEvents
 
         /// <summary>A stream held at its receiver's request was passed by on this sweep.</summary>
         public const int PushStreamHeldSkipped = Base + 15;
+
+        /// <summary>A queued item held nothing that could be sent, so it was dropped from the queue.</summary>
+        public const int UnsendableItemDropped = Base + 16;
     }
 }

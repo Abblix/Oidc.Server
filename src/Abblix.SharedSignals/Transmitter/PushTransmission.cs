@@ -30,6 +30,11 @@ internal readonly record struct PushTransmission(bool Continues, string Outcome,
     public static PushTransmission Refused(bool continues) => new(continues, PushDeliveryOutcomes.Refused);
 
     /// <summary>
+    /// The item held nothing that could be sent and is out of the queue, so the pass goes on to the next one.
+    /// </summary>
+    public static PushTransmission Discarded => new(true, PushDeliveryOutcomes.Failed);
+
+    /// <summary>
     /// The receiver gave no usable answer, and the pass stops with the token at the head of the queue.
     /// </summary>
     public static PushTransmission Failed(Exception? transportFailure = null)

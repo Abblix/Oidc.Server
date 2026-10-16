@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents;
@@ -49,21 +50,40 @@ public sealed class QueuedEventSigner(ISecurityEventTokenSigner signer, TimeProv
     /// An item queued by a version that signed on enqueue already holds a compact token. It is sent as it is, so
     /// events waiting when the transmitter is upgraded are still delivered.
     /// </remarks>
-    public async Task<string> SignAsync(OutboxItem item, CancellationToken cancellationToken = default)
+    /// <returns>The SET to send, or null when the item holds nothing any instance could send: no token, and no
+    /// unsigned form that reads as a header and claims. An earlier version that rewrites a durable outbox whole
+    /// drops the unsigned member it does not know, which leaves an item like that.</returns>
+    public async Task<string?> SignAsync(OutboxItem item, CancellationToken cancellationToken = default)
         => item switch
         {
             { Unsigned: { } unsigned } => await SignUnsignedAsync(unsigned, cancellationToken),
             { CompactToken: { } compactToken } => compactToken,
-            _ => throw new InvalidOperationException($"The outbox item '{item.JwtId}' carries no token."),
+            _ => null,
         };
 
-    private async Task<string> SignUnsignedAsync(string unsigned, CancellationToken cancellationToken)
+    private async Task<string?> SignUnsignedAsync(string unsigned, CancellationToken cancellationToken)
     {
-        var queued = JsonNode.Parse(unsigned)!.AsObject();
+        JsonNode? queued;
+        try
+        {
+            queued = JsonNode.Parse(unsigned);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (queued is not JsonObject { } members
+            || members[HeaderMember] is not JsonObject header
+            || members[ClaimsMember] is not JsonObject claims)
+        {
+            return null;
+        }
+
         var token = new JsonWebToken
         {
-            Header = new JsonWebTokenHeader(queued[HeaderMember]!.AsObject()),
-            Payload = new JsonWebTokenPayload(queued[ClaimsMember]!.AsObject()),
+            Header = new JsonWebTokenHeader(header),
+            Payload = new JsonWebTokenPayload(claims),
         };
         token.Payload.IssuedAt = _clock.GetUtcNow();
 
