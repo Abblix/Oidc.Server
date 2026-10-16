@@ -299,6 +299,15 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
+    /// Whether the license in force serves <paramref name="issuer"/>: it names no issuers, or names this one.
+    /// </summary>
+    internal static bool NamesIssuer(string issuer)
+        => Names(LicenseManager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow()) ?? FreeLicense, issuer);
+
+    private static bool Names(License license, string issuer)
+        => license.ValidIssuers is not { Count: > 0 } validIssuers || validIssuers.Contains(issuer);
+
+    /// <summary>
     /// How many issuers the license in force allows, or null when it sets no limit.
     /// </summary>
     internal static int? IssuerLimit
@@ -318,7 +327,7 @@ public static partial class LicenseChecker
         var utcNow = TimeProvider.System.GetUtcNow();
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
 
-        if (currentLicense.ValidIssuers is { Count: > 0 } && !currentLicense.ValidIssuers.Contains(issuer))
+        if (!Names(currentLicense, issuer))
         {
             // Throttled like every other license log site. A misconfigured issuer is reported on every single
             // request, so an unthrottled Critical record here floods the log - and on Windows the Event Log -

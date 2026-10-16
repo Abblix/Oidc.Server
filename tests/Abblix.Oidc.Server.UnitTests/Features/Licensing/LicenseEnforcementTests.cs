@@ -292,9 +292,40 @@ public sealed class LicenseEnforcementTests : IDisposable
         var moved = await manager.UpdateAsync(
             new TenantDefinition { Id = "acme", Issuer = new Uri("https://initech.example.com") }, acme.Version, ct);
 
-        Assert.False(created.TryGetSuccess(out _));
-        Assert.False(moved.TryGetSuccess(out _));
+        Assert.True(created.TryGetFailure(out var notCreated));
+        Assert.Equal(TenantChangeRefusalReason.IssuerNotLicensed, notCreated.Reason);
+        Assert.True(moved.TryGetFailure(out var notMoved));
+        Assert.Equal(TenantChangeRefusalReason.IssuerNotLicensed, notMoved.Reason);
         Assert.Equal(new Uri("https://acme.example.com"), Assert.Single(store.Tenants).Tenant.Issuer);
+    }
+
+    /// <summary>
+    /// The settings declaring more tenants than the issuers the license allows stop the server at startup, rather
+    /// than leaving the tenant asked last to be refused on every request.
+    /// </summary>
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public async Task Settings_declaring_more_tenants_than_the_license_allows_stop_the_server(
+        int issuerLimit,
+        bool starts)
+    {
+        TestLicense.InstallWithIssuerLimit(issuerLimit);
+        var check = new TenantLicenseStartupCheck(Options.Create(new MultiTenancyOptions
+        {
+            Tenants =
+            [
+                new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") },
+                new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") },
+            ],
+        }));
+
+        var refusal = await Record.ExceptionAsync(() => check.StartAsync(TestContext.Current.CancellationToken));
+
+        if (starts)
+            Assert.Null(refusal);
+        else
+            Assert.IsType<OptionsValidationException>(refusal);
     }
 
     [Fact]

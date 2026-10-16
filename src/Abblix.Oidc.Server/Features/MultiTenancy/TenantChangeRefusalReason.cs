@@ -47,4 +47,9 @@ public enum TenantChangeRefusalReason
     /// one, and the others are served.
     /// </remarks>
     BeyondLicense,
+
+    /// <summary>
+    /// The license in force names its issuers, and the tenant's issuer is not among them.
+    /// </summary>
+    IssuerNotLicensed,
 }

@@ -146,6 +146,9 @@ public sealed partial class TenantManager(
                 + "and the store holds at least as many tenants already.");
         }
 
+        if (NotLicensed(tenant) is { } notLicensed)
+            return notLicensed;
+
         // A generation of its own, so the store cannot hand a new creation the generation of one removed
         var created = tenant.WithGeneration(Guid.NewGuid().ToString("N"));
         if (Refusal(listed, created) is { } refusal)
@@ -165,6 +168,9 @@ public sealed partial class TenantManager(
     {
         if (Held(listed, tenant.Id, version) is not { } held)
             return Missing(listed, tenant.Id);
+
+        if (NotLicensed(tenant) is { } notLicensed)
+            return notLicensed;
 
         var changed = tenant.WithGeneration(held.Tenant.Generation);
         if (Refusal(listed, changed) is { } refusal)
@@ -212,6 +218,17 @@ public sealed partial class TenantManager(
                 TenantChangeRefusalReason.NotFound,
                 $"The store holds no tenant '{tenantId}'.")
             : Conflict(tenantId);
+
+    /// <summary>
+    /// The refusal of a tenant whose issuer the license in force does not name, which it would refuse on every
+    /// request; null for any other.
+    /// </summary>
+    private static TenantChangeRefusal? NotLicensed(TenantDefinition tenant)
+        => tenant.Issuer is { } issuer && !LicenseChecker.NamesIssuer(issuer.OriginalString)
+            ? new TenantChangeRefusal(
+                TenantChangeRefusalReason.IssuerNotLicensed,
+                $"The license in force does not name the issuer '{issuer.OriginalString}' of tenant '{tenant.Id}'.")
+            : null;
 
     /// <summary>
     /// What the checks of the tenant list hold against <paramref name="changed"/>, judged within the tenants the

@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
@@ -31,5 +32,6 @@ internal static class TenantValidationRegistration
             ServiceDescriptor.Singleton<ITenantsCheck, TenantDefinitionsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, TenantSettingsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, TenantKeysCheck>(),
+            ServiceDescriptor.Singleton<IHostedService, TenantLicenseStartupCheck>(),
         ]);
 }
