@@ -31,6 +31,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.SharedSignals.E2E.Tests;
@@ -54,6 +55,10 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 
     private readonly RecordingSink _sink = new();
 
+    // One clock for both hosts, so the receiver judges a token's issue time against the time the transmitter
+    // keeps. It starts at the present and moves only when a test moves it.
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
+
     private WebApplication _transmitter = null!;
     private WebApplication _receiver = null!;
 
@@ -67,6 +72,31 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
     {
         await _receiver.DisposeAsync();
         await _transmitter.DisposeAsync();
+    }
+
+    /// <summary>
+    /// An event that waited in the outbox longer than the receiver tolerates for a token's issue time - a receiver
+    /// down for a while, or the queue behind it - still reaches that receiver.
+    /// </summary>
+    [Fact]
+    public async Task AnEventQueuedLongerThanTheIssuedAtTolerance_IsStillDelivered()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
+        var stream = management.Created;
+        Assert.True(await management.Client.AddSubjectAsync(
+            new AddSubjectRequest { StreamId = stream.StreamId, Subject = Jdoe() },
+            cancellationToken));
+        Assert.True(await management.Client.RequestVerificationAsync(
+            new VerificationRequest { StreamId = stream.StreamId, State = "stale" },
+            cancellationToken));
+
+        _clock.Advance(new SecurityEventTokenValidationOptions().IssuedAtTolerance + TimeSpan.FromMinutes(1));
+
+        Assert.Equal(
+            new PushDeliveryPassOutcome(Delivered: 1, Rejected: 0),
+            await DrainPushAsync(stream.StreamId, cancellationToken));
+        Assert.Single(_sink.Consumed);
     }
 
     [Fact]
@@ -414,6 +444,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<TimeProvider>(_clock);
         builder.Services.AddSecurityEvents(options =>
             options.SigningKeySource = _ => Task.FromResult(_key));
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
@@ -444,6 +475,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<TimeProvider>(_clock);
         builder.Services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(_key));
         builder.Services.AddSecurityEvents(options =>
             options.Events.Register<VerificationEventPayload>(SharedSignalsEventTypes.Verification));
