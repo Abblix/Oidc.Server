@@ -134,11 +134,18 @@ public record OidcOptions
 	public CheckSessionCookieOptions CheckSessionCookie { get; set; } = new();
 
 	/// <summary>
-	/// The duration after which a login session expires. This setting determines how long a user's authentication
-	/// session remains valid before requiring re-authentication. Configuring this duration is essential for balancing
-	/// security concerns with usability, particularly in environments with varying security requirements.
+	/// How long the end user has on each of the host's pages of an authentication request - login, consent, account
+	/// selection - and how long the other pages of that request stay refused once a code or token is issued.
 	/// </summary>
-	public TimeSpan LoginSessionExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+	/// <remarks>
+	/// The request is stored each time the server sends the end user to a page, and found again by the address the
+	/// page comes back with, so the time starts over on every page. A page that comes back later is answered with
+	/// invalid_request_uri, and the end user begins again at the client. Once a code or token is issued, a refreshed
+	/// or revisited page of the same request is refused for this long. How long the end user stays signed in is not
+	/// set here: the host's authentication cookie decides that. A request a client pushed waits for its first use for
+	/// <see cref="PushedAuthorizationRequestExpiresIn"/> instead.
+	/// </remarks>
+	public TimeSpan AuthenticationRequestExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
 
 	/// <summary>
 	/// Configuration options for registering new clients dynamically in the OIDC server. These options define default
