@@ -22,6 +22,36 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantDefinitionsCheck : ITenantsCheck
 {
+    /// <summary>
+    /// Refuses a tenant whose issuer's path lies under another tenant's on the same host.
+    /// </summary>
+    /// <remarks>
+    /// A browser sends a cookie to every path under the one it was set for, so the sign-in cookie of the outer tenant
+    /// would reach the inner one, and the end user arrive there signed in.
+    /// </remarks>
+    private static IEnumerable<TenantRefusal> NestedIssuers(IReadOnlyCollection<TenantDefinition> tenants)
+    {
+        var addresses = (
+            from tenant in tenants
+            where IsIssuer(tenant.Issuer) && (tenant.MtlsBaseUri is null || IsMtlsHost(tenant.MtlsBaseUri))
+            from address in TenantAddress.AllOf(tenant).Select(address => address.Canonical()).Distinct()
+            select (tenant.Id, Address: address)
+        ).ToArray();
+
+        return (
+            from outer in addresses
+            from inner in addresses
+            where !string.Equals(outer.Id, inner.Id, StringComparison.Ordinal) &&
+                  string.Equals(outer.Address.Host, inner.Address.Host, StringComparison.Ordinal) &&
+                  !string.Equals(outer.Address.Path, inner.Address.Path, StringComparison.Ordinal) &&
+                  outer.Address.Covers(inner.Address.Path)
+            select (Outer: outer.Id, Inner: inner.Id)
+        ).Distinct().Select(nested => new TenantRefusal(
+            [nested.Outer, nested.Inner],
+            $"The issuer of tenant '{nested.Inner}' lies under that of tenant '{nested.Outer}' on the same host, " +
+            $"so the sign-in cookie of '{nested.Outer}' would reach '{nested.Inner}'."));
+    }
+
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants)
     {
@@ -84,6 +114,8 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
                 [..same],
                 $"The tenants {string.Join(", ", same)} are served at the same address " +
                 $"{same.Key.Host}{same.Key.Path}."));
+
+        failures.AddRange(NestedIssuers(tenants));
 
         // Refused here rather than when the first pairwise identifier is minted, which would answer with a 500
         failures.AddRange(

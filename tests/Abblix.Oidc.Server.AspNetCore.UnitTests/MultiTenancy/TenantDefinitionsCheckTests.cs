@@ -45,9 +45,8 @@ public class TenantDefinitionsCheckTests
     public void TenantsAtTheirOwnHostsAndUnderPathsOfOneHost_AreAccepted()
         => Assert.Null(FailureOf(
             Tenant("acme", "https://acme.example.com"),
-            Tenant("shared", "https://auth.example.com"),
             Tenant("globex", "https://auth.example.com/tenants/globex"),
-            Tenant("globex-eu", "https://auth.example.com/tenants/globex/eu")));
+            Tenant("initech", "https://auth.example.com/tenants/initech")));
 
     /// <summary>
     /// A tenant bound from configuration without an issuer, or read from a store that holds none, is refused by name
