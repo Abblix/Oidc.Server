@@ -72,7 +72,7 @@ public class PushedAuthorizationRequestProcessorDecorator(
 
             await consumedRequestUris.MarkConsumedAsync(
                 originRequestUri,
-                timeProvider.GetUtcNow() + options.Value.AuthorizationRequestExpiresIn);
+                timeProvider.GetUtcNow() + options.Value.AuthenticationRequestExpiresIn);
         }
 
         return response;

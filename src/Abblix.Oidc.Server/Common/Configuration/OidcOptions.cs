@@ -134,16 +134,18 @@ public record OidcOptions
 	public CheckSessionCookieOptions CheckSessionCookie { get; set; } = new();
 
 	/// <summary>
-	/// How long an authorization request is kept while the end user is on the host's pages - login, consent, account
-	/// selection - and how long the address a client pushed it under stays refused once a code or token is issued.
+	/// How long the end user has on each of the host's pages of an authentication request - login, consent, account
+	/// selection - and how long the other pages of that request stay refused once a code or token is issued.
 	/// </summary>
 	/// <remarks>
-	/// The request is stored when the server sends the end user to a page, and found again by the address the page
-	/// comes back with. Past this time it is gone, so an end user who comes back later starts over at the client. How
-	/// long the end user stays signed in is not set here: the host's authentication cookie decides that. A request a
-	/// client pushed waits for its first use for <see cref="PushedAuthorizationRequestExpiresIn"/> instead.
+	/// The request is stored each time the server sends the end user to a page, and found again by the address the
+	/// page comes back with, so the time starts over on every page. A page that comes back later is answered with
+	/// invalid_request_uri, and the end user begins again at the client. Once a code or token is issued, a refreshed
+	/// or revisited page of the same request is refused for this long. How long the end user stays signed in is not
+	/// set here: the host's authentication cookie decides that. A request a client pushed waits for its first use for
+	/// <see cref="PushedAuthorizationRequestExpiresIn"/> instead.
 	/// </remarks>
-	public TimeSpan AuthorizationRequestExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+	public TimeSpan AuthenticationRequestExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
 
 	/// <summary>
 	/// Configuration options for registering new clients dynamically in the OIDC server. These options define default
