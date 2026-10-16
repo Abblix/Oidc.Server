@@ -81,12 +81,20 @@ internal static class TestLicense
 
         checker.GetField("_knownClientIds", Statics)!.SetValue(null, null);
         checker.GetField("_knownIssuers", Statics)!.SetValue(null, null);
+        ClearLicenses();
+    }
 
-        // The manager itself is readonly, so its contents are emptied rather than the instance replaced.
-        var manager = checker.GetField("LicenseManager", Statics)!.GetValue(null)!;
-        var managerType = manager.GetType();
+    /// <summary>
+    /// Takes every license off the checker, leaving what it has counted.
+    /// </summary>
+    private static void ClearLicenses()
+    {
+        const BindingFlags Statics = BindingFlags.NonPublic | BindingFlags.Static;
         const BindingFlags Instances = BindingFlags.NonPublic | BindingFlags.Instance;
 
+        // The manager itself is readonly, so its contents are emptied rather than the instance replaced.
+        var manager = typeof(LicenseChecker).GetField("LicenseManager", Statics)!.GetValue(null)!;
+        var managerType = manager.GetType();
         if (managerType.GetField("_licenses", Instances)!.GetValue(manager) is IList licenses)
             licenses.Clear();
 
@@ -122,16 +130,7 @@ internal static class TestLicense
     /// </summary>
     internal static void ReplaceWithIssuerLimit(int issuerLimit)
     {
-        var checker = typeof(LicenseChecker);
-        const BindingFlags Statics = BindingFlags.NonPublic | BindingFlags.Static;
-        const BindingFlags Instances = BindingFlags.NonPublic | BindingFlags.Instance;
-
-        var manager = checker.GetField("LicenseManager", Statics)!.GetValue(null)!;
-        var managerType = manager.GetType();
-        if (managerType.GetField("_licenses", Instances)!.GetValue(manager) is IList licenses)
-            licenses.Clear();
-
-        managerType.GetField("_currentLicense", Instances)!.SetValue(manager, null);
+        ClearLicenses();
         LicenseChecker.AddLicense(new License
         {
             IssuerLimit = issuerLimit,

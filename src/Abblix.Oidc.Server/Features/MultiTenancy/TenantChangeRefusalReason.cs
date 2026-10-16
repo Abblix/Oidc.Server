@@ -41,8 +41,10 @@ public enum TenantChangeRefusalReason
     /// </summary>
     /// <remarks>
     /// With the server's own catalog of tenants, a removed tenant frees its place for the license only once the
-    /// server releases it, so the requests of a tenant created right after a removal are refused until then; with a
-    /// catalog of the host's own, the place is freed only by a restart. The other tenants are served throughout.
+    /// server releases it, so a tenant created right after a removal can find the license's count full until then;
+    /// with a catalog of the host's own, the place is freed only by a restart. The license counts tenants as their
+    /// first requests arrive, so the one refused meanwhile is whichever asks once the count is full, usually the new
+    /// one, and the others are served.
     /// </remarks>
     BeyondLicense,
 }

@@ -135,7 +135,8 @@ public sealed partial class TenantManager(
         if (Find(listed, tenant.Id) is not null)
             return AlreadyExists(tenant.Id);
 
-        // Refused here rather than served: past the limit the license refuses the new tenant's issuer on every request.
+        // Refused here rather than served: past the limit the license refuses whichever tenant asks once its count is
+        // full, usually the new one.
         // Changes are made one at a time within this instance only, so two instances may each take the last place
         if (LicenseChecker.IssuerLimit is { } limit && listed.Count >= limit)
         {
