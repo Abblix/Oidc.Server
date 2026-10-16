@@ -56,6 +56,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 public sealed class LicenseEnforcementTests : IDisposable
 {
     private const string UnlicensedIssuer = "https://second-issuer.example.com";
+    private const string ThirdIssuer = "https://third-issuer.example.com";
 
     public LicenseEnforcementTests() => TestLicense.ResetChecker();
 
@@ -324,6 +325,24 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         released.Cancel();
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    /// <summary>
+    /// An issuer refused past the limit takes no place, so the one freed by a tenant gone for good goes to whichever
+    /// issuer asks next rather than to the one that was refused earlier.
+    /// </summary>
+    [Fact]
+    public void An_issuer_refused_past_the_limit_takes_no_place_freed_later()
+    {
+        ArrangeInstallationWithNoLicence();
+        using var released = new CancellationTokenSource();
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", released.Token)));
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        released.Cancel();
+
+        Assert.Equal(ThirdIssuer, LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.Settings));
     }
 
     [Fact]
