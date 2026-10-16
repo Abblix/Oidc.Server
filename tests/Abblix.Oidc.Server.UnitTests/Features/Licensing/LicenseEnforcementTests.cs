@@ -132,6 +132,22 @@ public sealed class LicenseEnforcementTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The issuer beyond the count is the one refused: an issuer served within the limit keeps being served after a
+    /// further one has asked, so one extra issuer cannot stop the whole deployment.
+    /// </summary>
+    [Fact]
+    public void An_issuer_within_the_licensed_count_is_still_served_after_one_beyond_it_asked()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+    }
+
     [Fact]
     public void A_client_is_accepted_while_the_licence_sets_no_client_limit()
     {
