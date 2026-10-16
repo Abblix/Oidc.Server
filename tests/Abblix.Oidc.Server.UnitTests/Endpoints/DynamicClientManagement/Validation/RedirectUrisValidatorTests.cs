@@ -253,6 +253,7 @@ public class RedirectUrisValidatorTests
     [InlineData("https://example.com./callback")]
     [InlineData("https://foo.localhost./callback")]
     [InlineData("https://127.0.0.1.example.com/callback")]
+    [InlineData("https://[::ffff:8.8.8.8]/callback")]
     public async Task ValidateAsync_WebClientWithNameResemblingLoopback_ShouldReturnNull(string uri)
         => await AssertWebClientRedirectUri(uri, accepted: true);
 
