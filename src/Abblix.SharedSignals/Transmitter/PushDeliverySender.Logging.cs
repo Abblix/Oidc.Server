@@ -52,4 +52,11 @@ public sealed partial class PushDeliverySender
         Message = "The receiver objected to this transmitter rather than to the SET on stream {StreamId}, so "
             + "the queue is held for a later pass: {ErrorCode} - {ErrorDescription}")]
     private partial void LogReceiverObjected(string StreamId, string ErrorCode, string ErrorDescription);
+
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.SetSigningFailed,
+        Level = LogLevel.Error,
+        Message = "SET {JwtId} on stream {StreamId} could not be signed, so it was not sent and the queue is held "
+            + "for a later pass")]
+    private partial void LogSigningFailed(Exception exception, string StreamId, string JwtId);
 }

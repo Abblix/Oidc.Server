@@ -160,6 +160,43 @@ public class TransmitterDeliveryTests
         Assert.Contains("on stream s-1", written.Text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A SET that cannot be signed is a fault on this side: nothing reaches the receiver, the queue is kept, and
+    /// the log names it as an error rather than as the warning a receiver's refusal is.
+    /// </summary>
+    [Fact]
+    public async Task Push_ASetThatCannotBeSigned_IsAnErrorAndHoldsTheQueue()
+    {
+        var handler = new StubHttpHandler();
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", CompactToken: null, Unsigned: """{"header": {}, "claims": {}}"""));
+        var logger = new CapturingLogger();
+        var sender = new PushDeliverySender(
+            handler.CreateClient(),
+            outbox,
+            ReachingTheTestReceiver,
+            logger,
+            TestInstruments.Create(),
+            new QueuedEventSigner(new KeylessSigner()));
+
+        var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new PushDeliveryPassOutcome(Delivered: 0, Rejected: 0), outcome);
+        Assert.Empty(handler.Requests);
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
+        var written = Assert.Single(logger.Written);
+        Assert.Equal(LogLevel.Error, written.Level);
+        Assert.Equal(LogEvents.Transmitter.SetSigningFailed, written.Event.Id);
+    }
+
+    private sealed class KeylessSigner : Abblix.SecurityEvents.Abstractions.ISecurityEventTokenSigner
+    {
+        public Task<string> SignAsync(
+            Abblix.SecurityEvents.SecurityEventToken token,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("No signing key.");
+    }
+
     /// <summary>An objection to the transmitter is its own event, and it holds the queue.</summary>
     /// <remarks>
     /// The queue disposition is what an operator acts on, and it is the opposite of

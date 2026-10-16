@@ -131,10 +131,23 @@ public sealed partial class PushDeliverySender(
         CancellationToken cancellationToken)
         => instruments.ObservePushAsync(async () =>
         {
+            string token;
+            try
+            {
+                token = await signer.SignAsync(item, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // The fault is on this side - no key, or its custodian unreachable - so the receiver is not
+                // asked at all, and the event keeps its place for a pass made once signing works again.
+                LogSigningFailed(exception, stream.StreamId, item.JwtId);
+                return PushTransmission.Failed(exception);
+            }
+
             HttpResponseMessage response;
             try
             {
-                response = await SendAsync(push, item, cancellationToken);
+                response = await SendAsync(push, token, cancellationToken);
             }
             catch (HttpRequestException exception)
             {
@@ -192,10 +205,9 @@ public sealed partial class PushDeliverySender(
 
     private async Task<HttpResponseMessage> SendAsync(
         PushDeliveryMethod push,
-        OutboxItem item,
+        string token,
         CancellationToken cancellationToken)
     {
-        var token = await signer.SignAsync(item, cancellationToken);
         using var request = PushDeliveryRequest.Create(push, token);
         return await httpClient.SendAsync(request, cancellationToken);
     }

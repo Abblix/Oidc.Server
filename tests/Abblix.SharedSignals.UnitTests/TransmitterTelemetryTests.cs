@@ -281,8 +281,8 @@ public sealed class TransmitterTelemetryTests : IDisposable
     }
 
     /// <summary>
-    /// A SET is signed as it leaves, so a signing failure is a failed transmission: the event stays queued for the
-    /// next pass and the push span names the failure.
+    /// A SET is signed as it leaves, so a signing failure is a failed transmission: the receiver is not asked, the
+    /// event stays queued for the next pass and the push span names the failure.
     /// </summary>
     [Fact]
     public async Task AnEventThatCouldNotBeSigned_StaysQueued_AndItsPushSpanNamesTheFailure()
@@ -293,8 +293,10 @@ public sealed class TransmitterTelemetryTests : IDisposable
         var outbox = new InMemoryEventOutbox();
         Assert.Equal(1, await Dispatcher(store, outbox).DispatchAsync(Descriptor(), ct));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => SendPendingAsync(
-            new StubHttpHandler(), outbox, signer: new QueuedEventSigner(new FailingSigner())));
+        var receiver = new StubHttpHandler();
+        await SendPendingAsync(receiver, outbox, signer: new QueuedEventSigner(new FailingSigner()));
+
+        Assert.Empty(receiver.Requests);
 
         Assert.Single(await outbox.PendingAsync("receiver-a", StreamId, null, ct));
         Assert.Equal([PushDeliveryOutcomes.Failed], Outcomes(SharedSignalsMetrics.PushDeliveries));

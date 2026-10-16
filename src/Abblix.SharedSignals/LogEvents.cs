@@ -62,5 +62,8 @@ public static class LogEvents
 
         /// <summary>The receiver answered with "Retry-After", so its stream is held until then.</summary>
         public const int PushStreamHeld = Base + 13;
+
+        /// <summary>A queued SET could not be signed for delivery, so the stream's queue is held.</summary>
+        public const int SetSigningFailed = Base + 14;
     }
 }
