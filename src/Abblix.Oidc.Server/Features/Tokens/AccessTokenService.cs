@@ -132,6 +132,15 @@ internal class AccessTokenService(
 
 		authSession.ApplyTo(accessToken.Payload);
 
+		// Every resource server the token reaches reads its claims, so the user's address travels in it only when
+		// the client was granted the scope that releases it. The user-information endpoint rebuilds the session
+		// from this token and answers for that scope alone, so it loses nothing without it.
+		if (!authContext.Scope.HasFlag(Scopes.Email))
+		{
+			accessToken.Payload.Email = null;
+			accessToken.Payload.EmailVerified = null;
+		}
+
 		// The audience is settled once, before anything reads it, so the payload below and the encryption
 		// policy further down agree on who this token is for instead of each deriving its own answer.
 		var audienceContext = authContext.WithDefaultResource(issuerSettings.DefaultResourceIndicator);

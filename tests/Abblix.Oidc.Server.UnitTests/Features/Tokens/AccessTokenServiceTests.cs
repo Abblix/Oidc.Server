@@ -83,6 +83,32 @@ public class AccessTokenServiceTests
     private static IResourceKeysProvider NoResourceKeys => Mock.Of<IResourceKeysProvider>();
 
     /// <summary>
+    /// The address the user signed in with travels in the access token only for a client granted the email scope,
+    /// since every resource server the token reaches reads it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CreateAccessToken_CarriesTheSessionEmailOnlyUnderTheEmailScope(bool emailGranted)
+    {
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        string[] scopes = emailGranted ? [Scopes.OpenId, Scopes.Email] : [Scopes.OpenId, Scopes.Profile];
+        var authContext = new AuthorizationContext(ClientId, scopes, null);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal(emailGranted ? "user@example.com" : null, capturedToken!.Payload.Email);
+        Assert.Equal(emailGranted ? true : null, capturedToken.Payload.EmailVerified);
+    }
+
+    /// <summary>
     /// Verifies that CreateAccessTokenAsync generates a JWT with correct header fields:
     /// - Type: "at+jwt" (access token type per RFC 9068)
     /// - Algorithm: "RS256" (RSA-SHA256 signature)
