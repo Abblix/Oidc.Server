@@ -42,8 +42,10 @@ public interface ITokenRegistry
 	/// </summary>
 	/// <remarks>
 	/// Of several callers racing for one token, at most one is told it recorded the status, within the reach
-	/// <see cref="IEntityStorage.TrySetIfAbsentAsync{T}"/> gives the registered storage. A check followed by a
-	/// separate write lets two requests presenting a single-use token together both find it unspent.
+	/// <see cref="IEntityStorage.TrySetIfAbsentAsync{T}"/> gives the registered storage: one process for the
+	/// built-in storage over a distributed cache, every node for a storage whose backing store decides the write
+	/// itself. A host implementing this interface makes the check and the write one step, because a check followed
+	/// by a separate write lets two requests presenting a single-use token together both find it unspent.
 	/// </remarks>
 	/// <param name="jwtId">The identifier of the JWT whose status is to be recorded.</param>
 	/// <param name="status">The status to record.</param>

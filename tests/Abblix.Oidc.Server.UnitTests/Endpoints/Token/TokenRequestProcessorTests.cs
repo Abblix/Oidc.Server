@@ -561,10 +561,6 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, NewGrantId, null))
             .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
-            .Setup(s => s.TrySpendAsync(legacyRefreshToken, request.ClientInfo))
-            .ReturnsAsync(true);
-
-        _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
                 authSession, authContext, request.ClientInfo, legacyRefreshToken, NewGrantId))
             .ReturnsAsync(newRefreshToken);
@@ -845,10 +841,6 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
-            .Setup(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo))
-            .ReturnsAsync(true);
-
-        _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
                 authSession,
                 authContext,
@@ -872,13 +864,13 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// A request renewing a single-use token that another request has already spent is refused before anything is
-    /// minted for it, with the error a later replay of a superseded token gets.
+    /// A request renewing a single-use token that another request has already spent is refused, and hands over
+    /// none of the tokens it minted on the way.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_WhenThePresentedTokenWasAlreadySpent_RefusesBeforeMintingAnything()
+    public async Task ProcessAsync_WhenThePresentedTokenWasAlreadySpent_HandsNothingOver()
     {
-        var scopes = new[] { Scopes.OfflineAccess };
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
         var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
         var authSession = CreateAuthSession();
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
@@ -888,22 +880,24 @@ public class TokenRequestProcessorTests
             new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
+        var spent = new OidcError(ErrorCodes.InvalidGrant, "Token was already used");
 
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
-            .Setup(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo))
-            .ReturnsAsync(false);
+            .Setup(s => s.CreateRefreshTokenAsync(
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(spent);
 
         var result = await _processor.ProcessAsync(request);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        _accessTokenService.VerifyNoOtherCalls();
+        Assert.Same(spent, error);
         _identityTokenService.VerifyNoOtherCalls();
-        _refreshTokenService.Verify(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo), Times.Once);
-        _refreshTokenService.VerifyNoOtherCalls();
     }
 
     /// <summary>

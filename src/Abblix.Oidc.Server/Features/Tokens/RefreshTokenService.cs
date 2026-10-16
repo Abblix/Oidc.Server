@@ -57,30 +57,6 @@ public class RefreshTokenService(
 	IOptions<OidcOptions> options,
 	IIssuerSettings issuerSettings) : IRefreshTokenService
 {
-	/// <inheritdoc />
-	public async Task<bool> TrySpendAsync(JsonWebToken refreshToken, ClientInfo clientInfo)
-	{
-		if (refreshToken.Payload is not { JwtId: { } jwtId, ExpiresAt: { } expiresAt } payload)
-			return true;
-
-		// The same test CreateRefreshTokenAsync refuses a renewal by, so a renewal it refuses never consumes the
-		// presented token.
-		var now = clock.GetUtcNow();
-		var renews = CalculateExpiresAt(payload.IssuedAt ?? now, now, clientInfo.RefreshToken) >= now;
-
-		if (!rotationPolicy.Rotates(clientInfo) || !renews)
-			return true;
-
-		// Spending marks the token Used ("superseded"), not Revoked ("killed"). A later presentation of a
-		// superseded token is the replay signal that TokenStatusValidatorDecorator turns into a whole-family
-		// revocation (RFC 9700 section 4.14.2); a presentation losing the race to spend it is the same signal.
-		if (await tokenRegistry.TrySetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt))
-			return true;
-
-		await grantRevocation.RevokeAsync(payload);
-		return false;
-	}
-
 	/// <summary>
 	/// Generates a new refresh token based on the user's current authentication session and authorization context,
 	/// optionally renewing an existing refresh token. This facilitates prolonged access without re-authentication,
@@ -96,9 +72,10 @@ public class RefreshTokenService(
 	/// if this is null or expired.</param>
 	/// <param name="grantId">The family the new token joins, decided by the caller.</param>
 	/// <returns>A task that results in a new or renewed <see cref="EncodedJsonWebToken"/> representing
-	/// the refresh token, or null if the existing token cannot be renewed due to policy constraints or expiration.
+	/// the refresh token, or null if the existing token cannot be renewed due to policy constraints or expiration,
+	/// or the refusal of a renewal another request has already spent the presented token on.
 	/// </returns>
-	public async Task<EncodedJsonWebToken?> CreateRefreshTokenAsync(
+	public async Task<Result<EncodedJsonWebToken, OidcError>?> CreateRefreshTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
@@ -110,6 +87,10 @@ public class RefreshTokenService(
 		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 		if (expiresAt < now)
 			return null;
+
+		// Spent only once the renewal is known to go ahead, so a renewal refused above keeps the presented token.
+		if (refreshToken != null && !await TrySpendAsync(refreshToken, clientInfo))
+			return new OidcError(ErrorCodes.InvalidGrant, "Token was already used");
 
 		// The same four claims as on an access token, answering the same four questions - except that one of
 		// them answers a different question here than its name suggests:
@@ -166,6 +147,32 @@ public class RefreshTokenService(
 		var encoded = await jwtFormatter.FormatAsync(
 			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
+	}
+
+	/// <summary>
+	/// Spends the refresh token being renewed if the client's policy rotates it; false when another request has
+	/// already spent it, in which case the grant is revoked.
+	/// </summary>
+	/// <remarks>
+	/// The token is marked through a write the registry makes only when nothing is recorded for it, so of two
+	/// requests renewing it together exactly one spends it. Spending marks it Used ("superseded"), not Revoked
+	/// ("killed"): a later presentation of a superseded token is the replay signal TokenStatusValidatorDecorator
+	/// turns into a whole-family revocation (RFC 9700 section 4.14.2), and losing the race to spend it is the same
+	/// signal, because two presentations arriving together cannot be told from a stolen copy.
+	/// </remarks>
+	private async Task<bool> TrySpendAsync(JsonWebToken refreshToken, ClientInfo clientInfo)
+	{
+		if (!rotationPolicy.Rotates(clientInfo) ||
+		    refreshToken.Payload is not { JwtId: { } jwtId, ExpiresAt: { } expiresAt } payload)
+		{
+			return true;
+		}
+
+		if (await tokenRegistry.TrySetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt))
+			return true;
+
+		await grantRevocation.RevokeAsync(payload);
+		return false;
 	}
 
 	private static DateTimeOffset CalculateExpiresAt(
