@@ -50,7 +50,8 @@ public interface IRefreshTokenService
 	/// token unspent, and only when a new refresh token was issued for it. When another request has already
 	/// spent the token, the grant is revoked as for any replay of a superseded token, because two presentations
 	/// arriving together cannot be told from a stolen copy. A token the client's policy does not rotate is left
-	/// unspent.
+	/// unspent, and so is one presented for a request that issues no new refresh token, such as one narrowing its
+	/// scope to leave out offline access.
 	/// </remarks>
 	/// <param name="refreshToken">The refresh token presented for renewal.</param>
 	/// <param name="clientInfo">The client renewing it.</param>
