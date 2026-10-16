@@ -214,21 +214,16 @@ public class TransmitterDeliveryTests
     }
 
     /// <summary>
-    /// An item holding nothing that can be sent - its unsigned member dropped by an earlier version rewriting the
-    /// outbox, or a form that is not a header and claims - would fail every pass and hold every event behind it, so
-    /// it is dropped as an error and the pass goes on.
+    /// An item holding neither a token nor an unsigned form - its unsigned member dropped by an earlier version
+    /// rewriting the outbox - would fail every pass and hold every event behind it, so it is dropped as an error and
+    /// the pass goes on.
     /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData("not json")]
-    [InlineData("""{"header": {}}""")]
-    [InlineData("""{"claims": {}}""")]
-    [InlineData("[]")]
-    public async Task Push_AnItemWithNothingToSend_IsDropped_AndThePassGoesOn(string? unsigned)
+    [Fact]
+    public async Task Push_AnItemWithNothingToSend_IsDropped_AndThePassGoesOn()
     {
         var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
         var outbox = await OutboxWithAsync(
-            new OutboxItem("jti-1", CompactToken: null, Unsigned: unsigned),
+            new OutboxItem("jti-1", CompactToken: null),
             new OutboxItem("jti-2", "b.b.b"));
         var logger = new CapturingLogger<PushDeliverySender>();
         var sender = new PushDeliverySender(

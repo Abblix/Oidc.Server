@@ -94,8 +94,8 @@ public sealed partial class PollEndpointHandler(
     }
 
     /// <summary>
-    /// The page's SETs, each signed now. An item holding nothing that can be sent is dropped from the queue rather
-    /// than served, since kept it would fail every poll after this one.
+    /// The page's SETs, each signed now. An item holding neither a token nor an unsigned form is dropped from the
+    /// queue rather than served, since kept it would fail every poll after this one.
     /// </summary>
     private async Task<Dictionary<string, string>> SignAsync(
         StreamState stream,
