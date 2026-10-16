@@ -216,7 +216,7 @@ public class AuthorizationResponseFormatter(
     {
         var response = await authorizationRequestStorage.StoreAsync(
             request,
-            options.Value.LoginSessionExpiresIn);
+            options.Value.AuthorizationRequestExpiresIn);
 
         if (!uri.IsAbsoluteUri)
         {

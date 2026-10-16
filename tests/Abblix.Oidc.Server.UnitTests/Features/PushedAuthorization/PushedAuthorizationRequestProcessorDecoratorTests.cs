@@ -35,7 +35,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     private readonly Mock<IAuthorizationRequestStorage> _storage;
     private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
     private readonly FakeTimeProvider _timeProvider = new();
-    private readonly OidcOptions _options = new() { LoginSessionExpiresIn = TimeSpan.FromMinutes(7) };
+    private readonly OidcOptions _options = new() { AuthorizationRequestExpiresIn = TimeSpan.FromMinutes(7) };
     private readonly PushedAuthorizationRequestProcessorDecorator _decorator;
 
     public PushedAuthorizationRequestProcessorDecoratorTests()
@@ -112,7 +112,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         _storage.Verify(s => s.TryGetAsync(pageUri, true), Times.Once);
         _storage.Verify(s => s.TryGetAsync(pushedUri, true), Times.Once);
         _consumedRequestUris.Verify(
-            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.LoginSessionExpiresIn),
+            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.AuthorizationRequestExpiresIn),
             Times.Once);
     }
 
@@ -131,7 +131,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         await _decorator.ProcessAsync(request);
 
         _consumedRequestUris.Verify(
-            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.LoginSessionExpiresIn),
+            r => r.MarkConsumedAsync(pushedUri, _timeProvider.GetUtcNow() + _options.AuthorizationRequestExpiresIn),
             Times.Once);
     }
 
