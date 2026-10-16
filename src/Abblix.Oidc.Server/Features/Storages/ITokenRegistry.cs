@@ -35,4 +35,20 @@ public interface ITokenRegistry
 	/// updated based on the token's validity.</param>
 	/// <returns>A task representing the asynchronous operation of updating the token's status.</returns>
 	Task SetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt);
+
+	/// <summary>
+	/// Records <paramref name="status"/> for a JWT only when nothing is recorded for it yet, and reports whether
+	/// this caller is the one that recorded it.
+	/// </summary>
+	/// <remarks>
+	/// Of several callers racing for one token, at most one is told it recorded the status, within the reach
+	/// <see cref="IEntityStorage.TrySetIfAbsentAsync{T}"/> gives the registered storage. A check followed by a
+	/// separate write lets two requests presenting a single-use token together both find it unspent.
+	/// </remarks>
+	/// <param name="jwtId">The identifier of the JWT whose status is to be recorded.</param>
+	/// <param name="status">The status to record.</param>
+	/// <param name="expiresAt">When the record may be dropped.</param>
+	/// <returns>True when nothing was recorded and this caller recorded <paramref name="status"/>; false when a
+	/// status was already recorded.</returns>
+	Task<bool> TrySetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt);
 }

@@ -25,8 +25,8 @@ public interface IRefreshTokenService
 {
 	/// <summary>
 	/// Issues a refresh token for the supplied authentication session and authorization context.
-	/// When <paramref name="refreshToken"/> is non-null the call represents a refresh-token
-	/// rotation and the previous token may be revoked according to the client's policy. Returns
+	/// When <paramref name="refreshToken"/> is non-null the call renews that token, which
+	/// <see cref="TrySpendAsync"/> has already spent if the client's policy rotates it. Returns
 	/// <c>null</c> when expiration policies have already elapsed and no new token can be issued.
 	/// </summary>
 	/// <param name="authSession">The authentication session the token continues.</param>
@@ -41,6 +41,20 @@ public interface IRefreshTokenService
 		ClientInfo clientInfo,
 		JsonWebToken? refreshToken,
 		string grantId);
+
+	/// <summary>
+	/// Spends a refresh token presented for renewal, so that a token the client's policy rotates renews once.
+	/// </summary>
+	/// <remarks>
+	/// Called before anything is issued for the request. When another request has already spent the token, the
+	/// grant is revoked as for any replay of a superseded token, because two presentations arriving together
+	/// cannot be told from a stolen copy. A token that is not rotated, or that can no longer be renewed, is left
+	/// unspent.
+	/// </remarks>
+	/// <param name="refreshToken">The refresh token presented for renewal.</param>
+	/// <param name="clientInfo">The client renewing it.</param>
+	/// <returns>True when the request may go on; false when the token had already been spent.</returns>
+	Task<bool> TrySpendAsync(JsonWebToken refreshToken, ClientInfo clientInfo);
 
 	/// <summary>
 	/// Reconstructs the <see cref="AuthorizedGrant"/> represented by a previously issued refresh

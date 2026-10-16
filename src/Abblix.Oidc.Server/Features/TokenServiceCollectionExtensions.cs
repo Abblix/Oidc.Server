@@ -62,6 +62,7 @@ public static class TokenServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddRefreshToken(this IServiceCollection services)
     {
+        services.TryAddSingleton<RefreshTokenRotationPolicy>();
         services.TryAddSingleton<IRefreshTokenService, RefreshTokenService>();
         return services;
     }

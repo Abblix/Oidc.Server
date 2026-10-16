@@ -66,6 +66,15 @@ public class GrantRevocationTests
             return Task.CompletedTask;
         }
 
+        public async Task<bool> TrySetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
+        {
+            if (await GetStatusAsync(jwtId) != JsonWebTokenStatus.Unknown)
+                return false;
+
+            await SetStatusAsync(jwtId, status, expiresAt);
+            return true;
+        }
+
         public DateTimeOffset ExpiryOf(string jwtId) => _entries[jwtId].ExpiresAt;
     }
 
@@ -93,14 +102,15 @@ public class GrantRevocationTests
                 return jwt.Payload.JwtId!;
             });
 
-        var options = Options.Create(new OidcOptions());
-        _service = new RefreshTokenService(
-            issuer.Object, _clock, ids.Object, formatter.Object, _registry, new SubjectTypeConverter(),
-            options, SingleIssuer.SettingsOf(options));
-
         var clients = new Mock<IClientInfoProvider>();
         clients.Setup(provider => provider.TryFindClientAsync(ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
         var grants = new GrantRevocation(_registry, clients.Object);
+
+        var options = Options.Create(new OidcOptions());
+        _service = new RefreshTokenService(
+            issuer.Object, _clock, ids.Object, formatter.Object, _registry, grants,
+            new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(options)), new SubjectTypeConverter(),
+            options, SingleIssuer.SettingsOf(options));
         _processor = new RevocationRequestProcessor(_registry, grants, _clock);
 
         var inner = new Mock<IJsonWebTokenValidator>();
@@ -130,6 +140,11 @@ public class GrantRevocationTests
     {
         var session = new AuthSession("user_1", "session_1", Start, "test");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null);
+
+        // The token endpoint spends the presented token before it issues the next one.
+        if (previous != null)
+            Assert.True(await _service.TrySpendAsync(previous, _client));
+
         var encoded = await _service.CreateRefreshTokenAsync(session, context, _client, previous, GrantId);
         return encoded!.Token;
     }

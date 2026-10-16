@@ -56,6 +56,33 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         await AssertInvalidGrantAsync(afterCascade);
     }
 
+    /// <summary>
+    /// Two requests renewing one rotated token at once: exactly one is served, and the other is treated as the replay
+    /// it cannot be told from, so the family the two would have forked into is revoked - the token just issued to the
+    /// winner included. Whichever order the two take, the outcome is the same; two at once is the order in which
+    /// both used to be served.
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_renewals_of_one_token_serve_exactly_one()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+            var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+            var responses = await Task.WhenAll(RefreshAsync(client, discovery, rt1), RefreshAsync(client, discovery, rt1));
+
+            var served = Assert.Single(responses, response => response.IsSuccessStatusCode);
+            await AssertInvalidGrantAsync(Assert.Single(responses, response => !response.IsSuccessStatusCode));
+
+            var winnersToken = (await ReadJsonAsync(served))[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+            await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, winnersToken));
+        }
+    }
+
     [Fact]
     public async Task Replaying_the_oldest_token_revokes_a_multi_generation_family()
     {

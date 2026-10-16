@@ -82,6 +82,11 @@ public class TokenRequestProcessor(
 
 		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
+		// Spent before anything is minted, and only after the scope check, so a request refused for its scope
+		// keeps its token and the request losing the race to renew a single-use token issues nothing.
+		if (issuesRefreshToken && !await TrySpendAsync(presentedRefreshToken, clientInfo))
+			return new OidcError(ErrorCodes.InvalidGrant, "Token was already used");
+
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
 			authContext,
@@ -232,6 +237,17 @@ public class TokenRequestProcessor(
 			? expiresAt - issuedAt
 			: throw new InvalidOperationException(
 				$"The access token service issued a token without {nameof(JsonWebTokenPayload.IssuedAt)} or {nameof(JsonWebTokenPayload.ExpiresAt)}.");
+
+	/// <summary>
+	/// Spends the refresh token the request renews, if it renews one; false when another request has spent it.
+	/// </summary>
+	private Task<bool> TrySpendAsync(JsonWebToken? presentedRefreshToken, ClientInfo clientInfo)
+	{
+		if (presentedRefreshToken is null)
+			return Task.FromResult(true);
+
+		return refreshTokenService.TrySpendAsync(presentedRefreshToken, clientInfo);
+	}
 
 	private async Task AddRefreshTokenAsync(
 		TokenIssued response,
