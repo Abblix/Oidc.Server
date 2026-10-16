@@ -70,7 +70,8 @@ public sealed class IssuerSpellingTests : IDisposable
             new SubjectTypeConverter(),
             options,
             SingleIssuer.SettingsOf(options),
-            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()));
+            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
+            ScopeClaims.Of());
 
         await service.CreateAccessTokenAsync(
             new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),

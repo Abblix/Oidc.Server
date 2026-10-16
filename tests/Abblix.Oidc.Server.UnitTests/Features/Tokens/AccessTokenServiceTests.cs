@@ -14,6 +14,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -71,7 +72,8 @@ public class AccessTokenServiceTests
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions()),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(NoResources, NoResourceKeys));
+            new AudienceKeyResolver(NoResources, NoResourceKeys),
+            ScopeClaims.Of());
     }
 
     /// <summary>
@@ -81,6 +83,104 @@ public class AccessTokenServiceTests
     private static IResourceManager NoResources => Mock.Of<IResourceManager>();
 
     private static IResourceKeysProvider NoResourceKeys => Mock.Of<IResourceKeysProvider>();
+
+    /// <summary>
+    /// The address the user signed in with travels in the access token only for a client granted the email scope,
+    /// since every resource server the token reaches reads it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CreateAccessToken_CarriesTheSessionEmailOnlyUnderTheEmailScope(bool emailGranted)
+    {
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        string[] scopes = emailGranted ? [Scopes.OpenId, Scopes.Email] : [Scopes.OpenId, Scopes.Profile];
+        var authContext = new AuthorizationContext(ClientId, scopes, null);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal(emailGranted ? "user@example.com" : null, capturedToken!.Payload.Email);
+        Assert.Equal(emailGranted ? true : null, capturedToken.Payload.EmailVerified);
+    }
+
+    /// <summary>
+    /// A client granted the email claim another way than by the email scope - by naming it for the
+    /// user-information endpoint, or through a scope the host declares with it - gets the address in its access
+    /// token too, so that endpoint answers with the address the user signed in with.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateAccessToken_CarriesTheSessionEmailWhenTheClaimIsGrantedOtherwise(bool byHostScope)
+    {
+        const string contactScope = "contact";
+        var issuerProvider = new Mock<IIssuerProvider>();
+        issuerProvider.Setup(provider => provider.GetIssuer()).Returns(new Uri(Issuer));
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>();
+        tokenIdGenerator.Setup(generator => generator.GenerateTokenId()).Returns(TokenId);
+        var service = new AccessTokenService(
+            issuerProvider.Object,
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            _jwtFormatter.Object,
+            new SubjectTypeConverter(),
+            Options.Create(new OidcOptions()),
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
+            new AudienceKeyResolver(NoResources, NoResourceKeys),
+            ScopeClaims.Of(new ScopeDefinition(contactScope, IanaClaimTypes.Email)));
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = byHostScope
+            ? new AuthorizationContext(ClientId, [Scopes.OpenId, contactScope], null)
+            : new AuthorizationContext(
+                ClientId,
+                [Scopes.OpenId],
+                new RequestedClaims { UserInfo = new() { [IanaClaimTypes.Email] = new RequestedClaimDetails() } });
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal("user@example.com", capturedToken!.Payload.Email);
+        Assert.True(capturedToken.Payload.EmailVerified);
+    }
+
+    /// <summary>
+    /// A client that names the email claim for the ID token alone has the user-information endpoint ask for nothing
+    /// more, so the address stays out of its access token.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_LeavesOutTheSessionEmailNamedForTheIdTokenAlone()
+    {
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = new AuthorizationContext(
+            ClientId,
+            [Scopes.OpenId],
+            new RequestedClaims { IdToken = new() { [IanaClaimTypes.Email] = new RequestedClaimDetails() } });
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Null(capturedToken!.Payload.Email);
+        Assert.Null(capturedToken.Payload.EmailVerified);
+    }
 
     /// <summary>
     /// Verifies that CreateAccessTokenAsync generates a JWT with correct header fields:
@@ -538,7 +638,8 @@ public class AccessTokenServiceTests
             converter,
             Options.Create(new OidcOptions()),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(NoResources, NoResourceKeys));
+            new AudienceKeyResolver(NoResources, NoResourceKeys),
+            ScopeClaims.Of());
 
         var presentingClient = new ClientInfo(ClientId)
         {
@@ -652,7 +753,8 @@ public class AccessTokenServiceTests
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(manager.Object, keys.Object));
+            new AudienceKeyResolver(manager.Object, keys.Object),
+            ScopeClaims.Of());
     }
 
     private static AuthorizationContext ContextFor(params Uri[] resources) =>

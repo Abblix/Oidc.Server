@@ -66,17 +66,24 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     public ICollection<string>? AuthenticationMethodReferences { get; init; }
 
     /// <summary>
-    /// The email address used for authentication. When specified, this exact email is included in the authentication
-    /// cookie and ID token claims, regardless of other emails associated with the user account.
-    /// This ensures external provider emails (Google, Microsoft) or challenge emails are preserved exactly as used.
+    /// The email address used for authentication, such as the one an external provider (Google, Microsoft) or a
+    /// challenge confirmed, kept exactly as used whatever other addresses the account holds.
     /// </summary>
+    /// <remarks>
+    /// An access token carries it only when the user-information endpoint would ask the host's provider for it,
+    /// since every resource server that token reaches reads it. The server does not put it in an ID token itself; the user-information provider
+    /// receives the session and decides which address it releases, in the ID token and at the user-information
+    /// endpoint alike.
+    /// </remarks>
     public string? Email { get; init; }
 
     /// <summary>
-    /// Indicates whether the email address has been verified. When true, the email_verified claim is set to true
-    /// in ID tokens. This is particularly useful for external providers that verify emails or when email verification
-    /// has been completed through challenge flows.
+    /// Whether <see cref="Email"/> has been verified, by an external provider that verifies addresses or by a
+    /// challenge the user completed.
     /// </summary>
+    /// <remarks>
+    /// An access token carries it exactly when it carries <see cref="Email"/>.
+    /// </remarks>
     public bool? EmailVerified { get; init; }
 
     /// <summary>
