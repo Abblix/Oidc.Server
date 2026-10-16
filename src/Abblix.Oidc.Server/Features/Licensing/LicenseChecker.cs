@@ -47,6 +47,9 @@ public static partial class LicenseChecker
     // the watches stay as many as the creations served while clients come and go
     private static readonly ConcurrentDictionary<(object Count, CancellationToken Holder), byte> Watched = new();
 
+    /// <summary>Makes the check whether an issuer still fits and its counting one step.</summary>
+    private static readonly Lock IssuerAdmission = new();
+
     /// <summary>
     /// Registers a new license with the license management system, allowing for real-time updates
     /// to the application's licensing constraints.
@@ -95,30 +98,34 @@ public static partial class LicenseChecker
         if (!currentLicense.ClientLimit.HasValue)
             return;
 
-        _knownClientIds ??= new ConcurrentDictionary<(string IssuerId, string ClientId), Counted>();
-        if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < _knownClientIds.Count &&
-            !_knownClientIds.ContainsKey(client))
+        // One count for every caller: requests arriving together each assigning a count of their own would each
+        // be counted in a count nobody else reads
+        var knownClientIds = LazyInitializer.EnsureInitialized(
+            ref _knownClientIds,
+            () => new ConcurrentDictionary<(string IssuerId, string ClientId), Counted>());
+        if (currentLicense.ClientLimit.Value * ClientLimitOverExceedingFactor < knownClientIds.Count &&
+            !knownClientIds.ContainsKey(client))
         {
             if (LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(1)))
             {
                 LogClientLimitExceededByMargin(
                     LicenseLogger.Instance,
                     currentLicense.ClientLimit,
-                    _knownClientIds.Keys.Select(Named),
+                    knownClientIds.Keys.Select(Named),
                     Named(client));
             }
 
             throw new LicenseViolationException(LicenseRefusalReasons.ClientLimit);
         }
 
-        Count(_knownClientIds, client, client.ClientId, released);
-        if (currentLicense.ClientLimit.Value < _knownClientIds.Count &&
+        Count(knownClientIds, client, client.ClientId, released);
+        if (currentLicense.ClientLimit.Value < knownClientIds.Count &&
             LicenseLogger.Instance.IsAllowed(new { Client = client }, utcNow, TimeSpan.FromMinutes(15)))
         {
             LogClientLimitExceeded(
                 LicenseLogger.Instance,
                 currentLicense.ClientLimit.Value,
-                _knownClientIds.Keys.Select(Named));
+                knownClientIds.Keys.Select(Named));
         }
     }
 
@@ -264,6 +271,34 @@ public static partial class LicenseChecker
         => client.IssuerId.Length == 0 ? client.ClientId : $"{client.IssuerId}/{client.ClientId}";
 
     /// <summary>
+    /// Counts <paramref name="issuer"/> when it is counted already or still fits under <paramref name="issuerLimit"/>,
+    /// and answers whether it did.
+    /// </summary>
+    /// <remarks>
+    /// The issuer beyond the count is refused and left uncounted, so the issuers served within the limit go on being
+    /// served; counted first, one extra issuer would push the count over and refuse them all. One step, or two new
+    /// issuers asking at once could both find a place. A count above the limit can then only come from the license
+    /// narrowing or expiring under issuers already served, and that refuses every issuer, as the deployment no longer
+    /// fits the license it runs under.
+    /// </remarks>
+    private static bool TryAdmitIssuer(
+        ConcurrentDictionary<string, Counted> knownIssuers,
+        string issuer,
+        IIssuerSettings settings,
+        int issuerLimit)
+    {
+        var key = VouchedId(settings) is { Length: > 0 } tenantId ? tenantId : issuer;
+        lock (IssuerAdmission)
+        {
+            if (issuerLimit < knownIssuers.Count || !knownIssuers.ContainsKey(key) && issuerLimit <= knownIssuers.Count)
+                return false;
+
+            Count(knownIssuers, key, issuer, ReleasedOf(settings));
+            return true;
+        }
+    }
+
+    /// <summary>
     /// How many issuers the license in force allows, or null when it sets no limit.
     /// </summary>
     internal static int? IssuerLimit
@@ -297,12 +332,13 @@ public static partial class LicenseChecker
             throw new LicenseViolationException(LicenseRefusalReasons.IssuerNotAllowed);
         }
 
-        if (currentLicense.IssuerLimit.HasValue)
+        if (currentLicense.IssuerLimit is { } issuerLimit)
         {
-            _knownIssuers ??= new ConcurrentDictionary<string, Counted>(StringComparer.Ordinal);
-            var key = VouchedId(settings) is { Length: > 0 } tenantId ? tenantId : issuer;
-            Count(_knownIssuers, key, issuer, ReleasedOf(settings));
-            if (currentLicense.IssuerLimit.Value < _knownIssuers.Count)
+            // One count for every caller, as with the clients
+            var knownIssuers = LazyInitializer.EnsureInitialized(
+                ref _knownIssuers,
+                () => new ConcurrentDictionary<string, Counted>(StringComparer.Ordinal));
+            if (!TryAdmitIssuer(knownIssuers, issuer, settings, issuerLimit))
             {
                 // The decision is taken first and stands on its own; only the record of it is throttled. This
                 // mirrors the client-limit block above, where the refusal sits outside the logging guard and
@@ -313,8 +349,9 @@ public static partial class LicenseChecker
                     // Log error: Exceeded the licensed limit of issuers.
                     LogIssuerLimitExceeded(
                         LicenseLogger.Instance,
-                        currentLicense.IssuerLimit.Value,
-                        _knownIssuers.Values.Select(counted => counted.Name));
+                        issuerLimit,
+                        knownIssuers.Values.Select(counted => counted.Name),
+                        issuer);
                 }
 
                 throw new LicenseViolationException(LicenseRefusalReasons.IssuerLimit);

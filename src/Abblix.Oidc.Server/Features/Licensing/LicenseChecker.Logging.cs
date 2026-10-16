@@ -43,9 +43,11 @@ partial class LicenseChecker
     [LoggerMessage(
         EventId = LogEvents.Licensing.LicenseChecker.IssuerLimitExceeded,
         Level = LogLevel.Error,
-        Message = "Exceeded the licensed limit of issuers: {IssuerLimit}. The list of used issuers is {@Issuers}")]
+        Message = "Exceeded the licensed limit of issuers: {IssuerLimit}. The list of used issuers is {@Issuers}, "
+            + "and the issuer refused is {Refused}")]
     private static partial void LogIssuerLimitExceeded(
         ILogger logger,
         int IssuerLimit,
-        IEnumerable<string> Issuers);
+        IEnumerable<string> Issuers,
+        string Refused);
 }

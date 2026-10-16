@@ -56,6 +56,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 public sealed class LicenseEnforcementTests : IDisposable
 {
     private const string UnlicensedIssuer = "https://second-issuer.example.com";
+    private const string ThirdIssuer = "https://third-issuer.example.com";
 
     public LicenseEnforcementTests() => TestLicense.ResetChecker();
 
@@ -130,6 +131,22 @@ public sealed class LicenseEnforcementTests : IDisposable
                 () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
             Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
         }
+    }
+
+    /// <summary>
+    /// The issuer beyond the count is the one refused: an issuer served within the limit keeps being served after a
+    /// further one has asked, so one extra issuer cannot stop the whole deployment.
+    /// </summary>
+    [Fact]
+    public void An_issuer_within_the_licensed_count_is_still_served_after_one_beyond_it_asked()
+    {
+        ArrangeLicenceThatCountsIssuers();
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
     }
 
     [Fact]
@@ -308,6 +325,75 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         released.Cancel();
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    /// <summary>
+    /// A license narrowing under the issuers already served leaves the deployment beyond its terms, and every issuer
+    /// is refused, the ones counted before included.
+    /// </summary>
+    [Fact]
+    public void Issuers_served_under_a_license_that_narrows_beneath_them_are_all_refused()
+    {
+        TestLicense.InstallWithIssuerLimit(2);
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        TestLicense.ReplaceWithIssuerLimit(1);
+
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+    }
+
+    /// <summary>
+    /// Issuers asking at once for the last place under the limit take it one at a time, so exactly one is served.
+    /// </summary>
+    [Fact]
+    public async Task Issuers_asking_at_once_for_the_last_place_are_served_one()
+    {
+        const int Asking = 8;
+        const int Rounds = 50;
+        for (var round = 0; round < Rounds; round++)
+        {
+            ArrangeLicenceThatCountsIssuers();
+            using var start = new Barrier(Asking);
+            var served = 0;
+            var asking = Enumerable.Range(0, Asking).Select(index => Task.Run(() =>
+            {
+                start.SignalAndWait(TestContext.Current.CancellationToken);
+                try
+                {
+                    LicenseChecker.CheckIssuer($"https://issuer-{index}.example.com", SingleIssuer.Settings);
+                    Interlocked.Increment(ref served);
+                }
+                catch (LicenseViolationException)
+                {
+                    // Every issuer but one is refused, which is what is being counted
+                }
+            }));
+
+            await Task.WhenAll(asking);
+            Assert.Equal(1, served);
+        }
+    }
+
+    /// <summary>
+    /// An issuer refused past the limit takes no place, so the one freed by a tenant gone for good goes to whichever
+    /// issuer asks next rather than to the one that was refused earlier.
+    /// </summary>
+    [Fact]
+    public void An_issuer_refused_past_the_limit_takes_no_place_freed_later()
+    {
+        ArrangeInstallationWithNoLicence();
+        using var released = new CancellationTokenSource();
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", released.Token)));
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+
+        released.Cancel();
+
+        Assert.Equal(ThirdIssuer, LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.Settings));
     }
 
     [Fact]
