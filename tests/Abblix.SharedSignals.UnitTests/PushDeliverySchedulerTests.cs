@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;
@@ -73,6 +74,8 @@ public class PushDeliverySchedulerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(clock);
+        // The sender signs each SET as it leaves, so it needs a signer although these events are queued signed
+        services.AddSingleton<ISecurityEventTokenSigner, NamingSigner>();
         services.AddSecurityEvents();
 
         // Registered BEFORE the package, so its TryAddSingleton keeps this instance - the shape the
@@ -230,6 +233,8 @@ public class PushDeliverySchedulerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<TimeProvider>(clock);
+        // The sender signs each SET as it leaves, so it needs a signer although these events are queued signed
+        services.AddSingleton<ISecurityEventTokenSigner, NamingSigner>();
         services.AddSecurityEvents();
         services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {

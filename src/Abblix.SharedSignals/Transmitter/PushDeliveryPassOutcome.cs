@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net.Http.Headers;
+
 namespace Abblix.SharedSignals.Transmitter;
 
 /// <summary>
@@ -14,4 +16,6 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="Delivered">SETs the receiver accepted and the queue released.</param>
 /// <param name="Rejected">SETs the receiver judged invalid, dropped from the queue as terminal
 /// (RFC 8935 Section 2.3).</param>
-public sealed record PushDeliveryPassOutcome(int Delivered, int Rejected);
+/// <param name="RetryAfter">How long the receiver asked to be left alone, when the answer that stopped the pass
+/// named it in "Retry-After".</param>
+public sealed record PushDeliveryPassOutcome(int Delivered, int Rejected, RetryConditionHeaderValue? RetryAfter = null);

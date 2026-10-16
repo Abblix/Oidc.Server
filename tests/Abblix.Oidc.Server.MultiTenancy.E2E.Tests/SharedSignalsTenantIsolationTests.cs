@@ -215,7 +215,8 @@ public sealed class SharedSignalsTenantIsolationTests
                 provider.GetRequiredService<IEventOutbox>(),
                 provider.GetRequiredService<ReceiverAddressPolicy>(),
                 NullLogger<PushDeliverySender>.Instance,
-                provider.GetRequiredService<SharedSignalsInstruments>()))));
+                provider.GetRequiredService<SharedSignalsInstruments>(),
+                provider.GetRequiredService<QueuedEventSigner>()))));
 
         foreach (var tenant in (string[])[Acme, Globex])
         {
@@ -245,7 +246,13 @@ public sealed class SharedSignalsTenantIsolationTests
         Assert.Equal(1, await DispatchAsync(app, "acme", ct));
         await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
 
-        Assert.Equal(Host + Acme, IssuerOf(Assert.Single(receiver.Tokens)));
+        var token = Assert.Single(receiver.Tokens);
+        Assert.Equal(Host + Acme, IssuerOf(token));
+
+        // Signed on the sweep rather than in the request that queued it, so the key is the one the sweep entered
+        Assert.True(VerifiesAgainst(token, await KeySetOfAsync(ClientOf(app, Host + Acme), Acme, ct)));
+        Assert.False(VerifiesAgainst(token, await KeySetOfAsync(ClientOf(app, Host + Globex), Globex, ct)));
+
         (string, object?)[] expected =
             [(SharedSignalsMetrics.EventsTransmitted, "acme"), (SharedSignalsMetrics.PushDeliveries, "acme")];
         Assert.Equal(expected, tenants.ToArray());

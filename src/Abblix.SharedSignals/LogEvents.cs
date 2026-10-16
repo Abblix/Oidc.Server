@@ -59,5 +59,17 @@ public static class LogEvents
 
         /// <summary>A new stream covers no subject, while a conformant receiver adds none.</summary>
         public const int NoSubjectsIncludedByDefault = Base + 12;
+
+        /// <summary>The receiver answered with "Retry-After", so its stream is held until then.</summary>
+        public const int PushStreamHeld = Base + 13;
+
+        /// <summary>A queued SET could not be signed for delivery, so the stream's queue is held.</summary>
+        public const int SetSigningFailed = Base + 14;
+
+        /// <summary>A stream held at its receiver's request was passed by on this sweep.</summary>
+        public const int PushStreamHeldSkipped = Base + 15;
+
+        /// <summary>A queued item held nothing that could be sent, so it was dropped from the queue.</summary>
+        public const int UnsendableItemDropped = Base + 16;
     }
 }

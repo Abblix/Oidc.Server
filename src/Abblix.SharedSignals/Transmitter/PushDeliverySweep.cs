@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
+using System.Net.Http.Headers;
 using Abblix.SharedSignals.Model.Delivery;
 using Microsoft.Extensions.Logging;
 
@@ -18,6 +20,11 @@ namespace Abblix.SharedSignals.Transmitter;
 /// A pass is best-effort by design. One stream's failure must not stop the others, so each is caught and logged
 /// and the pass continues; the sender itself decides what a failed delivery means for the queue, keeping a
 /// transient refusal and dropping a final one.
+/// <para>
+/// A receiver that refuses with "Retry-After" is left alone until then (RFC 9110 Section 10.2.3, RFC 6585
+/// Section 4), since sending sooner is what it asked not to receive. The wait is held in this instance only:
+/// another instance that reaches the stream first meets the same answer and holds it too.
+/// </para>
 /// </remarks>
 /// <param name="logger">Records what a pass could not do.</param>
 /// <param name="store">Where the streams to sweep are read from.</param>
@@ -33,9 +40,27 @@ public sealed partial class PushDeliverySweep(
     SharedSignalsTransmitterOptions options,
     TimeProvider timeProvider) : IPushDeliverySweep
 {
+    /// <summary>The longest wait a receiver's "Retry-After" holds a stream for.</summary>
+    /// <remarks>
+    /// The receiver names the wait, and nothing in HTTP bounds it, so a receiver back after a minute that had
+    /// answered with a week would otherwise go without its events for that week.
+    /// </remarks>
+    public static TimeSpan RetryAfterCeiling { get; } = TimeSpan.FromHours(1);
+
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _heldUntil = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public async Task SweepAsync(CancellationToken cancellationToken)
     {
+        // A wait that has passed is dropped here rather than when its stream is next reached, so the wait of a
+        // stream deleted meanwhile does not stay behind.
+        var now = timeProvider.GetUtcNow();
+        foreach (var (streamId, until) in _heldUntil)
+        {
+            if (until <= now)
+                _heldUntil.TryRemove(streamId, out _);
+        }
+
         foreach (var stream in await store.ListAllAsync(cancellationToken))
         {
             if (stream.Configuration.Delivery is not PushDeliveryMethod)
@@ -55,6 +80,12 @@ public sealed partial class PushDeliverySweep(
     /// </remarks>
     private async Task SweepStreamAsync(StreamState stream, CancellationToken cancellationToken)
     {
+        if (_heldUntil.ContainsKey(stream.StreamId))
+        {
+            LogStreamHeld(stream.StreamId);
+            return;
+        }
+
         var duration = options.PushDeliveryLeaseDuration;
 
         await using var claim = await lease.TryAcquireAsync(
@@ -75,7 +106,12 @@ public sealed partial class PushDeliverySweep(
 
         try
         {
-            await sender.SendPendingAsync(stream, bounded.Token);
+            var outcome = await sender.SendPendingAsync(stream, bounded.Token);
+            if (HoldOf(outcome.RetryAfter) is { } until)
+            {
+                _heldUntil[stream.StreamId] = until;
+                LogStreamHeldUntil(stream.StreamId, until);
+            }
         }
         catch (OperationCanceledException)
             when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -87,6 +123,29 @@ public sealed partial class PushDeliverySweep(
             // One receiver being unreachable says nothing about the next one's stream.
             LogStreamFailed(exception, stream.StreamId);
         }
+    }
+
+    /// <summary>
+    /// The moment a receiver's "Retry-After" holds its stream until, bounded by <see cref="RetryAfterCeiling"/>, or
+    /// null when it named no wait still to come.
+    /// </summary>
+    private DateTimeOffset? HoldOf(RetryConditionHeaderValue? retryAfter)
+    {
+        var now = timeProvider.GetUtcNow();
+        DateTimeOffset? until = retryAfter switch
+        {
+            { Delta: { } delta } => now + delta,
+            { Date: { } date } => date,
+            null => null,
+            _ => throw new InvalidOperationException(
+                $"A {nameof(RetryConditionHeaderValue)} carries either a delay or a date."),
+        };
+
+        if (until is not { } moment || moment <= now)
+            return null;
+
+        var ceiling = now + RetryAfterCeiling;
+        return moment < ceiling ? moment : ceiling;
     }
 
     /// <summary>

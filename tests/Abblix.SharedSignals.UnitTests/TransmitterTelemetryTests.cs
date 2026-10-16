@@ -115,14 +115,19 @@ public sealed class TransmitterTelemetryTests : IDisposable
         return outbox;
     }
 
-    private async Task SendPendingAsync(HttpMessageHandler handler, IEventOutbox outbox, string? tenant = null)
+    private async Task SendPendingAsync(
+        HttpMessageHandler handler,
+        IEventOutbox outbox,
+        string? tenant = null,
+        QueuedEventSigner? signer = null)
     {
         var sender = new PushDeliverySender(
             new HttpClient(handler, disposeHandler: false),
             outbox,
             ReachingTheTestReceiver,
             NullLogger<PushDeliverySender>.Instance,
-            Instruments(tenant));
+            Instruments(tenant),
+            signer ?? TestQueuedEventSigner.Create());
 
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
     }
@@ -263,7 +268,7 @@ public sealed class TransmitterTelemetryTests : IDisposable
         var store = new InMemoryStreamStore();
         var stream = DispatchedStream("s-1");
         Assert.True(await store.TryCreateAsync(stream, ct));
-        var dispatcher = Dispatcher(store, new FixedSigner());
+        var dispatcher = Dispatcher(store, new InMemoryEventOutbox());
 
         Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));
         await dispatcher.DispatchToStreamAsync(stream, Descriptor(), cancellationToken: ct);
@@ -275,28 +280,36 @@ public sealed class TransmitterTelemetryTests : IDisposable
                                              && Equals(span.GetTagItem(SharedSignalsTags.EventType), EventType)));
     }
 
+    /// <summary>
+    /// A SET is signed as it leaves, so a signing failure is a failed transmission: the receiver is not asked, the
+    /// event stays queued for the next pass and the push span names the failure.
+    /// </summary>
     [Fact]
-    public async Task AnEventThatCouldNotBeSigned_IsNotCounted_AndItsSpanNamesTheFailure()
+    public async Task AnEventThatCouldNotBeSigned_StaysQueued_AndItsPushSpanNamesTheFailure()
     {
         var ct = TestContext.Current.CancellationToken;
         var store = new InMemoryStreamStore();
-        Assert.True(await store.TryCreateAsync(DispatchedStream("s-1"), ct));
-        var dispatcher = Dispatcher(store, new FailingSigner());
+        Assert.True(await store.TryCreateAsync(DispatchedStream(StreamId), ct));
+        var outbox = new InMemoryEventOutbox();
+        Assert.Equal(1, await Dispatcher(store, outbox).DispatchAsync(Descriptor(), ct));
 
-        Assert.Equal(0, await dispatcher.DispatchAsync(Descriptor(), ct));
+        var receiver = new StubHttpHandler();
+        await SendPendingAsync(receiver, outbox, signer: new QueuedEventSigner(new FailingSigner()));
 
-        Assert.DoesNotContain(_measurements, m => m.Name == SharedSignalsMetrics.EventsTransmitted);
-        var span = Assert.Single(_spans);
+        Assert.Empty(receiver.Requests);
+
+        Assert.Single(await outbox.PendingAsync("receiver-a", StreamId, null, ct));
+        Assert.Equal([PushDeliveryOutcomes.Failed], Outcomes(SharedSignalsMetrics.PushDeliveries));
+        var span = Assert.Single(_spans, span => span.OperationName == SharedSignalsTelemetry.PushSpan);
         Assert.Equal(typeof(InvalidOperationException).FullName, span.GetTagItem(SharedSignalsTags.ErrorType));
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         Assert.Null(span.StatusDescription);
     }
 
-    private EventDispatcher Dispatcher(IStreamStore store, ISecurityEventTokenSigner signer) => new(
+    private EventDispatcher Dispatcher(IStreamStore store, IEventOutbox outbox) => new(
         NullLogger<EventDispatcher>.Instance,
         store,
-        new InMemoryEventOutbox(),
-        signer,
+        outbox,
         new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
         Instruments());
 
@@ -320,12 +333,6 @@ public sealed class TransmitterTelemetryTests : IDisposable
         EventType = EventType,
         Subject = new EmailSubject("jdoe@example.com"),
     };
-
-    private sealed class FixedSigner : ISecurityEventTokenSigner
-    {
-        public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-            => Task.FromResult("a.b.c");
-    }
 
     private sealed class FailingSigner : ISecurityEventTokenSigner
     {
