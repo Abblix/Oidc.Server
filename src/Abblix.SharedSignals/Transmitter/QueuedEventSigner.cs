@@ -46,18 +46,20 @@ public sealed class QueuedEventSigner(ISecurityEventTokenSigner signer, TimeProv
     /// The SET to send for <paramref name="item"/>, signed now with the current time as its issue time.
     /// </summary>
     /// <remarks>
-    /// An item queued by a version that signed on enqueue already holds a compact token, which is a JWS rather
-    /// than a JSON object. It is sent as it is, so events waiting when the transmitter is upgraded are still
-    /// delivered.
+    /// An item queued by a version that signed on enqueue already holds a compact token. It is sent as it is, so
+    /// events waiting when the transmitter is upgraded are still delivered.
     /// </remarks>
     public async Task<string> SignAsync(OutboxItem item, CancellationToken cancellationToken = default)
-    {
-        if (!item.Token.StartsWith('{'))
+        => item switch
         {
-            return item.Token;
-        }
+            { Unsigned: { } unsigned } => await SignUnsignedAsync(unsigned, cancellationToken),
+            { CompactToken: { } compactToken } => compactToken,
+            _ => throw new InvalidOperationException($"The outbox item '{item.JwtId}' carries no token."),
+        };
 
-        var queued = JsonNode.Parse(item.Token)!.AsObject();
+    private async Task<string> SignUnsignedAsync(string unsigned, CancellationToken cancellationToken)
+    {
+        var queued = JsonNode.Parse(unsigned)!.AsObject();
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(queued[HeaderMember]!.AsObject()),

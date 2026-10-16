@@ -279,7 +279,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("same", "second"), ct);
 
         var item = Assert.Single(await outbox.PendingAsync(ReceiverId, streamId, null, ct));
-        Assert.Equal("second", item.Token);
+        Assert.Equal("second", item.CompactToken);
 
         // One acknowledgement is enough, because there is one listing.
         await outbox.AcknowledgeAsync(ReceiverId, streamId, ["same"], ct);

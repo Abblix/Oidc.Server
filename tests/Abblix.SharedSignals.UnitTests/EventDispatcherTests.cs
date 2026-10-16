@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Subjects;
@@ -134,6 +136,32 @@ public class EventDispatcherTests
         Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));
 
         Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1")).Issuer);
+    }
+
+    /// <summary>The outbox item as a version that signed on enqueue read it back from a durable outbox.</summary>
+    private sealed record PreviousOutboxItem(
+        [property: JsonPropertyName("jti")] string JwtId,
+        [property: JsonPropertyName("token")] string? CompactToken);
+
+    /// <summary>
+    /// An earlier instance sharing the outbox during a rolling deploy reads an item this one queued as carrying no
+    /// token, so its delivery fails and the item waits. Read as a token, the unsigned form would be sent, refused as
+    /// malformed and dropped.
+    /// </summary>
+    [Fact]
+    public async Task AQueuedEvent_ReadByAnEarlierVersion_CarriesNoTokenForItToSend()
+    {
+        var (dispatcher, outbox) = await CreateDispatcherAsync(
+            policy: null,
+            CreateStream("s-1", mode: StreamSubjectsMode.All));
+        Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), TestContext.Current.CancellationToken));
+        var item = Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
+
+        var asReadBefore = JsonSerializer.Deserialize<PreviousOutboxItem>(JsonSerializer.Serialize(item));
+
+        Assert.NotNull(asReadBefore);
+        Assert.Equal(item.JwtId, asReadBefore.JwtId);
+        Assert.Null(asReadBefore.CompactToken);
     }
 
     [Fact]

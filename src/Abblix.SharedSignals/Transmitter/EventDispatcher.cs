@@ -264,7 +264,11 @@ public sealed partial class EventDispatcher(
         await outbox.EnqueueAsync(
             stream.ReceiverId,
             stream.StreamId,
-            new OutboxItem(jwtId, QueuedEventSigner.ToQueued(builder.Build()), asStatusAnnouncement),
+            new OutboxItem(
+                jwtId,
+                CompactToken: null,
+                asStatusAnnouncement,
+                Unsigned: QueuedEventSigner.ToQueued(builder.Build())),
             cancellationToken);
     }
 
