@@ -230,19 +230,44 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// A web client keeps refusing every loopback host, not only the ones a native client may use.
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use, however the name is
+    /// spelled: a trailing dot, full-width letters or an ideographic full stop name the same host once normalized.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WebClientWithOtherLoopbackAddress_ShouldReturnError()
+    [Theory]
+    [InlineData("https://127.0.0.2/logout")]
+    [InlineData("https://localhost./logout")]
+    [InlineData("https://LOCALHOST./logout")]
+    [InlineData("https://127.0.0.1./logout")]
+    [InlineData("https://ｌｏｃａｌｈｏｓｔ/logout")]
+    [InlineData("https://localhost。/logout")]
+    [InlineData("https://１２７.０.０.１/logout")]
+    [InlineData("https://127.0.0.2./logout")]
+    [InlineData("https://[::ffff:127.0.0.2]/logout")]
+    public async Task ValidateAsync_WebClientWithLoopbackHost_ShouldReturnError(string uri)
+        => await AssertWebClientPostLogoutUri(uri, accepted: false);
+
+    /// <summary>
+    /// A name that only resembles a loopback host is an ordinary host for a web client.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com./logout")]
+    [InlineData("https://foo.localhost./logout")]
+    [InlineData("https://127.0.0.1.example.com/logout")]
+    [InlineData("https://[::ffff:8.8.8.8]/logout")]
+    public async Task ValidateAsync_WebClientWithNameResemblingLoopback_ShouldReturnNull(string uri)
+        => await AssertWebClientPostLogoutUri(uri, accepted: true);
+
+    private async Task AssertWebClientPostLogoutUri(string uri, bool accepted)
     {
         var context = CreateContext(
-            postLogoutRedirectUris: [new Uri("https://127.0.0.2/logout")],
+            postLogoutRedirectUris: [new Uri(uri)],
             applicationType: ApplicationTypes.Web);
 
         var result = await _validator.ValidateAsync(context);
 
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(accepted, result == null);
+        if (!accepted)
+            Assert.Equal(ErrorCodes.InvalidRedirectUri, result!.Error);
     }
 
     /// <summary>
