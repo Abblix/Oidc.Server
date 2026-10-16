@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
@@ -131,6 +132,8 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     tokenIds,
                     serviceFormatter.Object,
                     Mock.Of<ITokenRegistry>(),
+                    new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>()),
+                    new RefreshTokenRotationPolicy(settings),
                     new SubjectTypeConverter(),
                     options,
                     settings);

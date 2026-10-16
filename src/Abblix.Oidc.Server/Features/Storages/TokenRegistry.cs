@@ -37,4 +37,9 @@ public class TokenRegistry(IEntityStorage storage, IEntityStorageKeyFactory keyF
 	/// <returns>A task representing the asynchronous operation of setting the token's status.</returns>
 	public Task SetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
 		=> storage.SetAsync(keyFactory.JsonWebTokenStatusKey(jwtId), status, new () { AbsoluteExpiration = expiresAt });
+
+	/// <inheritdoc />
+	public Task<bool> TrySetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
+		=> storage.TrySetIfAbsentAsync(
+			keyFactory.JsonWebTokenStatusKey(jwtId), status, new () { AbsoluteExpiration = expiresAt });
 }

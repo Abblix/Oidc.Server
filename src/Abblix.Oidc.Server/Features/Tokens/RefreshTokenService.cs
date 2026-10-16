@@ -36,23 +36,46 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="tokenIdGenerator">Generator for unique token identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
+/// <param name="grantRevocation">Revokes the grant of a token another request has already spent.</param>
+/// <param name="rotationPolicy">Decides whether renewing a client's refresh token spends it.</param>
 /// <param name="subjectTypeConverter">Converts the real subject to the client-facing subject (pairwise pseudonym
 /// or real) on issuance, and opens it back when authorizing the token.</param>
 /// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
 /// </param>
-/// <param name="issuerSettings">Provides the issuer's default security profile.</param>
+/// <param name="issuerSettings">Provides the issuer's licensing state for the token it signs.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's issuer, clock, identifier, format, registry and subject each come from their own service, the server's options carry the service-token policy, and the issuer's settings the security profile that decides rotation.")]
+    Justification = "Every dependency is used: the token's issuer, clock, identifier, format, registry, grant revocation, rotation policy and subject each come from their own service, the server's options carry the service-token policy, and the issuer's settings the licensing state the issuer claim is checked against.")]
 public class RefreshTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
 	ITokenRegistry tokenRegistry,
+	GrantRevocation grantRevocation,
+	RefreshTokenRotationPolicy rotationPolicy,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
 	IIssuerSettings issuerSettings) : IRefreshTokenService
 {
+	/// <inheritdoc />
+	public async Task<bool> TrySpendAsync(JsonWebToken refreshToken, ClientInfo clientInfo)
+	{
+		if (!rotationPolicy.Rotates(clientInfo) ||
+		    refreshToken.Payload is not { JwtId: { } jwtId, ExpiresAt: { } expiresAt } payload)
+		{
+			return true;
+		}
+
+		// Spending marks the token Used ("superseded"), not Revoked ("killed"). A later presentation of a
+		// superseded token is the replay signal that TokenStatusValidatorDecorator turns into a whole-family
+		// revocation (RFC 9700 section 4.14.2); a presentation losing the race to spend it is the same signal.
+		if (await tokenRegistry.TrySetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt))
+			return true;
+
+		await grantRevocation.RevokeAsync(payload);
+		return false;
+	}
+
 	/// <summary>
 	/// Generates a new refresh token based on the user's current authentication session and authorization context,
 	/// optionally renewing an existing refresh token. This facilitates prolonged access without re-authentication,
@@ -82,21 +105,6 @@ public class RefreshTokenService(
 		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 		if (expiresAt < now)
 			return null;
-
-		// The profile and the default policy drop rotation only for a confidential client whose tokens are
-		// sender-constrained, the two controls that replace it; an explicit Reuse is the host's own decision and
-		// drops it for whatever client the host sets it on.
-		var rotates = !ReusesRefreshTokens(clientInfo) && !ProfileForbidsRotation(clientInfo);
-
-		if (rotates &&
-		    refreshToken is { Payload: { JwtId: { } previousJwtId, ExpiresAt: { } previousExpiresAt } })
-		{
-			// Rotation marks the previous token Used ("superseded"), not Revoked ("killed"). A later
-			// presentation of a superseded token is the replay signal that TokenStatusValidatorDecorator
-			// turns into a whole-family revocation (RFC 9700 section 4.14.2). Running this only after the expiry
-			// check means a refused renewal never consumes the presented token.
-			await tokenRegistry.SetStatusAsync(previousJwtId, JsonWebTokenStatus.Used, previousExpiresAt);
-		}
 
 		// The same four claims as on an access token, answering the same four questions - except that one of
 		// them answers a different question here than its name suggests:
@@ -154,65 +162,6 @@ public class RefreshTokenService(
 			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
 	}
-
-	/// <summary>
-	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens under its
-	/// <see cref="RefreshTokenOptions.ReusePolicy"/>.
-	/// </summary>
-	private static bool ReusesRefreshTokens(ClientInfo clientInfo) => clientInfo.RefreshToken.ReusePolicy switch
-	{
-		RefreshTokenReusePolicy.WhenSenderConstrained => IsAlwaysSenderConstrained(clientInfo),
-		RefreshTokenReusePolicy.Reuse => true,
-		RefreshTokenReusePolicy.Rotate => false,
-		var policy => throw new InvalidOperationException(
-			$"Unknown {nameof(RefreshTokenOptions.ReusePolicy)} value {policy} for the client {clientInfo.ClientId}."),
-	};
-
-	/// <summary>
-	/// Whether the security profile <paramref name="clientInfo"/> is held to forbids rotating its refresh tokens.
-	/// </summary>
-	/// <remarks>
-	/// FAPI 2.0 section 5.3.2.1 forbids rotation for a client held to it, because a confidential client with a
-	/// sender-constrained token gains nothing from rotating while losing its session whenever it fails to store the
-	/// token it was handed. The profile decides over the client's own policy, except for a client registered to
-	/// receive tokens outside the token endpoint: the profile checks the binding only there, so such a client's
-	/// tokens are not sender-constrained and the reason for dropping rotation does not hold.
-	/// </remarks>
-	private bool ProfileForbidsRotation(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation &&
-		   !ReceivesTokensOutsideTheTokenEndpoint(clientInfo);
-
-	/// <summary>
-	/// Whether every access token of <paramref name="clientInfo"/> is bound to a key the client proves, as
-	/// <see cref="RefreshTokenReusePolicy.WhenSenderConstrained"/> explains.
-	/// </summary>
-	private static bool IsAlwaysSenderConstrained(ClientInfo clientInfo)
-	{
-		if (ReceivesTokensOutsideTheTokenEndpoint(clientInfo))
-			return false;
-
-		return BindsEveryTokenRequest(clientInfo.TokenEndpointAuthMethod, clientInfo.RequireDPoP);
-	}
-
-	/// <summary>
-	/// Whether <paramref name="clientInfo"/> is registered to receive an access token that no token request binds:
-	/// one delivered by CIBA push, or one returned from the authorization endpoint for a response type that includes
-	/// <c>token</c>.
-	/// </summary>
-	private static bool ReceivesTokensOutsideTheTokenEndpoint(ClientInfo clientInfo)
-		=> clientInfo.BackChannelTokenDeliveryMode is BackchannelTokenDeliveryModes.Push ||
-		   clientInfo.EffectiveResponseTypes.Any(responseType => responseType.Contains(ResponseTypes.Token));
-
-	// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
-	// is the rule rather than a fallback: a method this library cannot name is not known to bind its tokens, and
-	// keeps rotating
-	private static bool BindsEveryTokenRequest(string tokenEndpointAuthMethod, bool requireDPoP)
-		=> tokenEndpointAuthMethod switch
-		{
-			ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
-			ClientAuthenticationMethods.PrivateKeyJwt => requireDPoP,
-			_ => false,
-		};
 
 	private static DateTimeOffset CalculateExpiresAt(
 		DateTimeOffset issuedAt,

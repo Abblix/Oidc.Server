@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Net.Http;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -561,6 +562,10 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, NewGrantId, null))
             .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
+            .Setup(s => s.TrySpendAsync(legacyRefreshToken, request.ClientInfo))
+            .ReturnsAsync(true);
+
+        _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
                 authSession, authContext, request.ClientInfo, legacyRefreshToken, NewGrantId))
             .ReturnsAsync(newRefreshToken);
@@ -841,6 +846,10 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
+            .Setup(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo))
+            .ReturnsAsync(true);
+
+        _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
                 authSession,
                 authContext,
@@ -861,6 +870,121 @@ public class TokenRequestProcessorTests
                 request.ClientInfo,
                 existingRefreshToken, ExistingGrantId),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A request renewing a single-use token that another request has already spent is refused once its tokens are
+    /// issued, and hands none of them over.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenThePresentedTokenWasAlreadySpent_HandsNothingOver()
+    {
+        var scopes = new[] { Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(CreateAccessToken());
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(CreateRefreshToken());
+        _refreshTokenService
+            .Setup(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo))
+            .ReturnsAsync(false);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// The presented token is spent only after every token of the response is issued, so a failure to issue the ID
+    /// token, such as a client key set that cannot be fetched, leaves it unspent for the client's retry.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenTheIdentityTokenCannotBeIssued_SpendsNothing()
+    {
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(accessToken);
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(CreateRefreshToken());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
+            .ThrowsAsync(new HttpRequestException("The client key set could not be fetched."));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(request));
+
+        _refreshTokenService.Verify(
+            s => s.TrySpendAsync(It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A renewal the expiry rules refuse issues no refresh token, so it spends nothing and the presented token stays
+    /// usable for as long as it is valid.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenNoRefreshTokenIsIssued_SpendsNothing()
+    {
+        var scopes = new[] { Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(CreateAccessToken());
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync((EncodedJsonWebToken?)null);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var issued));
+        Assert.Null(issued.RefreshToken);
+        _refreshTokenService.Verify(
+            s => s.TrySpendAsync(It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
     }
 
     /// <summary>

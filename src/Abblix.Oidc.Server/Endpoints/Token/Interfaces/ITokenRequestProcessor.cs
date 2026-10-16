@@ -25,8 +25,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// <para>
 /// Processing takes no cancellation token, deliberately. For most grants it runs after the grant is spent or while it
 /// is: a device code or a backchannel authentication request was taken from storage while the grant was resolved, an
-/// authorization code is taken as processing starts, and a rotated refresh token is marked used while it runs. None of
-/// that can be undone - RFC 6749 section 4.1.2 forbids a second use of a code - so abandoning past it would destroy the
+/// authorization code is taken as processing starts, and a rotated refresh token is marked used as its last step, once
+/// every token of the response is issued. None of that can be undone - RFC 6749 section 4.1.2 forbids a second use of a code - so abandoning past it would destroy the
 /// grant and issue nothing. The grants that spend nothing, such as client credentials, lose nothing by finishing
 /// either: whatever issuing costs, even a signature made remotely, nothing is given up by completing it. Once reached,
 /// issuance runs to completion and a response nobody waits for is discarded. An implementation that calls something
