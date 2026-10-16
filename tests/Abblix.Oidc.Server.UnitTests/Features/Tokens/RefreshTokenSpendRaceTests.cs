@@ -22,7 +22,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Abblix.Utils;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -34,11 +33,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 
 /// <summary>
 /// Two requests renewing one rotated refresh token, ordered so that the second runs whole between the first one's
-/// status check and its renewal - the order in which both used to be served.
+/// status check and its spending of the token - the order in which both used to be served.
 /// </summary>
 /// <remarks>
-/// Driven through the real token registry over the real storage the library registers by default, so the outcome
-/// rests on the storage's own write-if-absent rather than on a mock answering it.
+/// Driven through the real token registry over the real storage the library registers by default. What it shows is
+/// that spending checks the token's status again at the moment it marks it, rather than trusting the earlier check;
+/// that the check and the mark are one step is the storage's own property.
 /// </remarks>
 public class RefreshTokenSpendRaceTests
 {
@@ -50,7 +50,7 @@ public class RefreshTokenSpendRaceTests
     private readonly FakeTimeProvider _time = new(Now);
 
     [Fact]
-    public async Task Of_two_renewals_interleaved_at_the_status_check_exactly_one_is_served()
+    public async Task TwoRenewalsInterleavedAtTheStatusCheck_ServeExactlyOne()
     {
         var keyFactory = new EntityStorageKeyFactory();
         var storage = new LetsAnotherCallerIn(
@@ -63,33 +63,34 @@ public class RefreshTokenSpendRaceTests
         var service = CreateService(registry, _time);
         var presented = PresentedToken();
 
-        Result<EncodedJsonWebToken, OidcError>? second = null;
-        storage.OnNextReadOf(async () => second = await RenewAsync(registry, service, presented));
+        bool? secondServed = null;
+        storage.OnNextReadOf(async () => secondServed = await RenewAsync(registry, service, presented));
 
-        var first = await RenewAsync(registry, service, presented);
+        var firstServed = await RenewAsync(registry, service, presented);
 
-        Assert.NotNull(second);
-        Assert.True(second.Value.TryGetSuccess(out _));
-        Assert.NotNull(first);
-        Assert.True(first.Value.TryGetFailure(out var refusal));
-        Assert.Equal(ErrorCodes.InvalidGrant, refusal.Error);
+        Assert.True(secondServed);
+        Assert.False(firstServed);
         Assert.Equal(JsonWebTokenStatus.Revoked, await registry.GetStatusAsync(GrantId));
     }
 
     /// <summary>
-    /// One renewal as the token endpoint runs it: the status check the validator makes, then the renewal.
+    /// One renewal as the token endpoint runs it: the status check the validator makes, the new token, then the
+    /// spending of the presented one; true when the request is served.
     /// </summary>
-    private static async Task<Result<EncodedJsonWebToken, OidcError>?> RenewAsync(
+    private static async Task<bool> RenewAsync(
         TokenRegistry registry, RefreshTokenService service, JsonWebToken presented)
     {
         Assert.Equal(JsonWebTokenStatus.Unknown, await registry.GetStatusAsync(PresentedTokenId));
 
-        return await service.CreateRefreshTokenAsync(
+        var client = Client();
+        Assert.NotNull(await service.CreateRefreshTokenAsync(
             new AuthSession("user_1", "session_1", Now.AddHours(-1), "local"),
             new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
-            Client(),
+            client,
             presented,
-            GrantId);
+            GrantId));
+
+        return await service.TrySpendAsync(presented, client);
     }
 
     private static RefreshTokenService CreateService(ITokenRegistry registry, TimeProvider time)

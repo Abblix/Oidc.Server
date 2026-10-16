@@ -140,8 +140,13 @@ public class GrantRevocationTests
     {
         var session = new AuthSession("user_1", "session_1", Start, "test");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null);
-        var issued = await _service.CreateRefreshTokenAsync(session, context, _client, previous, GrantId);
-        return issued!.Value.GetSuccess().Token;
+
+        // The token endpoint spends the presented token before it issues the next one.
+        if (previous != null)
+            Assert.True(await _service.TrySpendAsync(previous, _client));
+
+        var encoded = await _service.CreateRefreshTokenAsync(session, context, _client, previous, GrantId);
+        return encoded!.Token;
     }
 
     private Task RevokeAsync(JsonWebToken token) => _processor.ProcessAsync(

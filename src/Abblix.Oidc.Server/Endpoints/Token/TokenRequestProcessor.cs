@@ -102,16 +102,16 @@ public class TokenRequestProcessor(
 
 		var response = CreateResponse(accessToken, lifetime, authContext);
 
-		// The refresh token is renewed after the access token, so a failure to sign the access token leaves the
-		// presented refresh token unspent; a renewal another request has already spent hands nothing over.
-		if (issuesRefreshToken &&
-		    await AddRefreshTokenAsync(response, request, authContext, presentedRefreshToken, grantId) is { } spent)
-		{
-			return spent;
-		}
+		if (issuesRefreshToken)
+			await AddRefreshTokenAsync(response, request, authContext, presentedRefreshToken, grantId);
 
 		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
 			await AddIdentityTokenAsync(response, request, authContext, accessToken);
+
+		// Spent last, once every token of the response is issued, so a failure to issue one leaves the presented
+		// token unspent; the request losing the race to renew a single-use token hands over nothing it issued.
+		if (!await TrySpendAsync(response, presentedRefreshToken, clientInfo))
+			return new OidcError(ErrorCodes.InvalidGrant, "Token was already used");
 
 		return response;
 	}
@@ -238,7 +238,18 @@ public class TokenRequestProcessor(
 			: throw new InvalidOperationException(
 				$"The access token service issued a token without {nameof(JsonWebTokenPayload.IssuedAt)} or {nameof(JsonWebTokenPayload.ExpiresAt)}.");
 
-	private async Task<OidcError?> AddRefreshTokenAsync(
+	/// <summary>
+	/// Spends the refresh token the response renews, if it renews one; false when another request has spent it.
+	/// </summary>
+	private Task<bool> TrySpendAsync(TokenIssued response, JsonWebToken? presentedRefreshToken, ClientInfo clientInfo)
+	{
+		if (response.RefreshToken is null || presentedRefreshToken is null)
+			return Task.FromResult(true);
+
+		return refreshTokenService.TrySpendAsync(presentedRefreshToken, clientInfo);
+	}
+
+	private async Task AddRefreshTokenAsync(
 		TokenIssued response,
 		ValidTokenRequest request,
 		AuthorizationContext authContext,
@@ -272,21 +283,12 @@ public class TokenRequestProcessor(
 			},
 		};
 
-		var refreshToken = await refreshTokenService.CreateRefreshTokenAsync(
+		response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
 			request.AuthorizedGrant.AuthSession,
 			refreshContext,
 			clientInfo,
 			presentedRefreshToken,
 			grantId.NotNull(nameof(grantId)));
-
-		if (refreshToken is not { } issued)
-			return null;
-
-		if (issued.TryGetFailure(out var refusal))
-			return refusal;
-
-		response.RefreshToken = issued.GetSuccess();
-		return null;
 	}
 
 	private async Task AddIdentityTokenAsync(
