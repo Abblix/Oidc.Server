@@ -126,6 +126,30 @@ public class TenantDefinitionsCheckTests
             FailureOf(allowHttp: true, Tenant("acme", first), Tenant("globex", second)), StringComparison.Ordinal);
 
     /// <summary>
+    /// An issuer whose path lies under another tenant's on the same host is refused: a browser sends the outer
+    /// tenant's sign-in cookie to every path below it, so an end user signed in there would arrive at the inner
+    /// tenant signed in.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com", "https://auth.example.com/tenants/acme")]
+    [InlineData("https://auth.example.com/tenants/acme", "https://auth.example.com/tenants/acme/eu")]
+    [InlineData("https://auth.example.com/tenants/acme/eu", "https://auth.example.com/tenants/acme")]
+    [InlineData("https://auth.example.com/tenants/acme", "https://AUTH.example.com/tenants/acme/eu")]
+    public void AnIssuerUnderAnothersPath_IsRefused(string first, string second)
+        => Assert.Contains("lies under", FailureOf(Tenant("acme", first), Tenant("globex", second)),
+            StringComparison.Ordinal);
+
+    /// <summary>
+    /// A path that merely begins with another's text is a sibling, not a path under it, and tenants on other hosts
+    /// share no cookie whatever their paths.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/tenants/acme", "https://auth.example.com/tenants/acme2")]
+    [InlineData("https://auth.example.com/tenants/acme", "https://other.example.com/tenants/acme/eu")]
+    public void IssuersBesideEachOther_AreAccepted(string first, string second)
+        => Assert.Null(FailureOf(Tenant("acme", first), Tenant("globex", second)));
+
+    /// <summary>
     /// The store of tenants is read again every period by a timer, so a period it cannot keep is refused at
     /// startup.
     /// </summary>
