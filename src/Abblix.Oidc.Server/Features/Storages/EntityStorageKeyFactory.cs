@@ -99,10 +99,10 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:NextPoll:Device:{Digest(deviceCode)}";
 
     /// <summary>
-    /// Generates a storage key for mapping a user code to its device code.
+    /// Generates a storage key for the index entry that leads from a user code to its device authorization record.
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>
-    /// <returns>A formatted storage key for the user code mapping.</returns>
+    /// <returns>A formatted storage key for the user code index entry.</returns>
     public string DeviceAuthorizationUserCodeKey([Credential] string userCode)
         => $"Abblix.Oidc.Server:UserCode:{Digest(userCode)}";
 

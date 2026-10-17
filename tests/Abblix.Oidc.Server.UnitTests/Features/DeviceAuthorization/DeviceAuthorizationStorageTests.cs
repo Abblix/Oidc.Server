@@ -8,6 +8,7 @@
 
 using Abblix.Utils;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -104,7 +105,7 @@ public class DeviceAuthorizationStorageTests
                 (_, _, opts, _) => captured = opts)
             .Returns(Task.CompletedTask);
 
-        await _storage.UpdateAsync(DeviceCode, request, TimeSpan.FromMinutes(3));
+        await _storage.UpdateAsync(new DeviceAuthorizationReference(RequestKey), request, TimeSpan.FromMinutes(3));
 
         Assert.NotNull(captured);
         Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
@@ -341,7 +342,7 @@ public class DeviceAuthorizationStorageTests
 
         var found = await storage.TryGetByUserCodeAsync(UserCode);
         Assert.NotNull(found);
-        Assert.Equal(DeviceCode, found.Value.DeviceCode);
+        Assert.Equal(RequestKey, found.Value.Reference.Key);
         Assert.Equal(UserCode, found.Value.Request.UserCode);
 
         // Twice, because the lookup must not consume what it finds: the verification service makes this
@@ -356,6 +357,33 @@ public class DeviceAuthorizationStorageTests
         // null as soon as the RECORD went, whatever became of the index - the lookup follows one to the
         // other, so it cannot tell the two apart and would report a dangling entry as a removed one.
         Assert.Null(await entities.GetAsync<string>(UserCodeKey, removeOnRetrieval: false));
+    }
+
+    /// <summary>
+    /// Whoever reads the values of the store, and not only its keys, must not find the device code there: the
+    /// device code alone redeems the tokens once the user approves, so a copy of it in a value hands them to that
+    /// reader. Measured on the bytes the store was given, over a real serializer, so a shape that carried the code
+    /// in any field would be found.
+    /// </summary>
+    [Fact]
+    public async Task NoStoredValue_CarriesTheDeviceCode()
+    {
+        var cache = new RecordingCache(RealCache());
+
+        // The real key factory, since the keys here are what the index now stores: the stand-in one keeps the
+        // device code readable in its keys, which is a choice of this test class and not of the server.
+        var storage = new DeviceAuthorizationStorage(
+            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
+            TestFingerprints.Instance,
+            new DistributedCacheStorage(cache, new ProtobufSerializer()),
+            new EntityStorageKeyFactory(),
+            new FakeTimeProvider(_now));
+
+        await storage.StoreAsync(DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+
+        var deviceCode = System.Text.Encoding.UTF8.GetBytes(DeviceCode);
+        Assert.NotEmpty(cache.Written);
+        Assert.All(cache.Written, value => Assert.Equal(-1, value.AsSpan().IndexOf(deviceCode)));
     }
 
     private static IDistributedCache RealCache()
@@ -381,6 +409,39 @@ public class DeviceAuthorizationStorageTests
             entities,
             keyFactory.Object,
             new FakeTimeProvider(_now));
+    }
+
+    /// <summary>
+    /// A cache that keeps a copy of every value it is given and passes everything through.
+    /// </summary>
+    private sealed class RecordingCache(IDistributedCache inner) : IDistributedCache
+    {
+        public List<byte[]> Written { get; } = [];
+
+        public Task SetAsync(
+            string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+        {
+            Written.Add(value);
+            return inner.SetAsync(key, value, options, token);
+        }
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+        {
+            Written.Add(value);
+            inner.Set(key, value, options);
+        }
+
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => inner.GetAsync(key, token);
+
+        public byte[]? Get(string key) => inner.Get(key);
+
+        public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
+
+        public void Refresh(string key) => inner.Refresh(key);
+
+        public Task RemoveAsync(string key, CancellationToken token = default) => inner.RemoveAsync(key, token);
+
+        public void Remove(string key) => inner.Remove(key);
     }
 
     /// <summary>

@@ -76,6 +76,11 @@ public interface IEntityStorageKeyFactory
     /// <summary>
     /// Generates a storage key for a device authorization request by device code.
     /// </summary>
+    /// <remarks>
+    /// The key is also stored as a value: the user-code index entry holds it to lead back to the record. The device
+    /// code redeems the tokens once the user approves, so it must not be recoverable from the key, or a reader of
+    /// the stored values gets it from the index.
+    /// </remarks>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>A formatted storage key for the device authorization request.</returns>
     string DeviceAuthorizationRequestKey(string deviceCode);
@@ -108,10 +113,10 @@ public interface IEntityStorageKeyFactory
     string DeviceAuthorizationNextPollKey(string deviceCode);
 
     /// <summary>
-    /// Generates a storage key for mapping a user code to its device code.
+    /// Generates a storage key for the index entry that leads from a user code to its device authorization record.
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>
-    /// <returns>A formatted storage key for the user code mapping.</returns>
+    /// <returns>A formatted storage key for the user code index entry.</returns>
     string DeviceAuthorizationUserCodeKey(string userCode);
 
     /// <summary>

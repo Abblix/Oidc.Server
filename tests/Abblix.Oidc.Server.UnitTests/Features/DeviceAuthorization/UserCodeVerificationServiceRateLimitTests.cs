@@ -84,16 +84,17 @@ public class UserCodeVerificationServiceRateLimitTests
         string? address = Address,
         Action<DeviceAuthorizationOptions>? configure = null)
     {
+        var reference = new DeviceAuthorizationReference("device-record");
         var deviceStorage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         deviceStorage
             .Setup(s => s.TryGetByUserCodeAsync(TheCode))
-            .ReturnsAsync(request == null ? null : ("device-code", request));
+            .ReturnsAsync(request == null ? null : (reference, request));
 
-        // Approval re-reads by DEVICE code before it writes, so without this the approval path refuses for
+        // Approval re-reads the record by its reference before it writes, so without this the approval path refuses for
         // a reason having nothing to do with the limits - and a row about the limits could not tell the two
         // apart. Measured: with this absent, removing the limiter from approval changed no test at all.
         deviceStorage
-            .Setup(s => s.TryGetByDeviceCodeAsync("device-code"))
+            .Setup(s => s.TryGetAsync(reference))
             .ReturnsAsync(request);
 
         var requestInfo = new Mock<IRequestInfoProvider>(MockBehavior.Loose);

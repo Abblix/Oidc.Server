@@ -87,8 +87,8 @@ public class LostUpdateTests
         storage.OnNextReadOf(async () =>
         {
             var approving = DeviceStorageOver(RealStorage(cache));
-            var request = await approving.TryGetByDeviceCodeAsync(DeviceCode);
-            request!.Status = DeviceAuthorizationStatus.Authorized;
+            var (reference, request) = (await approving.TryGetByUserCodeAsync(UserCode))!.Value;
+            request.Status = DeviceAuthorizationStatus.Authorized;
 
             // The status and the grant together, which is what approval writes: a record saying approved
             // with nothing to issue from is a different state, handled by an arm of its own.
@@ -96,7 +96,7 @@ public class LostUpdateTests
                 new AuthSession("a-user", "a-session", _now, "device"),
                 new AuthorizationContext("a-client", ["openid"], null));
 
-            await approving.UpdateAsync(DeviceCode, request, TimeSpan.FromMinutes(5));
+            await approving.UpdateAsync(reference, request, TimeSpan.FromMinutes(5));
         });
 
         // The real poll, through the handler the token endpoint calls.

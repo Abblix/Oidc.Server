@@ -36,6 +36,7 @@ public class UserCodeVerificationServiceTests
 {
     private const string CanonicalUserCode = "WDJBMJHT";
     private const string DeviceCode = "device-code-123";
+    private static readonly DeviceAuthorizationReference Reference = new("device:request:" + DeviceCode);
     private const string ClientId = "test-client";
 
     private static readonly DateTimeOffset Now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -61,7 +62,7 @@ public class UserCodeVerificationServiceTests
         storage
             .Setup(s => s.TryGetByUserCodeAsync(It.IsAny<string>()))
             .ReturnsAsync((string code) =>
-                code == CanonicalUserCode ? (DeviceCode, request) : null);
+                code == CanonicalUserCode ? (Reference, request) : null);
 
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
@@ -252,17 +253,17 @@ public class UserCodeVerificationServiceTests
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, fromUserCode) : null);
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, fromUserCode) : null);
 
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? fromDeviceCode : null);
+            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((DeviceAuthorizationReference reference) => reference == Reference ? fromDeviceCode : null);
 
         DeviceAuthorizationRequest? written = null;
         storage
             .Setup(store => store.UpdateAsync(
-                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
-            .Callback<string, DeviceAuthorizationRequest, TimeSpan>((_, r, _) => written = r)
+                It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
+            .Callback<DeviceAuthorizationReference, DeviceAuthorizationRequest, TimeSpan>((_, r, _) => written = r)
             .Returns(Task.CompletedTask);
 
         var service = new UserCodeVerificationService(
@@ -315,7 +316,7 @@ public class UserCodeVerificationServiceTests
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, expired) : null);
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, expired) : null);
 
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
@@ -368,10 +369,10 @@ public class UserCodeVerificationServiceTests
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, expired) : null);
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, expired) : null);
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? expired : null);
+            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((DeviceAuthorizationReference reference) => reference == Reference ? expired : null);
 
         var service = new UserCodeVerificationService(
             new CapturingLogger<UserCodeVerificationService>(),
@@ -392,7 +393,7 @@ public class UserCodeVerificationServiceTests
         Assert.Equal(DeviceAuthorizationStatus.Pending, expired.Status);
         storage.Verify(
             store => store.UpdateAsync(
-                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+                It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -409,14 +410,14 @@ public class UserCodeVerificationServiceTests
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, request) : null);
 
         // The decision is applied to the record as it stands at the write, so a fixture that answers the
         // user-code lookup and not this one is describing a record consumed in between - which is its own
         // row rather than the arrangement these tests want.
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? request : null);
+            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((DeviceAuthorizationReference reference) => reference == Reference ? request : null);
 
         logs = new CapturingLogger<UserCodeVerificationService>();
         return new UserCodeVerificationService(
@@ -483,10 +484,10 @@ public class UserCodeVerificationServiceTests
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, request) : null);
 
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
             .ReturnsAsync(current);
 
         var service = new UserCodeVerificationService(
@@ -503,7 +504,7 @@ public class UserCodeVerificationServiceTests
 
         Assert.False(decided);
         storage.Verify(
-            store => store.UpdateAsync(It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            store => store.UpdateAsync(It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 

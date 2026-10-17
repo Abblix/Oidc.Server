@@ -612,7 +612,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
         _storage
             .Setup(s => s.UpdateAsync(
-                DeviceCode,
+                It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(),
                 It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest>(),
                 It.IsAny<TimeSpan>()))
             .Returns(Task.CompletedTask);
@@ -688,7 +688,7 @@ public class DeviceCodeGrantHandlerTests
 
         // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -725,7 +725,7 @@ public class DeviceCodeGrantHandlerTests
 
         // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -796,7 +796,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -935,7 +935,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
         _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -1017,7 +1017,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
 
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
