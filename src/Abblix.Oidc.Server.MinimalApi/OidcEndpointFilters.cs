@@ -71,7 +71,7 @@ internal static class OidcEndpointFilters
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var request = context.HttpContext.Request;
-        if (request.IsHttps)
+        if (request.IsHttps || HttpsRequirement.IsWaived(context.HttpContext))
             return await next(context);
 
         if (HttpMethods.IsGet(request.Method))

@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
-[RequireHttps]
+[RequireHttpsUnlessHttpIssuer]
 [RequireHost]
 [RequireTenant]
 [OidcRouteValue]
