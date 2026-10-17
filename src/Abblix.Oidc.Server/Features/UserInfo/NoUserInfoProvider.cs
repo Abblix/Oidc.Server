@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// <remarks>
 /// Whoever it is asked about is unknown, so no ID token is issued and the user information endpoint answers
 /// invalid_token. Each such question is logged, since a host serving end users that forgot its provider learns of it
-/// only this way.
+/// only this way: the caller logs that the user's claims were not found, and this names why.
 /// </remarks>
 /// <param name="logger">Tells that the server was asked about a user with no provider to answer.</param>
 internal sealed partial class NoUserInfoProvider(ILogger<NoUserInfoProvider> logger) : IUserInfoProvider

@@ -726,7 +726,8 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 9000-9099: misc - Discovery, Storage, Issuer, Session, RandomGenerator.
+    /// Range 9000-9119: misc - Discovery, Storage, Issuer, Session, RandomGenerator, and the stand-in provider of
+    /// user information.
     /// </summary>
     public static class Misc
     {

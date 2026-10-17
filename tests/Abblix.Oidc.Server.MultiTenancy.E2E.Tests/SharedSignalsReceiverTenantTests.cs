@@ -118,7 +118,6 @@ public sealed class SharedSignalsReceiverTenantTests
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(_ => { });
 
         builder.Services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(_transmitterKey));
