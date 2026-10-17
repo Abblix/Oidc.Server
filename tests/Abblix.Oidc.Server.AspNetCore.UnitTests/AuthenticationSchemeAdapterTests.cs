@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -634,6 +635,33 @@ public class AuthenticationSchemeAdapterTests
 			Scheme);
 
 		Assert.Null(await globex.AuthenticateAsync());
+	}
+
+	/// <summary>
+	/// A request outside every tenant has no session, whatever cookie it brings, and cannot sign one in, even with
+	/// issuer settings of the host's own that answer outside any tenant.
+	/// </summary>
+	[Fact]
+	public async Task OutsideEveryTenant_NoSessionIsReadAndNoneSignedIn()
+	{
+		var authService = new Mock<IAuthenticationService>();
+		authService
+			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
+			.ReturnsAsync(AuthenticateResult.Success(new AuthenticationTicket(
+				PrincipalWith(new Claim("abblix_tenant", "acme")), null, Scheme)));
+#pragma warning disable ABXMT001 // the accessor multi-tenancy registers, telling this request reached no tenant
+		_httpContext.RequestServices = new ServiceCollection()
+			.AddSingleton(authService.Object)
+			.AddSingleton(Mock.Of<ITenantAccessor>(accessor => accessor.Current == null))
+			.BuildServiceProvider();
+#pragma warning restore ABXMT001
+		var acme = AtAcme();
+
+		Assert.Null(await acme.AuthenticateAsync());
+		await Assert.ThrowsAsync<InvalidOperationException>(() => acme.SignInAsync(Session()));
+		authService.Verify(
+			x => x.SignInAsync(It.IsAny<HttpContext>(), It.IsAny<string>(), It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()),
+			Times.Never);
 	}
 
 	/// <summary>
