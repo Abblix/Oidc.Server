@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -437,6 +438,56 @@ public class ServiceCollectionOverrideTests
                 CallerRateLimiters.Revocation);
 
         Assert.NotSame(introspection, revocation);
+    }
+
+    /// <summary>
+    /// A host that keeps no users, as one serving client credentials alone, registers no provider of user information,
+    /// and the services issuing tokens are still built: one that knows no user stands in.
+    /// </summary>
+    [Fact]
+    public async Task WithoutAProviderOfUserInformation_TheTokenServicesAreBuilt_AndKnowNoUser()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOidcCore(options =>
+        {
+            options.Issuer = TestConstants.DefaultIssuer;
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+        });
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IIdentityTokenService>());
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IUserInfoProvider>()
+            .GetUserInfoAsync(new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []));
+    }
+
+    /// <summary>
+    /// The stand-in is a default like the others: a provider the host registers, before or after, is the one used.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AProviderOfUserInformationTheHostRegisters_IsTheOneUsed(bool registeredFirst)
+    {
+        var hosts = new Mock<IUserInfoProvider>().Object;
+        var services = new ServiceCollection();
+        services.AddLogging();
+        if (registeredFirst)
+            services.AddSingleton(hosts);
+
+        services.AddOidcCore(options =>
+        {
+            options.Issuer = TestConstants.DefaultIssuer;
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+        });
+        if (!registeredFirst)
+            services.AddSingleton(hosts);
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+
+        Assert.Same(hosts, scope.ServiceProvider.GetRequiredService<IUserInfoProvider>());
     }
 
     [Fact]
