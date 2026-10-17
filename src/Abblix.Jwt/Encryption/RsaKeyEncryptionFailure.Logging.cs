@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
-partial class RsaKeyEncryptor
+partial class RsaKeyEncryptionFailure
 {
 	[LoggerMessage(
 		EventId = LogEvents.Jwt.RsaEncryptionFailed,

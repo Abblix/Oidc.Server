@@ -505,4 +505,33 @@ public class SymmetricKeyEncryptionTests
 		Assert.True(encryptor.TryDecryptKey(header, keyEncryptionKey, ciphertext, out var recoveredKey));
 		Assert.Equal(contentEncryptionKey, recoveredKey);
 	}
+
+	/// <summary>
+	/// The 'iv' and 'tag' header parameters come from the token, so one of the wrong size is a refusal of it. The
+	/// platform's AES-GCM rejects a tag of another length with an argument fault rather than a cryptographic one, so
+	/// without the size check a shortened tag would escape as a fault where the token should simply not open.
+	/// </summary>
+	[Theory]
+	[InlineData(12, 8)]
+	[InlineData(8, 16)]
+	public void AesGcmKeyWrap_DecryptKey_RefusesAnIvOrTagOfTheWrongSize(int ivSize, int tagSize)
+	{
+		var keyValue = CryptoRandom.GetRandomBytes(32);
+		var keyEncryptionKey = new OctetJsonWebKey
+		{
+			KeyId = "kek",
+			Algorithm = EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+			KeyValue = keyValue,
+		};
+
+		var header = new JsonWebTokenHeader(new JsonObject
+		{
+			["iv"] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(ivSize)),
+			["tag"] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(tagSize)),
+		});
+
+		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+
+		Assert.False(encryptor.TryDecryptKey(header, keyEncryptionKey, CryptoRandom.GetRandomBytes(32), out _));
+	}
 }
