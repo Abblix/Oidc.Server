@@ -176,9 +176,9 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
             header.AgreementPartyVInfo,
             keyEncryptionKeySize);
 
-        return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out var contentEncryptionKey)
-            ? contentEncryptionKey
-            : null;
+        using var aes = Aes.Create();
+        aes.Key = keyEncryptionKey;
+        return aes.TryUnwrapKey(encryptedKey, out var contentEncryptionKey) ? contentEncryptionKey : null;
     }
 
     /// <summary>

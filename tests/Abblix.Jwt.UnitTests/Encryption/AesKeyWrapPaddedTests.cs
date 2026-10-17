@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using Abblix.Jwt.Encryption;
 using Xunit;
 
@@ -31,6 +32,20 @@ public class AesKeyWrapPaddedTests
     private static readonly byte[] Rfc5649Kek =
         Convert.FromHexString("5840df6e29b02af1ab493b705bf16ea1ae8338f4dcc176a8");
 
+    private static byte[] Wrap(byte[] keyEncryptionKey, byte[] plaintext)
+    {
+        using var aes = Aes.Create();
+        aes.Key = keyEncryptionKey;
+        return aes.EncryptKeyWrapPadded(plaintext);
+    }
+
+    private static bool TryUnwrap(byte[] keyEncryptionKey, byte[] wrapped, out byte[]? plaintext)
+    {
+        using var aes = Aes.Create();
+        aes.Key = keyEncryptionKey;
+        return aes.TryUnwrapKeyPadded(wrapped, out plaintext);
+    }
+
     [Theory]
     // RFC 5649 section 4.1: 20 octets of key data - more than one semiblock, so the RFC 3394 rounds run.
     [InlineData(
@@ -45,10 +60,10 @@ public class AesKeyWrapPaddedTests
         var plaintext = Convert.FromHexString(plaintextHex.Replace(" ", ""));
         var expectedWrapped = Convert.FromHexString(expectedWrappedHex);
 
-        var wrapped = AesKeyWrapPadded.Wrap(Rfc5649Kek, plaintext);
+        var wrapped = Wrap(Rfc5649Kek, plaintext);
         Assert.Equal(expectedWrapped, wrapped);
 
-        Assert.True(AesKeyWrapPadded.TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
+        Assert.True(TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
         Assert.Equal(plaintext, recovered);
     }
 
@@ -59,10 +74,10 @@ public class AesKeyWrapPaddedTests
     [Fact]
     public void TamperedValue_FailsToUnwrap()
     {
-        var wrapped = AesKeyWrapPadded.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
+        var wrapped = Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
         wrapped[0] ^= 0xff;
 
-        Assert.False(AesKeyWrapPadded.TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
+        Assert.False(TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
         Assert.Null(recovered);
     }
 
@@ -73,11 +88,26 @@ public class AesKeyWrapPaddedTests
     [Fact]
     public void WrongKey_FailsToUnwrap()
     {
-        var wrapped = AesKeyWrapPadded.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
+        var wrapped = Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
         var wrongKeyEncryptionKey =
             Convert.FromHexString("000102030405060708090a0b0c0d0e0f1011121314151617");
 
-        Assert.False(AesKeyWrapPadded.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var recovered));
+        Assert.False(TryUnwrap(wrongKeyEncryptionKey, wrapped, out var recovered));
+        Assert.Null(recovered);
+    }
+
+    /// <summary>
+    /// A value of a length no padded wrap can have is refused rather than thrown on: such values arrive from outside,
+    /// a client's pairwise pseudonym among them.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]  // empty
+    [InlineData(8)]  // one semiblock - a padded wrap is at least two
+    [InlineData(17)] // not a multiple of 8
+    [InlineData(23)] // not a multiple of 8
+    public void InvalidLength_FailsToUnwrap(int length)
+    {
+        Assert.False(TryUnwrap(Rfc5649Kek, new byte[length], out var recovered));
         Assert.Null(recovered);
     }
 }

@@ -80,7 +80,9 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		header.Pbes2IterationCount = DefaultIterationCount;
 
 		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, DefaultIterationCount);
-		return AesKeyWrap.Wrap(keyEncryptionKey, keyToEncrypt);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.EncryptKeyWrap(keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -120,7 +122,9 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, iterationCount);
 
 		// The unwrap's integrity register check rejects tampered input and wrong-password attempts.
-		return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out decryptedKey);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.TryUnwrapKey(encryptedKey, out decryptedKey);
 	}
 
 	/// <summary>
