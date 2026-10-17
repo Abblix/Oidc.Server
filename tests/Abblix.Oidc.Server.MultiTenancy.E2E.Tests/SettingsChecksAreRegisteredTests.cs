@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.SharedSignals;
 using Abblix.SecurityEvents.Infrastructure;
+using SecurityEventsRegistration = Abblix.SecurityEvents.Infrastructure.ServiceCollectionExtensions;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,6 +45,7 @@ public class SettingsChecksAreRegisteredTests
         typeof(JsonWebKey).Assembly,
         typeof(OidcOptions).Assembly,
         typeof(SharedSignalsTransmitterOptions).Assembly,
+        typeof(SecurityEventsRegistration).Assembly,
         typeof(MultiTenancyExtensions).Assembly,
         typeof(SharedSignalsMultiTenancyExtensions).Assembly,
     ];
