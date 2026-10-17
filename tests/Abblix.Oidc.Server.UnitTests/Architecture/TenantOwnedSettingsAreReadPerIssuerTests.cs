@@ -48,6 +48,7 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         // The server without tenants: its one issuer and the settings it serves from these options
         typeof(OptionsIssuerSettings).FullName!,
         typeof(PreconfiguredIssuerProvider).FullName!,
+        typeof(Abblix.Oidc.Server.AspNetCore.HttpsRequirement).FullName!,
         $"{typeof(Abblix.Oidc.Server.Features.IssuerServiceCollectionExtensions).FullName}." +
         nameof(Abblix.Oidc.Server.Features.IssuerServiceCollectionExtensions.AddIssuer),
 
