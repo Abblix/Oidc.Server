@@ -47,6 +47,11 @@ public record OidcOptions
 	/// is accepted, as OpenID Connect Core 1.0 section 1.2 requires. Applies to the server's issuer and to every
 	/// tenant's.
 	/// </summary>
+	/// <remarks>
+	/// The endpoints are served over plain http only where the http issuer is configured, in <see cref="Issuer"/> or
+	/// in a tenant's definition. An issuer taken from the request carries the request's own scheme, so with no
+	/// issuer configured every request over http is still held to https.
+	/// </remarks>
 	public bool AllowHttpIssuer { get; set; }
 
 	/// <summary>
