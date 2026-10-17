@@ -182,7 +182,7 @@ public class EntityStorageKeyFactoryTests
     [Fact]
     public void AKeyBuiltFromACredential_DoesNotCarryIt()
     {
-        const string credential = "SplxlOBeZQQYbYS6WxSbIA";
+        const string credential = Credential;
 
         string[] keys =
         [
@@ -200,13 +200,47 @@ public class EntityStorageKeyFactoryTests
     }
 
     /// <summary>
-    /// Every node builds the same key for the same credential, which is what lets one of them find the entry another
-    /// wrote, and different credentials get different keys.
+    /// Every node and every later version builds the same key for the same credential, which is what lets one of them
+    /// find the entry another wrote. Pinned to the digest itself, so a key that differed per process or changed its
+    /// spelling between versions fails here rather than in a cluster.
     /// </summary>
-    [Fact]
-    public void AKeyBuiltFromACredential_IsTheSameForItAndDifferentForAnother()
+    [Theory]
+    [InlineData(nameof(IEntityStorageKeyFactory.AuthorizedGrantKey), "Abblix.Oidc.Server:Grant:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.BackChannelAuthenticationRequestKey), "Abblix.Oidc.Server:CIBA:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.BackChannelAuthenticationNextPollKey), "Abblix.Oidc.Server:NextPoll:CIBA:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.DeviceAuthorizationRequestKey), "Abblix.Oidc.Server:Device:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.DeviceAuthorizationNextPollKey), "Abblix.Oidc.Server:NextPoll:Device:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.DeviceAuthorizationUserCodeKey), "Abblix.Oidc.Server:UserCode:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.UserCodeRateLimitGenerationKey), "Abblix.Oidc.Server:RateLimit:UserCode:" + CredentialDigest + ":Generation")]
+    public void AKeyBuiltFromACredential_IsItsDigestUnderTheEntryName(string method, string expected)
     {
-        Assert.Equal(new EntityStorageKeyFactory().AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-a"));
-        Assert.NotEqual(Factory.AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-b"));
+        var key = method switch
+        {
+            nameof(IEntityStorageKeyFactory.AuthorizedGrantKey) => Factory.AuthorizedGrantKey(Credential),
+            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationRequestKey) => Factory.BackChannelAuthenticationRequestKey(Credential),
+            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationNextPollKey) => Factory.BackChannelAuthenticationNextPollKey(Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationRequestKey) => Factory.DeviceAuthorizationRequestKey(Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationNextPollKey) => Factory.DeviceAuthorizationNextPollKey(Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationUserCodeKey) => Factory.DeviceAuthorizationUserCodeKey(Credential),
+            nameof(IEntityStorageKeyFactory.UserCodeRateLimitGenerationKey) => Factory.UserCodeRateLimitGenerationKey(Credential),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, "No such key method in this test"),
+        };
+
+        Assert.Equal(expected, key);
     }
+
+    [Fact]
+    public void AnAttemptKeyOfAUserCode_IsItsDigestUnderTheEntryName()
+        => Assert.Equal(
+            "Abblix.Oidc.Server:RateLimit:UserCode:" + CredentialDigest + ":life:Attempt:1",
+            Factory.UserCodeRateLimitAttemptKey(Credential, "life", 1));
+
+    [Fact]
+    public void DifferentCredentials_GetDifferentKeys()
+        => Assert.NotEqual(Factory.AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-b"));
+
+    private const string Credential = "SplxlOBeZQQYbYS6WxSbIA";
+
+    // SHA-256 of Credential in UTF-8, lower-case hexadecimal, computed outside the code under test.
+    private const string CredentialDigest = "a35b81a7d7927b70ec99270dd2362b88580a28574af812f2c02f56469579186f";
 }
