@@ -68,7 +68,7 @@ public class SettingsChecksAreRegisteredTests
         services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = "https://idp.example.com",
-            JwksUri = new Uri("https://idp.example.com/.well-known/jwks"),
+            JwksUri = new UriBuilder(Uri.UriSchemeHttps, "idp.example.com") { Path = ".well-known/jwks" }.Uri,
             EventsSupported = ["https://schemas.openid.net/secevent/caep/event-type/session-revoked"],
         });
         services.AddMultiTenancy(_ => { }).AddSharedSignals();
