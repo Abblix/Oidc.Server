@@ -67,6 +67,27 @@ public class LicenseLoadingServiceTests
     }
 
     /// <summary>
+    /// What waits for the licenses learns they are loaded once the loading is done, and learns it failed when it
+    /// fails, so a check waiting on it neither judges against a license still to come nor waits for one that never will.
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_TellsWhenTheLicensesAreLoaded_AndWhenTheLoadingFailed()
+    {
+        var loaded = new LicenseLoading();
+        await new LicenseLoadingService(
+                NullLoggerFactory.Instance, new MockLicenseJwtProvider(null), TimeProvider.System, loaded)
+            .StartAsync(CancellationToken.None);
+        Assert.True(loaded.Loaded.IsCompletedSuccessfully);
+
+        var failed = new LicenseLoading();
+        var unreadable = new[] { "not.a.jwt" }.ToAsyncEnumerable();
+        await Assert.ThrowsAnyAsync<Exception>(() => new LicenseLoadingService(
+                NullLoggerFactory.Instance, new MockLicenseJwtProvider(unreadable), TimeProvider.System, failed)
+            .StartAsync(CancellationToken.None));
+        Assert.True(failed.Loaded.IsFaulted);
+    }
+
+    /// <summary>
     /// Verifies that StartAsync completes when provider returns null.
     /// </summary>
     [Fact]
@@ -75,7 +96,7 @@ public class LicenseLoadingServiceTests
         // Arrange
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -95,7 +116,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var emptyLicenses = AsyncEnumerable.Empty<string>();
         var provider = new MockLicenseJwtProvider(emptyLicenses);
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -121,7 +142,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var licenses = new[] { string.Empty }.ToAsyncEnumerable();
         var provider = new MockLicenseJwtProvider(licenses);
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         var cancellationToken = CancellationToken.None;
 
         // Act - Should skip empty string without throwing
@@ -141,7 +162,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var licenses = new[] { "invalid.jwt.token" }.ToAsyncEnumerable();
         var provider = new MockLicenseJwtProvider(licenses);
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         var cancellationToken = CancellationToken.None;
 
         // Act & Assert - Invalid license should throw during validation
@@ -158,7 +179,7 @@ public class LicenseLoadingServiceTests
         // Arrange
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -186,7 +207,7 @@ public class LicenseLoadingServiceTests
         }
 
         var provider = new MockLicenseJwtProvider(SlowLicenses(TestContext.Current.CancellationToken));
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         using var cts = new CancellationTokenSource();
 
         // Act - the token is already canceled when enumeration starts, so the first await inside the sequence
@@ -209,7 +230,7 @@ public class LicenseLoadingServiceTests
         // Arrange
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
-        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
         using var cts = new CancellationTokenSource();
 
         // Act - Should complete immediately (no enumeration needed)
@@ -231,7 +252,7 @@ public class LicenseLoadingServiceTests
         var provider = new MockLicenseJwtProvider(null);
 
         // Act
-        _ = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
+        _ = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System, new LicenseLoading());
 
         // Assert - LicenseLogger.Instance should be initialized
         // We can verify this by checking if IsEnabled returns expected value
@@ -341,7 +362,8 @@ public class LicenseLoadingServiceTests
         var service = new LicenseLoadingService(
             records,
             new MockLicenseJwtProvider(null),
-            new FakeTimeProvider(new DateTimeOffset(2200, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+            new FakeTimeProvider(new DateTimeOffset(2200, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+            new LicenseLoading());
 
         try
         {

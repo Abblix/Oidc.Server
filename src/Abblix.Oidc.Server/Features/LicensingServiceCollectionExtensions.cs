@@ -34,6 +34,7 @@ public static class LicensingServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IHostedService, LicenseLoadingService>());
         services.TryAddSingleton<ILicenseJwtProvider, OptionsLicenseJwtProvider>();
+        services.TryAddSingleton<LicenseLoading>();
 
         // The hosted service evaluates the loaded licenses against this clock. Registered here rather than
         // relied upon from elsewhere: this method is public and a host may call it on a collection that has
@@ -59,6 +60,8 @@ public static class LicensingServiceCollectionExtensions
     {
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IHostedService, LicenseLoadingService>());
+        services.TryAddSingleton<LicenseLoading>();
+
         // Intentional replacement: AddLicense(jwt) is an explicit host opt-in that must override
         // any ILicenseJwtProvider previously registered by AddLicenseFromOptions.
         services.Replace(ServiceDescriptor.Singleton<ILicenseJwtProvider>(

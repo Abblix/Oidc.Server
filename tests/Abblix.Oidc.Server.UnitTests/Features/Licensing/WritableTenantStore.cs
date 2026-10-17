@@ -45,8 +45,15 @@ internal sealed class WritableTenantStore : ITenantStore, ITenantStoreWriter
         TenantDefinition tenant,
         string expectedVersion,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException("The tests of the license only create tenants.");
+    {
+        if (!_tenants.TryGetValue(tenant.Id, out var held) || held.Version != expectedVersion)
+            return Task.FromResult<string?>(null);
+
+        var version = (++_versions).ToString(CultureInfo.InvariantCulture);
+        _tenants[tenant.Id] = new StoredTenant(tenant, version);
+        return Task.FromResult<string?>(version);
+    }
 
     public Task<bool> RemoveAsync(string tenantId, string expectedVersion, CancellationToken cancellationToken)
-        => throw new NotSupportedException("The tests of the license only create tenants.");
+        => throw new NotSupportedException("The tests of the license create and change tenants, never remove them.");
 }

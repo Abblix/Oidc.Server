@@ -266,6 +266,185 @@ public sealed class LicenseEnforcementTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A tenant whose issuer the license does not name would be refused on every request, so the manager of the
+    /// tenants refuses to create it, or to move a tenant to such an issuer.
+    /// </summary>
+    [Fact]
+    public async Task A_tenant_whose_issuer_the_license_does_not_name_is_neither_created_nor_moved_there()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ValidIssuers = ["https://acme.example.com", "https://globex.example.com"],
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var store = new WritableTenantStore();
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), store);
+
+        var created = await manager.CreateAsync(
+            new TenantDefinition { Id = "initech", Issuer = new Uri("https://initech.example.com") }, ct);
+        var acme = Assert.Single(store.Tenants);
+        var moved = await manager.UpdateAsync(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://initech.example.com") }, acme.Version, ct);
+
+        Assert.True(created.TryGetFailure(out var notCreated));
+        Assert.Equal(TenantChangeRefusalReason.IssuerNotLicensed, notCreated.Reason);
+        Assert.True(moved.TryGetFailure(out var notMoved));
+        Assert.Equal(TenantChangeRefusalReason.IssuerNotLicensed, notMoved.Reason);
+        Assert.Equal(new Uri("https://acme.example.com"), Assert.Single(store.Tenants).Tenant.Issuer);
+    }
+
+    /// <summary>
+    /// The settings declaring more tenants than the issuers the license allows stop the server at startup, rather
+    /// than leaving the tenant asked last to be refused on every request.
+    /// </summary>
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public async Task Settings_declaring_more_tenants_than_the_license_allows_stop_the_server(
+        int issuerLimit,
+        bool starts)
+    {
+        TestLicense.InstallWithIssuerLimit(issuerLimit);
+        var loading = new LicenseLoading();
+        loading.Complete();
+
+        var refusal = await Record.ExceptionAsync(
+            () => StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken));
+
+        if (starts)
+            Assert.Null(refusal);
+        else
+            Assert.IsType<OptionsValidationException>(refusal);
+    }
+
+    /// <summary>
+    /// The check waits for the license to be loaded, so a host starting its services at once cannot have it judge the
+    /// tenants by the limits of an installation with no license.
+    /// </summary>
+    [Fact]
+    public async Task The_tenants_are_judged_once_the_license_is_loaded()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+
+        var started = StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken);
+        Assert.False(started.IsCompleted);
+
+        loading.Complete();
+        await Assert.ThrowsAsync<OptionsValidationException>(() => started);
+    }
+
+    /// <summary>
+    /// With a store of the host's own the tenants the settings declare are not served, so the license does not judge
+    /// them.
+    /// </summary>
+    [Fact]
+    public async Task Tenants_the_settings_declare_but_a_host_store_replaces_are_not_judged()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+        loading.Complete();
+
+        await StartupCheck(loading, new WritableTenantStore()).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static TenantLicenseStartupCheck StartupCheck(
+        LicenseLoading loading,
+        ITenantStore? store = null,
+        TimeProvider? clock = null)
+    {
+        var options = Options.Create(new MultiTenancyOptions
+        {
+            Tenants =
+            [
+                new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") },
+                new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") },
+            ],
+        });
+        return new TenantLicenseStartupCheck(options, store ?? new OptionsTenantStore(options), clock ?? TimeProvider.System, loading);
+    }
+
+    /// <summary>
+    /// A license that never arrives refuses the start once the wait is over, rather than keeping the server from
+    /// starting with nothing in the log.
+    /// </summary>
+    [Fact]
+    public async Task A_license_that_never_arrives_refuses_the_start_once_the_wait_is_over()
+    {
+        var clock = new FakeTimeProvider();
+        var started = StartupCheck(new LicenseLoading(), clock: clock).StartAsync(TestContext.Current.CancellationToken);
+
+        clock.Advance(TenantLicenseStartupCheck.LicenseWait);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => started);
+    }
+
+    /// <summary>
+    /// A license that failed to load refuses the start through its own loading, so the check does not repeat it.
+    /// </summary>
+    [Fact]
+    public async Task A_license_that_failed_to_load_is_left_to_its_loading()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+        loading.Fail(new InvalidOperationException("The license could not be read."));
+
+        await StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// A provider of the license failing on a timeout of its own is a failed load, not a wait run out, so the start is
+    /// not refused with advice about the order of registration.
+    /// </summary>
+    [Fact]
+    public async Task A_license_provider_timing_out_is_left_to_its_loading()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+        loading.Fail(new TimeoutException("The license provider did not answer."));
+
+        await StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// A tenant left on an issuer a narrower license no longer names can still be changed in other ways, its keys or
+    /// clients, while the license is renewed.
+    /// </summary>
+    [Fact]
+    public async Task A_tenant_on_an_issuer_the_license_no_longer_names_can_still_be_changed_in_place()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            ValidIssuers = ["https://globex.example.com"],
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var store = new WritableTenantStore();
+        await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
+        var manager = new TenantManager(
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), store);
+
+        var changed = await manager.UpdateAsync(
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = new Uri("https://acme.example.com"),
+                LoginUri = new Uri("/sign-in", UriKind.Relative),
+            },
+            Assert.Single(store.Tenants).Version,
+            ct);
+
+        Assert.True(changed.TryGetSuccess(out _));
+    }
+
     [Fact]
     public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
     {
