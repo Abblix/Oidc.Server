@@ -49,47 +49,55 @@ public partial class DeviceAuthorizationStorage(
             request,
             options);
 
-        // Store a mapping from user code to device code (for user verification lookup)
+        // The user code leads to the record by its storage key, never by the device code: the device code
+        // redeems the tokens once the user approves, and a value is read by more than the key list is.
         await storage.SetAsync(
             keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode),
-            deviceCode,
+            ReferenceTo(deviceCode).Key,
             options);
     }
 
     /// <inheritdoc />
     public Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync([Credential] string deviceCode)
-        => storage.GetAsync<DeviceAuthorizationRequest>(
-            keyFactory.DeviceAuthorizationRequestKey(deviceCode),
-            removeOnRetrieval: false);
+        => TryGetAsync(ReferenceTo(deviceCode));
 
     /// <inheritdoc />
-    public async Task<(string DeviceCode, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync([Credential] string userCode)
+    public Task<DeviceAuthorizationRequest?> TryGetAsync(DeviceAuthorizationReference reference)
+        => storage.GetAsync<DeviceAuthorizationRequest>(reference.Key, removeOnRetrieval: false);
+
+    /// <inheritdoc />
+    public async Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request)?>
+        TryGetByUserCodeAsync([Credential] string userCode)
     {
-        var deviceCode = await storage.GetAsync<string>(
+        var key = await storage.GetAsync<string>(
             keyFactory.DeviceAuthorizationUserCodeKey(userCode),
             removeOnRetrieval: false);
 
-        if (deviceCode == null)
+        if (key == null)
             return null;
 
-        var request = await TryGetByDeviceCodeAsync(deviceCode);
+        var reference = new DeviceAuthorizationReference(key);
+        var request = await TryGetAsync(reference);
         if (request == null)
             return null;
 
-        return (deviceCode, request);
+        return (reference, request);
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync([Credential] string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
+    public Task UpdateAsync(DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
         // record's fixed ExpiresAt (RFC 8628 section 3.2) and gates on expiry first, so polling cannot extend the
         // code and the TTL here is always positive - no second clock read that could race the expiry boundary
         return storage.SetAsync(
-            keyFactory.DeviceAuthorizationRequestKey(deviceCode),
+            reference.Key,
             request,
             new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
     }
+
+    private DeviceAuthorizationReference ReferenceTo(string deviceCode)
+        => new(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
 
     /// <inheritdoc />
     public async Task RemoveAsync([Credential] string deviceCode)

@@ -124,7 +124,7 @@ public partial class UserCodeVerificationService(
             return false;
         }
 
-        var (deviceCode, request) = result.Value;
+        var (reference, request) = result.Value;
 
         if (request.Status != DeviceAuthorizationStatus.Pending)
         {
@@ -155,7 +155,7 @@ public partial class UserCodeVerificationService(
         }
 
         if (!await TryDecideAsync(
-                deviceCode,
+                reference,
                 remaining,
                 current =>
                 {
@@ -199,7 +199,7 @@ public partial class UserCodeVerificationService(
             return false;
         }
 
-        var (deviceCode, request) = result.Value;
+        var (reference, request) = result.Value;
 
         if (request.Status != DeviceAuthorizationStatus.Pending)
         {
@@ -216,7 +216,7 @@ public partial class UserCodeVerificationService(
         }
 
         return await TryDecideAsync(
-            deviceCode, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+            reference, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
     }
 
     /// <summary>
@@ -244,22 +244,22 @@ public partial class UserCodeVerificationService(
     /// approval lives in. Issue 435 tracks the remaining half.
     /// </para>
     /// </remarks>
-    /// <param name="deviceCode">The record to decide on.</param>
+    /// <param name="reference">The record to decide on.</param>
     /// <param name="remaining">The lifetime left, applied as the cache TTL so the code cannot be extended.</param>
     /// <param name="decide">Applies the decision to the freshly read record.</param>
     private async Task<bool> TryDecideAsync(
-        [Credential] string deviceCode,
+        DeviceAuthorizationReference reference,
         TimeSpan remaining,
         Action<DeviceAuthorizationRequest> decide)
     {
-        var current = await storage.TryGetByDeviceCodeAsync(deviceCode);
+        var current = await storage.TryGetAsync(reference);
         if (current is not { Status: DeviceAuthorizationStatus.Pending })
         {
             return false;
         }
 
         decide(current);
-        await storage.UpdateAsync(deviceCode, current, remaining);
+        await storage.UpdateAsync(reference, current, remaining);
         return true;
     }
 }

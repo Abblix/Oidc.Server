@@ -39,20 +39,30 @@ public interface IDeviceAuthorizationStorage
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>
     /// <returns>
-    /// A task that returns the device code and request if found; otherwise, null.
+    /// A task that returns a reference to the record and the request if found; otherwise, null. The reference,
+    /// not the device code, is what leads back to the record: the device code redeems the tokens, so it is kept
+    /// nowhere a reader of the stored values would find it.
     /// </returns>
-    Task<(string DeviceCode, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync(string userCode);
+    Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync(
+        string userCode);
+
+    /// <summary>
+    /// Tries to retrieve the device authorization request a reference names.
+    /// </summary>
+    /// <param name="reference">The reference <see cref="TryGetByUserCodeAsync"/> returned.</param>
+    /// <returns>A task that returns the request if it is still stored; otherwise, null.</returns>
+    Task<DeviceAuthorizationRequest?> TryGetAsync(DeviceAuthorizationReference reference);
 
     /// <summary>
     /// Updates an existing device authorization request in storage, refreshing its cache entry with the
     /// caller-supplied remaining lifetime.
     /// </summary>
-    /// <param name="deviceCode">The device code identifier.</param>
+    /// <param name="reference">The reference <see cref="TryGetByUserCodeAsync"/> returned.</param>
     /// <param name="request">The updated device authorization request.</param>
     /// <param name="expiresIn">The remaining lifetime to apply as the cache TTL. The caller derives it from
     /// the request's fixed expiry (RFC 8628 section 3.2) so that repeated polling cannot extend the code.</param>
     /// <returns>A task that completes when the request is updated.</returns>
-    Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn);
+    Task UpdateAsync(DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn);
 
     /// <summary>
     /// Removes a device authorization request from storage using its device code.
