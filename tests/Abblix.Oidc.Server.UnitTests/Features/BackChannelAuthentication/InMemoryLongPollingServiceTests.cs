@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Microsoft.Extensions.Logging.Abstractions;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
@@ -25,7 +26,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
 public class InMemoryLongPollingServiceTests
 {
     private static InMemoryLongPollingService CreateService()
-        => new(NullLogger<InMemoryLongPollingService>.Instance);
+        => new(NullLogger<InMemoryLongPollingService>.Instance, TestFingerprints.Instance);
 
     private static System.Collections.ICollection Waiters(InMemoryLongPollingService service)
     {

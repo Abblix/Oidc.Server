@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifi
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
@@ -39,7 +40,7 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.UpdateAsync(AuthReqId, stored, _expiresIn)).Returns(Task.CompletedTask);
 
         var handler = new PollModeCompletionHandler(
-            Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), notifier.Object);
+            Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(), notifier.Object);
 
         await handler.DenyAuthenticationAsync(AuthReqId, _expiresIn);
 

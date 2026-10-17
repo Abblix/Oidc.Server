@@ -16,37 +16,29 @@ namespace Abblix.Utils;
 /// </summary>
 /// <remarks>
 /// A keyed hash rather than a plain one: a user code has few enough combinations that a plain hash would give it
-/// back to anybody who tries them all. The key is drawn once per process, so a fingerprint matches only the records
-/// one process wrote; the price is that two nodes write different fingerprints for the same code.
+/// back to anybody who tries them all. The key comes from whoever creates the fingerprint, so every process of one
+/// deployment that holds the same key writes the same fingerprint for the same value.
+/// <para>
+/// A plain struct rather than a positional record, whose parameters would become public properties: a sink that
+/// writes an object's properties would then write the credential itself.
+/// </para>
 /// </remarks>
-public readonly record struct Fingerprint
+/// <param name="key">The secret the fingerprint is computed under.</param>
+/// <param name="value">The credential the record is about, never written itself.</param>
+public readonly struct Fingerprint(byte[] key, string? value)
 {
     // Hexadecimal characters of the hash kept: enough that two codes alive at once do not share one.
     private const int Length = 16;
-
-    private static readonly byte[] Key = RandomNumberGenerator.GetBytes(SHA256.HashSizeInBytes);
-
-    private readonly string? _value;
-
-    private Fingerprint(string? value)
-    {
-        _value = value;
-    }
-
-    /// <summary>
-    /// Wraps <paramref name="value"/>, which is never written: only its fingerprint is.
-    /// </summary>
-    public static Fingerprint Of(string? value) => new(value);
 
     /// <summary>
     /// The fingerprint, or "(null)" for an absent value, as the logging library writes a null argument.
     /// </summary>
     public override string ToString()
     {
-        if (_value is null)
+        if (value is null)
             return Sanitized.NullText;
 
-        var hash = HMACSHA256.HashData(Key, Encoding.UTF8.GetBytes(_value));
+        var hash = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(value));
         return Convert.ToHexStringLower(hash)[..Length];
     }
 }

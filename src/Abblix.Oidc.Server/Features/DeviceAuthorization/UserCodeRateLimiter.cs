@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
@@ -31,12 +32,14 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// a storage whose backing store decides it.
 /// </remarks>
 /// <param name="logger">Logger for security events.</param>
+/// <param name="fingerprints">Names a user code in a record by its fingerprint.</param>
 /// <param name="storage">The storage service for persisting rate limit state.</param>
 /// <param name="keyFactory">The factory for generating storage keys.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options containing device authorization settings.</param>
 public partial class UserCodeRateLimiter(
     ILogger<UserCodeRateLimiter> logger,
+    CredentialFingerprints fingerprints,
     IEntityStorage storage,
     IEntityStorageKeyFactory keyFactory,
     TimeProvider timeProvider,
@@ -104,7 +107,7 @@ public partial class UserCodeRateLimiter(
         // it and left nothing to count.
         if (attempts >= deviceAuthOptions.MaxUserCodeAttempts && firstAttemptAt is { } firstAt)
         {
-            LogUserCodeAttemptsSpent(Fingerprint.Of(userCode), attempts);
+            LogUserCodeAttemptsSpent(fingerprints.Of(userCode), attempts);
             return new UserCodeRateLimited(firstAt + deviceAuthOptions.CodeLifetime - now, true);
         }
 
@@ -114,7 +117,7 @@ public partial class UserCodeRateLimiter(
             var blockedUntil = attemptAt + BackoffAfter(attempts, deviceAuthOptions);
             if (now < blockedUntil)
             {
-                LogUserCodeRateLimited(Fingerprint.Of(userCode), blockedUntil, attempts);
+                LogUserCodeRateLimited(fingerprints.Of(userCode), blockedUntil, attempts);
                 return new UserCodeRateLimited(blockedUntil - now, true);
             }
         }
@@ -187,7 +190,7 @@ public partial class UserCodeRateLimiter(
         // an attempt works out that instant, and it anchors on the attempt rather than on the moment of
         // asking - a second anchor here would agree only while the two coincide, which is exactly now.
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
-            LogUserCodeBlocked(Fingerprint.Of(userCode), BackoffAfter(attempts, deviceAuthOptions), attempts);
+            LogUserCodeBlocked(fingerprints.Of(userCode), BackoffAfter(attempts, deviceAuthOptions), attempts);
 
         var source = SourceOf(clientIdentifier);
         var addressAttempts = await RecordAgainstSourceAndBudgetAsync(source, now, deviceAuthOptions);
@@ -195,7 +198,7 @@ public partial class UserCodeRateLimiter(
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
         {
-            LogBruteForceDetected(Fingerprint.Of(userCode), source, attempts, addressAttempts);
+            LogBruteForceDetected(fingerprints.Of(userCode), source, attempts, addressAttempts);
         }
     }
 
@@ -260,7 +263,7 @@ public partial class UserCodeRateLimiter(
                 AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
             });
 
-        LogUserCodeVerified(Fingerprint.Of(userCode), SourceOf(clientIdentifier));
+        LogUserCodeVerified(fingerprints.Of(userCode), SourceOf(clientIdentifier));
     }
 
     /// <summary>

@@ -55,6 +55,17 @@ public record OidcOptions
 	public bool AllowHttpIssuer { get; set; }
 
 	/// <summary>
+	/// A base64 secret of at least 32 bytes that keys the fingerprints standing for credentials - a device code, a
+	/// user code, a CIBA request id - in log records. Set the same value on every node so the records of one flow match
+	/// across nodes and restarts; left unset, each process draws its own key and records match within it only.
+	/// </summary>
+	/// <remarks>
+	/// It protects what the log would otherwise give away, so keep it out of the log's reach: anybody holding it can
+	/// try every user code against a fingerprint.
+	/// </remarks>
+	public string? FingerprintKey { get; set; }
+
+	/// <summary>
 	/// A collection of client configurations supported by this OIDC server. Each <see cref="ClientInfo"/> object
 	/// defines the settings and capabilities of a registered client, including client ID, client secrets,
 	/// redirect URIs, and other OAuth2/OIDC parameters. Proper client configuration is essential for securing client

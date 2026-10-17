@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -20,6 +21,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// Supports optional long-polling to reduce polling frequency and improve efficiency.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
@@ -29,10 +31,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// notification nobody waits for is a no-op.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, statusNotifier)
 {
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.
@@ -51,6 +54,6 @@ public partial class PollModeCompletionHandler(
     {
         await StoreAsync(authenticationRequestId, request, expiresIn);
 
-        LogTokensStored(Fingerprint.Of(authenticationRequestId));
+        LogTokensStored(FingerprintOf(authenticationRequestId));
     }
 }

@@ -79,6 +79,7 @@ public class UserCodeRateLimiterTests
 
         _rateLimiter = new UserCodeRateLimiter(
             _logs.CreateLogger<UserCodeRateLimiter>(),
+            TestFingerprints.Instance,
             _storage,
             new EntityStorageKeyFactory(),
             _time,
@@ -296,7 +297,7 @@ public class UserCodeRateLimiterTests
         Assert.Contains(_logs.Entries,
             entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeAttemptsSpent);
         Assert.All(_logs.Entries, entry => Assert.DoesNotContain(UserCode, entry.Message));
-        Assert.Contains(_logs.Entries, entry => entry.Message.Contains(Fingerprint.Of(UserCode).ToString()));
+        Assert.Contains(_logs.Entries, entry => entry.Message.Contains(TestFingerprints.Instance.Of(UserCode).ToString()));
     }
 
     /// <summary>
@@ -754,6 +755,7 @@ public class UserCodeRateLimiterTests
 
         return new UserCodeRateLimiter(
             _logs.CreateLogger<UserCodeRateLimiter>(),
+            TestFingerprints.Instance,
             _storage,
             new EntityStorageKeyFactory(),
             _time,
