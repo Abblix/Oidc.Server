@@ -69,14 +69,32 @@ public class CredentialFingerprintsTests
     [Fact]
     public void TheServerRefusesAShortKey_WhenItsSettingsAreRead()
     {
+        using var provider = ServerWith("c2hvcnQ=");
+
+        Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+    }
+
+    /// <summary>
+    /// The same server with a key long enough reads its settings, so the refusal above is the key's and no other
+    /// check's.
+    /// </summary>
+    [Fact]
+    public void TheSameServerWithALongEnoughKey_ReadsItsSettings()
+    {
+        var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(FingerprintKeyValidator.MinKeyBytes));
+        using var provider = ServerWith(key);
+
+        Assert.Equal(key, provider.GetRequiredService<IOptions<OidcOptions>>().Value.FingerprintKey);
+    }
+
+    private static ServiceProvider ServerWith(string key)
+    {
         var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.FingerprintKey = "c2hvcnQ=");
+        services.AddOptions<OidcOptions>().Configure(options => options.FingerprintKey = key);
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddOidcOptionsValidators();
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        return services.BuildServiceProvider();
     }
 }
