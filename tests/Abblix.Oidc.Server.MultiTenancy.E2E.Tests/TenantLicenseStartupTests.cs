@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 #pragma warning disable ABXMT001
@@ -53,10 +55,62 @@ public sealed class TenantLicenseStartupTests
         Assert.Equal(System.Net.HttpStatusCode.OK, discovery.StatusCode);
     }
 
-    private static WebApplication Build(params string[] issuerPaths)
+    /// <summary>
+    /// A host starting its services at once still has the tenants judged against the license it supplies, not against
+    /// the limits of an installation with no license, which would refuse these two tenants.
+    /// </summary>
+    [Fact]
+    public async Task Tenants_the_license_allows_start_when_the_services_start_at_once()
+    {
+        await TestLicense.Loaded;
+        await using var app = BuildLicensed(TestLicense.Jwt, "/tenants/acme", "/tenants/globex");
+
+        await app.StartAsync(TestContext.Current.CancellationToken)
+            .WaitAsync(StartBound, TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var discovery = await client.GetAsync(
+            Host + "/tenants/globex/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.OK, discovery.StatusCode);
+    }
+
+    /// <summary>
+    /// A license that cannot be loaded refuses the start of a host starting its services at once, rather than
+    /// leaving the tenants' check waiting for it.
+    /// </summary>
+    [Fact]
+    public async Task A_license_that_cannot_be_loaded_refuses_the_start_when_the_services_start_at_once()
+    {
+        await TestLicense.Loaded;
+        await using var app = BuildLicensed("not.a.jwt", "/tenants/acme", "/tenants/globex");
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => app.StartAsync(TestContext.Current.CancellationToken)
+                .WaitAsync(StartBound, TestContext.Current.CancellationToken));
+    }
+
+    // Long beyond any start, short of a run that hangs
+    private static readonly TimeSpan StartBound = TimeSpan.FromSeconds(30);
+
+    private static WebApplication Build(params string[] issuerPaths) => BuildHost(null, issuerPaths);
+
+    /// <summary>
+    /// A host serving tenants under <paramref name="issuerPaths"/> that supplies <paramref name="licenseJwt"/> itself
+    /// and starts its services at once.
+    /// </summary>
+    private static WebApplication BuildLicensed(string licenseJwt, params string[] issuerPaths)
+        => BuildHost(licenseJwt, issuerPaths);
+
+    private static WebApplication BuildHost(string? licenseJwt, string[] issuerPaths)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        if (licenseJwt is not null)
+        {
+            builder.Services.Configure<HostOptions>(host => host.ServicesStartConcurrently = true);
+            builder.Services.AddLicense(licenseJwt);
+        }
+
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();

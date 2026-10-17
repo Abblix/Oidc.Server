@@ -67,6 +67,27 @@ public class LicenseLoadingServiceTests
     }
 
     /// <summary>
+    /// What waits for the licenses learns they are loaded once the loading is done, and learns it failed when it
+    /// fails, so a check waiting on it neither judges against a license still to come nor waits for one that never will.
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_TellsWhenTheLicensesAreLoaded_AndWhenTheLoadingFailed()
+    {
+        var loaded = new LicenseLoading();
+        await new LicenseLoadingService(
+                NullLoggerFactory.Instance, new MockLicenseJwtProvider(null), TimeProvider.System, loaded)
+            .StartAsync(CancellationToken.None);
+        Assert.True(loaded.Loaded.IsCompletedSuccessfully);
+
+        var failed = new LicenseLoading();
+        var unreadable = new[] { "not.a.jwt" }.ToAsyncEnumerable();
+        await Assert.ThrowsAnyAsync<Exception>(() => new LicenseLoadingService(
+                NullLoggerFactory.Instance, new MockLicenseJwtProvider(unreadable), TimeProvider.System, failed)
+            .StartAsync(CancellationToken.None));
+        Assert.True(failed.Loaded.IsFaulted);
+    }
+
+    /// <summary>
     /// Verifies that StartAsync completes when provider returns null.
     /// </summary>
     [Fact]

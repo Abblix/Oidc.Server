@@ -24,22 +24,31 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="options">The tenants the settings declare.</param>
 /// <param name="store">The store the tenants are served from.</param>
+/// <param name="clock">Bounds the wait for the license.</param>
 /// <param name="loading">Tells when the license is loaded; absent where nothing loads one, and the limits of an
 /// installation with no license are the ones in force.</param>
 [Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class TenantLicenseStartupCheck(
     IOptions<MultiTenancyOptions> options,
     ITenantStore store,
+    TimeProvider clock,
     LicenseLoading? loading = null) : IHostedService
 {
+    /// <summary>
+    /// How long the check waits for the license before refusing the start.
+    /// </summary>
+    /// <remarks>
+    /// The hosting does not bound its start, so a license that never arrives - this service started ahead of the one
+    /// loading it, one after the other - would otherwise keep the server from starting with nothing in the log.
+    /// </remarks>
+    internal static readonly TimeSpan LicenseWait = TimeSpan.FromMinutes(1);
+
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (store is not OptionsTenantStore)
+        if (store is not OptionsTenantStore || !await LicenseLoadedAsync(cancellationToken))
             return;
 
-        if (loading is not null)
-            await loading.Loaded.WaitAsync(cancellationToken);
         var tenants = options.Value.Tenants;
         List<string> failures =
         [
@@ -58,6 +67,36 @@ internal sealed class TenantLicenseStartupCheck(
 
         if (failures.Count > 0)
             throw new OptionsValidationException(Options.DefaultName, typeof(MultiTenancyOptions), failures);
+    }
+
+    /// <summary>
+    /// Waits for the license, and answers whether the tenants are to be judged against it.
+    /// </summary>
+    /// <remarks>
+    /// A license that failed to load is not judged against: its loading refuses the start with its own error, which
+    /// this check would only repeat.
+    /// </remarks>
+    private async Task<bool> LicenseLoadedAsync(CancellationToken cancellationToken)
+    {
+        if (loading is null)
+            return true;
+
+        try
+        {
+            await loading.Loaded.WaitAsync(LicenseWait, clock, cancellationToken);
+            return true;
+        }
+        catch (TimeoutException exception)
+        {
+            throw new InvalidOperationException(
+                "The license was not loaded in time to judge the tenants the settings declare against it. " +
+                "Register the server's services before multi-tenancy, so the license is loaded first.",
+                exception);
+        }
+        catch (Exception) when (loading.Loaded.IsFaulted)
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc />

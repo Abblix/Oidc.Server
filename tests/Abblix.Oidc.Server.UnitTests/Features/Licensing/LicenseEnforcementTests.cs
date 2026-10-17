@@ -354,7 +354,10 @@ public sealed class LicenseEnforcementTests : IDisposable
         await StartupCheck(loading, new WritableTenantStore()).StartAsync(TestContext.Current.CancellationToken);
     }
 
-    private static TenantLicenseStartupCheck StartupCheck(LicenseLoading loading, ITenantStore? store = null)
+    private static TenantLicenseStartupCheck StartupCheck(
+        LicenseLoading loading,
+        ITenantStore? store = null,
+        TimeProvider? clock = null)
     {
         var options = Options.Create(new MultiTenancyOptions
         {
@@ -364,7 +367,35 @@ public sealed class LicenseEnforcementTests : IDisposable
                 new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") },
             ],
         });
-        return new TenantLicenseStartupCheck(options, store ?? new OptionsTenantStore(options), loading);
+        return new TenantLicenseStartupCheck(options, store ?? new OptionsTenantStore(options), clock ?? TimeProvider.System, loading);
+    }
+
+    /// <summary>
+    /// A license that never arrives refuses the start once the wait is over, rather than keeping the server from
+    /// starting with nothing in the log.
+    /// </summary>
+    [Fact]
+    public async Task A_license_that_never_arrives_refuses_the_start_once_the_wait_is_over()
+    {
+        var clock = new FakeTimeProvider();
+        var started = StartupCheck(new LicenseLoading(), clock: clock).StartAsync(TestContext.Current.CancellationToken);
+
+        clock.Advance(TenantLicenseStartupCheck.LicenseWait);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => started);
+    }
+
+    /// <summary>
+    /// A license that failed to load refuses the start through its own loading, so the check does not repeat it.
+    /// </summary>
+    [Fact]
+    public async Task A_license_that_failed_to_load_is_left_to_its_loading()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+        loading.Fail(new InvalidOperationException("The license could not be read."));
+
+        await StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>

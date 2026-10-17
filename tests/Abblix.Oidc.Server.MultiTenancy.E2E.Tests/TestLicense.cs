@@ -17,15 +17,22 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// </summary>
 internal static class TestLicense
 {
+    /// <summary>
+    /// The license as a host supplies it; read before the loading below, which static initialization runs in order.
+    /// </summary>
+    public static string Jwt { get; } = Read();
+
     public static readonly Task Loaded = LoadAsync();
 
-    private static async Task LoadAsync()
+    private static async Task LoadAsync() => await LicenseLoader.LoadAsync(Jwt);
+
+    private static string Read()
     {
         var assembly = Assembly.GetExecutingAssembly();
         const string name = "Abblix.Oidc.Server.MultiTenancy.E2E.Tests.Resources.test-license-multitenant.jwt";
-        await using var stream = assembly.GetManifestResourceStream(name)
+        using var stream = assembly.GetManifestResourceStream(name)
             ?? throw new InvalidOperationException($"The embedded license {name} is missing.");
         using var reader = new StreamReader(stream);
-        await LicenseLoader.LoadAsync((await reader.ReadToEndAsync()).Trim());
+        return reader.ReadToEnd().Trim();
     }
 }
