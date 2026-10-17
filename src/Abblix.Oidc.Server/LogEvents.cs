@@ -789,6 +789,17 @@ internal static class LogEvents
 
             public const int ServingLastKnownKeys = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Features/UserInfo/NoUserInfoProvider.cs</c> - the stand-in for a host that registered no provider of
+        /// user information (sub-range 9100-9119).
+        /// </summary>
+        public static class NoUserInfoProvider
+        {
+            private const int Base = 9100;
+
+            public const int NoProviderRegistered = Base + 1;
+        }
     }
 
     /// <summary>

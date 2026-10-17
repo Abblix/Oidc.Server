@@ -34,6 +34,10 @@ public static class UserInfoServiceCollectionExtensions
     public static IServiceCollection AddUserInfo(this IServiceCollection services)
     {
         services.TryAddScoped<IUserClaimsProvider, UserClaimsProvider>();
+
+        // A host keeping no users, as one serving client credentials alone, registers no provider of user
+        // information, and the services issuing tokens still have to be built; a host's own replaces this one
+        services.TryAddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         services.TryAddSingleton<ISubjectTypeConverter, IssuerSubjectTypeConverter>();
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();

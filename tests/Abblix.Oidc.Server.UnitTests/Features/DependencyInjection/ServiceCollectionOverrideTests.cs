@@ -42,6 +42,7 @@ using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using Moq;
 
@@ -460,6 +461,31 @@ public class ServiceCollectionOverrideTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IIdentityTokenService>());
         Assert.Null(await scope.ServiceProvider.GetRequiredService<IUserInfoProvider>()
             .GetUserInfoAsync(new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []));
+    }
+
+    /// <summary>
+    /// Each question the stand-in is asked is a warning under an id of its own, since a host serving end users that
+    /// forgot its provider learns of it only from the log.
+    /// </summary>
+    [Fact]
+    public async Task TheStandInForAProviderOfUserInformation_WarnsWhenAskedAboutAUser()
+    {
+        var records = new RecordingLoggerFactory();
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(records);
+        services.AddLogging();
+        services.AddOidcCore(options =>
+        {
+            options.Issuer = TestConstants.DefaultIssuer;
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+        });
+        await using var provider = services.BuildServiceProvider();
+
+        await provider.GetRequiredService<IUserInfoProvider>()
+            .GetUserInfoAsync(new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []);
+
+        var record = Assert.Single(records.Entries, entry => entry.EventId.Id == LogEvents.Misc.NoUserInfoProvider.NoProviderRegistered);
+        Assert.Equal(LogLevel.Warning, record.Level);
     }
 
     /// <summary>
