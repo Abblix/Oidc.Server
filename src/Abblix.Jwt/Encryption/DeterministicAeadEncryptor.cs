@@ -17,7 +17,7 @@ namespace Abblix.Jwt.Encryption;
 /// same input.
 /// </summary>
 /// <remarks>
-/// The encryption is AES Key Wrap with Padding (RFC 5649 / NIST SP 800-38F KWP) via <see cref="AesKeyWrapPadded"/>,
+/// The encryption is AES Key Wrap with Padding (RFC 5649 / NIST SP 800-38F KWP) over the platform implementation,
 /// a standardised deterministic authenticated encryption whose integrity check rejects any tampered value on
 /// unwrap. RFC 5649 has no associated-data input, so the associated data is bound into the key instead: a distinct
 /// key encryption key is derived per associated-data value by HKDF, so a value sealed for one context cannot be
@@ -53,7 +53,11 @@ public sealed class DeterministicAeadEncryptor
     /// inputs always return the same bytes.
     /// </summary>
     public byte[] Seal(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData)
-        => AesKeyWrapPadded.Wrap(DeriveKeyEncryptionKey(associatedData), plaintext);
+    {
+        using var aes = Aes.Create();
+        aes.Key = DeriveKeyEncryptionKey(associatedData);
+        return aes.EncryptKeyWrapPadded(plaintext);
+    }
 
     /// <summary>
     /// Opens a value produced by <see cref="Seal"/> under the same <paramref name="associatedData"/>.
@@ -61,9 +65,11 @@ public sealed class DeterministicAeadEncryptor
     /// <returns>The recovered plaintext, or <c>null</c> when the value is malformed, tampered, or bound to
     /// different associated data.</returns>
     public byte[]? Open(ReadOnlySpan<byte> sealedData, ReadOnlySpan<byte> associatedData)
-        => AesKeyWrapPadded.TryUnwrap(DeriveKeyEncryptionKey(associatedData), sealedData.ToArray(), out var plaintext)
-            ? plaintext
-            : null;
+    {
+        using var aes = Aes.Create();
+        aes.Key = DeriveKeyEncryptionKey(associatedData);
+        return aes.TryUnwrapKeyPadded(sealedData.ToArray(), out var plaintext) ? plaintext : null;
+    }
 
     private byte[] DeriveKeyEncryptionKey(ReadOnlySpan<byte> associatedData)
     {

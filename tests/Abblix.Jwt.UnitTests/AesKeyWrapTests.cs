@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +35,20 @@ public class AesKeyWrapTests
 	/// The 128-bit KEK of the RFC 3394 section 4.1 vector, shared with the negative tests in this class.
 	/// </summary>
 	private const string KeyEncryptionKey128Hex = "000102030405060708090A0B0C0D0E0F";
+
+	private static byte[] Wrap(byte[] keyEncryptionKey, byte[] keyData)
+	{
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.EncryptKeyWrap(keyData);
+	}
+
+	private static bool TryUnwrap(byte[] keyEncryptionKey, byte[] wrappedKey, out byte[]? keyData)
+	{
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.TryUnwrapKey(wrappedKey, out keyData);
+	}
 
 	/// <summary>
 	/// The six complete known-answer vectors of RFC 3394 section 4.1-section 4.6, covering every
@@ -83,7 +98,7 @@ public class AesKeyWrapTests
 	[MemberData(nameof(Rfc3394Vectors))]
 	public void Wrap_Rfc3394KnownAnswerVectors_ProducesExpectedCiphertext(string keyEncryptionKeyHex, string keyHex, string expectedHex)
 	{
-		var wrapped = AesKeyWrap.Wrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(keyHex));
+		var wrapped = Wrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(keyHex));
 
 		Assert.Equal(Convert.FromHexString(expectedHex), wrapped);
 	}
@@ -92,7 +107,7 @@ public class AesKeyWrapTests
 	[MemberData(nameof(Rfc3394Vectors))]
 	public void TryUnwrap_Rfc3394KnownAnswerVectors_RecoversKeyData(string keyEncryptionKeyHex, string keyHex, string wrappedHex)
 	{
-		Assert.True(AesKeyWrap.TryUnwrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(wrappedHex), out var keyData));
+		Assert.True(TryUnwrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(wrappedHex), out var keyData));
 		Assert.Equal(Convert.FromHexString(keyHex), keyData);
 	}
 
@@ -113,7 +128,7 @@ public class AesKeyWrapTests
 			tampered[position] ^= 0x01;
 
 			Assert.False(
-				AesKeyWrap.TryUnwrap(keyEncryptionKey, tampered, out var keyData),
+				TryUnwrap(keyEncryptionKey, tampered, out var keyData),
 				$"Unwrap must fail when byte {position} is tampered");
 			Assert.Null(keyData);
 		}
@@ -125,7 +140,7 @@ public class AesKeyWrapTests
 		var wrongKeyEncryptionKey = Convert.FromHexString("0F0E0D0C0B0A09080706050403020100");
 		var wrapped = Convert.FromHexString("1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5");
 
-		Assert.False(AesKeyWrap.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var keyData));
+		Assert.False(TryUnwrap(wrongKeyEncryptionKey, wrapped, out var keyData));
 		Assert.Null(keyData);
 	}
 
@@ -138,7 +153,7 @@ public class AesKeyWrapTests
 	{
 		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 
-		Assert.False(AesKeyWrap.TryUnwrap(keyEncryptionKey, new byte[length], out var keyData));
+		Assert.False(TryUnwrap(keyEncryptionKey, new byte[length], out var keyData));
 		Assert.Null(keyData);
 	}
 
@@ -150,7 +165,7 @@ public class AesKeyWrapTests
 	{
 		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 
-		Assert.Throws<ArgumentException>(() => AesKeyWrap.Wrap(keyEncryptionKey, new byte[length]));
+		Assert.Throws<ArgumentException>(() => Wrap(keyEncryptionKey, new byte[length]));
 	}
 
 	/// <summary>

@@ -76,7 +76,9 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 			return [];
 
 		var keyEncryptionKey = DeriveKeyForEncryption(header, recipientKey, keyEncryptionKeySize);
-		return AesKeyWrap.Wrap(keyEncryptionKey, keyToEncrypt);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.EncryptKeyWrap(keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -108,7 +110,9 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 			if (_keyEncryptionKeySize is { } keyEncryptionKeySize)
 			{
 				var keyEncryptionKey = DeriveKey(recipientKey, ephemeralKey, algorithm, apu, apv, keyEncryptionKeySize);
-				return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out decryptedKey);
+				using var aes = Aes.Create();
+				aes.Key = keyEncryptionKey;
+				return aes.TryUnwrapKey(encryptedKey, out decryptedKey);
 			}
 
 			// Direct Key Agreement: the encrypted key must be empty and the derived key IS the CEK,
