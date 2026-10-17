@@ -7,15 +7,21 @@
 
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
 /// Opens an inbound JWE with the first candidate key that recovers its content.
 /// </summary>
+/// <param name="logger">Records an inbound JWE that no key opened, which its sender only learns of as a refusal.
+/// </param>
 /// <param name="serviceProvider">Resolves the content encryption algorithm by its 'enc' name.</param>
 /// <param name="keyAttempt">Opens the token with one candidate key.</param>
-internal sealed class JweDecryption(IServiceProvider serviceProvider, JweKeyAttempt keyAttempt)
+internal sealed partial class JweDecryption(
+    ILogger<JweDecryption> logger,
+    IServiceProvider serviceProvider,
+    JweKeyAttempt keyAttempt)
 {
     /// <summary>
     /// Validates and decrypts JWE tokens using decoded byte parts and original string parts.
@@ -37,12 +43,12 @@ internal sealed class JweDecryption(IServiceProvider serviceProvider, JweKeyAtte
         IAsyncEnumerable<JsonWebKey> decryptionKeys,
         CancellationToken cancellationToken)
     {
-        var header = envelope.Header;
+        var keyId = envelope.Header.KeyId;
 
         // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL
         // Filter only by kid when present - algorithm compatibility is validated during decryption attempt
-        if (header.KeyId.HasValue())
-            decryptionKeys = decryptionKeys.Where(key => string.Equals(key.KeyId, header.KeyId, StringComparison.Ordinal));
+        if (keyId.HasValue())
+            decryptionKeys = decryptionKeys.Where(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
 
         // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
         // encryption algorithms for incoming JWE - an unregistered 'enc' yields no decryptor and is
@@ -52,17 +58,24 @@ internal sealed class JweDecryption(IServiceProvider serviceProvider, JweKeyAtte
         if (contentDecryptor == null)
             return new JwtValidationError(JwtError.InvalidToken, "Unsupported 'enc' content encryption algorithm in JWE");
 
-        var keyFound = false;
+        var keysTried = 0;
         await foreach (var key in decryptionKeys.WithCancellation(cancellationToken))
         {
-            keyFound = true;
+            keysTried++;
 
             if (await keyAttempt.TryOpenAsync(envelope, contentDecryptor, key, cancellationToken) is { } plaintext)
                 return plaintext;
         }
 
-        return new JwtValidationError(
-            JwtError.InvalidToken,
-            keyFound ? "Failed to decrypt JWE with any available key" : "No decryption keys found");
+        // Logged once, after every key, so the record says nothing about which key failed or why: the sender's
+        // answer stays the same whatever the cause, as RFC 7516 section 11.5 requires.
+        if (keysTried == 0)
+        {
+            LogNoDecryptionKey(envelope.Algorithm, envelope.EncryptionAlgorithm, keyId);
+            return new JwtValidationError(JwtError.InvalidToken, "No decryption keys found");
+        }
+
+        LogNoKeyOpened(envelope.Algorithm, envelope.EncryptionAlgorithm, keyId, keysTried);
+        return new JwtValidationError(JwtError.InvalidToken, "Failed to decrypt JWE with any available key");
     }
 }

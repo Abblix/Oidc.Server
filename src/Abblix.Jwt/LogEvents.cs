@@ -26,6 +26,8 @@ internal static class LogEvents
         public const int NoMatchingKey = Base + 2;
         public const int RsaEncryptionFailed = Base + 3;
         public const int KeyBelowTheFloor = Base + 4;
+        public const int NoDecryptionKey = Base + 5;
+        public const int NoDecryptionKeyOpened = Base + 6;
     }
 
     /// <summary>
