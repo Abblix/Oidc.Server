@@ -51,7 +51,7 @@ internal sealed partial class JwtBearerAudienceValidator(
 		if (isValid)
 			return Task.FromResult(true);
 
-		var actualAudiences = string.Join(", ", audienceList);
+		var actualAudiences = Sanitized.Values(audienceList);
 		if (options.StrictAudienceValidation)
 		{
 			LogAudienceFailedStrict(tokenEndpoint, actualAudiences);

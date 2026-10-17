@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -208,6 +209,35 @@ public class IntrospectionRequestValidatorTests
         Assert.Null(validRequest.Token);
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()), Times.Once);
         _jwtValidator.Verify(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The refusal of a token quotes what its sender wrote, a key identifier among it, so the record of an invalid
+    /// token writes that refusal through <see cref="Sanitized"/>, on one line.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithInvalidJwt_RecordsTheRefusalOnOneLine()
+    {
+        var loggers = new RecordingLoggerFactory();
+        var validator = new IntrospectionRequestValidator(
+            new Logger<IntrospectionRequestValidator>(loggers),
+            _clientAuthenticator.Object,
+            _jwtValidator.Object,
+            CallerRateLimiters.Create(new CallerRateLimitOptions()));
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "No signing key matched: kid='sent\r\nforged'"));
+
+        await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+
+        var record = Assert.Single(loggers.Entries);
+        Assert.IsType<Sanitized>(record.Value("JwtValidationError"));
+        Assert.DoesNotContain('\n', record.Message);
+        Assert.DoesNotContain('\r', record.Message);
     }
 
     /// <summary>

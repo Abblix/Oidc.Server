@@ -68,7 +68,7 @@ public partial class InMemoryLongPollingService(
             _ => new ConcurrentDictionary<TaskCompletionSource<bool>, byte>());
         waiters.TryAdd(tcs, 0);
 
-        LogWaitingForStatusChange(authenticationRequestId.Sanitized(), timeout);
+        LogWaitingForStatusChange(authenticationRequestId, timeout);
 
         try
         {
@@ -82,11 +82,11 @@ public partial class InMemoryLongPollingService(
 
             if (completedTask == tcs.Task)
             {
-                LogStatusChangeReceived(authenticationRequestId.Sanitized());
+                LogStatusChangeReceived(authenticationRequestId);
                 return true;
             }
 
-            LogWaitTimedOut(authenticationRequestId.Sanitized());
+            LogWaitTimedOut(authenticationRequestId);
             return false;
         }
         catch (OperationCanceledException ex) when (LogCancellation(ex, authenticationRequestId))
@@ -122,7 +122,7 @@ public partial class InMemoryLongPollingService(
     // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
     private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
     {
-        LogWaitCancelled(ex, authenticationRequestId.Sanitized());
+        LogWaitCancelled(ex, authenticationRequestId);
         return false;
     }
 
@@ -137,11 +137,11 @@ public partial class InMemoryLongPollingService(
         if (!_waiters.TryRemove(authenticationRequestId, out var waiters))
         {
             // No one waiting - this is normal and expected
-            LogNoWaiters(newStatus, authenticationRequestId.Sanitized());
+            LogNoWaiters(newStatus, authenticationRequestId);
             return Task.CompletedTask;
         }
 
-        LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId.Sanitized());
+        LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId);
 
         // Signal all waiting tasks
         foreach (var waiter in waiters.Keys)

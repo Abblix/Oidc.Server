@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -59,7 +60,7 @@ public partial class FlowTypeValidator(
         // unauthorized_client (no client policy was consulted).
         if (responseType is not { Length: > 0 })
         {
-            LogResponseTypeInvalid(responseType);
+            LogResponseTypeInvalid(Sanitized.Values(responseType));
             return Error(ErrorCodes.InvalidRequest, "The response type is required");
         }
 
@@ -71,7 +72,7 @@ public partial class FlowTypeValidator(
         var profile = SecurityProfileRequirements.For(context.ClientInfo, issuerSettings.DefaultSecurityProfile);
         if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
         {
-            LogResponseTypeNotAllowed(responseType);
+            LogResponseTypeNotAllowed(Sanitized.Values(responseType));
             return Error(
                 ErrorCodes.UnauthorizedClient,
                 "The security profile permits only the authorization code response type");
@@ -92,7 +93,7 @@ public partial class FlowTypeValidator(
 
         if (!ResponseTypeAllowed(context))
         {
-            LogResponseTypeNotAllowed(responseType);
+            LogResponseTypeNotAllowed(Sanitized.Values(responseType));
             // RFC 6749 section 4.1.2.1 / section 4.2.2.1: the server supports this response_type (the gate above
             // passed), but this particular client is not registered to use it - that is
             // unauthorized_client. unsupported_response_type (returned before) is reserved for
@@ -102,7 +103,7 @@ public partial class FlowTypeValidator(
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            LogResponseTypeInvalid(responseType);
+            LogResponseTypeInvalid(Sanitized.Values(responseType));
             return Error(ErrorCodes.UnsupportedResponseType, "The response type is not supported");
         }
 

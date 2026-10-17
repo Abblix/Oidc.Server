@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.SecurityEvents.BackChannelLogout;
@@ -15,11 +16,11 @@ partial class BackChannelLogoutHandler
         EventId = LogEvents.BackChannelLogout.RequestRefused,
         Level = LogLevel.Warning,
         Message = "Back-channel logout refused: {Error} {Description}")]
-    private partial void LogRefused(string error, string description);
+    private partial void LogRefused(string error, Sanitized description);
 
     [LoggerMessage(
         EventId = LogEvents.BackChannelLogout.ReservationKept,
         Level = LogLevel.Warning,
         Message = "The sink did not report success for the Logout Token {TokenId} from {Issuer}, and the token stays reserved: a retransmission of it will be refused as a replay until it expires")]
-    private partial void LogReservationKept(Exception exception, string issuer, string tokenId);
+    private partial void LogReservationKept(Exception exception, Sanitized issuer, Sanitized tokenId);
 }

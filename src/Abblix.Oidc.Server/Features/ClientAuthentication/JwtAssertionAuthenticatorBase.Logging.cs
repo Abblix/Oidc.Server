@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -28,8 +29,8 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.JwtValidationError,
         Level = LogLevel.Warning,
-        Message = "JWT validation error: {@Error}")]
-    private partial void LogJwtValidationError(JwtValidationError Error);
+        Message = "JWT validation error: {Error}")]
+    private partial void LogJwtValidationError(Sanitized Error);
 
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AuthMethodNotAllowed,
@@ -47,7 +48,7 @@ partial class JwtAssertionAuthenticatorBase
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.IssuerSubjectMismatch,
         Level = LogLevel.Warning,
         Message = "The error during authentication: iss is '{Issuer}', but sub is {Subject}")]
-    private partial void LogIssuerSubjectMismatch(string? Issuer, string? Subject);
+    private partial void LogIssuerSubjectMismatch(Sanitized Issuer, Sanitized Subject);
 
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.MissingJti,
@@ -59,13 +60,13 @@ partial class JwtAssertionAuthenticatorBase
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.OtherKindPresentedAsAssertion,
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} declares typ {TokenType}, which names another kind of JWT rather than an authentication assertion")]
-    private partial void LogOtherKindPresentedAsAssertion(string ClientId, string? TokenType);
+    private partial void LogOtherKindPresentedAsAssertion(string ClientId, Sanitized TokenType);
 
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.SigningAlgorithmNotAllowed,
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} uses algorithm {Algorithm}, but the client registered token_endpoint_auth_signing_alg {RequiredAlgorithm}")]
-    private partial void LogSigningAlgorithmNotAllowed(string ClientId, string? Algorithm, string RequiredAlgorithm);
+    private partial void LogSigningAlgorithmNotAllowed(string ClientId, Sanitized Algorithm, string RequiredAlgorithm);
 
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.MissingExpiration,
@@ -77,7 +78,7 @@ partial class JwtAssertionAuthenticatorBase
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.ReplayDetected,
         Level = LogLevel.Warning,
         Message = "The client assertion jti {Jti} for {ClientId} has already been used; possible replay attack")]
-    private partial void LogReplayDetected(string Jti, string ClientId);
+    private partial void LogReplayDetected(Sanitized Jti, string ClientId);
 
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TimestampsOutsideTheClientsProfile,
@@ -89,11 +90,11 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries {@Audiences} where the profile "
+        Message = "The client assertion for {ClientId} carries {Audiences} where the profile "
                   + "governing it accepts the issuer identifier {IssuerIdentifier} alone")]
     private partial void LogAudienceIsNotTheIssuerAlone(
         string ClientId,
-        string[] Audiences,
+        Sanitized[] Audiences,
         string IssuerIdentifier);
 
     [LoggerMessage(

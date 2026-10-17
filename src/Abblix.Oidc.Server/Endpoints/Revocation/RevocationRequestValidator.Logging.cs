@@ -23,8 +23,8 @@ partial class RevocationRequestValidator
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.RevocationRequestValidator.TokenValidationFailed,
 		Level = LogLevel.Warning,
-		Message = "The token validation failed: {@Error}")]
-	private partial void LogTokenValidationFailed(JwtValidationError Error);
+		Message = "The token validation failed: {Error}")]
+	private partial void LogTokenValidationFailed(Sanitized Error);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.RevocationRequestValidator.CallerRateLimited,

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -16,13 +17,13 @@ partial class ClientJwtValidator
         EventId = LogEvents.Tokens.ClientJwtValidator.ValidationFailed,
         Level = LogLevel.Warning,
         Message = "Client JWT validation failed. Error: {ErrorType}, Description: {Description}")]
-    private partial void LogValidationFailed(string ErrorType, string Description);
+    private partial void LogValidationFailed(string ErrorType, Sanitized Description);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.ClientIdMismatch,
         Level = LogLevel.Warning,
         Message = "Client ID mismatch: issuer resolves to {IssuerClientId}, but client_id claim is {ClaimClientId}")]
-    private partial void LogClientIdMismatch(string IssuerClientId, string ClaimClientId);
+    private partial void LogClientIdMismatch(Sanitized IssuerClientId, Sanitized ClaimClientId);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.ClientNotDetermined,
@@ -52,6 +53,6 @@ partial class ClientJwtValidator
     [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.AudienceValidationFailed,
         Level = LogLevel.Warning,
-        Message = "Audience validation failed, token audiences: {@Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]
-    private partial void LogAudienceValidationFailed(IReadOnlyCollection<string> Audiences, string RequestUri, string Issuer);
+        Message = "Audience validation failed, token audiences: {Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]
+    private partial void LogAudienceValidationFailed(Sanitized[] Audiences, string RequestUri, Sanitized Issuer);
 }

@@ -115,7 +115,7 @@ public partial class ClientSecretJwtAuthenticator(
         var result = materialized.Contains(requestUri);
         if (!result)
         {
-            LogAudienceValidationFailed(materialized, requestUri);
+            LogAudienceValidationFailed(Sanitized.Values(materialized), requestUri);
         }
 
         return Task.FromResult(result);

@@ -125,7 +125,7 @@ public partial class IntrospectionRequestValidator(
 			},
 			error =>
 			{
-				LogInvalidJwt(error);
+				LogInvalidJwt(Sanitized.Value(error));
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}

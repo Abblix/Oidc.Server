@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -16,11 +17,11 @@ partial class JwtBearerAudienceValidator
 		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedStrict,
 		Level = LogLevel.Warning,
 		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint}, got {Audiences}")]
-	private partial void LogAudienceFailedStrict(Uri TokenEndpoint, string Audiences);
+	private partial void LogAudienceFailedStrict(Uri TokenEndpoint, Sanitized[] Audiences);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedPermissive,
 		Level = LogLevel.Warning,
 		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {ApplicationUri}, got {Audiences}")]
-	private partial void LogAudienceFailedPermissive(Uri TokenEndpoint, Uri ApplicationUri, string Audiences);
+	private partial void LogAudienceFailedPermissive(Uri TokenEndpoint, Uri ApplicationUri, Sanitized[] Audiences);
 }

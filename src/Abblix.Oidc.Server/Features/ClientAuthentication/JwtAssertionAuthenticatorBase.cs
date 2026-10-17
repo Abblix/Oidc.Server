@@ -140,7 +140,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, audiences, issuerIdentifier);
+        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Values(audiences), issuerIdentifier);
         return false;
     }
 
@@ -160,7 +160,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
-            LogJwtValidationError(error);
+            LogJwtValidationError(Sanitized.Value(error));
             return null;
         }
 
