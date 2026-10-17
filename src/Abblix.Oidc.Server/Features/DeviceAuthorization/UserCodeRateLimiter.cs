@@ -104,7 +104,7 @@ public partial class UserCodeRateLimiter(
         // it and left nothing to count.
         if (attempts >= deviceAuthOptions.MaxUserCodeAttempts && firstAttemptAt is { } firstAt)
         {
-            LogUserCodeAttemptsSpent(userCode, attempts);
+            LogUserCodeAttemptsSpent(Fingerprint.Of(userCode), attempts);
             return new UserCodeRateLimited(firstAt + deviceAuthOptions.CodeLifetime - now, true);
         }
 
@@ -114,7 +114,7 @@ public partial class UserCodeRateLimiter(
             var blockedUntil = attemptAt + BackoffAfter(attempts, deviceAuthOptions);
             if (now < blockedUntil)
             {
-                LogUserCodeRateLimited(userCode, blockedUntil, attempts);
+                LogUserCodeRateLimited(Fingerprint.Of(userCode), blockedUntil, attempts);
                 return new UserCodeRateLimited(blockedUntil - now, true);
             }
         }
@@ -187,7 +187,7 @@ public partial class UserCodeRateLimiter(
         // an attempt works out that instant, and it anchors on the attempt rather than on the moment of
         // asking - a second anchor here would agree only while the two coincide, which is exactly now.
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
-            LogUserCodeBlocked(userCode, BackoffAfter(attempts, deviceAuthOptions), attempts);
+            LogUserCodeBlocked(Fingerprint.Of(userCode), BackoffAfter(attempts, deviceAuthOptions), attempts);
 
         var source = SourceOf(clientIdentifier);
         var addressAttempts = await RecordAgainstSourceAndBudgetAsync(source, now, deviceAuthOptions);
@@ -195,7 +195,7 @@ public partial class UserCodeRateLimiter(
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
         {
-            LogBruteForceDetected(userCode, source, attempts, addressAttempts);
+            LogBruteForceDetected(Fingerprint.Of(userCode), source, attempts, addressAttempts);
         }
     }
 
@@ -260,7 +260,7 @@ public partial class UserCodeRateLimiter(
                 AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
             });
 
-        LogUserCodeVerified(userCode, SourceOf(clientIdentifier));
+        LogUserCodeVerified(Fingerprint.Of(userCode), SourceOf(clientIdentifier));
     }
 
     /// <summary>

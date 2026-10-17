@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -155,12 +156,14 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(
             LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim, entry.EventId.Id);
 
-        // The DEVICE code key, and the user code NOWHERE in the MESSAGE. TryRemoveAsync never reads the
+        // The DEVICE code by its fingerprint, the code itself and the user code NOWHERE in the MESSAGE: a device
+        // code is what a public client trades for tokens, so a log reader must not be able to read one back. TryRemoveAsync never reads the
         // record, so it cannot establish that the user code it was handed is the spent one - and on the
         // public interface a host can hand it a live code belonging to another request. Asserting the
         // absence as well as the presence, because a message that named both would satisfy a check for
         // the device code alone.
-        Assert.Contains(RequestKey, entry.Message);
+        Assert.Contains(Fingerprint.Of(DeviceCode).ToString(), entry.Message);
+        Assert.DoesNotContain(DeviceCode, entry.Message);
         Assert.DoesNotContain(UserCodeKey, entry.Message);
         Assert.DoesNotContain(UserCode, entry.Message);
 
@@ -287,7 +290,8 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(
             LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedBeforeDiscard,
             entry.EventId.Id);
-        Assert.Contains(UserCodeKey, entry.Message);
+        Assert.Contains(Fingerprint.Of(UserCode).ToString(), entry.Message);
+        Assert.DoesNotContain(UserCode, entry.Message);
 
         // And it really is the discard path: the request is gone by the time this returns, even
         // though the log fired while it was still there.

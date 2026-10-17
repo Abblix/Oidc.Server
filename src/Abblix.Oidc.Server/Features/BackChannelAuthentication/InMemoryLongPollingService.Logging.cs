@@ -17,35 +17,35 @@ partial class InMemoryLongPollingService
         EventId = LogEvents.Device.InMemoryLongPollingService.WaitingForStatusChange,
         Level = LogLevel.Debug,
         Message = "Long-polling request waiting for auth_req_id: {AuthReqId}, timeout: {Timeout}")]
-    private partial void LogWaitingForStatusChange(Sanitized AuthReqId, TimeSpan Timeout);
+    private partial void LogWaitingForStatusChange(Fingerprint AuthReqId, TimeSpan Timeout);
 
     [LoggerMessage(
         EventId = LogEvents.Device.InMemoryLongPollingService.StatusChangeReceived,
         Level = LogLevel.Information,
         Message = "Long-polling request received status change notification for auth_req_id: {AuthReqId}")]
-    private partial void LogStatusChangeReceived(Sanitized AuthReqId);
+    private partial void LogStatusChangeReceived(Fingerprint AuthReqId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.InMemoryLongPollingService.WaitTimedOut,
         Level = LogLevel.Debug,
         Message = "Long-polling request timed out for auth_req_id: {AuthReqId}")]
-    private partial void LogWaitTimedOut(Sanitized AuthReqId);
+    private partial void LogWaitTimedOut(Fingerprint AuthReqId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.InMemoryLongPollingService.WaitCancelled,
         Level = LogLevel.Debug,
         Message = "Long-polling request cancelled for auth_req_id: {AuthReqId}")]
-    private partial void LogWaitCancelled(Exception ex, Sanitized AuthReqId);
+    private partial void LogWaitCancelled(Exception ex, Fingerprint AuthReqId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.InMemoryLongPollingService.NoWaiters,
         Level = LogLevel.Debug,
         Message = "Status changed to {Status} for auth_req_id: {AuthReqId}, but no long-polling requests waiting")]
-    private partial void LogNoWaiters(BackChannelAuthenticationStatus Status, Sanitized AuthReqId);
+    private partial void LogNoWaiters(BackChannelAuthenticationStatus Status, Fingerprint AuthReqId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.InMemoryLongPollingService.NotifyingWaiters,
         Level = LogLevel.Information,
         Message = "Notifying {Count} long-polling request(s) of status change to {Status} for auth_req_id: {AuthReqId}")]
-    private partial void LogNotifyingWaiters(int Count, BackChannelAuthenticationStatus Status, Sanitized AuthReqId);
+    private partial void LogNotifyingWaiters(int Count, BackChannelAuthenticationStatus Status, Fingerprint AuthReqId);
 }

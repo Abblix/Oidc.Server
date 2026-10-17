@@ -143,7 +143,7 @@ public partial class PushModeCompletionHandler(
             // A validator throws for an entry no end user could have produced, a fault in the host's code.
             // The request is already taken and a push client never polls, so it is told the transaction
             // failed before the fault goes on to the host that completed the request.
-            LogGrantedAuthorizationDetailsFaulted(exception, authenticationRequestId, clientInfo.ClientId);
+            LogGrantedAuthorizationDetailsFaulted(exception, Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
             await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
             throw;
         }
@@ -151,13 +151,13 @@ public partial class PushModeCompletionHandler(
         if (refusal is { } refused)
         {
             LogGrantedAuthorizationDetailsRefused(
-                authenticationRequestId, clientInfo.ClientId, refused.Reason);
+                Fingerprint.Of(authenticationRequestId), clientInfo.ClientId, refused.Reason);
 
             await SendErrorAsync(authenticationRequestId, request, RefusedGrant);
             return;
         }
 
-        LogGeneratingTokens(authenticationRequestId);
+        LogGeneratingTokens(Fingerprint.Of(authenticationRequestId));
 
         var tokenResult = await IssueTokensAsync(authenticationRequestId, request, clientInfo);
 
@@ -182,15 +182,15 @@ public partial class PushModeCompletionHandler(
 
                 // The tokens of a failed delivery are dropped with this lambda and nothing retries them.
                 if (delivered)
-                    LogTokensDelivered(authenticationRequestId);
+                    LogTokensDelivered(Fingerprint.Of(authenticationRequestId));
                 else
-                    LogPushDeliveryFailed(authenticationRequestId);
+                    LogPushDeliveryFailed(Fingerprint.Of(authenticationRequestId));
 
                 return null;
             },
             async error =>
             {
-                LogTokenGenerationFailed(authenticationRequestId, error.Error);
+                LogTokenGenerationFailed(Fingerprint.Of(authenticationRequestId), error.Error);
                 await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
                 return null;
             });
@@ -230,7 +230,7 @@ public partial class PushModeCompletionHandler(
         {
             // The request is already taken and a push client never polls, so it is told the transaction failed
             // before the fault goes on to the host that completed the request.
-            LogTokenIssuanceFaulted(exception, authenticationRequestId, clientInfo.ClientId);
+            LogTokenIssuanceFaulted(exception, Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
             await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
             throw;
         }

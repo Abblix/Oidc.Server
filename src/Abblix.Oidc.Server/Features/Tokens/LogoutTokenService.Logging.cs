@@ -16,6 +16,6 @@ partial class LogoutTokenService
     [LoggerMessage(
         EventId = LogEvents.Tokens.LogoutTokenService.TokenPrepared,
         Level = LogLevel.Debug,
-        Message = "The logout token was prepared {@LogoutToken}")]
-    private partial void LogTokenPrepared(JsonWebToken LogoutToken);
+        Message = "The logout token {JwtId} was prepared for {ClientId}")]
+    private partial void LogTokenPrepared(string? JwtId, string ClientId);
 }
