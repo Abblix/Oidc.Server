@@ -12,11 +12,14 @@ namespace Abblix.Jwt.Encryption;
 
 /// <summary>
 /// Unwrapping with the platform AES Key Wrap that answers a value which does not open with false rather than an
-/// exception, since every caller treats such a value as a key that does not fit.
+/// exception.
 /// </summary>
 /// <remarks>
-/// The platform raises an exception even from its Try methods when the integrity check fails, so the refusal is
-/// turned into false here, once, instead of at each caller.
+/// A wrapped value always arrives from outside - a JWE's encrypted key, a client's pairwise pseudonym - so one that
+/// does not open is a refusal of that input, not a fault of the server. The token decryptor tries each candidate key
+/// in turn, and RFC 7516 section 11.5 forbids answering format, padding and length errors of encrypted keys
+/// differently. The platform raises an exception even from its Try methods when the integrity check fails, so the
+/// refusal is made here, once, instead of at each caller.
 /// </remarks>
 internal static class AesKeyWrapExtensions
 {
