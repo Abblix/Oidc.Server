@@ -11,7 +11,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -47,7 +46,6 @@ public sealed class SessionTenantBindingTests : IAsyncLifetime
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options =>
         {
