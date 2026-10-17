@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Security.Cryptography;
+using System.Text;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -14,6 +16,12 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// Centralized factory for generating entity storage keys with consistent formatting.
 /// Provides standardized key generation for all OIDC storage entities.
 /// </summary>
+/// <remarks>
+/// A key built from a value that is itself a credential - an authorization code, a CIBA request id, a device code, a
+/// user code - carries a digest of it rather than the value, so the store's own listings and the faults its client
+/// raises, which quote the key, do not hand out the credential. A digest is a fixed function of the value, so every
+/// node finds the same entry.
+/// </remarks>
 public class EntityStorageKeyFactory : IEntityStorageKeyFactory
 {
     /// <summary>
@@ -63,7 +71,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <param name="authorizationCode">The OAuth 2.0 authorization code.</param>
     /// <returns>A formatted storage key for the authorization grant.</returns>
     public string AuthorizedGrantKey(string authorizationCode)
-        => $"Abblix.Oidc.Server:Grant:{authorizationCode}";
+        => $"Abblix.Oidc.Server:Grant:{Digest(authorizationCode)}";
 
     /// <summary>
     /// Generates a storage key for a backchannel authentication request by request ID.
@@ -71,7 +79,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <param name="requestId">The CIBA authentication request identifier.</param>
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
     public string BackChannelAuthenticationRequestKey(string requestId)
-        => $"Abblix.Oidc.Server:CIBA:{requestId}";
+        => $"Abblix.Oidc.Server:CIBA:{Digest(requestId)}";
 
     /// <summary>
     /// Generates a storage key for a device authorization request by device code.
@@ -79,15 +87,15 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>A formatted storage key for the device authorization request.</returns>
     public string DeviceAuthorizationRequestKey(string deviceCode)
-        => $"Abblix.Oidc.Server:Device:{deviceCode}";
+        => $"Abblix.Oidc.Server:Device:{Digest(deviceCode)}";
 
     /// <inheritdoc />
     public string BackChannelAuthenticationNextPollKey(string requestId)
-        => $"Abblix.Oidc.Server:NextPoll:CIBA:{requestId}";
+        => $"Abblix.Oidc.Server:NextPoll:CIBA:{Digest(requestId)}";
 
     /// <inheritdoc />
     public string DeviceAuthorizationNextPollKey(string deviceCode)
-        => $"Abblix.Oidc.Server:NextPoll:Device:{deviceCode}";
+        => $"Abblix.Oidc.Server:NextPoll:Device:{Digest(deviceCode)}";
 
     /// <summary>
     /// Generates a storage key for mapping a user code to its device code.
@@ -95,15 +103,15 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <param name="userCode">The user-friendly verification code.</param>
     /// <returns>A formatted storage key for the user code mapping.</returns>
     public string DeviceAuthorizationUserCodeKey(string userCode)
-        => $"Abblix.Oidc.Server:UserCode:{userCode}";
+        => $"Abblix.Oidc.Server:UserCode:{Digest(userCode)}";
 
     /// <inheritdoc />
     public string UserCodeRateLimitAttemptKey(string userCode, string life, int attempt)
-        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:{life}:Attempt:{attempt}";
+        => $"Abblix.Oidc.Server:RateLimit:UserCode:{Digest(userCode)}:{life}:Attempt:{attempt}";
 
     /// <inheritdoc />
     public string UserCodeRateLimitGenerationKey(string userCode)
-        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:Generation";
+        => $"Abblix.Oidc.Server:RateLimit:UserCode:{Digest(userCode)}:Generation";
 
     /// <inheritdoc />
     public string FailedAttemptKey(long window, int attempt)
@@ -136,4 +144,10 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <inheritdoc />
     public string NonceSecretKey(long bucket)
         => $"Abblix.Oidc.Server:NonceSecret:{bucket}";
+
+    /// <summary>
+    /// The digest of a credential that stands for it in a storage key.
+    /// </summary>
+    private static string Digest(string credential)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(credential)));
 }

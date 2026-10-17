@@ -174,4 +174,73 @@ public class EntityStorageKeyFactoryTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => Factory.RevocationCutoffKey(unknown, "user_42"));
     }
+
+    /// <summary>
+    /// A key built from a credential carries a digest of it: the store's listings and its client's faults quote keys,
+    /// and must not hand out an authorization code, a CIBA request id, a device code or a user code.
+    /// </summary>
+    [Fact]
+    public void AKeyBuiltFromACredential_DoesNotCarryIt()
+    {
+        const string credential = Credential;
+
+        string[] keys =
+        [
+            Factory.AuthorizedGrantKey(credential),
+            Factory.BackChannelAuthenticationRequestKey(credential),
+            Factory.BackChannelAuthenticationNextPollKey(credential),
+            Factory.DeviceAuthorizationRequestKey(credential),
+            Factory.DeviceAuthorizationNextPollKey(credential),
+            Factory.DeviceAuthorizationUserCodeKey(credential),
+            Factory.UserCodeRateLimitAttemptKey(credential, "life", 1),
+            Factory.UserCodeRateLimitGenerationKey(credential),
+        ];
+
+        Assert.All(keys, key => Assert.DoesNotContain(credential, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Every node and every later version builds the same key for the same credential, which is what lets one of them
+    /// find the entry another wrote. Pinned to the digest itself, so a key that differed per process or changed its
+    /// spelling between versions fails here rather than in a cluster.
+    /// </summary>
+    [Theory]
+    [InlineData(nameof(IEntityStorageKeyFactory.AuthorizedGrantKey), "Abblix.Oidc.Server:Grant:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.BackChannelAuthenticationRequestKey), "Abblix.Oidc.Server:CIBA:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.BackChannelAuthenticationNextPollKey), "Abblix.Oidc.Server:NextPoll:CIBA:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.DeviceAuthorizationRequestKey), "Abblix.Oidc.Server:Device:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.DeviceAuthorizationNextPollKey), "Abblix.Oidc.Server:NextPoll:Device:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.DeviceAuthorizationUserCodeKey), "Abblix.Oidc.Server:UserCode:" + CredentialDigest)]
+    [InlineData(nameof(IEntityStorageKeyFactory.UserCodeRateLimitGenerationKey), "Abblix.Oidc.Server:RateLimit:UserCode:" + CredentialDigest + ":Generation")]
+    public void AKeyBuiltFromACredential_IsItsDigestUnderTheEntryName(string method, string expected)
+    {
+        var key = method switch
+        {
+            nameof(IEntityStorageKeyFactory.AuthorizedGrantKey) => Factory.AuthorizedGrantKey(Credential),
+            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationRequestKey) => Factory.BackChannelAuthenticationRequestKey(Credential),
+            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationNextPollKey) => Factory.BackChannelAuthenticationNextPollKey(Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationRequestKey) => Factory.DeviceAuthorizationRequestKey(Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationNextPollKey) => Factory.DeviceAuthorizationNextPollKey(Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationUserCodeKey) => Factory.DeviceAuthorizationUserCodeKey(Credential),
+            nameof(IEntityStorageKeyFactory.UserCodeRateLimitGenerationKey) => Factory.UserCodeRateLimitGenerationKey(Credential),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, "No such key method in this test"),
+        };
+
+        Assert.Equal(expected, key);
+    }
+
+    [Fact]
+    public void AnAttemptKeyOfAUserCode_IsItsDigestUnderTheEntryName()
+        => Assert.Equal(
+            "Abblix.Oidc.Server:RateLimit:UserCode:" + CredentialDigest + ":life:Attempt:1",
+            Factory.UserCodeRateLimitAttemptKey(Credential, "life", 1));
+
+    [Fact]
+    public void DifferentCredentials_GetDifferentKeys()
+        => Assert.NotEqual(Factory.AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-b"));
+
+    private const string Credential = "SplxlOBeZQQYbYS6WxSbIA";
+
+    // SHA-256 of Credential in UTF-8, lower-case hexadecimal, computed outside the code under test.
+    private const string CredentialDigest = "a35b81a7d7927b70ec99270dd2362b88580a28574af812f2c02f56469579186f";
 }
