@@ -57,7 +57,7 @@ public partial class PingModeCompletionHandler(
     /// access_denied.</param>
     /// <param name="expiresIn">How long the denied request stays readable.</param>
     protected override async Task RefuseAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal,
         TimeSpan expiresIn)
@@ -88,7 +88,7 @@ public partial class PingModeCompletionHandler(
     /// <param name="clientInfo">Client information for validation.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     protected override async Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)

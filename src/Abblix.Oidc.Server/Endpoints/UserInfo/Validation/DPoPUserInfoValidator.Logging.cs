@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
@@ -41,5 +42,5 @@ partial class DPoPUserInfoValidator
         EventId = LogEvents.DPoP.DPoPUserInfoValidator.SchemeBindingMismatch,
         Level = LogLevel.Warning,
         Message = "Authorization scheme/binding mismatch at UserInfo endpoint: presented scheme={PresentedScheme}, access-token DPoP-bound={TokenIsBound} (RFC 9449 section 7.1).")]
-    private partial void LogSchemeBindingMismatch(string presentedScheme, bool tokenIsBound);
+    private partial void LogSchemeBindingMismatch(Sanitized presentedScheme, bool tokenIsBound);
 }

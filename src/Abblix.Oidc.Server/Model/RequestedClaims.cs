@@ -7,12 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// Represents claims requested for inclusion in the UserInfo response and ID Token in OAuth2 or OpenID Connect authentication flows.
 /// </summary>
+[ExternalInput]
 public record RequestedClaims
 {
     /// <summary>

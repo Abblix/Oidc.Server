@@ -58,7 +58,7 @@ public partial class InMemoryLongPollingService(
     /// Uses TaskCompletionSource to efficiently wait without blocking threads.
     /// </summary>
     public async Task<bool> WaitForStatusChangeAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
@@ -122,7 +122,7 @@ public partial class InMemoryLongPollingService(
     }
 
     // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
-    private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
+    private bool LogCancellation(OperationCanceledException ex, [Credential] string authenticationRequestId)
     {
         LogWaitCancelled(ex, fingerprints.Of(authenticationRequestId));
         return false;
@@ -133,7 +133,7 @@ public partial class InMemoryLongPollingService(
     /// Signals all TaskCompletionSource objects waiting for this auth_req_id.
     /// </summary>
     public Task NotifyStatusChangeAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationStatus newStatus)
     {
         if (!_waiters.TryRemove(authenticationRequestId, out var waiters))

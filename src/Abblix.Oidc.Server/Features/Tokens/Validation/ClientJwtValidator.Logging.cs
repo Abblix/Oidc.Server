@@ -48,7 +48,7 @@ partial class ClientJwtValidator
         EventId = LogEvents.Tokens.ClientJwtValidator.TimestampUnreadable,
         Level = LogLevel.Warning,
         Message = "The token from {ClientId} carries a timestamp that cannot be read: {WhyUnreadable}")]
-    private partial void LogTimestampUnreadable(string ClientId, string WhyUnreadable);
+    private partial void LogTimestampUnreadable(string ClientId, Sanitized WhyUnreadable);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.AudienceValidationFailed,

@@ -9,6 +9,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Model;
@@ -17,6 +18,7 @@ namespace Abblix.Oidc.Server.Model;
 /// Parameters of an RP-initiated logout request to the OpenID Provider's <c>end_session_endpoint</c>,
 /// as defined in OpenID Connect RP-Initiated Logout 1.0.
 /// </summary>
+[ExternalInput]
 public record EndSessionRequest
 {
 	/// <summary>

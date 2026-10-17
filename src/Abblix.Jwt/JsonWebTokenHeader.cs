@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.Jwt;
 
@@ -20,6 +21,7 @@ namespace Abblix.Jwt;
 /// The JWT header typically specifies the cryptographic operations applied to the JWT
 /// and can also include additional properties defined or required by the application.
 /// </remarks>
+[ExternalInput]
 public class JsonWebTokenHeader(JsonObject json)
 {
     /// <summary>

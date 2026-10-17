@@ -9,6 +9,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
@@ -86,7 +87,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>A formatted storage key for the device authorization request.</returns>
-    public string DeviceAuthorizationRequestKey(string deviceCode)
+    public string DeviceAuthorizationRequestKey([Credential] string deviceCode)
         => $"Abblix.Oidc.Server:Device:{Digest(deviceCode)}";
 
     /// <inheritdoc />
@@ -94,7 +95,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:NextPoll:CIBA:{Digest(requestId)}";
 
     /// <inheritdoc />
-    public string DeviceAuthorizationNextPollKey(string deviceCode)
+    public string DeviceAuthorizationNextPollKey([Credential] string deviceCode)
         => $"Abblix.Oidc.Server:NextPoll:Device:{Digest(deviceCode)}";
 
     /// <summary>
@@ -102,15 +103,15 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>
     /// <returns>A formatted storage key for the user code mapping.</returns>
-    public string DeviceAuthorizationUserCodeKey(string userCode)
+    public string DeviceAuthorizationUserCodeKey([Credential] string userCode)
         => $"Abblix.Oidc.Server:UserCode:{Digest(userCode)}";
 
     /// <inheritdoc />
-    public string UserCodeRateLimitAttemptKey(string userCode, string life, int attempt)
+    public string UserCodeRateLimitAttemptKey([Credential] string userCode, string life, int attempt)
         => $"Abblix.Oidc.Server:RateLimit:UserCode:{Digest(userCode)}:{life}:Attempt:{attempt}";
 
     /// <inheritdoc />
-    public string UserCodeRateLimitGenerationKey(string userCode)
+    public string UserCodeRateLimitGenerationKey([Credential] string userCode)
         => $"Abblix.Oidc.Server:RateLimit:UserCode:{Digest(userCode)}:Generation";
 
     /// <inheritdoc />

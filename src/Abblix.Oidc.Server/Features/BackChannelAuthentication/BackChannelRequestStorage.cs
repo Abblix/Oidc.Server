@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
@@ -52,7 +53,7 @@ public class BackChannelRequestStorage(
 	/// A task that returns the authentication request if found;
 	/// otherwise, null.
 	/// </returns>
-	public Task<BackChannelAuthenticationRequest?> TryGetAsync(string authenticationRequestId)
+	public Task<BackChannelAuthenticationRequest?> TryGetAsync([Credential] string authenticationRequestId)
 	{
 		// A status read must NOT consume the request. The CIBA grant handler calls this on every poll/ping
 		// to inspect the status and only redeems once, via TryRemoveAsync, on successful token issuance.
@@ -105,7 +106,7 @@ public class BackChannelRequestStorage(
 	/// nobody to lose to, its outcome being the request gone with nobody able to be told they took it. A
 	/// store call that fails after the removal raises instead of answering.
 	/// </returns>
-	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId)
+	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync([Credential] string authenticationRequestId)
 	{
 		return storage.GetAsync<BackChannelAuthenticationRequest>(
 			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),

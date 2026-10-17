@@ -43,7 +43,7 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
     /// an exception instead of a result.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
         var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);

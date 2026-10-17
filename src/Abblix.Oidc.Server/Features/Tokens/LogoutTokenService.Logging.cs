@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
@@ -17,5 +18,5 @@ partial class LogoutTokenService
         EventId = LogEvents.Tokens.LogoutTokenService.TokenPrepared,
         Level = LogLevel.Debug,
         Message = "The logout token {JwtId} was prepared for {ClientId}")]
-    private partial void LogTokenPrepared(string? JwtId, string ClientId);
+    private partial void LogTokenPrepared(Sanitized JwtId, string ClientId);
 }

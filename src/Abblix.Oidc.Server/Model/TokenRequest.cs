@@ -10,6 +10,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -20,6 +21,7 @@ namespace Abblix.Oidc.Server.Model;
 /// where clients can request tokens based on different grant types like 'authorization_code', 'refresh_token'
 /// and others.
 /// </summary>
+[ExternalInput]
 public record TokenRequest
 {
 	/// <summary>
@@ -117,6 +119,7 @@ public record TokenRequest
 	/// This is used in the authorization code grant type to exchange for an access token.
 	/// </summary>
 	[JsonPropertyName(Parameters.Code)]
+	[Credential]
 	public string? Code { get; set; }
 
 	/// <summary>
@@ -145,6 +148,7 @@ public record TokenRequest
 	/// The refresh token used to get a new access token. Required when using the refresh token grant type.
 	/// </summary>
 	[JsonPropertyName(Parameters.RefreshToken)]
+	[Credential]
 	public string? RefreshToken { get; set; }
 
 	/// <summary>
@@ -165,6 +169,7 @@ public record TokenRequest
 	/// The password of the resource owner, required when using the resource owner password credentials grant type.
 	/// </summary>
 	[JsonPropertyName(Parameters.Password)]
+	[Credential]
 	public string? Password { get; set; }
 
 	/// <summary>
@@ -172,6 +177,7 @@ public record TokenRequest
 	/// Required for public clients using the authorization code grant type to enhance security.
 	/// </summary>
 	[JsonPropertyName(Parameters.CodeVerifier)]
+	[Credential]
 	public string? CodeVerifier { get; set; }
 
 	/// <summary>
@@ -179,6 +185,7 @@ public record TokenRequest
 	/// This identifier references a backchannel authentication request initiated by the client.
 	/// </summary>
 	[JsonPropertyName(Parameters.AuthenticationRequestId)]
+	[Credential]
 	public string? AuthenticationRequestId { get; set; }
 
 	/// <summary>
@@ -186,6 +193,7 @@ public record TokenRequest
 	/// This contains a signed JWT with claims about the resource owner and is used to request an access token.
 	/// </summary>
 	[JsonPropertyName(Parameters.Assertion)]
+	[Credential]
 	public string? Assertion { get; set; }
 
 	/// <summary>
@@ -193,6 +201,7 @@ public record TokenRequest
 	/// This code is obtained from the device authorization endpoint and used to poll for tokens.
 	/// </summary>
 	[JsonPropertyName(Parameters.DeviceCode)]
+	[Credential]
 	public string? DeviceCode { get; set; }
 
 	/// <summary>
@@ -200,6 +209,7 @@ public record TokenRequest
 	/// <see cref="GrantTypes.TokenExchange"/>.
 	/// </summary>
 	[JsonPropertyName(Parameters.SubjectToken)]
+	[Credential]
 	public string? SubjectToken { get; set; }
 
 	/// <summary>
@@ -214,6 +224,7 @@ public record TokenRequest
 	/// flows. Optional. When present, <see cref="ActorTokenType"/> MUST also be present.
 	/// </summary>
 	[JsonPropertyName(Parameters.ActorToken)]
+	[Credential]
 	public string? ActorToken { get; set; }
 
 	/// <summary>

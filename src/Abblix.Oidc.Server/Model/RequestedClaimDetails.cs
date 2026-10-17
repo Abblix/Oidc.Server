@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -14,6 +15,7 @@ namespace Abblix.Oidc.Server.Model;
 /// Represents the details of a requested claim in OAuth2 or OpenID Connect scenarios.
 /// This can include whether the claim is essential, and specific values or a range of values for the claim.
 /// </summary>
+[ExternalInput]
 public record RequestedClaimDetails
 {
     /// <summary>

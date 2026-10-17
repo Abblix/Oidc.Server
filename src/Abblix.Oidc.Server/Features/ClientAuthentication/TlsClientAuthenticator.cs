@@ -90,11 +90,11 @@ public partial class TlsClientAuthenticator(
         var certJwk = certificate.ToJsonWebKey();
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
-            LogNoMatchingPublicKey(clientId);
+            LogNoMatchingPublicKey(client.ClientId);
             return null;
         }
 
-        LogAuthenticated(clientId);
+        LogAuthenticated(client.ClientId);
         return client;
     }
 

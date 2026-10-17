@@ -55,7 +55,7 @@ public partial class AuthenticationCompletionRouter(
     /// <param name="request">The authentication request to mark as completed.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     public async Task CompleteAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
@@ -64,7 +64,7 @@ public partial class AuthenticationCompletionRouter(
     }
 
     /// <inheritdoc />
-    public async Task DenyAsync(string authenticationRequestId, TimeSpan expiresIn)
+    public async Task DenyAsync([Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
         var (handler, _) = await RouteAsync(authenticationRequestId, "denied");
         await handler.DenyAuthenticationAsync(authenticationRequestId, expiresIn);
@@ -83,7 +83,7 @@ public partial class AuthenticationCompletionRouter(
     /// <param name="authenticationRequestId">The request being answered.</param>
     /// <param name="answered">What the caller is doing, for the refusals: completed or denied.</param>
     private async Task<(AuthenticationCompletionHandler Handler, ClientInfo ClientInfo)> RouteAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         string answered)
     {
         var stored = await storage.TryGetAsync(authenticationRequestId);

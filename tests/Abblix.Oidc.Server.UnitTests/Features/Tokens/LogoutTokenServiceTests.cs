@@ -93,7 +93,7 @@ public class LogoutTokenServiceTests
         await service.CreateLogoutTokenAsync(clientInfo, logoutContext);
 
         var record = Assert.Single(loggers.Entries);
-        Assert.Equal("unique-jwt-id-1", record.Value("JwtId"));
+        Assert.Equal("unique-jwt-id-1", record.Value("JwtId")?.ToString());
         Assert.Equal(clientInfo.ClientId, record.Value("ClientId"));
         Assert.DoesNotContain(SessionId, record.Message);
     }

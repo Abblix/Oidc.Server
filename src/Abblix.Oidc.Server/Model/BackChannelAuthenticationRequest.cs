@@ -9,6 +9,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -20,6 +21,7 @@ namespace Abblix.Oidc.Server.Model;
 /// (out of band, on a separate device); the OP returns a <c>auth_req_id</c> the client then redeems
 /// at the token endpoint via the <c>urn:openid:params:grant-type:ciba</c> grant.
 /// </summary>
+[ExternalInput]
 public record BackChannelAuthenticationRequest
 {
     /// <summary>

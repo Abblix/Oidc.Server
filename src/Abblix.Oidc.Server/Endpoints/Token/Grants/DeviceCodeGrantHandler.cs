@@ -95,7 +95,7 @@ public partial class DeviceCodeGrantHandler(
     /// <param name="deviceRequest">What the store held when it was read, or null when it held nothing.</param>
     /// <param name="now">The one clock reading this answer is decided on.</param>
     private async Task<Result<AuthorizedGrant, OidcError>> DecideAsync(
-        string deviceCode,
+        [Credential] string deviceCode,
         ClientInfo clientInfo,
         Features.DeviceAuthorization.DeviceAuthorizationRequest? deviceRequest,
         DateTimeOffset now)

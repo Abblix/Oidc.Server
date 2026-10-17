@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
@@ -17,7 +18,7 @@ partial class BackChannelLogoutTokenSender
         EventId = LogEvents.Device.BackChannelLogoutTokenSender.RequestSent,
         Level = LogLevel.Debug,
         Message = "The logout token {JwtId} was sent to {Uri}, the status code {StatusCode} was received")]
-    private partial void LogRequestSent(string? JwtId, Uri Uri, HttpStatusCode StatusCode);
+    private partial void LogRequestSent(Sanitized JwtId, Uri Uri, HttpStatusCode StatusCode);
 
     [LoggerMessage(
         EventId = LogEvents.Device.BackChannelLogoutTokenSender.SendFailed,

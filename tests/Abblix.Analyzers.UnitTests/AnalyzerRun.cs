@@ -27,6 +27,9 @@ internal static class AnalyzerRun
             .Split(Path.PathSeparator)
             // The host may list an assembly the runtime folder does not carry; there is nothing to read.
             .Where(File.Exists)
+            // The runtime only, not what this test project references: a sample declares the product types a rule
+            // looks for itself, and one the real assembly also offered could not be left out to show the rule off.
+            .Where(path => !Path.GetFullPath(path).StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase))
             .Select(path => MetadataReference.CreateFromFile(path)),
     ];
 

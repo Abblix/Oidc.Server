@@ -8,6 +8,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Model;
@@ -17,6 +18,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <c>introspection_endpoint</c>, used by protected resources to determine the active state and metadata
 /// of a token. Client authentication is required and is supplied alongside this payload.
 /// </summary>
+[ExternalInput]
 public record IntrospectionRequest
 {
 	/// <summary>
@@ -39,6 +41,7 @@ public record IntrospectionRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Token)]
 	[Required]
+	[Credential]
 	public string Token { get; set; } = null!;
 
 	/// <summary>

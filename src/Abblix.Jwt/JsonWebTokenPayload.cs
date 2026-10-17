@@ -8,6 +8,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Abblix.Utils;
 
 namespace Abblix.Jwt;
 
@@ -19,6 +20,7 @@ namespace Abblix.Jwt;
 /// such as issuer, subject, expiration time, and more can be included, as well as additional claims as needed.
 /// This class provides a convenient way to work with the payload, allowing for easy access and modification of claims.
 /// </remarks>
+[ExternalInput]
 public class JsonWebTokenPayload(JsonObject json)
 {
 	/// <summary>

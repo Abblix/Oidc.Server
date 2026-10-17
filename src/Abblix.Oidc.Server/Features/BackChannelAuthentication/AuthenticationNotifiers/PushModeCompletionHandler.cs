@@ -66,7 +66,7 @@ public partial class PushModeCompletionHandler(
     /// <param name="refusal">The error sent.</param>
     /// <param name="expiresIn">Unused: nothing is left behind to expire.</param>
     protected override async Task RefuseAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal,
         TimeSpan expiresIn)
@@ -97,7 +97,7 @@ public partial class PushModeCompletionHandler(
     /// <param name="clientInfo">Client information for token generation.</param>
     /// <param name="expiresIn">Unused: push leaves no record behind.</param>
     protected override async Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
@@ -202,7 +202,7 @@ public partial class PushModeCompletionHandler(
     /// Issues the tokens of a taken push request, telling the client the transaction failed when issuing throws.
     /// </summary>
     private async Task<Result<TokenIssued, OidcError>> IssueTokensAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo)
     {
@@ -246,7 +246,7 @@ public partial class PushModeCompletionHandler(
     /// registered nowhere to send it.
     /// </remarks>
     private async Task SendErrorAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal)
     {

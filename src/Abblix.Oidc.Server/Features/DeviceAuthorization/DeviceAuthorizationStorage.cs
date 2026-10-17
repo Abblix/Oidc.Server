@@ -34,7 +34,7 @@ public partial class DeviceAuthorizationStorage(
     TimeProvider timeProvider) : IDeviceAuthorizationStorage
 {
     /// <inheritdoc />
-    public async Task StoreAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
+    public async Task StoreAsync([Credential] string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
         // Persist the absolute expiry so a regularly-polling client cannot extend the code: the token
         // endpoint derives the remaining cache TTL from this fixed instant instead of resetting the full
@@ -57,13 +57,13 @@ public partial class DeviceAuthorizationStorage(
     }
 
     /// <inheritdoc />
-    public Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync(string deviceCode)
+    public Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync([Credential] string deviceCode)
         => storage.GetAsync<DeviceAuthorizationRequest>(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),
             removeOnRetrieval: false);
 
     /// <inheritdoc />
-    public async Task<(string DeviceCode, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync(string userCode)
+    public async Task<(string DeviceCode, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync([Credential] string userCode)
     {
         var deviceCode = await storage.GetAsync<string>(
             keyFactory.DeviceAuthorizationUserCodeKey(userCode),
@@ -80,7 +80,7 @@ public partial class DeviceAuthorizationStorage(
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
+    public Task UpdateAsync([Credential] string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
         // record's fixed ExpiresAt (RFC 8628 section 3.2) and gates on expiry first, so polling cannot extend the
@@ -92,7 +92,7 @@ public partial class DeviceAuthorizationStorage(
     }
 
     /// <inheritdoc />
-    public async Task RemoveAsync(string deviceCode)
+    public async Task RemoveAsync([Credential] string deviceCode)
     {
         // The secondary index is best-effort here for the same reason it is in TryRemoveAsync: it is not
         // what the caller asked for. The token endpoint calls this from its expired and denied arms and
@@ -179,7 +179,7 @@ public partial class DeviceAuthorizationStorage(
     /// not be the removed request's, and it carries its own expiry either way.
     /// </para>
     /// </returns>
-    public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
+    public async Task<bool> TryRemoveAsync([Credential] string deviceCode, [Credential] string userCode)
     {
         var claimed = await storage.GetAsync<DeviceAuthorizationRequest>(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),

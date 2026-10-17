@@ -12,6 +12,7 @@ using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -22,6 +23,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <remarks>
 /// See the OpenID Connect Registration specification at https://openid.net/specs/openid-connect-registration-1_0.html.
 /// </remarks>
+[ExternalInput]
 public record ClientRegistrationRequest
 {
     /// <summary>

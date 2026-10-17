@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -36,7 +37,7 @@ public partial class UserCodeVerificationService(
     TimeProvider timeProvider) : IUserCodeVerificationService
 {
     /// <inheritdoc />
-    public async Task<UserCodeVerificationResult> VerifyAsync(string userCode)
+    public async Task<UserCodeVerificationResult> VerifyAsync([Credential] string userCode)
     {
         // Canonicalize before both rate limiting and lookup: this accepts the readability variants
         // the user may have typed and keeps a single rate-limit bucket per logical code, so case or
@@ -105,7 +106,7 @@ public partial class UserCodeVerificationService(
     }
 
     /// <inheritdoc />
-    public async Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant)
+    public async Task<bool> ApproveAsync([Credential] string userCode, AuthorizedGrant authorizedGrant)
     {
         userCode = normalizer.Normalize(userCode);
 
@@ -182,7 +183,7 @@ public partial class UserCodeVerificationService(
     }
 
     /// <inheritdoc />
-    public async Task<bool> DenyAsync(string userCode)
+    public async Task<bool> DenyAsync([Credential] string userCode)
     {
         userCode = normalizer.Normalize(userCode);
 
@@ -247,7 +248,7 @@ public partial class UserCodeVerificationService(
     /// <param name="remaining">The lifetime left, applied as the cache TTL so the code cannot be extended.</param>
     /// <param name="decide">Applies the decision to the freshly read record.</param>
     private async Task<bool> TryDecideAsync(
-        string deviceCode,
+        [Credential] string deviceCode,
         TimeSpan remaining,
         Action<DeviceAuthorizationRequest> decide)
     {
