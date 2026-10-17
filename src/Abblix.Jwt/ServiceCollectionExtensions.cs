@@ -69,6 +69,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IJsonWebTokenCreator, JsonWebTokenCreator>();
         services.TryAddSingleton<IJsonWebTokenValidator, JsonWebTokenValidator>();
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
+        services.TryAddSingleton<JweEncryption>();
+        services.TryAddSingleton<JweDecryption>();
+        services.TryAddSingleton<JweKeyAttempt>();
+        services.TryAddSingleton<LocalKeyEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
 
         // The signing seam behind IJsonWebTokenSigner is a composition of key-owning backends (IDataSigner):
