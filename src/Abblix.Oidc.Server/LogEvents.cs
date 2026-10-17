@@ -726,7 +726,8 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 9000-9099: misc - Discovery, Storage, Issuer, Session, RandomGenerator.
+    /// Range 9000-9119: misc - Discovery, Storage, Issuer, Session, RandomGenerator, and the stand-in provider of
+    /// user information.
     /// </summary>
     public static class Misc
     {
@@ -788,6 +789,17 @@ internal static class LogEvents
             private const int Base = 9080;
 
             public const int ServingLastKnownKeys = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/UserInfo/NoUserInfoProvider.cs</c> - the stand-in for a host that registered no provider of
+        /// user information (sub-range 9100-9119).
+        /// </summary>
+        public static class NoUserInfoProvider
+        {
+            private const int Base = 9100;
+
+            public const int NoProviderRegistered = Base + 1;
         }
     }
 

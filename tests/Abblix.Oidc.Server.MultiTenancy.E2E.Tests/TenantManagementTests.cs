@@ -74,7 +74,6 @@ public sealed class TenantManagementTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(options => options.EnabledEndpoints = OidcEndpoints.Base);
 
         builder.Services.AddSingleton<ITenantStore>(_store);

@@ -375,7 +375,6 @@ public sealed class SharedSignalsTenantIsolationTests
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(_ => { });
 
         builder.Services.AddSecurityEvents();

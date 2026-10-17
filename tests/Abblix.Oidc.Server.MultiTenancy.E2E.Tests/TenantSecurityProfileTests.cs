@@ -68,7 +68,6 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options =>
         {

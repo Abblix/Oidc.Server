@@ -50,7 +50,6 @@ public sealed class HostRequestOutsideTenantsTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
         {

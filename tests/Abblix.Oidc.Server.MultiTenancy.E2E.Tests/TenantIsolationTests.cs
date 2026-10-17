@@ -88,7 +88,6 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
 
         // Grant features before AddOidcServices, which composes the grant handlers.
         builder.Services.AddDeviceAuthorization();

@@ -10,7 +10,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -122,7 +121,6 @@ public sealed class TenantLicenseStartupTests
 
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
-        builder.Services.AddSingleton<IUserInfoProvider, NoUserInfoProvider>();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options =>
         {
