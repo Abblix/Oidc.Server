@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Collections.Frozen;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
@@ -31,6 +32,11 @@ internal sealed partial class JweDecryptionLog(
     private const string UnregisteredAlgorithm = "(unregistered)";
     private const char ReplacedControlCharacter = '?';
 
+    // Read once: the registrations are fixed when the container is built, and a flood of forged tokens would
+    // otherwise enumerate them on every refusal.
+    private readonly FrozenSet<string> _registeredAlgorithms =
+        algorithms.KeyManagementAlgorithms.ToFrozenSet(StringComparer.Ordinal);
+
     /// <summary>
     /// No key was a candidate for the token.
     /// </summary>
@@ -44,7 +50,7 @@ internal sealed partial class JweDecryptionLog(
         => LogNoKeyOpened(Algorithm(envelope), envelope.EncryptionAlgorithm, KeyId(envelope), keysTried);
 
     private string Algorithm(JweEnvelope envelope)
-        => algorithms.KeyManagementAlgorithms.Contains(envelope.Algorithm, StringComparer.Ordinal)
+        => _registeredAlgorithms.Contains(envelope.Algorithm)
             ? envelope.Algorithm
             : UnregisteredAlgorithm;
 
