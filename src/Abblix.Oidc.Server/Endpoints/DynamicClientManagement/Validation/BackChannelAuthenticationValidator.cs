@@ -56,15 +56,6 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     ErrorCodes.InvalidClientMetadata,
                     "Notification endpoint is required if the token delivery mode is set to ping or push");
 
-            // CIBA Core 1.0 sections 7.1 and 10.1 require the client to authenticate at both endpoints of the flow,
-            // which a client registered with the method "none" never does.
-            case {
-                BackChannelTokenDeliveryMode: not null,
-                TokenEndpointAuthMethod: ClientAuthenticationMethods.None,
-            }:
-                return new OidcError(
-                    ErrorCodes.InvalidClientMetadata,
-                    "A client using backchannel authentication must authenticate to the server");
             // "not null and" is load-bearing since the null-mode exit moved below this switch: null is
             // "not (poll or ping or push)" as much as "carrier-pigeon" is, so without it a registration
             // naming no mode at all would be told its mode is unsupported.
@@ -77,6 +68,15 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
                     "The specified token delivery mode is not supported");
+            // CIBA Core 1.0 sections 7.1 and 10.1 require the client to authenticate at both endpoints of the flow,
+            // which a client registered with the method "none" never does.
+            case {
+                BackChannelTokenDeliveryMode: not null,
+                TokenEndpointAuthMethod: ClientAuthenticationMethods.None,
+            }:
+                return new OidcError(
+                    ErrorCodes.InvalidClientMetadata,
+                    "A client using backchannel authentication must authenticate to the server");
         }
 
         // The VALUE, asked after the mode is settled and before a registration that names no mode can
