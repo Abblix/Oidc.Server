@@ -95,6 +95,25 @@ public sealed class SessionTenantBindingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A page of the host's own, outside every tenant, reads a tenant's session as no session rather than failing.
+    /// </summary>
+    [Fact]
+    public async Task A_page_outside_every_tenant_sees_no_session()
+    {
+        var cookie = await SignInAtAsync(Acme);
+
+        Assert.Null(await WhoIsSignedInAtAsync(string.Empty, cookie));
+    }
+
+    /// <summary>
+    /// A sign-in outside every tenant would belong to no tenant and be read by none, so it is refused.
+    /// </summary>
+    [Fact]
+    public async Task A_sign_in_outside_every_tenant_is_refused()
+        => await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _http.PostAsync(SignInPath, null, TestContext.Current.CancellationToken));
+
+    /// <summary>
     /// Signs alice in at <paramref name="tenant"/> and answers the cookie the browser was handed, as a Cookie header.
     /// </summary>
     private async Task<string> SignInAtAsync(string tenant)

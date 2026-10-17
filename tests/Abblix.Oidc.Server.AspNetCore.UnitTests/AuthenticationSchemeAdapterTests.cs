@@ -618,6 +618,25 @@ public class AuthenticationSchemeAdapterTests
 	}
 
 	/// <summary>
+	/// A session written in this request at acme is not what a read under another tenant in the same request gets.
+	/// </summary>
+	[Fact]
+	public async Task AuthenticateAsync_UnderAnotherTenant_DoesNotSeeASessionWrittenInThisRequest()
+	{
+		SetupCookie();
+		await AtAcme().SignInAsync(Session());
+
+		var globex = new AuthenticationSchemeAdapter(
+			_httpContextAccessor.Object,
+			Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict),
+			_clock,
+			Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == "globex"),
+			Scheme);
+
+		Assert.Null(await globex.AuthenticateAsync());
+	}
+
+	/// <summary>
 	/// A session signed in at a tenant is read back there.
 	/// </summary>
 	[Fact]

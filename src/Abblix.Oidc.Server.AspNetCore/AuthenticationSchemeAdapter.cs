@@ -12,11 +12,13 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using static System.Globalization.CultureInfo;
 using static System.Globalization.NumberStyles;
 
@@ -27,6 +29,11 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// This adapter allows the integration of the Abblix OIDC Server with standard ASP.NET authentication mechanisms,
 /// enabling the use of existing authentication schemes to manage OIDC sessions.
 /// </summary>
+/// <remarks>
+/// On a server with tenants a session belongs to the tenant it was signed in at. A cookie the browser carries to
+/// another tenant reads there as no session, and a sign-in there writes over it without ending it, so the clients of
+/// the first tenant are not told; keeping each tenant's cookie to its own host and path keeps both.
+/// </remarks>
 /// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
 /// allowing operations on the HTTP context of the current request.</param>
 /// <param name="authSessionTerminator">Ends the session a sign-in replaces, for its tokens and its clients.</param>
@@ -80,9 +87,26 @@ public class AuthenticationSchemeAdapter(
 	private const string TenantClaimType = "abblix_tenant";
 
 	/// <summary>
-	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
+	/// The request item holding the session this scheme last wrote for the current tenant, or null once it signed out,
+	/// in the request.
 	/// </summary>
-	private (Type, string) WrittenInThisRequest => (typeof(AuthenticationSchemeAdapter), authenticationScheme);
+	private (Type, string, string) WrittenInThisRequest
+		=> (typeof(AuthenticationSchemeAdapter), authenticationScheme, CurrentTenant ?? string.Empty);
+
+	/// <summary>
+	/// The tenant serving this request, as the partition of its keys names it; empty on a server without tenants, and
+	/// null on a server with tenants for a request that reached none of them, such as a page of the host's own.
+	/// </summary>
+	/// <remarks>
+	/// The tenant is looked up only where the server serves tenants, and asked first whether there is one, since the
+	/// settings of a tenant refuse to answer outside any.
+	/// </remarks>
+#pragma warning disable ABXMT001 // read only where the host turned multi-tenancy on
+	private string? CurrentTenant
+		=> HttpContext.RequestServices.GetService<ITenantAccessor>() is { Current: null }
+			? null
+			: issuerSettings.KeyPartition;
+#pragma warning restore ABXMT001
 
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
@@ -135,21 +159,22 @@ public class AuthenticationSchemeAdapter(
 		if (HttpContext.Items.TryGetValue(WrittenInThisRequest, out var written))
 			return (AuthSession?)written;
 
+		// A session belongs to the tenant it was signed in at, so a request outside every tenant has none
+		if (CurrentTenant is not { } tenant)
+			return null;
+
 		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
-		return authenticationResult.Succeeded && IsOfThisTenant(authenticationResult.Principal)
+		return authenticationResult.Succeeded && IsOf(tenant, authenticationResult.Principal)
 			? ReadSession(authenticationResult.Principal)
 			: null;
 	}
 
 	/// <summary>
-	/// Whether the session <paramref name="principal"/> carries was signed in at the tenant serving this request; a
-	/// session naming no tenant was signed in by a server without tenants.
+	/// Whether the session <paramref name="principal"/> carries was signed in at <paramref name="tenant"/>; a session
+	/// naming no tenant was signed in by a server without tenants.
 	/// </summary>
-	private bool IsOfThisTenant(ClaimsPrincipal principal)
-		=> string.Equals(
-			principal.FindFirstValue(TenantClaimType) ?? string.Empty,
-			issuerSettings.KeyPartition,
-			StringComparison.Ordinal);
+	private static bool IsOf(string tenant, ClaimsPrincipal principal)
+		=> string.Equals(principal.FindFirstValue(TenantClaimType) ?? string.Empty, tenant, StringComparison.Ordinal);
 
 	/// <summary>
 	/// Reads the OIDC session a principal written by this adapter carries, or null when it carries none.
@@ -270,6 +295,9 @@ public class AuthenticationSchemeAdapter(
 	public async Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
 	{
 		RequireReadableBack(authSession);
+		var tenant = CurrentTenant ?? throw new InvalidOperationException(
+			"A session cannot be signed in outside every tenant: it would belong to no tenant and be read by none. " +
+			"Sign the end user in under the path of the tenant they sign in to.");
 
 		var replaced = await AuthenticateAsync();
 		AuthSession[] endedSessions = [];
@@ -278,7 +306,7 @@ public class AuthenticationSchemeAdapter(
 		else if (replaced != null)
 			endedSessions = [replaced];
 
-		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, issuerSettings.KeyPartition);
+		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, tenant);
 
 		await HttpContext.SignInAsync(authenticationScheme, principal);
 
