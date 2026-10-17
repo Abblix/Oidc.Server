@@ -110,7 +110,7 @@ public partial class LogoutTokenService(
         // cannot be inherited.
         logoutToken.Header.Algorithm = ResolveSigningAlgorithm(clientInfo);
 
-        LogTokenPrepared(logoutToken);
+        LogTokenPrepared(logoutToken.Payload.JwtId, clientInfo.ClientId);
 
         var jwt = await jwtFormatter.FormatAsync(
             logoutToken,

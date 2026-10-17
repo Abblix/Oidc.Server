@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -275,6 +276,21 @@ public class UserCodeRateLimiterTests
         await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
 
         Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A user code is what a person types to approve a device, so the records of its failures, its block and its
+    /// verification name it by fingerprint: they can be told to concern one code, and the code is in none of them.
+    /// </summary>
+    [Fact]
+    public async Task TheRecordsOfACode_NameItOnlyByFingerprint()
+    {
+        await Fail(5);
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        Assert.NotEmpty(_logs.Entries);
+        Assert.All(_logs.Entries, entry => Assert.DoesNotContain(UserCode, entry.Message));
+        Assert.Contains(_logs.Entries, entry => entry.Message.Contains(Fingerprint.Of(UserCode).ToString()));
     }
 
     /// <summary>

@@ -89,6 +89,29 @@ public class BackChannelLogoutTokenSenderTests
     }
 
     /// <summary>
+    /// The logout token is signed and names a user's session, so the record of sending it names the token by its id
+    /// and never carries the token itself.
+    /// </summary>
+    [Fact]
+    public async Task SendBackChannelLogoutAsync_RecordsTheTokenByIdNotByValue()
+    {
+        const string encodedJwt = "eyJhbGciOiJSUzI1NiJ9.eyJzaWQiOiJzZXNzaW9uIn0.c2lnbmF0dXJl";
+        var loggers = new RecordingLoggerFactory();
+        var sender = new BackChannelLogoutTokenSender(
+            loggers.CreateLogger<BackChannelLogoutTokenSender>(), _httpClient);
+        SetupHttpResponse(HttpStatusCode.OK);
+
+        await sender.SendBackChannelLogoutAsync(CreateClientInfo(), CreateLogoutToken(encodedJwt));
+
+        Assert.NotEmpty(loggers.Entries);
+        Assert.All(loggers.Entries, entry =>
+        {
+            Assert.DoesNotContain(encodedJwt, entry.Message);
+            Assert.DoesNotContain(entry.State ?? [], pair => pair.Value?.ToString()?.Contains(encodedJwt) == true);
+        });
+    }
+
+    /// <summary>
     /// Verifies successful token sending with 200 OK response.
     /// Per OpenID Connect Back-Channel Logout, 200 OK indicates successful delivery.
     /// </summary>

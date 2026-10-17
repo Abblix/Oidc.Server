@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
 
@@ -110,7 +111,7 @@ public partial class DeviceAuthorizationStorage(
             }
             catch (Exception exception)
             {
-                LogUserCodeIndexNotRemovedBeforeDiscard(exception, userCodeKey);
+                LogUserCodeIndexNotRemovedBeforeDiscard(exception, Fingerprint.Of(request.UserCode));
             }
         }
 
@@ -198,21 +199,20 @@ public partial class DeviceAuthorizationStorage(
         //
         // Swallowed, not hidden. Nothing else in the system reports a dangling index, so without this line
         // an operator has no way to learn the store refused a write at all.
-        var deviceCodeKey = keyFactory.DeviceAuthorizationRequestKey(deviceCode);
         try
         {
             await storage.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
         }
         catch (Exception exception)
         {
-            // The DEVICE code key, not the user-code one. Nothing checks that the user code the caller
+            // The DEVICE code, not the user code. Nothing checks that the user code the caller
             // handed over belongs to the request just claimed, and on the public interface a host may
             // hand it a live one, so the key that was tried is not known to name this request. The device
             // code carries no such doubt: this line is reached only because the claim removed it.
             //
             // The claimed record carries the right user code and would settle that, which is a change to
             // what this method does with its argument rather than to how it reports a refusal.
-            LogUserCodeIndexNotRemovedAfterClaim(exception, deviceCodeKey);
+            LogUserCodeIndexNotRemovedAfterClaim(exception, Fingerprint.Of(deviceCode));
         }
 
         return true;
