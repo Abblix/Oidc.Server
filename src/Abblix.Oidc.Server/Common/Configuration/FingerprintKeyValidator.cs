@@ -11,9 +11,9 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses at startup a <see cref="OidcOptions.LogFingerprintKey"/> that cannot key the fingerprints of credentials.
+/// Refuses at startup a <see cref="OidcOptions.FingerprintKey"/> that cannot key the fingerprints of credentials.
 /// </summary>
-public sealed class LogFingerprintKeyValidator : IValidateOptions<OidcOptions>
+public sealed class FingerprintKeyValidator : IValidateOptions<OidcOptions>
 {
     /// <summary>
     /// The least decoded length of the key: 256 bits, so the fingerprint of a short code cannot be searched for by
@@ -24,20 +24,20 @@ public sealed class LogFingerprintKeyValidator : IValidateOptions<OidcOptions>
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        if (options.LogFingerprintKey is not { } key)
+        if (options.FingerprintKey is not { } key)
             return ValidateOptionsResult.Success;
 
         var buffer = new byte[key.Length];
         if (!Convert.TryFromBase64String(key, buffer, out var length))
         {
             return ValidateOptionsResult.Fail(
-                $"{nameof(OidcOptions.LogFingerprintKey)} is not valid base64.");
+                $"{nameof(OidcOptions.FingerprintKey)} is not valid base64.");
         }
 
         if (length < MinKeyBytes)
         {
             return ValidateOptionsResult.Fail(
-                $"{nameof(OidcOptions.LogFingerprintKey)} decodes to {length} bytes; it must carry at least " +
+                $"{nameof(OidcOptions.FingerprintKey)} decodes to {length} bytes; it must carry at least " +
                 $"{MinKeyBytes}.");
         }
 

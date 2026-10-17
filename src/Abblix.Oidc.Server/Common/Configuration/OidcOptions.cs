@@ -63,7 +63,7 @@ public record OidcOptions
 	/// It protects what the log would otherwise give away, so keep it out of the log's reach: anybody holding it can
 	/// try every user code against a fingerprint.
 	/// </remarks>
-	public string? LogFingerprintKey { get; set; }
+	public string? FingerprintKey { get; set; }
 
 	/// <summary>
 	/// A collection of client configurations supported by this OIDC server. Each <see cref="ClientInfo"/> object
