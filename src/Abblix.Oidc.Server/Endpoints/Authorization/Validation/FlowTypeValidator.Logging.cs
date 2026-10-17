@@ -22,12 +22,12 @@ partial class FlowTypeValidator
     [LoggerMessage(
         EventId = LogEvents.Endpoints.FlowTypeValidator.ResponseTypeNotAllowed,
         Level = LogLevel.Warning,
-        Message = "The response type {@ResponseType} is not allowed for the client")]
+        Message = "The response type {ResponseType} is not allowed for the client")]
     private partial void LogResponseTypeNotAllowed(Sanitized[]? ResponseType);
 
     [LoggerMessage(
         EventId = LogEvents.Endpoints.FlowTypeValidator.ResponseTypeInvalid,
         Level = LogLevel.Warning,
-        Message = "The response type {@ResponseType} is not valid")]
+        Message = "The response type {ResponseType} is not valid")]
     private partial void LogResponseTypeInvalid(Sanitized[]? ResponseType);
 }

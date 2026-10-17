@@ -29,8 +29,8 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.JwtValidationError,
         Level = LogLevel.Warning,
-        Message = "JWT validation error: {@Error}")]
-    private partial void LogJwtValidationError(JwtValidationError Error);
+        Message = "JWT validation error: {Error}")]
+    private partial void LogJwtValidationError(Sanitized Error);
 
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AuthMethodNotAllowed,
@@ -90,7 +90,7 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries {@Audiences} where the profile "
+        Message = "The client assertion for {ClientId} carries {Audiences} where the profile "
                   + "governing it accepts the issuer identifier {IssuerIdentifier} alone")]
     private partial void LogAudienceIsNotTheIssuerAlone(
         string ClientId,

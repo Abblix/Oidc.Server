@@ -53,6 +53,6 @@ partial class ClientJwtValidator
     [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.AudienceValidationFailed,
         Level = LogLevel.Warning,
-        Message = "Audience validation failed, token audiences: {@Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]
+        Message = "Audience validation failed, token audiences: {Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]
     private partial void LogAudienceValidationFailed(Sanitized[] Audiences, string RequestUri, Sanitized Issuer);
 }

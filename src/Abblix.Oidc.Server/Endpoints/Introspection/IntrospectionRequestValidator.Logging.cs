@@ -17,8 +17,8 @@ partial class IntrospectionRequestValidator
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.InvalidJwt,
 		Level = LogLevel.Warning,
-		Message = "The incoming JWT token is invalid: {@JwtValidationError}")]
-	private partial void LogInvalidJwt(JwtValidationError JwtValidationError);
+		Message = "The incoming JWT token is invalid: {JwtValidationError}")]
+	private partial void LogInvalidJwt(Sanitized JwtValidationError);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.PublicClientRejected,

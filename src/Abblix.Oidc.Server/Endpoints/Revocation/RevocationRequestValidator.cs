@@ -193,7 +193,7 @@ public partial class RevocationRequestValidator(
 			},
 			error =>
 			{
-				LogTokenValidationFailed(error);
+				LogTokenValidationFailed(Sanitized.Value(error));
 				return ValidRevocationRequest.InvalidToken(revocationRequest);
 			});
 	}

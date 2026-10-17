@@ -231,7 +231,7 @@ public partial class RequestObjectFetcher(
 
     private OidcError InvalidRequestObject(JwtValidationError error)
     {
-        LogInvalidToken(error);
+        LogInvalidToken(Sanitized.Value(error));
         return new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 

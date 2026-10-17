@@ -17,8 +17,8 @@ partial class RequestObjectFetcher
     [LoggerMessage(
         EventId = LogEvents.Misc.RequestObjectFetcher.InvalidToken,
         Level = LogLevel.Warning,
-        Message = "The request object contains invalid token: {@Error}")]
-    private partial void LogInvalidToken(JwtValidationError Error);
+        Message = "The request object contains invalid token: {Error}")]
+    private partial void LogInvalidToken(Sanitized Error);
 
     [LoggerMessage(
         EventId = LogEvents.Misc.RequestObjectFetcher.SigningAlgorithmMismatch,
