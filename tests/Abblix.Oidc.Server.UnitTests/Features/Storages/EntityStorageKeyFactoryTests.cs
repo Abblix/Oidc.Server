@@ -174,4 +174,39 @@ public class EntityStorageKeyFactoryTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => Factory.RevocationCutoffKey(unknown, "user_42"));
     }
+
+    /// <summary>
+    /// A key built from a credential carries a digest of it: the store's listings and its client's faults quote keys,
+    /// and must not hand out an authorization code, a CIBA request id, a device code or a user code.
+    /// </summary>
+    [Fact]
+    public void AKeyBuiltFromACredential_DoesNotCarryIt()
+    {
+        const string credential = "SplxlOBeZQQYbYS6WxSbIA";
+
+        string[] keys =
+        [
+            Factory.AuthorizedGrantKey(credential),
+            Factory.BackChannelAuthenticationRequestKey(credential),
+            Factory.BackChannelAuthenticationNextPollKey(credential),
+            Factory.DeviceAuthorizationRequestKey(credential),
+            Factory.DeviceAuthorizationNextPollKey(credential),
+            Factory.DeviceAuthorizationUserCodeKey(credential),
+            Factory.UserCodeRateLimitAttemptKey(credential, "life", 1),
+            Factory.UserCodeRateLimitGenerationKey(credential),
+        ];
+
+        Assert.All(keys, key => Assert.DoesNotContain(credential, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Every node builds the same key for the same credential, which is what lets one of them find the entry another
+    /// wrote, and different credentials get different keys.
+    /// </summary>
+    [Fact]
+    public void AKeyBuiltFromACredential_IsTheSameForItAndDifferentForAnother()
+    {
+        Assert.Equal(new EntityStorageKeyFactory().AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-a"));
+        Assert.NotEqual(Factory.AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-b"));
+    }
 }
