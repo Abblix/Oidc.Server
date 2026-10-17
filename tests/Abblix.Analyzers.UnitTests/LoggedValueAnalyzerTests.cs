@@ -56,8 +56,12 @@ public class LoggedValueAnalyzerTests
                 public string? ClientId { get; set; }
                 public string[] Scope { get; set; } = [];
                 public int MaxAge { get; set; }
+                public int? Lifetime { get; set; }
+                public Kind Kind { get; set; }
                 [Credential] public string? Code { get; set; }
             }
+
+            public enum Kind { A, B }
 
             public sealed class Secrets
             {
@@ -71,6 +75,8 @@ public class LoggedValueAnalyzerTests
 
             public sealed class Client
             {
+                public Client() { }
+                public Client(string? clientId) => ClientId = clientId ?? "";
                 public string ClientId { get; set; } = "";
             }
 
@@ -139,6 +145,11 @@ public class LoggedValueAnalyzerTests
     [InlineData("void M(Request request) => LogText(new System.Uri(request.ClientId!).AbsoluteUri);")]
     [InlineData("void M(Request request) => LogText(string.Concat(new System.Collections.Generic.List<string>(request.Scope)));")]
     [InlineData("void M(Request request) { var id = request.ClientId; id = id?.Trim(); LogText(id); }")]
+    [InlineData("void M(Request request) => LogText($\"{request.ClientId![0]}\");")]
+    [InlineData("void M(Request request) => LogText(new string(request.ClientId![0], 3));")]
+    [InlineData("void M(Request request) { if (request.ClientId is string s) LogText(s); }")]
+    [InlineData("void M(Request request) => LogText(new Client(request.ClientId).ClientId);")]
+    [InlineData("void M(Request request) => LogText(System.MemoryExtensions.AsSpan(request.ClientId).ToString());")]
     public async Task AValueFromOutside_LoggedUnsanitized_IsReported(string body)
         => Assert.Equal([LoggedValueAnalyzer.ExternalInputRule.Id], await IdsOf(body));
 
@@ -148,6 +159,7 @@ public class LoggedValueAnalyzerTests
     [InlineData("void M(Request request) => LogSanitizedList(Sanitized.Values(request.Scope));")]
     [InlineData("void M(Request request) => LogFingerprint(Fingerprints.Of(request.ClientId));")]
     [InlineData("void M(Request request) => LogSanitizedSequence(Sanitized.Values(request.Scope));")]
+    [InlineData("void M(Request request) => LogSanitizedSequence([request.ClientId]);")]
     public async Task AValueFromOutside_LoggedSanitized_IsNotReported(string body)
         => Assert.Empty(await IdsOf(body));
 
@@ -179,6 +191,8 @@ public class LoggedValueAnalyzerTests
     [InlineData("void M(Request request) => LogText(request.GetType().Name);")]
     [InlineData("void M(Request request) => LogText(request.Code is null ? \"no code\" : \"code\");")]
     [InlineData("void M(Request request) => LogText(request.Code!.Length.ToString());")]
+    [InlineData("void M(Request request) => LogText(request.Kind switch { Kind.A => \"a\", _ => \"b\" });")]
+    [InlineData("void M(Request request) => LogText($\"{request.Lifetime} s\");")]
     public async Task WhatTheServerObservedOfAValue_IsNotReported(string body)
         => Assert.Empty(await IdsOf(body));
 
@@ -191,6 +205,7 @@ public class LoggedValueAnalyzerTests
     [InlineData("void M([Credential] string code) => LogSanitized($\"code {code}\");")]
     [InlineData("void M([Credential] string code) { var copy = code; LogText(copy); }")]
     [InlineData("void M(Secrets secrets) => LogText(secrets.Token);")]
+    [InlineData("void M(Request request) => LogText(request.Code![0].ToString());")]
     public async Task ACredential_LoggedOtherThanAsItsFingerprint_IsReported(string body)
         => Assert.Equal([LoggedValueAnalyzer.CredentialRule.Id], await IdsOf(body));
 

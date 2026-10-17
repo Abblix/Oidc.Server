@@ -16,10 +16,11 @@ namespace Abblix.Analyzers;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A call or a constructor passes on what it is made on and what its arguments carry only when its result can hold
-/// text - a string, a URI, an object, or a sequence of them - as <c>Trim</c> and <c>string.Join</c> do. A result of
-/// any other type was looked up or computed by the server rather than copied: the registered client found by a client
-/// id that was sent is the server's own record, and so is the type of a request.
+/// A call passes on what it is made on and what its arguments carry only when its result can hold text - a string,
+/// a character, a URI, an object, a span, or a sequence of them - as <c>Trim</c> and <c>string.Join</c> do. A result
+/// of any other type was looked up or computed by the server rather than copied: the registered client found by a
+/// client id that was sent is the server's own record, and so is the type of a request. A constructor always passes
+/// its arguments on, since what it builds usually keeps them.
 /// </para>
 /// <para>
 /// A constant, a flag, a number and an enum member end the trail too: whether a code was sent, or how many values
@@ -37,6 +38,14 @@ internal sealed class ValueSources(Compilation compilation)
     private readonly INamedTypeSymbol? _task = compilation.GetTypeByMetadataName("System.Threading.Tasks.Task`1");
     private readonly INamedTypeSymbol? _valueTask = compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask`1");
     private readonly INamedTypeSymbol? _uri = compilation.GetTypeByMetadataName("System.Uri");
+
+    private readonly INamedTypeSymbol?[] _views =
+    [
+        compilation.GetTypeByMetadataName("System.Span`1"),
+        compilation.GetTypeByMetadataName("System.ReadOnlySpan`1"),
+        compilation.GetTypeByMetadataName("System.Memory`1"),
+        compilation.GetTypeByMetadataName("System.ReadOnlyMemory`1"),
+    ];
 
     /// <summary>The operations <paramref name="value"/> is computed from.</summary>
     public IEnumerable<IOperation> Of(IOperation value)
@@ -66,7 +75,8 @@ internal sealed class ValueSources(Compilation compilation)
 
     /// <summary>
     /// Whether <paramref name="operation"/> yields something no sender's text survives in: a constant the compiler
-    /// fixed, such as a <c>nameof</c>, or a flag, a number or an enum member. Whether a code was sent, or how many
+    /// fixed, such as a <c>nameof</c>, or a flag, a number or an enum member - but not a character, since one
+    /// character of a value is enough to carry a line break into the record. Whether a code was sent, or how many
     /// values were, is the server's own observation, though what it observed came from outside.
     /// </summary>
     private static bool CarriesNoText(IOperation operation)
@@ -78,7 +88,8 @@ internal sealed class ValueSources(Compilation compilation)
             ? nullable.TypeArguments[0]
             : operation.Type;
 
-        return type is { IsValueType: true } && (type.TypeKind == TypeKind.Enum || type.SpecialType != SpecialType.None);
+        return type is { IsValueType: true, SpecialType: not SpecialType.System_Char }
+               && (type.TypeKind == TypeKind.Enum || type.SpecialType != SpecialType.None);
     }
 
     private IEnumerable<IOperation> PartsOf(IOperation operation)
@@ -89,7 +100,6 @@ internal sealed class ValueSources(Compilation compilation)
         return operation switch
         {
             IInvocationOperation invocation when !CanHoldText(invocation.Type) => none,
-            IObjectCreationOperation creation when !CanHoldText(creation.Type) => none,
             _ => operation.ChildOperations,
         };
     }
@@ -103,7 +113,10 @@ internal sealed class ValueSources(Compilation compilation)
         null => false,
         { SpecialType: SpecialType.System_String or SpecialType.System_Object } => true,
         IArrayTypeSymbol array => CanHoldText(array.ElementType),
+        { SpecialType: SpecialType.System_Char } => true,
         INamedTypeSymbol named when Is(named, _uri) => true,
+        INamedTypeSymbol { TypeArguments.Length: 1 } view when _views.Any(candidate => Is(view.OriginalDefinition, candidate))
+            => CanHoldText(view.TypeArguments[0]),
         INamedTypeSymbol named => named.AllInterfaces.Append(named).Any(IsSequenceOfText),
         _ => false,
     };

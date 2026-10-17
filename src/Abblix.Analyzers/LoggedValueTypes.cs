@@ -59,13 +59,13 @@ internal sealed class LoggedValueTypes
     /// </summary>
     public bool CanCarryText(ITypeSymbol type) => !type.IsValueType || IsWrapped(type);
 
-    /// <summary>Whether <paramref name="type"/> logs a value, or each value of an array, as its fingerprint.</summary>
-    public bool IsFingerprint(ITypeSymbol type) => Is(Element(type), _fingerprint);
+    /// <summary>Whether <paramref name="type"/> logs a value, or each value of a list, as its fingerprint.</summary>
+    public bool IsFingerprint(ITypeSymbol type) => Is(Item(type), _fingerprint);
 
     /// <summary>
-    /// Whether <paramref name="type"/> logs a value, or each value of an array, sanitized or as its fingerprint.
+    /// Whether <paramref name="type"/> logs a value, or each value of a list, sanitized or as its fingerprint.
     /// </summary>
-    public bool IsWrapped(ITypeSymbol type) => IsFingerprint(type) || Is(Element(type), _sanitized);
+    public bool IsWrapped(ITypeSymbol type) => IsFingerprint(type) || Is(Item(type), _sanitized);
 
     /// <summary>Whether <paramref name="operation"/> reads a member or a parameter marked as a credential.</summary>
     public bool ReadsCredential(IOperation operation) => operation switch
@@ -109,6 +109,24 @@ internal sealed class LoggedValueTypes
             ? nullable.TypeArguments[0]
             : type;
     }
+
+    /// <summary>
+    /// What a parameter of <paramref name="type"/> logs one value as: the item of an array or of any other sequence,
+    /// seen through <see cref="Nullable{T}"/>, so a list of the wrapper counts as the wrapper, as an array of it does.
+    /// </summary>
+    private static ITypeSymbol? Item(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol named
+            && named.AllInterfaces.Append(named).FirstOrDefault(IsSequence) is { } sequence)
+        {
+            return Element(sequence.TypeArguments[0]);
+        }
+
+        return Element(type);
+    }
+
+    private static bool IsSequence(INamedTypeSymbol type)
+        => type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T;
 
     private static bool Is(ITypeSymbol? type, INamedTypeSymbol expected)
         => SymbolEqualityComparer.Default.Equals(type?.OriginalDefinition, expected);
