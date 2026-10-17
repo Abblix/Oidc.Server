@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<JweEncryption>();
         services.TryAddSingleton<JweDecryption>();
+        services.TryAddSingleton<JweDecryptionLog>();
         services.TryAddSingleton<JweKeyAttempt>();
         services.TryAddSingleton<LocalKeyEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
-partial class JweDecryption
+partial class JweDecryptionLog
 {
     [LoggerMessage(
         EventId = LogEvents.Jwt.NoDecryptionKey,

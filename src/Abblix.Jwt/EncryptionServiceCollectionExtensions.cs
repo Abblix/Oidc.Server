@@ -61,7 +61,7 @@ public static class EncryptionServiceCollectionExtensions
     /// transport with PKCS#1 v1.5 padding after 2023, and RFC 8725 section 3.2 prescribes preferring RSAES-OAEP -
     /// interoperating with a legacy peer that still requires it is an explicit hosting decision.
     /// The padding's Bleichenbacher decryption oracle stays closed for opted-in hosts by the
-    /// RFC 7516 section 11.5 mitigation in <see cref="JsonWebTokenEncryptor"/>: a CEK that fails to
+    /// RFC 7516 section 11.5 mitigation in <see cref="JweKeyAttempt"/>: a CEK that fails to
     /// decrypt is replaced with a random CEK and the AEAD step still runs, so a decryption
     /// failure is processed identically regardless of padding validity.
     /// </summary>

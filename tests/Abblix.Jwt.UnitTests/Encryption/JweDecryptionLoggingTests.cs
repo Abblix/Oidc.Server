@@ -5,7 +5,9 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Buffers.Text;
 using System.Text;
+using System.Text.Json.Nodes;
 using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +22,7 @@ namespace Abblix.Jwt.UnitTests.Encryption;
 /// </summary>
 public class JweDecryptionLoggingTests
 {
-    private readonly RecordingLogger<JweDecryption> _logger = new();
+    private readonly RecordingLogger<JweDecryptionLog> _logger = new();
     private readonly IJsonWebTokenEncryptor _encryptor;
 
     public JweDecryptionLoggingTests()
@@ -29,7 +31,7 @@ public class JweDecryptionLoggingTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddSingleton<ILogger<JweDecryption>>(_logger);
+        services.AddSingleton<ILogger<JweDecryptionLog>>(_logger);
         _encryptor = services.BuildServiceProvider().GetRequiredService<IJsonWebTokenEncryptor>();
     }
 
@@ -48,6 +50,51 @@ public class JweDecryptionLoggingTests
         Assert.Equal(LogEvents.Jwt.NoDecryptionKeyOpened, entry.EventId);
         Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Equal(2, entry.Value("KeyCount"));
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.Aes128KW, entry.Value("Algorithm"));
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, entry.Value("EncryptionAlgorithm"));
+        Assert.Equal("sender-key", entry.Value("KeyId"));
+    }
+
+    /// <summary>
+    /// The header is the sender's text: an algorithm this server does not register is not written, and a key
+    /// identifier reaches the record cut short and without the line breaks that could pose as another record.
+    /// </summary>
+    [Fact]
+    public async Task SendersHeaderValues_ReachTheRecordOnlyInASafeForm()
+    {
+        var jwtParts = await EncryptTo(NewKey("sender-key"));
+        var keyId = "line\r\nforged record " + new string('k', 200);
+        jwtParts[0] = EncodeHeader("unknown-alg", EncryptionAlgorithms.ContentEncryption.Aes128Gcm, keyId);
+
+        var result = await _encryptor.DecryptAsync(
+            jwtParts,
+            NewKey(keyId).ToAsync(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out _));
+        var entry = Assert.Single(_logger.Entries);
+        Assert.Equal(LogEvents.Jwt.NoDecryptionKeyOpened, entry.EventId);
+        Assert.NotEqual("unknown-alg", entry.Value("Algorithm"));
+        var recorded = Assert.IsType<string>(entry.Value("KeyId"));
+        Assert.True(recorded.Length < keyId.Length);
+        Assert.DoesNotContain(recorded, char.IsControl);
+        Assert.StartsWith("line", recorded);
+    }
+
+    /// <summary>
+    /// A token refused before any key is tried has nothing to say about keys, so it leaves no record here.
+    /// </summary>
+    [Fact]
+    public async Task TokenRefusedBeforeTheKeys_IsNotRecorded()
+    {
+        var key = NewKey("sender-key");
+        var jwtParts = await EncryptTo(key);
+        jwtParts[0] = EncodeHeader(EncryptionAlgorithms.KeyManagement.Aes128KW, "unknown-enc", "sender-key");
+
+        var result = await _encryptor.DecryptAsync(jwtParts, key.ToAsync(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out _));
+        Assert.Empty(_logger.Entries);
     }
 
     [Fact]
@@ -91,6 +138,17 @@ public class JweDecryptionLoggingTests
             EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
             TestContext.Current.CancellationToken);
         return jwe.Split('.');
+    }
+
+    private static string EncodeHeader(string algorithm, string encryptionAlgorithm, string keyId)
+    {
+        var header = new JsonObject
+        {
+            ["alg"] = algorithm,
+            ["enc"] = encryptionAlgorithm,
+            ["kid"] = keyId,
+        };
+        return Base64Url.EncodeToString(Encoding.UTF8.GetBytes(header.ToJsonString()));
     }
 
     private static OctetJsonWebKey NewKey(string keyId) => new()

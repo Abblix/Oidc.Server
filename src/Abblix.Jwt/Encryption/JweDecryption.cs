@@ -7,19 +7,17 @@
 
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
 /// Opens an inbound JWE with the first candidate key that recovers its content.
 /// </summary>
-/// <param name="logger">Records an inbound JWE that no key opened, which its sender only learns of as a refusal.
-/// </param>
+/// <param name="log">Records an inbound JWE that no key opened.</param>
 /// <param name="serviceProvider">Resolves the content encryption algorithm by its 'enc' name.</param>
 /// <param name="keyAttempt">Opens the token with one candidate key.</param>
-internal sealed partial class JweDecryption(
-    ILogger<JweDecryption> logger,
+internal sealed class JweDecryption(
+    JweDecryptionLog log,
     IServiceProvider serviceProvider,
     JweKeyAttempt keyAttempt)
 {
@@ -71,11 +69,11 @@ internal sealed partial class JweDecryption(
         // answer stays the same whatever the cause, as RFC 7516 section 11.5 requires.
         if (keysTried == 0)
         {
-            LogNoDecryptionKey(envelope.Algorithm, envelope.EncryptionAlgorithm, keyId);
+            log.NoDecryptionKey(envelope);
             return new JwtValidationError(JwtError.InvalidToken, "No decryption keys found");
         }
 
-        LogNoKeyOpened(envelope.Algorithm, envelope.EncryptionAlgorithm, keyId, keysTried);
+        log.NoKeyOpened(envelope, keysTried);
         return new JwtValidationError(JwtError.InvalidToken, "Failed to decrypt JWE with any available key");
     }
 }
