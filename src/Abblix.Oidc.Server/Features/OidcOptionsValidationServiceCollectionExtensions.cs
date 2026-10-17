@@ -85,6 +85,8 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
 
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewCeilingValidator>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, BackChannelClientAuthenticationValidator>());
         return services;
     }
 }

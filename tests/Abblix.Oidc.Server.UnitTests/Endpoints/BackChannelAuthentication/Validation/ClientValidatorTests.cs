@@ -13,6 +13,8 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Moq;
+using Abblix.Oidc;
+using Abblix.Oidc.Server.Common;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -287,5 +289,28 @@ public class ClientValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 section 7.1: the client MUST authenticate to the backchannel authentication endpoint, so a client
+    /// registered with the method "none" is not authorized for the flow, whatever else it registered.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAPublicCibaClient_ReturnsUnauthorizedClient()
+    {
+        var context = CreateContext();
+        var clientInfo = new ClientInfo("test-client")
+        {
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Equal(ErrorCodes.UnauthorizedClient, Assert.IsType<OidcError>(result).Error);
     }
 }

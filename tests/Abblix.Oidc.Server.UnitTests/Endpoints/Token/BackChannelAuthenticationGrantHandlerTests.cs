@@ -32,6 +32,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using Abblix.Oidc;
 using Xunit;
 using CibaStorage = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelRequestStorage;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
@@ -1035,5 +1036,28 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 section 10.1: the client MUST be authenticated at the token endpoint, so a client registered with
+    /// the method "none" is refused before any request is looked up, in every delivery mode that fetches tokens there.
+    /// </summary>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping)]
+    public async Task AuthorizeAsync_WithAPublicClient_ReturnsUnauthorizedClientBeforeTheLookup(string deliveryMode)
+    {
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = deliveryMode,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<string>()), Times.Never);
     }
 }

@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Moq;
+using Abblix.Oidc;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -484,5 +485,41 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(signingAlg: "NOPE");
 
         Assert.Null(await _validator.ValidateAsync(context));
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at both endpoints of the flow, so a
+    /// registration asking for the flow with the method "none" is refused, and the same flow with a method that
+    /// authenticates is not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.None, true)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false)]
+    public async Task ValidateAsync_PollModeAndAuthenticationMethod_IsRefusedOnlyWithoutAuthentication(
+        string authenticationMethod,
+        bool refused)
+    {
+        var request = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Poll).Request with
+        {
+            TokenEndpointAuthMethod = authenticationMethod,
+        };
+
+        var result = await _validator.ValidateAsync(new ClientRegistrationValidationContext(request));
+
+        if (refused)
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
+        else
+            Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A client that does not ask for the flow may register with the method "none", as any public client does.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PublicClientWithoutBackChannel_IsAccepted()
+    {
+        var request = CreateContext().Request with { TokenEndpointAuthMethod = ClientAuthenticationMethods.None };
+
+        Assert.Null(await _validator.ValidateAsync(new ClientRegistrationValidationContext(request)));
     }
 }
