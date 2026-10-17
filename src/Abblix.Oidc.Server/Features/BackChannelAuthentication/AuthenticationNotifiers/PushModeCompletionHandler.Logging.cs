@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -16,19 +17,19 @@ partial class PushModeCompletionHandler
         EventId = LogEvents.Device.PushModeCompletionHandler.GeneratingTokens,
         Level = LogLevel.Information,
         Message = "Generating and delivering tokens via CIBA push mode for auth_req_id: {AuthReqId}")]
-    private partial void LogGeneratingTokens(string AuthReqId);
+    private partial void LogGeneratingTokens(Fingerprint AuthReqId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.TokensDelivered,
         Level = LogLevel.Information,
         Message = "Tokens delivered via CIBA push mode for auth_req_id: {AuthReqId}")]
-    private partial void LogTokensDelivered(string AuthReqId);
+    private partial void LogTokensDelivered(Fingerprint AuthReqId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.TokenGenerationFailed,
         Level = LogLevel.Error,
         Message = "Failed to generate tokens for CIBA push mode, auth_req_id: {AuthReqId}, Error: {ErrorCode}")]
-    private partial void LogTokenGenerationFailed(string AuthReqId, string ErrorCode);
+    private partial void LogTokenGenerationFailed(Fingerprint AuthReqId, string ErrorCode);
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.PushDeliveryFailed,
@@ -36,7 +37,7 @@ partial class PushModeCompletionHandler
         Message = "CIBA push delivery failed for auth_req_id: {AuthReqId}. The tokens were minted and " +
                   "are gone - nothing retries them, and the request was taken before minting, so nothing " +
                   "is left to complete again: recovering means asking the end user.")]
-    private partial void LogPushDeliveryFailed(string AuthReqId);
+    private partial void LogPushDeliveryFailed(Fingerprint AuthReqId);
 
     /// <summary>
     /// The validator's own words, which the client never sees.
@@ -53,7 +54,7 @@ partial class PushModeCompletionHandler
         Message = "The per-type validators will not issue the authorization_details completing " +
                   "auth_req_id {AuthReqId}, so it is refused. ClientId: {ClientId}, reason: {Reason}")]
     private partial void LogGrantedAuthorizationDetailsRefused(
-        string AuthReqId, string ClientId, string Reason);
+        Fingerprint AuthReqId, string ClientId, string Reason);
 
     /// <summary>
     /// The check of the granted authorization_details failed with an exception, a fault in the host's code,
@@ -65,7 +66,7 @@ partial class PushModeCompletionHandler
         Message = "Checking the authorization_details completing auth_req_id {AuthReqId} failed, so the " +
                   "client was told the transaction failed. ClientId: {ClientId}")]
     private partial void LogGrantedAuthorizationDetailsFaulted(
-        Exception exception, string AuthReqId, string ClientId);
+        Exception exception, Fingerprint AuthReqId, string ClientId);
 
     /// <summary>
     /// Issuing the tokens of a taken push request threw, and the client was told the transaction failed.
@@ -75,5 +76,5 @@ partial class PushModeCompletionHandler
         Level = LogLevel.Error,
         Message = "Issuing the tokens of auth_req_id {AuthReqId} failed, so the client was told the transaction " +
                   "failed. ClientId: {ClientId}")]
-    private partial void LogTokenIssuanceFaulted(Exception exception, string AuthReqId, string ClientId);
+    private partial void LogTokenIssuanceFaulted(Exception exception, Fingerprint AuthReqId, string ClientId);
 }

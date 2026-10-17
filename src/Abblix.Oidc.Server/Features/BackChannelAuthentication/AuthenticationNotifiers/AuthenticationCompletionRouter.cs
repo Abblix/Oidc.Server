@@ -86,7 +86,7 @@ public partial class AuthenticationCompletionRouter(
         var stored = await storage.TryGetAsync(authenticationRequestId);
         if (stored is null)
         {
-            LogNothingStored(authenticationRequestId, answered);
+            LogNothingStored(Fingerprint.Of(authenticationRequestId), answered);
             throw AuthenticationCompletionHandler.NotPending(answered, null);
         }
 
@@ -94,7 +94,7 @@ public partial class AuthenticationCompletionRouter(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo == null)
         {
-            LogClientNotFound(authenticationRequestId, clientId);
+            LogClientNotFound(Fingerprint.Of(authenticationRequestId), clientId);
             throw new InvalidOperationException(
                 $"The authentication request cannot be {answered}: its client {clientId} is not registered.");
         }

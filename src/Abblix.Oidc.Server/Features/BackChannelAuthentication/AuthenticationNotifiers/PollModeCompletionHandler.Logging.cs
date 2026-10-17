@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -17,5 +18,5 @@ partial class PollModeCompletionHandler
         Level = LogLevel.Debug,
         Message = "Poll mode - the authenticated request is stored for auth_req_id: {AuthReqId}. No " +
                   "token exists yet; they are minted at the token endpoint when the client redeems")]
-    private partial void LogTokensStored(string AuthReqId);
+    private partial void LogTokensStored(Fingerprint AuthReqId);
 }

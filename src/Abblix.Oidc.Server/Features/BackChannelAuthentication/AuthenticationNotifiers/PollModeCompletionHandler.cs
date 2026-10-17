@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
@@ -50,6 +51,6 @@ public partial class PollModeCompletionHandler(
     {
         await StoreAsync(authenticationRequestId, request, expiresIn);
 
-        LogTokensStored(authenticationRequestId);
+        LogTokensStored(Fingerprint.Of(authenticationRequestId));
     }
 }

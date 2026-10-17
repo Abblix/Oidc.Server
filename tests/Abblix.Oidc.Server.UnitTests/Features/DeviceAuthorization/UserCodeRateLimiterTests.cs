@@ -285,10 +285,16 @@ public class UserCodeRateLimiterTests
     [Fact]
     public async Task TheRecordsOfACode_NameItOnlyByFingerprint()
     {
-        await Fail(5);
+        await Fail(4);
+        await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        await Fail(1);
+        await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
         await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
 
-        Assert.NotEmpty(_logs.Entries);
+        Assert.Contains(_logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeRateLimited);
+        Assert.Contains(_logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeAttemptsSpent);
         Assert.All(_logs.Entries, entry => Assert.DoesNotContain(UserCode, entry.Message));
         Assert.Contains(_logs.Entries, entry => entry.Message.Contains(Fingerprint.Of(UserCode).ToString()));
     }

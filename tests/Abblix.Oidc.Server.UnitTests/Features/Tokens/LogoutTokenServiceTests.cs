@@ -72,6 +72,33 @@ public class LogoutTokenServiceTests
     }
 
     /// <summary>
+    /// The record of a prepared logout token names it by its id and its client: the token itself names the user's
+    /// session, which the record does not carry.
+    /// </summary>
+    [Fact]
+    public async Task CreateLogoutTokenAsync_RecordsTheTokenByIdAndClient()
+    {
+        var loggers = new RecordingLoggerFactory();
+        var service = new LogoutTokenService(
+            loggers.CreateLogger<LogoutTokenService>(),
+            new FakeTimeProvider(_currentTime),
+            _subjectTypeConverter.Object,
+            _jwtFormatter.Object,
+            _tokenIdGenerator.Object,
+            Options.Create(new OidcOptions()));
+        var clientInfo = CreateClientInfo();
+        var logoutContext = CreateLogoutContext();
+        SetupMocks(clientInfo, logoutContext, _ => { });
+
+        await service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+
+        var record = Assert.Single(loggers.Entries);
+        Assert.Equal("unique-jwt-id-1", record.Value("JwtId"));
+        Assert.Equal(clientInfo.ClientId, record.Value("ClientId"));
+        Assert.DoesNotContain(SessionId, record.Message);
+    }
+
+    /// <summary>
     /// Verifies that CreateLogoutTokenAsync generates JWT with correct header.
     /// Per OpenID Connect Back-Channel Logout Section 2.4, logout token must have type "logout+jwt".
     /// </summary>

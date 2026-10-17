@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -127,7 +128,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 stored.AuthorizedGrant.Context.ClientId,
                 StringComparison.Ordinal))
         {
-            LogGrantNamesAnotherClient(authenticationRequestId, stored.AuthorizedGrant.Context.ClientId);
+            LogGrantNamesAnotherClient(Fingerprint.Of(authenticationRequestId), stored.AuthorizedGrant.Context.ClientId);
             await RefuseAsync(authenticationRequestId, stored, GrantForAnotherClient, expiresIn);
             return;
         }
@@ -142,7 +143,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (request.RequestedSubjects is { } accepted &&
             !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
-            LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
+            LogAuthenticatedUserNotTheOneRequested(Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);
             return;
         }
@@ -157,7 +158,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 stored.AuthorizedGrant.Context.RequestedClaims,
                 request.AuthorizedGrant.AuthSession.AuthContextClassRef))
         {
-            LogAuthenticationLevelNotTheOneRequired(authenticationRequestId, clientInfo.ClientId);
+            LogAuthenticationLevelNotTheOneRequired(Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, NotTheRequiredLevel, expiresIn);
             return;
         }
@@ -180,7 +181,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (EscapedAuthorizationDetailTypes(request) is { Length: > 0 } escaped)
         {
             LogGrantedAuthorizationDetailsExceedTheRequest(
-                authenticationRequestId, clientInfo.ClientId, string.Join(", ", escaped));
+                Fingerprint.Of(authenticationRequestId), clientInfo.ClientId, string.Join(", ", escaped));
 
             await RefuseAsync(authenticationRequestId, request, WidensTheRequest, expiresIn);
             return;
@@ -270,7 +271,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
             return stored;
 
-        LogNotPendingOnCompletion(authenticationRequestId, answered, stored?.Status.ToString());
+        LogNotPendingOnCompletion(Fingerprint.Of(authenticationRequestId), answered, stored?.Status.ToString());
         throw NotPending(answered, stored);
     }
 
@@ -281,7 +282,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="authenticationRequestId">The request that could not be taken.</param>
     protected InvalidOperationException ClaimLost(string authenticationRequestId)
     {
-        LogNotPendingOnCompletion(authenticationRequestId, Answered, null);
+        LogNotPendingOnCompletion(Fingerprint.Of(authenticationRequestId), Answered, null);
         return NotPending(Answered, null);
     }
 
@@ -378,7 +379,7 @@ public abstract partial class AuthenticationCompletionHandler(
         LogMissingNotificationConfig(
             deliveryMode,
             clientId,
-            authenticationRequestId,
+            Fingerprint.Of(authenticationRequestId),
             endpoint?.ToString() ?? "null",
             hasToken);
 

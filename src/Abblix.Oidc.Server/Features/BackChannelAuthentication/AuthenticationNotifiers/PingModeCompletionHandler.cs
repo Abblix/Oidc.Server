@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
@@ -103,7 +104,7 @@ public partial class PingModeCompletionHandler(
 
         await StoreAsync(authenticationRequestId, request, expiresIn);
 
-        LogSendingPingNotification(authenticationRequestId);
+        LogSendingPingNotification(Fingerprint.Of(authenticationRequestId));
 
         var payload = new BackChannelPingNotificationRequest
         {
