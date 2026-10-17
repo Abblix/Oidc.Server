@@ -71,7 +71,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="authorizationCode">The OAuth 2.0 authorization code.</param>
     /// <returns>A formatted storage key for the authorization grant.</returns>
-    public string AuthorizedGrantKey(string authorizationCode)
+    public string AuthorizedGrantKey([Credential] string authorizationCode)
         => $"Abblix.Oidc.Server:Grant:{Digest(authorizationCode)}";
 
     /// <summary>
@@ -79,7 +79,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="requestId">The CIBA authentication request identifier.</param>
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
-    public string BackChannelAuthenticationRequestKey(string requestId)
+    public string BackChannelAuthenticationRequestKey([Credential] string requestId)
         => $"Abblix.Oidc.Server:CIBA:{Digest(requestId)}";
 
     /// <summary>
@@ -91,7 +91,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:Device:{Digest(deviceCode)}";
 
     /// <inheritdoc />
-    public string BackChannelAuthenticationNextPollKey(string requestId)
+    public string BackChannelAuthenticationNextPollKey([Credential] string requestId)
         => $"Abblix.Oidc.Server:NextPoll:CIBA:{Digest(requestId)}";
 
     /// <inheritdoc />

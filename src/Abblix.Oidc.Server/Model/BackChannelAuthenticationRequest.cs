@@ -39,6 +39,7 @@ public record BackChannelAuthenticationRequest
     /// the authentication result to the client.
     /// </summary>
     [JsonPropertyName(Parameters.ClientNotificationToken)]
+    [Credential]
     public string? ClientNotificationToken { get; init; }
 
     /// <summary>
@@ -86,6 +87,7 @@ public record BackChannelAuthenticationRequest
     /// This code is often used in scenarios where the user is identified by a code that they provide to the client.
     /// </summary>
     [JsonPropertyName(Parameters.UserCode)]
+    [Credential]
     public string? UserCode { get; init; }
 
     /// <summary>

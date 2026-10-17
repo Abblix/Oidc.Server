@@ -27,4 +27,11 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
 
+  <!-- A record written past [LoggerMessage] is one the logging rules of Abblix.Analyzers never see, so the
+       shipped code here writes none. Kept to this repository rather than added to the list the analyzers
+       package carries, which every product referencing it would meet on its next upgrade. -->
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Logging.txt" />
+  </ItemGroup>
+
 </Project>

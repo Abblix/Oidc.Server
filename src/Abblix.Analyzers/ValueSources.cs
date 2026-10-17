@@ -16,11 +16,14 @@ namespace Abblix.Analyzers;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A call or a constructor passes on what its arguments carry only when its result can hold text - a string, a
-/// URI, an object, or a sequence of them - as <c>string.Join</c> does. A result of any other type was looked up or
-/// computed by the server rather than copied from the arguments: the registered client found by a client id that
-/// was sent is the server's own record. What a call is made ON is always followed, since a method of a value works
-/// on that value.
+/// A call or a constructor passes on what it is made on and what its arguments carry only when its result can hold
+/// text - a string, a URI, an object, or a sequence of them - as <c>Trim</c> and <c>string.Join</c> do. A result of
+/// any other type was looked up or computed by the server rather than copied: the registered client found by a client
+/// id that was sent is the server's own record, and so is the type of a request.
+/// </para>
+/// <para>
+/// A constant, a flag, a number and an enum member end the trail too: whether a code was sent, or how many values
+/// were, is what the server observed, and no character a sender chose survives in it.
 /// </para>
 /// <para>
 /// A local is given a value by its declaration, by an assignment, by a pattern that declares it, or as the variable
@@ -48,6 +51,9 @@ internal sealed class ValueSources(Compilation compilation)
         while (pending.Count > 0)
         {
             var operation = pending.Pop();
+            if (CarriesNoText(operation))
+                continue;
+
             yield return operation;
 
             foreach (var part in PartsOf(operation))
@@ -58,13 +64,35 @@ internal sealed class ValueSources(Compilation compilation)
         }
     }
 
-    private IEnumerable<IOperation> PartsOf(IOperation operation) => operation switch
+    /// <summary>
+    /// Whether <paramref name="operation"/> yields something no sender's text survives in: a constant the compiler
+    /// fixed, such as a <c>nameof</c>, or a flag, a number or an enum member. Whether a code was sent, or how many
+    /// values were, is the server's own observation, though what it observed came from outside.
+    /// </summary>
+    private static bool CarriesNoText(IOperation operation)
     {
-        IInvocationOperation invocation when !CanHoldText(invocation.Type)
-            => invocation.Instance is { } instance ? [instance] : [],
-        IObjectCreationOperation creation when !CanHoldText(creation.Type) => [],
-        _ => operation.ChildOperations,
-    };
+        if (operation.ConstantValue.HasValue)
+            return true;
+
+        var type = operation.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
+            ? nullable.TypeArguments[0]
+            : operation.Type;
+
+        return type is { IsValueType: true } && (type.TypeKind == TypeKind.Enum || type.SpecialType != SpecialType.None);
+    }
+
+    private IEnumerable<IOperation> PartsOf(IOperation operation)
+    {
+        // Typed as the interface on purpose: the operation list the children come in is a struct whose default
+        // value throws when enumerated, and an empty collection expression of that type would be one.
+        IEnumerable<IOperation> none = [];
+        return operation switch
+        {
+            IInvocationOperation invocation when !CanHoldText(invocation.Type) => none,
+            IObjectCreationOperation creation when !CanHoldText(creation.Type) => none,
+            _ => operation.ChildOperations,
+        };
+    }
 
     /// <summary>
     /// Whether a value of <paramref name="type"/> can hold text taken from what it was computed from, seen through a

@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
@@ -42,6 +43,7 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     /// The client notification token for ping mode.
     /// Provided by the client in the authentication request for secure notification delivery.
     /// </summary>
+    [Credential]
     public string? ClientNotificationToken { get; set; }
 
     /// <summary>

@@ -59,10 +59,12 @@ internal sealed class LoggedValueTypes
     /// </summary>
     public bool CanCarryText(ITypeSymbol type) => !type.IsValueType || IsWrapped(type);
 
-    /// <summary>Whether <paramref name="type"/> logs a value as its fingerprint.</summary>
+    /// <summary>Whether <paramref name="type"/> logs a value, or each value of an array, as its fingerprint.</summary>
     public bool IsFingerprint(ITypeSymbol type) => Is(Element(type), _fingerprint);
 
-    /// <summary>Whether <paramref name="type"/> logs a value sanitized or as its fingerprint.</summary>
+    /// <summary>
+    /// Whether <paramref name="type"/> logs a value, or each value of an array, sanitized or as its fingerprint.
+    /// </summary>
     public bool IsWrapped(ITypeSymbol type) => IsFingerprint(type) || Is(Element(type), _sanitized);
 
     /// <summary>Whether <paramref name="operation"/> reads a member or a parameter marked as a credential.</summary>

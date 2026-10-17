@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -186,7 +187,7 @@ public partial class SubjectTypeValidator(
         var missingUris = requiredUris.Except(sectorIdentifierContent).ToArray();
         if (missingUris.Length > 0)
         {
-            LogSectorIdentifierMissingUris(sectorIdentifierUri, missingUris);
+            LogSectorIdentifierMissingUris(sectorIdentifierUri, Sanitized.Values(missingUris));
 
             // The missing values are named individually. A message saying "redirect URIs" to a client
             // whose notification endpoint was the omission sends its author to the wrong metadata.

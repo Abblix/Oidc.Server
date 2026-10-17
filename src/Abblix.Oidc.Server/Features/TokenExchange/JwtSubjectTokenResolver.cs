@@ -70,7 +70,7 @@ public sealed class JwtSubjectTokenResolver(
 
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
-        string subjectToken,
+        [Credential] string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken)
     {

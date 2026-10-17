@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -25,5 +26,5 @@ partial class BackChannelGrantRedeemer
         Level = LogLevel.Warning,
         Message = "Client {ClientId} redeemed a CIBA grant the per-type validators will not issue, so the " +
                   "request is refused and no token was issued: {Reason}")]
-    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string Reason);
+    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, Sanitized Reason);
 }

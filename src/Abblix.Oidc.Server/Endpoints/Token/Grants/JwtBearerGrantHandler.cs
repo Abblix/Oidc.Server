@@ -129,7 +129,7 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Validates the JWT signature, lifetime, issuer, and audience claims.
 	/// </summary>
-	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync(string assertion, ClientInfo clientInfo)
+	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync([Credential] string assertion, ClientInfo clientInfo)
 	{
 		var validationResult = await jwtValidator.ValidateAsync(
 			assertion,
