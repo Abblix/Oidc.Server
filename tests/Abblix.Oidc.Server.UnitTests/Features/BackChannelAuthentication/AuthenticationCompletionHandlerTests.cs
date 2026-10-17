@@ -91,16 +91,16 @@ public partial class AuthenticationCompletionHandlerTests
     }
 
     private PollModeCompletionHandler CreatePollModeHandler() =>
-        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null);
+        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(), null);
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
-        new(Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+        new(Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             _notificationService.Object);
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
         ILogger<PushModeCompletionHandler>? logger = null) =>
-        new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+        new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             _notificationService.Object, _tokenRequestProcessor.Object,
             policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
@@ -739,7 +739,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         var handler = new PollModeCompletionHandler(
-            Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), notifier.Object);
+            Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(), notifier.Object);
 
         await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
 
@@ -790,10 +790,10 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
         AuthenticationCompletionHandler handler = isPing
             ? new PingModeCompletionHandler(
-                Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+                Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
                 _notificationService.Object, notifier.Object)
             : new PollModeCompletionHandler(
-                Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+                Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
                 notifier.Object);
 
         await handler.CompleteAuthenticationAsync(

@@ -79,8 +79,7 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
             // was promised was absent, an enumeration yields a null element, and GetRequiredService reports
             // the service as unregistered while a descriptor for it plainly exists. Constructing it when it
             // will not be used costs one object; the alternative costs a diagnosis.
-            var logger = sp.GetRequiredService<ILogger<InMemoryLongPollingService>>();
-            return new InMemoryLongPollingService(logger);
+            return ActivatorUtilities.CreateInstance<InMemoryLongPollingService>(sp);
         });
 
         // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime

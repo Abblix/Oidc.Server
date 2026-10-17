@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
@@ -21,11 +22,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// backchannel_token_delivery_mode.
 /// </summary>
 /// <param name="logger">Logger for tracking completion events.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
 /// <param name="storage">Holds the stored request, whose client decides the route.</param>
 public partial class AuthenticationCompletionRouter(
     ILogger<AuthenticationCompletionRouter> logger,
+    CredentialFingerprints fingerprints,
     IClientInfoProvider clientInfoProvider,
     IServiceProvider serviceProvider,
     IBackChannelRequestStorage storage) : IAuthenticationCompletionHandler
@@ -86,7 +89,7 @@ public partial class AuthenticationCompletionRouter(
         var stored = await storage.TryGetAsync(authenticationRequestId);
         if (stored is null)
         {
-            LogNothingStored(Fingerprint.Of(authenticationRequestId), answered);
+            LogNothingStored(fingerprints.Of(authenticationRequestId), answered);
             throw AuthenticationCompletionHandler.NotPending(answered, null);
         }
 
@@ -94,7 +97,7 @@ public partial class AuthenticationCompletionRouter(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo == null)
         {
-            LogClientNotFound(Fingerprint.Of(authenticationRequestId), clientId);
+            LogClientNotFound(fingerprints.Of(authenticationRequestId), clientId);
             throw new InvalidOperationException(
                 $"The authentication request cannot be {answered}: its client {clientId} is not registered.");
         }
