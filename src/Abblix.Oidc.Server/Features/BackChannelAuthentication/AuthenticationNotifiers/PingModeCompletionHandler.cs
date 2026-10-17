@@ -23,6 +23,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// In ping mode, the authenticated request is stored and a notification is sent to the client's registered endpoint.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
@@ -32,11 +33,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// one that polls before its notification arrives waits, and is woken from here.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     IBackChannelLongPollingService? statusNotifier = null)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
@@ -104,7 +106,7 @@ public partial class PingModeCompletionHandler(
 
         await StoreAsync(authenticationRequestId, request, expiresIn);
 
-        LogSendingPingNotification(Fingerprint.Of(authenticationRequestId));
+        LogSendingPingNotification(FingerprintOf(authenticationRequestId));
 
         var payload = new BackChannelPingNotificationRequest
         {

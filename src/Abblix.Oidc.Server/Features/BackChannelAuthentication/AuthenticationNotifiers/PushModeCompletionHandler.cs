@@ -26,6 +26,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// request that ends without tokens is answered with the error payload of CIBA Core 1.0 section 12.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
@@ -35,12 +36,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// the grant the host completed with is still one the deployment will issue.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
@@ -143,7 +145,7 @@ public partial class PushModeCompletionHandler(
             // A validator throws for an entry no end user could have produced, a fault in the host's code.
             // The request is already taken and a push client never polls, so it is told the transaction
             // failed before the fault goes on to the host that completed the request.
-            LogGrantedAuthorizationDetailsFaulted(exception, Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
+            LogGrantedAuthorizationDetailsFaulted(exception, FingerprintOf(authenticationRequestId), clientInfo.ClientId);
             await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
             throw;
         }
@@ -151,13 +153,13 @@ public partial class PushModeCompletionHandler(
         if (refusal is { } refused)
         {
             LogGrantedAuthorizationDetailsRefused(
-                Fingerprint.Of(authenticationRequestId), clientInfo.ClientId, refused.Reason);
+                FingerprintOf(authenticationRequestId), clientInfo.ClientId, refused.Reason);
 
             await SendErrorAsync(authenticationRequestId, request, RefusedGrant);
             return;
         }
 
-        LogGeneratingTokens(Fingerprint.Of(authenticationRequestId));
+        LogGeneratingTokens(FingerprintOf(authenticationRequestId));
 
         var tokenResult = await IssueTokensAsync(authenticationRequestId, request, clientInfo);
 
@@ -182,15 +184,15 @@ public partial class PushModeCompletionHandler(
 
                 // The tokens of a failed delivery are dropped with this lambda and nothing retries them.
                 if (delivered)
-                    LogTokensDelivered(Fingerprint.Of(authenticationRequestId));
+                    LogTokensDelivered(FingerprintOf(authenticationRequestId));
                 else
-                    LogPushDeliveryFailed(Fingerprint.Of(authenticationRequestId));
+                    LogPushDeliveryFailed(FingerprintOf(authenticationRequestId));
 
                 return null;
             },
             async error =>
             {
-                LogTokenGenerationFailed(Fingerprint.Of(authenticationRequestId), error.Error);
+                LogTokenGenerationFailed(FingerprintOf(authenticationRequestId), error.Error);
                 await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
                 return null;
             });
@@ -230,7 +232,7 @@ public partial class PushModeCompletionHandler(
         {
             // The request is already taken and a push client never polls, so it is told the transaction failed
             // before the fault goes on to the host that completed the request.
-            LogTokenIssuanceFaulted(exception, Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
+            LogTokenIssuanceFaulted(exception, FingerprintOf(authenticationRequestId), clientInfo.ClientId);
             await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
             throw;
         }

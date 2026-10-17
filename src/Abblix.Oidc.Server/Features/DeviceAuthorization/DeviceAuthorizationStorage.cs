@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.Storages;
@@ -21,11 +22,13 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// class's.
 /// </summary>
 /// <param name="logger">Records a secondary-index entry left behind, which nothing else reports.</param>
+/// <param name="fingerprints">Names a device code or a user code in a record by its fingerprint.</param>
 /// <param name="storage">Holds the request and its user-code index, and decides who redeems.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
 /// <param name="timeProvider">Provides the current time for seeding the request's absolute expiry.</param>
 public partial class DeviceAuthorizationStorage(
     ILogger<DeviceAuthorizationStorage> logger,
+    CredentialFingerprints fingerprints,
     IEntityStorage storage,
     IEntityStorageKeyFactory keyFactory,
     TimeProvider timeProvider) : IDeviceAuthorizationStorage
@@ -111,7 +114,7 @@ public partial class DeviceAuthorizationStorage(
             }
             catch (Exception exception)
             {
-                LogUserCodeIndexNotRemovedBeforeDiscard(exception, Fingerprint.Of(request.UserCode));
+                LogUserCodeIndexNotRemovedBeforeDiscard(exception, fingerprints.Of(request.UserCode));
             }
         }
 
@@ -212,7 +215,7 @@ public partial class DeviceAuthorizationStorage(
             //
             // The claimed record carries the right user code and would settle that, which is a change to
             // what this method does with its argument rather than to how it reports a refusal.
-            LogUserCodeIndexNotRemovedAfterClaim(exception, Fingerprint.Of(deviceCode));
+            LogUserCodeIndexNotRemovedAfterClaim(exception, fingerprints.Of(deviceCode));
         }
 
         return true;

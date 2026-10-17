@@ -32,6 +32,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// keeps a request from being answered for an end user it did not name.
 /// </remarks>
 /// <param name="logger">Logger for tracking completion events and errors.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
@@ -40,10 +41,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// to wake.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier = null)
 {
+    /// <summary>
+    /// The fingerprint that stands for a CIBA request id in this handler's and its delivery mode's records.
+    /// </summary>
+    protected Fingerprint FingerprintOf(string? authenticationRequestId) => fingerprints.Of(authenticationRequestId);
+
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
     /// to the mode-specific delivery implementation.
@@ -128,7 +135,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 stored.AuthorizedGrant.Context.ClientId,
                 StringComparison.Ordinal))
         {
-            LogGrantNamesAnotherClient(Fingerprint.Of(authenticationRequestId), stored.AuthorizedGrant.Context.ClientId);
+            LogGrantNamesAnotherClient(FingerprintOf(authenticationRequestId), stored.AuthorizedGrant.Context.ClientId);
             await RefuseAsync(authenticationRequestId, stored, GrantForAnotherClient, expiresIn);
             return;
         }
@@ -143,7 +150,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (request.RequestedSubjects is { } accepted &&
             !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
-            LogAuthenticatedUserNotTheOneRequested(Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
+            LogAuthenticatedUserNotTheOneRequested(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);
             return;
         }
@@ -158,7 +165,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 stored.AuthorizedGrant.Context.RequestedClaims,
                 request.AuthorizedGrant.AuthSession.AuthContextClassRef))
         {
-            LogAuthenticationLevelNotTheOneRequired(Fingerprint.Of(authenticationRequestId), clientInfo.ClientId);
+            LogAuthenticationLevelNotTheOneRequired(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, NotTheRequiredLevel, expiresIn);
             return;
         }
@@ -181,7 +188,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (EscapedAuthorizationDetailTypes(request) is { Length: > 0 } escaped)
         {
             LogGrantedAuthorizationDetailsExceedTheRequest(
-                Fingerprint.Of(authenticationRequestId), clientInfo.ClientId, string.Join(", ", escaped));
+                FingerprintOf(authenticationRequestId), clientInfo.ClientId, string.Join(", ", escaped));
 
             await RefuseAsync(authenticationRequestId, request, WidensTheRequest, expiresIn);
             return;
@@ -271,7 +278,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
             return stored;
 
-        LogNotPendingOnCompletion(Fingerprint.Of(authenticationRequestId), answered, stored?.Status.ToString());
+        LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), answered, stored?.Status.ToString());
         throw NotPending(answered, stored);
     }
 
@@ -282,7 +289,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="authenticationRequestId">The request that could not be taken.</param>
     protected InvalidOperationException ClaimLost(string authenticationRequestId)
     {
-        LogNotPendingOnCompletion(Fingerprint.Of(authenticationRequestId), Answered, null);
+        LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), Answered, null);
         return NotPending(Answered, null);
     }
 
@@ -379,7 +386,7 @@ public abstract partial class AuthenticationCompletionHandler(
         LogMissingNotificationConfig(
             deliveryMode,
             clientId,
-            Fingerprint.Of(authenticationRequestId),
+            FingerprintOf(authenticationRequestId),
             endpoint?.ToString() ?? "null",
             hasToken);
 

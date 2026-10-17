@@ -40,7 +40,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// </para>
 /// </remarks>
 public partial class InMemoryLongPollingService(
-    ILogger<InMemoryLongPollingService> logger)
+    ILogger<InMemoryLongPollingService> logger,
+    CredentialFingerprints fingerprints)
     : IBackChannelLongPollingService
 {
     /// <summary>
@@ -69,7 +70,7 @@ public partial class InMemoryLongPollingService(
             _ => new ConcurrentDictionary<TaskCompletionSource<bool>, byte>());
         waiters.TryAdd(tcs, 0);
 
-        LogWaitingForStatusChange(Fingerprint.Of(authenticationRequestId), timeout);
+        LogWaitingForStatusChange(fingerprints.Of(authenticationRequestId), timeout);
 
         try
         {
@@ -83,11 +84,11 @@ public partial class InMemoryLongPollingService(
 
             if (completedTask == tcs.Task)
             {
-                LogStatusChangeReceived(Fingerprint.Of(authenticationRequestId));
+                LogStatusChangeReceived(fingerprints.Of(authenticationRequestId));
                 return true;
             }
 
-            LogWaitTimedOut(Fingerprint.Of(authenticationRequestId));
+            LogWaitTimedOut(fingerprints.Of(authenticationRequestId));
             return false;
         }
         catch (OperationCanceledException ex) when (LogCancellation(ex, authenticationRequestId))
@@ -123,7 +124,7 @@ public partial class InMemoryLongPollingService(
     // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
     private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
     {
-        LogWaitCancelled(ex, Fingerprint.Of(authenticationRequestId));
+        LogWaitCancelled(ex, fingerprints.Of(authenticationRequestId));
         return false;
     }
 
@@ -138,11 +139,11 @@ public partial class InMemoryLongPollingService(
         if (!_waiters.TryRemove(authenticationRequestId, out var waiters))
         {
             // No one waiting - this is normal and expected
-            LogNoWaiters(newStatus, Fingerprint.Of(authenticationRequestId));
+            LogNoWaiters(newStatus, fingerprints.Of(authenticationRequestId));
             return Task.CompletedTask;
         }
 
-        LogNotifyingWaiters(waiters.Count, newStatus, Fingerprint.Of(authenticationRequestId));
+        LogNotifyingWaiters(waiters.Count, newStatus, fingerprints.Of(authenticationRequestId));
 
         // Signal all waiting tasks
         foreach (var waiter in waiters.Keys)

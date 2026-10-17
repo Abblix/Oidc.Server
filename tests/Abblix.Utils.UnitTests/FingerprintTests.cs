@@ -17,18 +17,31 @@ public class FingerprintTests
 {
     private const string UserCode = "BCDFGHJK";
 
+    private static readonly byte[] Key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+
+    private static Fingerprint Under(byte[] key, string? value) => new(key, value);
+
+    [Fact]
+    public void TheSameKey_GivesTheSameFingerprintWhereverItIsHeld()
+        => Assert.Equal(Under(Key.ToArray(), UserCode).ToString(), Under(Key.ToArray(), UserCode).ToString());
+
+    [Fact]
+    public void AnotherKey_GivesAnotherFingerprint()
+        => Assert.NotEqual(Under(Key, UserCode).ToString(),
+            Under(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32), UserCode).ToString());
+
     [Fact]
     public void TheSameValue_HasTheSameFingerprint()
-        => Assert.Equal(Fingerprint.Of(UserCode).ToString(), Fingerprint.Of(UserCode).ToString());
+        => Assert.Equal(Under(Key, UserCode).ToString(), Under(Key, UserCode).ToString());
 
     [Fact]
     public void DifferentValues_HaveDifferentFingerprints()
-        => Assert.NotEqual(Fingerprint.Of(UserCode).ToString(), Fingerprint.Of("BCDFGHJL").ToString());
+        => Assert.NotEqual(Under(Key, UserCode).ToString(), Under(Key, "BCDFGHJL").ToString());
 
     [Fact]
     public void TheFingerprint_DoesNotCarryTheValue()
     {
-        var fingerprint = Fingerprint.Of(UserCode).ToString();
+        var fingerprint = Under(Key, UserCode).ToString();
 
         Assert.DoesNotContain(UserCode, fingerprint, StringComparison.OrdinalIgnoreCase);
         Assert.NotEqual(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
@@ -37,5 +50,5 @@ public class FingerprintTests
 
     [Fact]
     public void AnAbsentValue_IsWrittenAsTheLoggingLibraryWritesNull()
-        => Assert.Equal(Sanitized.NullText, Fingerprint.Of(null).ToString());
+        => Assert.Equal(Sanitized.NullText, Under(Key, null).ToString());
 }

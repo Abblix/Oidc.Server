@@ -64,6 +64,7 @@ public class DeviceAuthorizationStorageTests
 
         _storage = new DeviceAuthorizationStorage(
             new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
+            TestFingerprints.Instance,
             new DistributedCacheStorage(_cache.Object, _serializer.Object),
             keyFactory.Object,
             new FakeTimeProvider(_now));
@@ -162,7 +163,7 @@ public class DeviceAuthorizationStorageTests
         // public interface a host can hand it a live code belonging to another request. Asserting the
         // absence as well as the presence, because a message that named both would satisfy a check for
         // the device code alone.
-        Assert.Contains(Fingerprint.Of(DeviceCode).ToString(), entry.Message);
+        Assert.Contains(TestFingerprints.Instance.Of(DeviceCode).ToString(), entry.Message);
         Assert.DoesNotContain(DeviceCode, entry.Message);
         Assert.DoesNotContain(UserCodeKey, entry.Message);
         Assert.DoesNotContain(UserCode, entry.Message);
@@ -290,7 +291,7 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(
             LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedBeforeDiscard,
             entry.EventId.Id);
-        Assert.Contains(Fingerprint.Of(UserCode).ToString(), entry.Message);
+        Assert.Contains(TestFingerprints.Instance.Of(UserCode).ToString(), entry.Message);
         Assert.DoesNotContain(UserCode, entry.Message);
 
         // And it really is the discard path: the request is gone by the time this returns, even
@@ -376,6 +377,7 @@ public class DeviceAuthorizationStorageTests
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
+            TestFingerprints.Instance,
             entities,
             keyFactory.Object,
             new FakeTimeProvider(_now));

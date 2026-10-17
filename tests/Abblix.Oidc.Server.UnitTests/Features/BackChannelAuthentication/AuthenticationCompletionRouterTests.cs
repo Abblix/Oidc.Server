@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
@@ -61,10 +62,11 @@ public class AuthenticationCompletionRouterTests
         services.AddKeyedSingleton<AuthenticationCompletionHandler>(
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
-                NullLogger<PollModeCompletionHandler>.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
+                NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
 
         var router = new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
+            TestFingerprints.Instance,
             clients.Object,
             services.BuildServiceProvider(),
             storage.Object);
@@ -176,10 +178,11 @@ public class AuthenticationCompletionRouterTests
         services.AddKeyedSingleton<AuthenticationCompletionHandler>(
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
-                NullLogger<PollModeCompletionHandler>.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
+                NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
 
         return new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
+            TestFingerprints.Instance,
             clients.Object,
             services.BuildServiceProvider(),
             storage.Object);

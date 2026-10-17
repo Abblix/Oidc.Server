@@ -258,6 +258,7 @@ public class LostUpdateTests
     private DeviceAuthorizationStorage DeviceStorageOver(IEntityStorage storage)
         => new(
             NullLogger<DeviceAuthorizationStorage>.Instance,
+            TestFingerprints.Instance,
             storage,
             DeviceKeys(),
             new FakeTimeProvider(_now));
@@ -279,6 +280,7 @@ public class LostUpdateTests
     private UserCodeRateLimiter LimiterOver(IEntityStorage storage, int failuresBeforeBackoff = 2)
         => new(
             NullLogger<UserCodeRateLimiter>.Instance,
+            TestFingerprints.Instance,
             storage,
             new EntityStorageKeyFactory(),
             new FakeTimeProvider(_now),

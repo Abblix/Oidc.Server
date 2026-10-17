@@ -24,6 +24,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
@@ -107,6 +108,7 @@ public class UserCodeVerificationServiceRateLimitTests
             deviceStorage.Object,
             new UserCodeRateLimiter(
                 NullLogger<UserCodeRateLimiter>.Instance,
+                TestFingerprints.Instance,
                 _rateLimitStore,
                 new EntityStorageKeyFactory(),
                 new FakeTimeProvider(_now),
@@ -360,6 +362,7 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         var limiter = new UserCodeRateLimiter(
             NullLogger<UserCodeRateLimiter>.Instance,
+            TestFingerprints.Instance,
             _rateLimitStore,
             new EntityStorageKeyFactory(),
             new FakeTimeProvider(_now),
@@ -421,6 +424,7 @@ public class UserCodeVerificationServiceRateLimitTests
         PauseAtThree(deviceOptions);
         var limiter = new UserCodeRateLimiter(
             NullLogger<UserCodeRateLimiter>.Instance,
+            TestFingerprints.Instance,
             _rateLimitStore,
             new EntityStorageKeyFactory(),
             new FakeTimeProvider(_now),
@@ -569,6 +573,7 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var limiter = new UserCodeRateLimiter(
             NullLogger<UserCodeRateLimiter>.Instance,
+            TestFingerprints.Instance,
             _rateLimitStore,
             new EntityStorageKeyFactory(),
             new FakeTimeProvider(_now),
