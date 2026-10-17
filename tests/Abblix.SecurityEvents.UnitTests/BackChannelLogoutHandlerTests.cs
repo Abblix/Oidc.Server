@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Mime;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.BackChannelLogout;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -292,13 +293,36 @@ public class BackChannelLogoutHandlerTests
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
 
         var (eventId, warning) = Assert.Single(logger.Warnings);
-        Assert.Contains(expected, warning, StringComparison.Ordinal);
+        Assert.Contains(Sanitized.Value(expected).ToString(), warning, StringComparison.Ordinal);
         Assert.Contains(result.Error!.Error, warning, StringComparison.Ordinal);
 
         // The number is the contract a runbook keys off, so it is asserted rather than the message:
         // the text may be reworded, the identifier may not move.
         Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, eventId.Id);
     }
+
+    /// <summary>
+    /// The endpoint is unauthenticated, and the refusal of a wrong media type quotes the request's Content-Type, so
+    /// an anonymous caller chooses what that record says: it is written cut short and without its line breaks.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalQuotingTheCaller_IsRecordedCutShortAndOnOneLine()
+    {
+        var logger = new RecordingLogger();
+        var handler = new BackChannelLogoutHandler(logger, new StubValidator(), new RecordingSink(null), new ReleasingCache());
+        var contentType = "text/plain\r\nforged record " + new string('x', LongerThanAnyRecordKeeps);
+
+        var result = await handler.HandleAsync(contentType, "logout_token=x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        var (_, warning) = Assert.Single(logger.Warnings);
+        Assert.DoesNotContain('\n', warning);
+        Assert.DoesNotContain('\r', warning);
+        Assert.True(warning.Length < contentType.Length);
+    }
+
+    // Longer than the part of a value the log keeps, so the record shows it was cut.
+    private const int LongerThanAnyRecordKeeps = 5000;
 
     /// <summary>Success is silent at EVERY level, so the refusals stay findable among ordinary traffic.</summary>
     /// <remarks>

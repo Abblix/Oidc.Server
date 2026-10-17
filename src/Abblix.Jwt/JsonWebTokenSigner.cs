@@ -158,7 +158,7 @@ internal partial class JsonWebTokenSigner(
             return new JwtValidationError(
                 JwtError.InvalidToken,
                 keyId.HasValue()
-                    ? $"No signing key matched header constraints: kid='{Sanitized.Value(keyId)}', alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)"
+                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)"
                     : $"No signing key matched header constraints: alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)");
         }
 

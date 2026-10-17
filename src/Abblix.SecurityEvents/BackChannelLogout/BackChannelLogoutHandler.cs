@@ -152,25 +152,10 @@ public sealed partial class BackChannelLogoutHandler(
         // The code is the constant every refusal carries, taken from the constant rather than read
         // back off the result: the result's error is nullable, and dereferencing it here would
         // assert a fact the compiler cannot check in order to learn something already known.
-        LogRefused(BackChannelLogoutError.InvalidRequest, Abbreviate(description));
+        LogRefused(BackChannelLogoutError.InvalidRequest, description);
 
         return BackChannelLogoutResult.BadRequest(description);
     }
-
-    /// <summary>How much of a description is worth keeping in a log line.</summary>
-    /// <remarks>
-    /// This endpoint is unauthenticated by design, and one refusal path echoes the request's own
-    /// Content-Type into the description - so an anonymous caller chooses both the rate and, up to
-    /// the server's header limit, the size of what is written. The response still carries the whole
-    /// text to the provider, which is what Section 2.8 asks for; the log keeps the part that names
-    /// the problem.
-    /// </remarks>
-    private const int LoggedDescriptionLimit = 512;
-
-    private static string Abbreviate(string description)
-        => description.Length <= LoggedDescriptionLimit
-            ? description
-            : description[..LoggedDescriptionLimit] + "...";
 
     /// <summary>
     /// Reads the one parameter this endpoint understands out of a form-encoded body.

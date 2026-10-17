@@ -183,7 +183,7 @@ public partial class ClientJwtValidator(
         var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);
         if (!result)
         {
-            LogAudienceValidationFailed(string.Join(", ", materializedAudiences), requestUri, issuer);
+            LogAudienceValidationFailed(Sanitized.Values(materializedAudiences), requestUri, issuer);
         }
 
         return Task.FromResult(result);

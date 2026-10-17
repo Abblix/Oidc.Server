@@ -140,7 +140,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, string.Join(", ", audiences), issuerIdentifier);
+        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Values(audiences), issuerIdentifier);
         return false;
     }
 

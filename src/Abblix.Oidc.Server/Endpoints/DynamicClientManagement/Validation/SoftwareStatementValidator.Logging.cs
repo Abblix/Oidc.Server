@@ -17,7 +17,7 @@ partial class SoftwareStatementValidator
         EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.ValidationFailed,
         Level = LogLevel.Warning,
         Message = "Software statement validation failed: {Error}")]
-    private partial void LogValidationFailed(string Error);
+    private partial void LogValidationFailed(Sanitized Error);
 
     [LoggerMessage(
         EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerNotTrusted,

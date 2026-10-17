@@ -55,7 +55,7 @@ partial class JwtBearerGrantHandler
 		EventId = LogEvents.Endpoints.JwtBearer.ScopesNotAllowed,
 		Level = LogLevel.Warning,
 		Message = "JWT Bearer grant rejected: scopes {InvalidScopes} not allowed for issuer {Issuer}")]
-	private partial void LogScopesNotAllowed(Sanitized InvalidScopes, Sanitized Issuer);
+	private partial void LogScopesNotAllowed(Sanitized[] InvalidScopes, Sanitized Issuer);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.GrantSucceeded,

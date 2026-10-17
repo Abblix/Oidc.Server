@@ -225,7 +225,7 @@ public partial class JwtBearerGrantHandler(
 		if (invalidScopes.Length == 0)
 			return ctx;
 
-		LogScopesNotAllowed(string.Join(", ", invalidScopes), ctx.Issuer);
+		LogScopesNotAllowed(Sanitized.Values(invalidScopes), ctx.Issuer);
 
 		return new OidcError(
 			ErrorCodes.InvalidScope,

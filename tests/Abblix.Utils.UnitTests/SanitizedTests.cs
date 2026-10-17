@@ -145,13 +145,14 @@ public class SanitizedTests
     }
 
     [Fact]
-    public void ToString_ShouldCutALongerValueAndMarkTheCut()
+    public void ToString_ShouldKeepTheStartAndTheEndOfALongerValue()
     {
-        var input = new string('a', Sanitized.MaxLength) + "tail";
+        const int half = Sanitized.MaxLength / 2;
+        var input = new string('a', half) + "middle" + new string('z', half);
 
         var result = Sanitized.Value(input).ToString();
 
-        Assert.Equal(new string('a', Sanitized.MaxLength) + Sanitized.TruncationMark, result);
+        Assert.Equal(new string('a', half) + Sanitized.TruncationMark + new string('z', half), result);
     }
 
     [Fact]
@@ -161,17 +162,28 @@ public class SanitizedTests
 
         var result = Sanitized.Value(input).ToString();
 
-        Assert.Equal(string.Concat(Enumerable.Repeat("\\n", Sanitized.MaxLength)) + Sanitized.TruncationMark, result);
+        var half = string.Concat(Enumerable.Repeat("\\n", Sanitized.MaxLength / 2));
+        Assert.Equal(half + Sanitized.TruncationMark + half, result);
     }
 
     [Fact]
-    public void ToString_ShouldNotSplitASurrogatePairAtTheCut()
+    public void ToString_ShouldNotSplitASurrogatePairAtEitherCut()
     {
-        var input = new string('a', Sanitized.MaxLength - 1) + "\U0001F600" + "tail";
+        const int half = Sanitized.MaxLength / 2;
+        const string pair = "\U0001F600";
+        var input = new string('a', half - 1) + pair + "middle" + pair + new string('z', half - 1);
 
         var result = Sanitized.Value(input).ToString();
 
-        Assert.Equal(new string('a', Sanitized.MaxLength - 1) + Sanitized.TruncationMark, result);
+        Assert.Equal(new string('a', half - 1) + Sanitized.TruncationMark + new string('z', half - 1), result);
+    }
+
+    [Fact]
+    public void Values_ShouldSanitizeEachItemOnItsOwn()
+    {
+        var result = Sanitized.Values(["a,b", "c\nd"]);
+
+        Assert.Equal(["a\\,b", "c\\nd"], result.Select(value => value.ToString()));
     }
 
     [Fact]
@@ -179,7 +191,7 @@ public class SanitizedTests
     {
         const string? input = null;
         Sanitized sanitizedValue = input;
-        Assert.Equal(string.Empty, sanitizedValue.ToString());
+        Assert.Equal(Sanitized.NullText, sanitizedValue.ToString());
     }
 
     /// <summary>

@@ -15,12 +15,12 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// A signed token's key identifier is the sender's text and is read before the signature is checked, so it reaches
-/// the record and the refusal only through <see cref="Sanitized"/>.
+/// the record only through <see cref="Sanitized"/>.
 /// </summary>
 public class SignatureValidationLoggingTests
 {
     [Fact]
-    public async Task KeyIdNoKeyMatches_ReachesTheRecordAndTheRefusalWithoutItsLineBreaks()
+    public async Task KeyIdNoKeyMatches_ReachesTheRecordWithoutItsLineBreaks()
     {
         var logger = new RecordingLogger<JsonWebTokenSigner>();
         var services = new ServiceCollection();
@@ -43,7 +43,6 @@ public class SignatureValidationLoggingTests
             TestContext.Current.CancellationToken);
 
         Assert.NotNull(error);
-        Assert.DoesNotContain(error.ErrorDescription, char.IsControl);
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogEvents.Jwt.NoMatchingKey, entry.EventId);
         var recorded = Assert.IsType<Sanitized>(entry.Value("KeyId")).ToString();

@@ -17,7 +17,7 @@ partial class ClientJwtValidator
         EventId = LogEvents.Tokens.ClientJwtValidator.ValidationFailed,
         Level = LogLevel.Warning,
         Message = "Client JWT validation failed. Error: {ErrorType}, Description: {Description}")]
-    private partial void LogValidationFailed(string ErrorType, string Description);
+    private partial void LogValidationFailed(string ErrorType, Sanitized Description);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.ClientIdMismatch,
@@ -54,5 +54,5 @@ partial class ClientJwtValidator
         EventId = LogEvents.Tokens.ClientJwtValidator.AudienceValidationFailed,
         Level = LogLevel.Warning,
         Message = "Audience validation failed, token audiences: {@Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]
-    private partial void LogAudienceValidationFailed(Sanitized Audiences, string RequestUri, Sanitized Issuer);
+    private partial void LogAudienceValidationFailed(Sanitized[] Audiences, string RequestUri, Sanitized Issuer);
 }

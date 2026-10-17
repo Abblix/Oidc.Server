@@ -94,7 +94,7 @@ partial class JwtAssertionAuthenticatorBase
                   + "governing it accepts the issuer identifier {IssuerIdentifier} alone")]
     private partial void LogAudienceIsNotTheIssuerAlone(
         string ClientId,
-        Sanitized Audiences,
+        Sanitized[] Audiences,
         string IssuerIdentifier);
 
     [LoggerMessage(

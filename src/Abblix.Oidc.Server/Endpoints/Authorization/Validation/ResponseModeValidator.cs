@@ -40,7 +40,7 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 		{
 			if (!IsResponseModeAllowed(responseMode, context.FlowType))
 			{
-				LogIncompatibleResponseMode(responseMode, context.Request.ResponseType);
+				LogIncompatibleResponseMode(responseMode, Sanitized.Values(context.Request.ResponseType));
 
 				return context.InvalidRequest("The response mode is not supported");
 			}
