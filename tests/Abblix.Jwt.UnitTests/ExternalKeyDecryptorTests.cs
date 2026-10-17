@@ -224,11 +224,18 @@ public class ExternalKeyDecryptorTests
                 RsaJsonWebKey rsaKey => RsaDecrypt(rsaKey, algorithm, encryptedKey),
 
                 OctetJsonWebKey { KeyValue: { } secret }
-                    => AesKeyWrap.TryUnwrap(secret, encryptedKey, out var unwrapped) ? unwrapped : null,
+                    => UnwrapUnder(secret, encryptedKey),
 
                 _ => null,
             };
             return Task.FromResult(contentEncryptionKey);
+        }
+
+        private static byte[]? UnwrapUnder(byte[] secret, byte[] encryptedKey)
+        {
+            using var aes = Aes.Create();
+            aes.Key = secret;
+            return aes.TryUnwrapKey(encryptedKey, out var unwrapped) ? unwrapped : null;
         }
 
         public Task<byte[]> AgreeKeyAsync(

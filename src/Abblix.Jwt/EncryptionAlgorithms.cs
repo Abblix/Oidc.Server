@@ -47,7 +47,7 @@ public static class EncryptionAlgorithms
 
 		/// <summary>
 		/// AES Key Wrap with a 128-bit key (RFC 7518 Section 4.4). The CEK is wrapped with the
-		/// RFC 3394 AES Key Wrap construction over the platform AES-ECB primitive; the wrap's own
+		/// platform implementation of the RFC 3394 AES Key Wrap construction; the wrap's own
 		/// integrity check register protects the wrapped key, so no extra header parameters are used.
 		/// </summary>
 		public const string Aes128KW = "A128KW";
