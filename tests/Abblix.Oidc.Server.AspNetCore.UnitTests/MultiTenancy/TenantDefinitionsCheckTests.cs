@@ -45,9 +45,8 @@ public class TenantDefinitionsCheckTests
     public void TenantsAtTheirOwnHostsAndUnderPathsOfOneHost_AreAccepted()
         => Assert.Null(FailureOf(
             Tenant("acme", "https://acme.example.com"),
-            Tenant("shared", "https://auth.example.com"),
             Tenant("globex", "https://auth.example.com/tenants/globex"),
-            Tenant("globex-eu", "https://auth.example.com/tenants/globex/eu")));
+            Tenant("initech", "https://auth.example.com/tenants/initech")));
 
     /// <summary>
     /// A tenant bound from configuration without an issuer, or read from a store that holds none, is refused by name
@@ -124,6 +123,61 @@ public class TenantDefinitionsCheckTests
     public void TwoIssuersAtOneAddress_AreRefused(string first, string second)
         => Assert.Contains("served at the same address",
             FailureOf(allowHttp: true, Tenant("acme", first), Tenant("globex", second)), StringComparison.Ordinal);
+
+    /// <summary>
+    /// An issuer whose path lies under another tenant's on the same host is refused: a browser sends the outer
+    /// tenant's sign-in cookie to every path below it, so an end user signed in there would arrive at the inner
+    /// tenant signed in.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com", "https://auth.example.com/tenants/acme")]
+    [InlineData("https://auth.example.com/tenants/acme", "https://auth.example.com/tenants/acme/eu")]
+    [InlineData("https://auth.example.com/tenants/acme/eu", "https://auth.example.com/tenants/acme")]
+    [InlineData("https://auth.example.com/tenants/acme", "https://AUTH.example.com/tenants/acme/eu")]
+    public void AnIssuerUnderAnothersPath_IsRefused(string first, string second)
+        => Assert.Contains("lies under", FailureOf(Tenant("acme", first), Tenant("globex", second)),
+            StringComparison.Ordinal);
+
+    /// <summary>
+    /// A path that merely begins with another's text is a sibling, not a path under it, and tenants on other hosts
+    /// share no cookie whatever their paths.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/tenants/acme", "https://auth.example.com/tenants/acme2")]
+    [InlineData("https://auth.example.com/tenants/acme", "https://other.example.com/tenants/acme/eu")]
+    public void IssuersBesideEachOther_AreAccepted(string first, string second)
+        => Assert.Null(FailureOf(Tenant("acme", first), Tenant("globex", second)));
+
+    /// <summary>
+    /// The refusal names both tenants, the outer one first, whichever order they are listed in, so a list read from a
+    /// store leaves both out and the manager refuses to add either one beside the other.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ANestedIssuer_IsRefusedNamingTheOuterTenantAndTheInnerOne(bool innerFirst)
+    {
+        var outer = Tenant("acme", "https://auth.example.com/tenants/acme");
+        var inner = Tenant("globex", "https://auth.example.com/tenants/acme/eu");
+
+        var refusal = Assert.Single(new TenantDefinitionsCheck().Check(innerFirst ? [inner, outer] : [outer, inner]));
+
+        Assert.Equal(["acme", "globex"], refusal.TenantIds);
+    }
+
+    /// <summary>
+    /// Tenants on hosts of their own may share a mutual-TLS host, which serves clients presenting a certificate and
+    /// takes no end user's sign-in, so their paths there do not nest.
+    /// </summary>
+    [Fact]
+    public void TenantsSharingAMutualTlsHost_AreNotNested()
+    {
+        var mtls = new Uri("https://mtls.example.com");
+
+        Assert.Null(FailureOf(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), MtlsBaseUri = mtls },
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com/eu"), MtlsBaseUri = mtls }));
+    }
 
     /// <summary>
     /// The store of tenants is read again every period by a timer, so a period it cannot keep is refused at
