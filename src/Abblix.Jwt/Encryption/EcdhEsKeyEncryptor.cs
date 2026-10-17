@@ -6,10 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography;
-using System.Text.Json;
-using Abblix.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -25,61 +21,36 @@ namespace Abblix.Jwt.Encryption;
 /// <see cref="ConcatKeyDerivation"/>. Expressing the KDF over a raw Z, rather than fusing it with the
 /// agreement, is what lets the identical derivation serve the external-custodian path, where an HSM/KMS
 /// performs the agreement and returns Z. Supports the NIST curves P-256, P-384 and P-521 - the set the
-/// platform <see cref="ECDiffieHellman"/> covers.
+/// platform <c>ECDiffieHellman</c> covers.
 /// This is a stateless service that can be registered as a singleton in DI.
+/// A Facade over <see cref="EcdhEsSender"/> and <see cref="EcdhEsRecipient"/>, which do the two sides.
 /// </remarks>
 internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serviceProvider)
 	: IKeyManagementAlgorithm<EllipticCurveJsonWebKey>
 {
+	private readonly EcdhEsSender _sender = new(algorithm);
+	private readonly EcdhEsRecipient _recipient = new(algorithm, new EcdhEsContentKey(serviceProvider));
+
 	/// <inheritdoc />
 	public string Algorithm => algorithm;
 
-	/// <summary>
-	/// The RFC 3394 KEK size in bytes for the key-wrapping variants, or null for Direct Key Agreement,
-	/// where the derived key is the CEK itself and no wrapping occurs.
-	/// </summary>
-	private readonly int? _keyEncryptionKeySize = algorithm switch
-	{
-		EncryptionAlgorithms.KeyManagement.EcdhEs => null,
-		EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW => 16,
-		EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW => 24,
-		EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => 32,
-		_ => throw new ArgumentException($"Unsupported ECDH-ES algorithm: {algorithm}", nameof(algorithm))
-	};
-
 	/// <inheritdoc />
 	/// <remarks>
-	/// In Direct Key Agreement mode the CEK is not random: it is derived from the ephemeral-static
-	/// agreement, and this method performs the whole derivation - it generates the ephemeral key on
-	/// the recipient key's curve, publishes it as the 'epk' header parameter and returns the derived
-	/// key. The key-wrapping variants use the default random CEK; their agreement happens in
-	/// <see cref="EncryptKey"/>, which derives the KEK instead.
+	/// In Direct Key Agreement mode the CEK is not random: it is derived from the ephemeral-static agreement, and this
+	/// method performs the whole derivation, publishing the ephemeral key as the 'epk' header parameter.
 	/// </remarks>
 	public byte[] GenerateContentEncryptionKey(
 		JsonWebTokenHeader header,
 		EllipticCurveJsonWebKey recipientKey,
 		int keySizeInBytes)
-		=> _keyEncryptionKeySize == null
-			? DeriveKeyForEncryption(header, recipientKey, keySizeInBytes)
-			: CryptoRandom.GetRandomBytes(keySizeInBytes);
+		=> _sender.GenerateContentEncryptionKey(header, recipientKey, keySizeInBytes);
 
 	/// <inheritdoc />
 	/// <remarks>
-	/// Per RFC 7518 Section 4.6, in Direct Key Agreement mode the JWE Encrypted Key is the empty
-	/// octet sequence - the agreement already produced the CEK in
-	/// <see cref="GenerateContentEncryptionKey"/>. In the key-wrapping variants the agreement
-	/// derives a KEK of the size the algorithm name declares, which then wraps the CEK per RFC 3394.
+	/// Per RFC 7518 Section 4.6, in Direct Key Agreement mode the JWE Encrypted Key is the empty octet sequence.
 	/// </remarks>
 	public byte[] EncryptKey(JsonWebTokenHeader header, EllipticCurveJsonWebKey recipientKey, byte[] keyToEncrypt)
-	{
-		if (_keyEncryptionKeySize is not { } keyEncryptionKeySize)
-			return [];
-
-		var keyEncryptionKey = DeriveKeyForEncryption(header, recipientKey, keyEncryptionKeySize);
-		using var aes = Aes.Create();
-		aes.Key = keyEncryptionKey;
-		return aes.EncryptKeyWrap(keyToEncrypt);
-	}
+		=> _sender.EncryptKey(header, recipientKey, keyToEncrypt);
 
 	/// <inheritdoc />
 	public bool TryDecryptKey(
@@ -88,156 +59,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 		byte[] encryptedKey,
 		[NotNullWhen(true)] out byte[]? decryptedKey)
 	{
-		decryptedKey = null;
-
-		try
-		{
-			// RFC 7518 section 4.6.2: both agreement parties may be identified by 'apu'/'apv'; when both are
-			// present they must be distinct, otherwise the producer and recipient roles collapse into
-			// one identity and the KDF binding loses its meaning.
-			var apu = header.AgreementPartyUInfo;
-			var apv = header.AgreementPartyVInfo;
-			if (apu != null && apv != null && string.Equals(apu, apv, StringComparison.Ordinal))
-				return false;
-
-			// The originator's ephemeral public key is mandatory and must live on the recipient key's
-			// curve - a point from another curve would make the agreement computation meaningless
-			// (and is the classic invalid-curve attack shape).
-			if (header.EphemeralPublicKey is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey
-			    || !string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal))
-				return false;
-
-			if (_keyEncryptionKeySize is { } keyEncryptionKeySize)
-			{
-				var keyEncryptionKey = DeriveKey(recipientKey, ephemeralKey, algorithm, apu, apv, keyEncryptionKeySize);
-				using var aes = Aes.Create();
-				aes.Key = keyEncryptionKey;
-				return aes.TryUnwrapKey(encryptedKey, out decryptedKey);
-			}
-
-			// Direct Key Agreement: the encrypted key must be empty and the derived key IS the CEK,
-			// sized for the content encryption algorithm named by 'enc'.
-			if (encryptedKey.Length != 0)
-				return false;
-
-			if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm
-			    || serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm)
-				    is not { } contentEncryptor)
-				return false;
-
-			decryptedKey = DeriveKey(
-				recipientKey, ephemeralKey, contentEncryptionAlgorithm, apu, apv, contentEncryptor.KeySizeInBytes);
-			return true;
-		}
-		catch (CryptographicException)
-		{
-			// Invalid ephemeral point (e.g. coordinates not on the curve) or agreement failure
-			decryptedKey = null;
-			return false;
-		}
-		catch (PlatformNotSupportedException)
-		{
-			// Windows CNG surfaces an off-curve ephemeral point as PlatformNotSupportedException
-			// ("the specified curve or its parameters are not valid for this platform") wrapping the
-			// underlying CryptographicException - the same forgery, a different exception shape.
-			decryptedKey = null;
-			return false;
-		}
-		catch (FormatException)
-		{
-			// Malformed base64url in the 'apu'/'apv' header parameters
-			decryptedKey = null;
-			return false;
-		}
-		catch (JsonException)
-		{
-			// Malformed 'epk' header parameter
-			decryptedKey = null;
-			return false;
-		}
-	}
-
-	/// <summary>
-	/// Performs the encryption-side agreement: generates an ephemeral key pair on the recipient
-	/// key's curve, publishes its public part as the 'epk' header parameter and derives a key of
-	/// the requested size. The AlgorithmID of the Concat KDF is the 'enc' value in Direct Key
-	/// Agreement mode and the 'alg' value in the key-wrapping variants, per RFC 7518 section 4.6.2.
-	/// </summary>
-	private byte[] DeriveKeyForEncryption(
-		JsonWebTokenHeader header,
-		EllipticCurveJsonWebKey recipientKey,
-		int keySizeInBytes)
-	{
-		var algorithmId = _keyEncryptionKeySize == null
-			? header.EncryptionAlgorithm
-			  ?? throw new InvalidOperationException(
-				  "ECDH-ES Direct Key Agreement requires the 'enc' header to be set before key derivation")
-			: algorithm;
-
-		using var recipient = recipientKey.ToEcdh();
-		using var ephemeral = ECDiffieHellman.Create(recipient.ExportParameters(false).Curve);
-
-		var ephemeralParameters = ephemeral.ExportParameters(false);
-		header.EphemeralPublicKey = new EllipticCurveJsonWebKey().Apply(ephemeralParameters) with
-		{
-			// 'epk' carries the ephemeral public key only: no private material by construction
-			// (public export above), and none of the optional JWK members Apply infers.
-			Algorithm = null,
-		};
-
-		return DeriveKey(
-			ephemeral,
-			recipient.PublicKey,
-			algorithmId,
-			header.AgreementPartyUInfo,
-			header.AgreementPartyVInfo,
-			keySizeInBytes);
-	}
-
-	/// <summary>
-	/// Runs the decryption-side agreement between the recipient's static private key and the
-	/// originator's ephemeral public key from the 'epk' header parameter.
-	/// </summary>
-	private static byte[] DeriveKey(
-		EllipticCurveJsonWebKey recipientKey,
-		EllipticCurveJsonWebKey ephemeralKey,
-		string algorithmId,
-		string? apu,
-		string? apv,
-		int keySizeInBytes)
-	{
-		using var recipient = recipientKey.ToEcdh();
-		using var ephemeral = ephemeralKey.ToEcdh();
-		return DeriveKey(recipient, ephemeral.PublicKey, algorithmId, apu, apv, keySizeInBytes);
-	}
-
-	/// <summary>
-	/// Materialises the raw ECDH shared secret Z between the two parties and runs the Concat KDF on it
-	/// via <see cref="ConcatKeyDerivation"/>. The agreement is the only step that touches the private key;
-	/// expressing the KDF over a raw Z lets the exact same derivation serve the external-custodian path,
-	/// where an HSM performs the agreement and returns Z. <see cref="ECDiffieHellman.DeriveRawSecretAgreement"/>
-	/// yields the same Z that <see cref="ECDiffieHellman.DeriveKeyFromHash(ECDiffieHellmanPublicKey,HashAlgorithmName,byte[],byte[])"/>
-	/// would hash internally, so the derived key is byte-identical to the previous fused implementation
-	/// (pinned by the ECDH-ES known-answer vector).
-	/// </summary>
-	private static byte[] DeriveKey(
-		ECDiffieHellman privateParty,
-		ECDiffieHellmanPublicKey publicParty,
-		string algorithmId,
-		string? apu,
-		string? apv,
-		int keySizeInBytes)
-	{
-		// Z is the raw ECDH shared secret named by NIST SP 800-56A and RFC 7518 section 4.6.
-		// DeriveRawSecretAgreement yields exactly what the fused DeriveKeyFromHash would hash internally.
-		var sharedSecretZ = privateParty.DeriveRawSecretAgreement(publicParty);
-		try
-		{
-			return ConcatKeyDerivation.DeriveKey(sharedSecretZ, algorithmId, apu, apv, keySizeInBytes);
-		}
-		finally
-		{
-			CryptographicOperations.ZeroMemory(sharedSecretZ);
-		}
+		decryptedKey = _recipient.TryDecryptKey(header, recipientKey, encryptedKey);
+		return decryptedKey != null;
 	}
 }
