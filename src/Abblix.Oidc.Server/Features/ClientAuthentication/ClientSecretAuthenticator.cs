@@ -38,7 +38,7 @@ public abstract partial class ClientSecretAuthenticator(
 	/// <returns>
 	/// Authenticated client information if successful; otherwise, null.
 	/// </returns>
-	protected async Task<ClientInfo?> TryAuthenticateAsync(string? clientId, string? secret, string authenticationMethod)
+	protected async Task<ClientInfo?> TryAuthenticateAsync(string? clientId, [Credential] string? secret, string authenticationMethod)
 	{
 		if (!clientId.NotNullOrWhiteSpace() || !secret.NotNullOrWhiteSpace())
 		{
@@ -80,7 +80,7 @@ public abstract partial class ClientSecretAuthenticator(
 	/// <returns>
 	/// True if the secret matches a stored hash and is not expired; otherwise, false.
 	/// </returns>
-	private bool TryValidateClientSecret(ClientInfo client, string secret)
+	private bool TryValidateClientSecret(ClientInfo client, [Credential] string secret)
 	{
 		// We store only client secret hashes, so we have to hash the raw secret to compare. And we do it lazy.
 		var matchingSha512Secrets = FindMatchingSecrets(
@@ -123,7 +123,7 @@ public abstract partial class ClientSecretAuthenticator(
 		ClientInfo client,
 		Func<ClientSecret, byte[]?> hashSelector,
 		HashAlgorithm hashAlgorithm,
-		string secretValue)
+		[Credential] string secretValue)
 	{
 		var validSecretHashes =
 			from clientSecret in client.ClientSecrets

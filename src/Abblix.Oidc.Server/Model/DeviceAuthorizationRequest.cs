@@ -9,6 +9,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -18,6 +19,7 @@ namespace Abblix.Oidc.Server.Model;
 /// This request is initiated by a device with limited input capabilities to obtain
 /// a device code and user code for user authentication on a separate device.
 /// </summary>
+[ExternalInput]
 public record DeviceAuthorizationRequest
 {
     /// <summary>

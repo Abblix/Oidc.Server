@@ -24,7 +24,7 @@
 
     <PackageId>Abblix.Analyzers</PackageId>
     <Title>Abblix Analyzers</Title>
-    <Description>Roslyn analyzers holding the Abblix house rules for C#: the time is read from a TimeProvider rather than from DateTime or DateTimeOffset, no code declares a TimeProvider of its own, and no #region hides code. Build errors, reported by the compiler in the IDE and in CI alike.</Description>
+    <Description>Roslyn analyzers holding the Abblix house rules for C#, from reading the time through a TimeProvider to what a log record may carry. Build errors, reported by the compiler in the IDE and in CI alike; the README lists every rule.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Analyzers</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>

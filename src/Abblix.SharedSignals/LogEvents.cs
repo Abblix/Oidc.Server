@@ -71,5 +71,8 @@ public static class LogEvents
 
         /// <summary>A queued item held nothing that could be sent, so it was dropped from the queue.</summary>
         public const int UnsendableItemDropped = Base + 16;
+
+        /// <summary>A stream identifier a URL path cannot carry unchanged, so no poll address is published for it.</summary>
+        public const int NoPollAddress = Base + 17;
     }
 }

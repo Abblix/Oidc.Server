@@ -15,7 +15,7 @@ namespace Abblix.SharedSignals.MinimalApi;
 /// <summary>
 /// Composes the addresses this deployment publishes for its poll endpoints.
 /// </summary>
-internal static class PollEndpointAddresses
+internal static partial class PollEndpointAddresses
 {
     /// <summary>
     /// The prefix the outside world reaches this deployment on: the advertised one where a proxy rewrites
@@ -112,13 +112,7 @@ internal static class PollEndpointAddresses
             return address;
         }
 
-        logger.LogWarning(
-            "No poll address can be composed for the stream identifier {StreamId}: a request to "
-            + "{Address} reaches this transmitter naming something else, or nothing at all. Name the "
-            + "stream something a URL path carries unchanged, or give it push delivery, which needs no "
-            + "address of ours.",
-            streamId,
-            address);
+        LogNoPollAddress(logger, streamId, address);
 
         return null;
     }

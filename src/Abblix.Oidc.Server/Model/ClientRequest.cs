@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.Model;
@@ -20,6 +21,7 @@ namespace Abblix.Oidc.Server.Model;
 /// client assertions per RFC 7521/7523, and the mTLS client certificate per RFC 8705.
 /// Concrete request DTOs typically expose these values alongside their endpoint-specific parameters.
 /// </summary>
+[ExternalInput]
 public record ClientRequest
 {
 	/// <summary>
@@ -64,6 +66,7 @@ public record ClientRequest
 	/// <c>client_secret_post</c> authentication method (RFC 6749 section 2.3.1).
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientSecret)]
+	[Credential]
 	public string? ClientSecret { get; set; }
 
 	/// <summary>
@@ -78,6 +81,7 @@ public record ClientRequest
 	/// <c>private_key_jwt</c> or <c>client_secret_jwt</c> (RFC 7523 section 2.2, OIDC Core section 9).
 	/// </summary>
     [JsonPropertyName(Parameters.ClientAssertion)]
+    [Credential]
     public string? ClientAssertion { get; set; }
 
     /// <summary>
@@ -98,5 +102,6 @@ public record ClientRequest
     /// </summary>
     [JsonIgnore]
     [RequestHeader(HttpRequestHeaders.DPoP)]
+    [Credential]
     public string? DPoPProof { get; set; }
 }

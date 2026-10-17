@@ -9,6 +9,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
@@ -70,7 +71,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="authorizationCode">The OAuth 2.0 authorization code.</param>
     /// <returns>A formatted storage key for the authorization grant.</returns>
-    public string AuthorizedGrantKey(string authorizationCode)
+    public string AuthorizedGrantKey([Credential] string authorizationCode)
         => $"Abblix.Oidc.Server:Grant:{Digest(authorizationCode)}";
 
     /// <summary>
@@ -78,7 +79,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="requestId">The CIBA authentication request identifier.</param>
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
-    public string BackChannelAuthenticationRequestKey(string requestId)
+    public string BackChannelAuthenticationRequestKey([Credential] string requestId)
         => $"Abblix.Oidc.Server:CIBA:{Digest(requestId)}";
 
     /// <summary>
@@ -86,15 +87,15 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>A formatted storage key for the device authorization request.</returns>
-    public string DeviceAuthorizationRequestKey(string deviceCode)
+    public string DeviceAuthorizationRequestKey([Credential] string deviceCode)
         => $"Abblix.Oidc.Server:Device:{Digest(deviceCode)}";
 
     /// <inheritdoc />
-    public string BackChannelAuthenticationNextPollKey(string requestId)
+    public string BackChannelAuthenticationNextPollKey([Credential] string requestId)
         => $"Abblix.Oidc.Server:NextPoll:CIBA:{Digest(requestId)}";
 
     /// <inheritdoc />
-    public string DeviceAuthorizationNextPollKey(string deviceCode)
+    public string DeviceAuthorizationNextPollKey([Credential] string deviceCode)
         => $"Abblix.Oidc.Server:NextPoll:Device:{Digest(deviceCode)}";
 
     /// <summary>
@@ -102,15 +103,15 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>
     /// <returns>A formatted storage key for the user code mapping.</returns>
-    public string DeviceAuthorizationUserCodeKey(string userCode)
+    public string DeviceAuthorizationUserCodeKey([Credential] string userCode)
         => $"Abblix.Oidc.Server:UserCode:{Digest(userCode)}";
 
     /// <inheritdoc />
-    public string UserCodeRateLimitAttemptKey(string userCode, string life, int attempt)
+    public string UserCodeRateLimitAttemptKey([Credential] string userCode, string life, int attempt)
         => $"Abblix.Oidc.Server:RateLimit:UserCode:{Digest(userCode)}:{life}:Attempt:{attempt}";
 
     /// <inheritdoc />
-    public string UserCodeRateLimitGenerationKey(string userCode)
+    public string UserCodeRateLimitGenerationKey([Credential] string userCode)
         => $"Abblix.Oidc.Server:RateLimit:UserCode:{Digest(userCode)}:Generation";
 
     /// <inheritdoc />

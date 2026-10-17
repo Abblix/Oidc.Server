@@ -169,7 +169,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// <param name="cancellationToken">Abandons the wait when the caller stops waiting.</param>
     /// <returns>Either an authorized grant if authentication completed during long-polling, or authorization_pending error.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> HandlePendingRequestAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticationRequest,
         ClientInfo clientInfo,
         CancellationToken cancellationToken)
@@ -245,7 +245,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// Null indicates the caller should return authorization_pending error.
     /// </returns>
     private async Task<Result<AuthorizedGrant, OidcError>?> TryLongPollingAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         ClientInfo clientInfo,
         CancellationToken cancellationToken)
     {
@@ -274,7 +274,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// <returns>Either an authorized grant, access denied error, expired token error, or authorization_pending.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> ProcessUpdatedRequest(
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest? updatedRequest,
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         ClientInfo clientInfo)
     {
         // Validate client ownership before processing (security critical)

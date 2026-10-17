@@ -53,8 +53,8 @@ public class JweDecryptionLoggingTests
         Assert.Equal(LogEvents.Jwt.NoDecryptionKeyOpened, entry.EventId);
         Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Equal(2, entry.Value("KeyCount"));
-        Assert.Equal(EncryptionAlgorithms.KeyManagement.Aes128KW, entry.Value("Algorithm"));
-        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, entry.Value("EncryptionAlgorithm"));
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.Aes128KW, entry.Value("Algorithm")?.ToString());
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, entry.Value("EncryptionAlgorithm")?.ToString());
         Assert.Equal("sender-key", entry.Value("KeyId")?.ToString());
     }
 
@@ -78,7 +78,7 @@ public class JweDecryptionLoggingTests
         Assert.True(result.TryGetFailure(out _));
         var entry = Assert.Single(_logger.Entries);
         Assert.Equal(LogEvents.Jwt.NoDecryptionKeyOpened, entry.EventId);
-        Assert.NotEqual("unknown-alg", entry.Value("Algorithm"));
+        Assert.NotEqual("unknown-alg", entry.Value("Algorithm")?.ToString());
         var recorded = Assert.IsType<Sanitized>(entry.Value("KeyId")).ToString();
         Assert.DoesNotContain(recorded, char.IsControl);
         Assert.StartsWith("line", recorded);

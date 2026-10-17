@@ -49,7 +49,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <summary>
     /// The fingerprint that stands for a CIBA request id in this handler's and its delivery mode's records.
     /// </summary>
-    protected Fingerprint FingerprintOf(string? authenticationRequestId) => fingerprints.Of(authenticationRequestId);
+    protected Fingerprint FingerprintOf([Credential] string? authenticationRequestId) => fingerprints.Of(authenticationRequestId);
 
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
@@ -78,7 +78,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// identifier. The full statement of the condition, and why it is stated that way rather than as a
     /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
@@ -261,7 +261,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
     /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
     /// identifier: a request already answered, removed or expired cannot be refused either.</exception>
-    public async Task DenyAuthenticationAsync(string authenticationRequestId, TimeSpan expiresIn)
+    public async Task DenyAuthenticationAsync([Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
         var stored = await ReadPendingAsync(authenticationRequestId, "denied");
         await RefuseAsync(authenticationRequestId, stored, EndUserDenied, expiresIn);
@@ -272,7 +272,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </summary>
     /// <param name="authenticationRequestId">The request being answered.</param>
     /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
-    private async Task<BackChannelAuthenticationRequest> ReadPendingAsync(string authenticationRequestId, string answered)
+    private async Task<BackChannelAuthenticationRequest> ReadPendingAsync([Credential] string authenticationRequestId, string answered)
     {
         var stored = await storage.TryGetAsync(authenticationRequestId);
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
@@ -287,7 +287,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// store let the claim expire - so a caller that lost is never told it succeeded.
     /// </summary>
     /// <param name="authenticationRequestId">The request that could not be taken.</param>
-    protected InvalidOperationException ClaimLost(string authenticationRequestId)
+    protected InvalidOperationException ClaimLost([Credential] string authenticationRequestId)
     {
         LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), Answered, null);
         return NotPending(Answered, null);
@@ -342,7 +342,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="refusal">Why, in the terms a push-mode client is sent.</param>
     /// <param name="expiresIn">How long a denied request stays readable.</param>
     protected virtual Task RefuseAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal,
         TimeSpan expiresIn)
@@ -357,7 +357,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid.</param>
     protected abstract Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn);
@@ -377,7 +377,7 @@ public abstract partial class AuthenticationCompletionHandler(
         [NotNullWhen(true)] string? token,
         string deliveryMode,
         string clientId,
-        string authenticationRequestId)
+        [Credential] string authenticationRequestId)
     {
         var hasToken = token != null;
         if (hasToken && endpoint != null)
@@ -401,7 +401,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="request">The authentication request to mark as denied.</param>
     /// <param name="expiresIn">How long the denied status remains in storage for client polling.</param>
     protected async Task DenyRequestAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
@@ -440,7 +440,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="request">The request whose status has just changed.</param>
     /// <param name="expiresIn">How long the stored record remains available.</param>
     protected async Task StoreAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
@@ -466,6 +466,6 @@ public abstract partial class AuthenticationCompletionHandler(
     /// there, somebody else having taken it, and a claim that expired mid-protocol, which happens to a
     /// single caller with nobody to lose to. A store fault after the removal raises rather than
     /// returning null.</returns>
-    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync(string authenticationRequestId)
+    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync([Credential] string authenticationRequestId)
         => storage.TryRemoveAsync(authenticationRequestId);
 }

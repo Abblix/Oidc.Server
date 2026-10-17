@@ -16,13 +16,13 @@ partial class JsonWebTokenSigner
         EventId = LogEvents.Jwt.NoSigningKeys,
         Level = LogLevel.Warning,
         Message = "JWS signature validation failed: no signing keys configured for issuer (alg='{Algorithm}', kid='{KeyId}'). FAPI category: NoKeysAvailable.")]
-    private partial void LogNoSigningKeys(string Algorithm, Sanitized KeyId);
+    private partial void LogNoSigningKeys(Sanitized Algorithm, Sanitized KeyId);
 
     [LoggerMessage(
         EventId = LogEvents.Jwt.NoMatchingKey,
         Level = LogLevel.Warning,
         Message = "JWS signature validation failed: no signing key matched header (alg='{Algorithm}', kid='{KeyId}'); issuer has {IssuerKeyCount} key(s). FAPI category: UnknownKid.")]
-    private partial void LogNoMatchingKey(string Algorithm, Sanitized KeyId, int IssuerKeyCount);
+    private partial void LogNoMatchingKey(Sanitized Algorithm, Sanitized KeyId, int IssuerKeyCount);
 
     [LoggerMessage(
         EventId = LogEvents.Jwt.KeyBelowTheFloor,
@@ -33,5 +33,5 @@ partial class JsonWebTokenSigner
                   + "which reads downstream exactly like a tampered signature - so a burst of these "
                   + "immediately after a key rotation is worth checking against the ring's retired keys "
                   + "before it is read as tampering. It does not rule tampering out.")]
-    private partial void LogKeyBelowTheFloor(string Algorithm, Sanitized KeyId, int KeyBits, int FloorBits);
+    private partial void LogKeyBelowTheFloor(Sanitized Algorithm, Sanitized KeyId, int KeyBits, int FloorBits);
 }

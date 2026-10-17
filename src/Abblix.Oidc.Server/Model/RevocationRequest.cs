@@ -8,6 +8,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 
 namespace Abblix.Oidc.Server.Model;
@@ -16,6 +17,7 @@ namespace Abblix.Oidc.Server.Model;
 /// Parameters of an OAuth 2.0 token revocation request (RFC 7009 section 2.1) sent to the
 /// <c>revocation_endpoint</c>. Client authentication is required and is supplied alongside this payload.
 /// </summary>
+[ExternalInput]
 public record RevocationRequest
 {
 	/// <summary>
@@ -38,6 +40,7 @@ public record RevocationRequest
 	/// </summary>
 	[JsonPropertyName(Parameters.Token)]
 	[Required]
+	[Credential]
 	public string Token { get; set; } = null!;
 
 	/// <summary>

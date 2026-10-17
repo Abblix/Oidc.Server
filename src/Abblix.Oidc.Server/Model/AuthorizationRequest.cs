@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -21,6 +22,7 @@ namespace Abblix.Oidc.Server.Model;
 /// Parameters are bound from query string, form body, or a Request Object passed via
 /// <see cref="Request"/> / <see cref="RequestUri"/> (OIDC Core section 6).
 /// </summary>
+[ExternalInput]
 public record AuthorizationRequest
 {
 	/// <summary>

@@ -27,6 +27,8 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Abblix.Analyzers\Abblix.Analyzers.csproj" />
+      <!-- The real types the logging rule looks for, so a rename that would switch it off fails a test. -->
+      <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
 </Project>

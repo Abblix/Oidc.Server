@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -41,7 +42,7 @@ public partial class DPoPUserInfoValidator(
     public async Task<OidcError?> ValidateAsync(
         ClientRequest clientRequest,
         JsonWebToken accessToken,
-        string rawAccessToken)
+        [Credential] string rawAccessToken)
     {
         var schemeDPoP = clientRequest is { AuthorizationHeader.Scheme: TokenTypes.DPoP };
 
@@ -71,7 +72,7 @@ public partial class DPoPUserInfoValidator(
         ClientRequest clientRequest,
         bool schemeDPoP,
         string committed,
-        string rawAccessToken)
+        [Credential] string rawAccessToken)
     {
         if (!schemeDPoP)
         {

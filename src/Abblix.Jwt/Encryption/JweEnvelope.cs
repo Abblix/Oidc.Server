@@ -21,6 +21,7 @@ namespace Abblix.Jwt.Encryption;
 /// <param name="EncryptionAlgorithm">The content encryption algorithm the header names.</param>
 /// <param name="EncodedHeader">The protected header as it was sent, which the content encryption authenticates.
 /// </param>
+[ExternalInput]
 internal sealed record JweEnvelope(
     byte[][] Parts,
     JsonWebTokenHeader Header,

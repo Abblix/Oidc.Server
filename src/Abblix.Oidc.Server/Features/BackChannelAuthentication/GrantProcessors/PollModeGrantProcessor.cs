@@ -40,7 +40,7 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     /// this method.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
         // Removed through the store's claim protocol, which is what keeps two polls from both coming back

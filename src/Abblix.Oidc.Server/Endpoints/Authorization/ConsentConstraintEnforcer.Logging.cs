@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
@@ -21,5 +22,5 @@ public partial class ConsentConstraintEnforcer
         EventId = LogEvents.AuthorizationConsent.ConsentConstraintEnforcer.GrantedAuthorizationDetailsRefused,
         Level = LogLevel.Warning,
         Message = "The authorization_details granted to client {ClientId} were refused: {Reason}")]
-    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string? Reason);
+    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, Sanitized Reason);
 }

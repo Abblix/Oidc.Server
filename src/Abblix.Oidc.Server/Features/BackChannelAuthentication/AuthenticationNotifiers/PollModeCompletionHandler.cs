@@ -47,7 +47,7 @@ public partial class PollModeCompletionHandler(
     /// <param name="clientInfo">Client information (not used in poll mode).</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     protected override async Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -15,6 +16,7 @@ namespace Abblix.Oidc.Server.Model;
 /// is normally presented in the HTTP <c>Authorization</c> header per RFC 6750 section 2.1, but RFC 6750 section 2.2
 /// also permits the form-encoded <c>access_token</c> body parameter modeled here.
 /// </summary>
+[ExternalInput]
 public record UserInfoRequest
 {
     /// <summary>
@@ -34,5 +36,6 @@ public record UserInfoRequest
     /// This token is typically obtained during the authentication process and is used to access protected user data.
     /// </summary>
     [JsonPropertyName(Parameters.AccessToken)]
+    [Credential]
     public string? AccessToken { get; set; }
 }

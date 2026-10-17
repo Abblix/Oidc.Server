@@ -92,7 +92,7 @@ public partial class UserCodeRateLimiter(
     private static string SourceOf(string? clientIdentifier) => clientIdentifier ?? SourceNotSeen;
 
     /// <inheritdoc />
-    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier)
+    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync([Credential] string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -166,7 +166,7 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordFailureAsync(string userCode, string? clientIdentifier)
+    public async Task RecordFailureAsync([Credential] string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -231,7 +231,7 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordSuccessAsync(string userCode, string? clientIdentifier)
+    public async Task RecordSuccessAsync([Credential] string userCode, string? clientIdentifier)
     {
         // The verified code leaves its attempt history behind by starting a new life, and nothing is removed:
         // the reader finds the highest rung by halving the range, so it may not meet a gap. The records left
@@ -270,7 +270,7 @@ public partial class UserCodeRateLimiter(
     /// Which life of this code its attempt records belong to, named by the verification that started it.
     /// Nothing written means no verification has, which is the life before any.
     /// </summary>
-    private async Task<string> CurrentLifeAsync(string userCode)
+    private async Task<string> CurrentLifeAsync([Credential] string userCode)
     {
         var started = await storage.GetAsync<RateLimitGeneration>(
             keyFactory.UserCodeRateLimitGenerationKey(userCode), removeOnRetrieval: false);
@@ -336,7 +336,7 @@ public partial class UserCodeRateLimiter(
     /// none - which forgives attempts against a value nobody can verify any more.
     /// </remarks>
     private async Task<(int Attempts, DateTimeOffset? FirstAt, DateTimeOffset? LastAt)>
-        FindHighestAttemptAsync(string userCode, string life)
+        FindHighestAttemptAsync([Credential] string userCode, string life)
     {
         // The first rung decides whether there is anything to search for at all, and its absence is the
         // ordinary case: every verification of a correct code asks this question with nothing on record.

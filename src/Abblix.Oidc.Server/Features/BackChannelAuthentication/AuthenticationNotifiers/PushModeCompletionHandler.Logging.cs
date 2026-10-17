@@ -54,7 +54,7 @@ partial class PushModeCompletionHandler
         Message = "The per-type validators will not issue the authorization_details completing " +
                   "auth_req_id {AuthReqId}, so it is refused. ClientId: {ClientId}, reason: {Reason}")]
     private partial void LogGrantedAuthorizationDetailsRefused(
-        Fingerprint AuthReqId, string ClientId, string Reason);
+        Fingerprint AuthReqId, string ClientId, Sanitized Reason);
 
     /// <summary>
     /// The check of the granted authorization_details failed with an exception, a fault in the host's code,

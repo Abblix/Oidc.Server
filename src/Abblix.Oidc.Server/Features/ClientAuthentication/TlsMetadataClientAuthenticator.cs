@@ -83,7 +83,7 @@ public partial class TlsMetadataClientAuthenticator(
         var options = client.TlsClientAuth;
         if (options == null)
         {
-            LogNoTlsMetadataConfigured(clientId);
+            LogNoTlsMetadataConfigured(client.ClientId);
             return null;
         }
 
@@ -93,7 +93,7 @@ public partial class TlsMetadataClientAuthenticator(
         if (!MatchSans(options, certificate))
             return null;
 
-        LogAuthenticated(clientId);
+        LogAuthenticated(client.ClientId);
         return client;
     }
 

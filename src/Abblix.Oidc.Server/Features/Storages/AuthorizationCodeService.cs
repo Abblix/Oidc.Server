@@ -55,7 +55,7 @@ public class AuthorizationCodeService(
 	/// <param name="authorizationCode">The authorization code to validate and process.</param>
 	/// <returns>A task that resolves to a <see cref="Result{AuthorizedGrant, AuthError}"/>, which indicates the outcome of
 	/// the authorization attempt and contains any tokens issued.</returns>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync([Credential] string authorizationCode)
 	{
 		var result = await storage.GetAsync<AuthorizedGrant>(keyFactory.AuthorizedGrantKey(authorizationCode), false);
 		if (result == null)
@@ -67,7 +67,7 @@ public class AuthorizationCodeService(
 	}
 
 	/// <inheritdoc />
-	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode)
+	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync([Credential] string authorizationCode)
 	{
 		// removeOnRetrieval: true claims the code, and every caller that finds it gone is rejected. How
 		// far that reaches is the storage's to answer: the interface requires the removal to be
@@ -101,7 +101,7 @@ public class AuthorizationCodeService(
 	/// <param name="authorizationCodeExpiresIn"></param>
 	/// <returns>A task representing the asynchronous operation of updating the authorization grant result.</returns>
 	public Task UpdateAuthorizationGrantAsync(
-		string authorizationCode,
+		[Credential] string authorizationCode,
 		AuthorizedGrant authorizedGrant,
 		TimeSpan authorizationCodeExpiresIn)
 	{

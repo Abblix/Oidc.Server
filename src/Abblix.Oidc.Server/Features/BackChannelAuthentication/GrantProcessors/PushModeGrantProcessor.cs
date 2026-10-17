@@ -35,7 +35,7 @@ public class PushModeGrantProcessor : IBackChannelGrantProcessor
     /// because <see cref="ValidateTokenEndpointAccess"/> short-circuits push-mode token-endpoint requests.
     /// </summary>
     public Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
         return Task.FromResult<Result<AuthorizedGrant, OidcError>>(

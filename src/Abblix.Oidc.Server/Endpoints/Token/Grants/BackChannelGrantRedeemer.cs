@@ -62,7 +62,7 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// </para>
     /// </remarks>
     public async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         StoredRequest request,
         ClientInfo clientInfo,
         IBackChannelGrantProcessor processor)
