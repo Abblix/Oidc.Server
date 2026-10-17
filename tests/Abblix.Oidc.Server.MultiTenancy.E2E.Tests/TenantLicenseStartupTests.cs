@@ -30,12 +30,16 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 public sealed class TenantLicenseStartupTests
 {
     private const string Host = "https://auth.example.com";
+    private const string Acme = "/tenants/acme";
+    private const string Globex = "/tenants/globex";
+    private const string Initech = "/tenants/initech";
+    private const string GlobexDiscovery = Host + Globex + "/.well-known/openid-configuration";
 
     [Fact]
     public async Task A_tenant_whose_issuer_the_license_does_not_name_stops_the_server()
     {
         await TestLicense.Loaded;
-        await using var app = Build("/tenants/acme", "/tenants/initech");
+        await using var app = Build(Acme, Initech);
 
         await Assert.ThrowsAsync<OptionsValidationException>(
             () => app.StartAsync(TestContext.Current.CancellationToken));
@@ -45,13 +49,13 @@ public sealed class TenantLicenseStartupTests
     public async Task Tenants_whose_issuers_the_license_names_start()
     {
         await TestLicense.Loaded;
-        await using var app = Build("/tenants/acme", "/tenants/globex");
+        await using var app = Build(Acme, Globex);
 
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         using var discovery = await client.GetAsync(
-            Host + "/tenants/globex/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+            GlobexDiscovery, TestContext.Current.CancellationToken);
         Assert.Equal(System.Net.HttpStatusCode.OK, discovery.StatusCode);
     }
 
@@ -63,14 +67,14 @@ public sealed class TenantLicenseStartupTests
     public async Task Tenants_the_license_allows_start_when_the_services_start_at_once()
     {
         await TestLicense.Loaded;
-        await using var app = BuildLicensed(TestLicense.Jwt, "/tenants/acme", "/tenants/globex");
+        await using var app = BuildLicensed(TestLicense.Jwt, Acme, Globex);
 
         await app.StartAsync(TestContext.Current.CancellationToken)
             .WaitAsync(StartBound, TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         using var discovery = await client.GetAsync(
-            Host + "/tenants/globex/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+            GlobexDiscovery, TestContext.Current.CancellationToken);
         Assert.Equal(System.Net.HttpStatusCode.OK, discovery.StatusCode);
     }
 
@@ -82,7 +86,7 @@ public sealed class TenantLicenseStartupTests
     public async Task A_license_that_cannot_be_loaded_refuses_the_start_when_the_services_start_at_once()
     {
         await TestLicense.Loaded;
-        await using var app = BuildLicensed("not.a.jwt", "/tenants/acme", "/tenants/globex");
+        await using var app = BuildLicensed("not.a.jwt", Acme, Globex);
 
         var refusal = await Record.ExceptionAsync(
             () => app.StartAsync(TestContext.Current.CancellationToken)
