@@ -10,6 +10,7 @@ using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -30,6 +31,8 @@ public class AuthenticationSchemeAdapterTests
 	private readonly AuthenticationSchemeAdapter _adapter;
 	private readonly List<string> _calls = [];
 
+	private static readonly IIssuerSettings ServerWithoutTenants = Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == string.Empty);
+
 	public AuthenticationSchemeAdapterTests()
 	{
 		_httpContextAccessor = new Mock<IHttpContextAccessor>(MockBehavior.Strict);
@@ -42,7 +45,7 @@ public class AuthenticationSchemeAdapterTests
 			.Callback((string sessionId, string subject) => _calls.Add($"terminate {sessionId} {subject}"))
 			.ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
 
-		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, _clock, Scheme);
+		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, _clock, ServerWithoutTenants, Scheme);
 	}
 
 	private static AuthSession Session(JsonObject? additionalClaims = null, string identityProvider = "TestProvider") => new(
@@ -419,7 +422,7 @@ public class AuthenticationSchemeAdapterTests
 			.ReturnsAsync(AuthenticateResult.NoResult());
 		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
 		var other = new AuthenticationSchemeAdapter(
-			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, otherScheme);
+			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, ServerWithoutTenants, otherScheme);
 
 		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
 		var result = await other.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
@@ -577,6 +580,56 @@ public class AuthenticationSchemeAdapterTests
 		new Claim(IanaClaimTypes.AuthTime, "1700000000"),
 		extra,
 	], Scheme));
+
+	/// <summary>
+	/// The adapter of a request served by tenant acme, its tenant named as the partition of its keys.
+	/// </summary>
+	private AuthenticationSchemeAdapter AtAcme() => new(
+		_httpContextAccessor.Object,
+		Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict),
+		_clock,
+		Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == "acme"),
+		Scheme);
+
+	/// <summary>
+	/// A cookie naming no tenant was written by a server without tenants, or before sessions named theirs, so a tenant
+	/// does not take it as its own.
+	/// </summary>
+	[Fact]
+	public async Task AuthenticateAsync_UnderATenant_IgnoresASessionNamingNoTenant()
+	{
+		SetupAuthenticate(PrincipalWith(new Claim(IanaClaimTypes.Acr, "1")));
+
+		Assert.Null(await AtAcme().AuthenticateAsync());
+	}
+
+	/// <summary>
+	/// The tenant a session names is the adapter's to write: a host's additional claim of that name is not written,
+	/// so it cannot make a session of no tenant pass as one of acme's.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_DoesNotLetAnAdditionalClaimNameTheTenant()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session(new JsonObject { ["abblix_tenant"] = "acme" }));
+		NextRequest();
+
+		Assert.Null(await AtAcme().AuthenticateAsync());
+	}
+
+	/// <summary>
+	/// A session signed in at a tenant is read back there.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_UnderATenant_IsReadBackThere()
+	{
+		SetupCookie();
+		var acme = AtAcme();
+		await acme.SignInAsync(Session());
+		NextRequest();
+
+		Assert.Equal("user123", (await acme.AuthenticateAsync())?.Subject);
+	}
 
 	[Fact]
 	public async Task RoundTrip_ArrayAdditionalClaim_StaysJsonArray()

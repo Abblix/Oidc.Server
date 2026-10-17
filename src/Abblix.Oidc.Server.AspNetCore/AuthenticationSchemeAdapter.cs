@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Authentication;
@@ -30,12 +31,15 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// allowing operations on the HTTP context of the current request.</param>
 /// <param name="authSessionTerminator">Ends the session a sign-in replaces, for its tokens and its clients.</param>
 /// <param name="clock">Tells when a session is signed in.</param>
+/// <param name="issuerSettings">Names the tenant a session is signed in at, so a session of another tenant is not
+/// read as one of this tenant's.</param>
 /// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
 /// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
 public class AuthenticationSchemeAdapter(
 	IHttpContextAccessor httpContextAccessor,
 	IAuthSessionTerminator authSessionTerminator,
 	TimeProvider clock,
+	IIssuerSettings issuerSettings,
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
 	/// <summary>
@@ -48,6 +52,7 @@ public class AuthenticationSchemeAdapter(
 	private static readonly HashSet<string> ReservedClaimTypes =
 	[
 		SignedInAtClaimType,
+		TenantClaimType,
 		JwtClaimTypes.Subject,
 		IanaClaimTypes.Sid,
 		IanaClaimTypes.AuthTime,
@@ -62,6 +67,17 @@ public class AuthenticationSchemeAdapter(
 	/// and never read back as an additional claim a token would carry.
 	/// </summary>
 	private const string SignedInAtClaimType = "abblix_signed_in_at";
+
+	/// <summary>
+	/// The claim the cookie keeps the tenant a session was signed in at under, its id and creation, as the partition
+	/// of its keys names them. A server without tenants writes none, so its sessions read as before.
+	/// </summary>
+	/// <remarks>
+	/// A browser can carry a tenant's cookie to another: a cookie domain the host shares between the tenants' hosts,
+	/// or a path it widened. Read there without this, the session would stand for that tenant's user of the same
+	/// subject, who need not be the same person.
+	/// </remarks>
+	private const string TenantClaimType = "abblix_tenant";
 
 	/// <summary>
 	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
@@ -120,8 +136,20 @@ public class AuthenticationSchemeAdapter(
 			return (AuthSession?)written;
 
 		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
-		return authenticationResult.Succeeded ? ReadSession(authenticationResult.Principal) : null;
+		return authenticationResult.Succeeded && IsOfThisTenant(authenticationResult.Principal)
+			? ReadSession(authenticationResult.Principal)
+			: null;
 	}
+
+	/// <summary>
+	/// Whether the session <paramref name="principal"/> carries was signed in at the tenant serving this request; a
+	/// session naming no tenant was signed in by a server without tenants.
+	/// </summary>
+	private bool IsOfThisTenant(ClaimsPrincipal principal)
+		=> string.Equals(
+			principal.FindFirstValue(TenantClaimType) ?? string.Empty,
+			issuerSettings.KeyPartition,
+			StringComparison.Ordinal);
 
 	/// <summary>
 	/// Reads the OIDC session a principal written by this adapter carries, or null when it carries none.
@@ -250,7 +278,7 @@ public class AuthenticationSchemeAdapter(
 		else if (replaced != null)
 			endedSessions = [replaced];
 
-		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() });
+		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, issuerSettings.KeyPartition);
 
 		await HttpContext.SignInAsync(authenticationScheme, principal);
 
@@ -295,7 +323,7 @@ public class AuthenticationSchemeAdapter(
 	/// <summary>
 	/// The principal the cookie stores for a session: its fields as claims, under its identity provider.
 	/// </summary>
-	private static ClaimsPrincipal BuildPrincipal(AuthSession authSession)
+	private static ClaimsPrincipal BuildPrincipal(AuthSession authSession, string tenant)
 	{
 		// Critical claims stored in principal for access in cookie events (especially SigningOut)
 		var claims = new List<Claim>
@@ -323,6 +351,9 @@ public class AuthenticationSchemeAdapter(
 
 		if (authSession.SignedInAt.HasValue)
 			claims.Add(new (SignedInAtClaimType, authSession.SignedInAt.Value.ToUnixTimeSeconds().ToString(InvariantCulture)));
+
+		if (tenant.Length > 0)
+			claims.Add(new (TenantClaimType, tenant));
 
 		if (authSession.AdditionalClaims != null)
 			AddAdditionalClaims(claims, authSession.AdditionalClaims);
