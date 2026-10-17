@@ -399,6 +399,20 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     /// <summary>
+    /// A provider of the license failing on a timeout of its own is a failed load, not a wait run out, so the start is
+    /// not refused with advice about the order of registration.
+    /// </summary>
+    [Fact]
+    public async Task A_license_provider_timing_out_is_left_to_its_loading()
+    {
+        TestLicense.InstallWithIssuerLimit(1);
+        var loading = new LicenseLoading();
+        loading.Fail(new TimeoutException("The license provider did not answer."));
+
+        await StartupCheck(loading).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// A tenant left on an issuer a narrower license no longer names can still be changed in other ways, its keys or
     /// clients, while the license is renewed.
     /// </summary>

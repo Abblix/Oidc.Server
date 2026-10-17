@@ -86,16 +86,17 @@ internal sealed class TenantLicenseStartupCheck(
             await loading.Loaded.WaitAsync(LicenseWait, clock, cancellationToken);
             return true;
         }
+        // First, so a provider of the license failing on a timeout of its own is not mistaken for a wait run out
+        catch (Exception) when (loading.Loaded.IsFaulted)
+        {
+            return false;
+        }
         catch (TimeoutException exception)
         {
             throw new InvalidOperationException(
                 "The license was not loaded in time to judge the tenants the settings declare against it. " +
                 "Register the server's services before multi-tenancy, so the license is loaded first.",
                 exception);
-        }
-        catch (Exception) when (loading.Loaded.IsFaulted)
-        {
-            return false;
         }
     }
 

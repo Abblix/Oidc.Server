@@ -84,9 +84,14 @@ public sealed class TenantLicenseStartupTests
         await TestLicense.Loaded;
         await using var app = BuildLicensed("not.a.jwt", "/tenants/acme", "/tenants/globex");
 
-        await Assert.ThrowsAnyAsync<Exception>(
+        var refusal = await Record.ExceptionAsync(
             () => app.StartAsync(TestContext.Current.CancellationToken)
                 .WaitAsync(StartBound, TestContext.Current.CancellationToken));
+
+        // The loader's own refusal, the host wrapping it when its services start at once; a start that hangs instead
+        // ends in the bound's timeout, which is not this
+        var loaderRefusal = refusal is AggregateException aggregate ? aggregate.InnerExceptions[0] : refusal;
+        Assert.IsType<InvalidOperationException>(loaderRefusal);
     }
 
     // Long beyond any start, short of a run that hangs
