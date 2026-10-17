@@ -9,12 +9,14 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.MinimalApi;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests;
@@ -23,10 +25,11 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// A server let run on an http issuer, for local development, is served over http: its endpoints do not send the
 /// client to https, which such a server does not listen on.
 /// </summary>
-public sealed class HttpIssuerTests(TestFactory httpsFactory) : IClassFixture<TestFactory>
+public sealed class HttpIssuerTests(HttpIssuerTests.HttpLetThroughFactory httpsFactory)
+    : IClassFixture<HttpIssuerTests.HttpLetThroughFactory>
 {
     /// <summary>
-    /// A server whose issuer is https still sends a request over http to https.
+    /// A server whose issuer is https still sends a request over http to https, with http issuers let through.
     /// </summary>
     [Fact]
     public async Task Discovery_OfAnHttpsIssuer_ReachedOverHttp_IsRedirected()
@@ -70,6 +73,22 @@ public sealed class HttpIssuerTests(TestFactory httpsFactory) : IClassFixture<Te
         using var response = await client.GetAsync("/.well-known/jwks", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The sample host, whose issuer is https, with http issuers let through.
+    /// </summary>
+    public sealed class HttpLetThroughFactory : TestFactory
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options => options.AllowHttpIssuer = true)));
+        }
     }
 
     [SuppressMessage("Minor Code Smell", "S1075",
