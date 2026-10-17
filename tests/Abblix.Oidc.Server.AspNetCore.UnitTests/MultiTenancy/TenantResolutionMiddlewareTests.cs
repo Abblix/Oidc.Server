@@ -31,6 +31,8 @@ public class TenantResolutionMiddlewareTests
     private const string SharedHost = "auth.example.com";
     private const string MountedHost = "idp.example.com";
 
+    // Nested tenants among these, which the server's checks refuse: a catalog of the host's own may still serve them,
+    // and the longest path is what resolves a request there
     private static readonly MultiTenancyOptions Declared = new()
     {
         Tenants =

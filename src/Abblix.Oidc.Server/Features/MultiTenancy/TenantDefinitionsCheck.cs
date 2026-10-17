@@ -27,15 +27,15 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     /// </summary>
     /// <remarks>
     /// A browser sends a cookie to every path under the one it was set for, so the sign-in cookie of the outer tenant
-    /// would reach the inner one, and the end user arrive there signed in.
+    /// would reach the inner one, and the end user arrive there signed in. Only the issuers' own addresses are
+    /// compared: the end user signs in there, while a mutual-TLS host serves clients presenting a certificate.
     /// </remarks>
     private static IEnumerable<TenantRefusal> NestedIssuers(IReadOnlyCollection<TenantDefinition> tenants)
     {
         var addresses = (
             from tenant in tenants
-            where IsIssuer(tenant.Issuer) && (tenant.MtlsBaseUri is null || IsMtlsHost(tenant.MtlsBaseUri))
-            from address in TenantAddress.AllOf(tenant).Select(address => address.Canonical()).Distinct()
-            select (tenant.Id, Address: address)
+            where IsIssuer(tenant.Issuer)
+            select (tenant.Id, Address: TenantAddress.Of(tenant.Issuer).Canonical())
         ).ToArray();
 
         return (

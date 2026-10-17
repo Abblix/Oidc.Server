@@ -160,6 +160,20 @@ public sealed class TenantManagerTests : IDisposable
             : throw new Xunit.Sdk.XunitException(result.ToString());
 
     /// <summary>
+    /// A tenant whose issuer would hold another tenant's path under its own is refused when created after it, as the
+    /// inner tenant is when created after the outer one.
+    /// </summary>
+    [Fact]
+    public async Task ATenantAboveAnExistingOnesPath_IsRefused()
+    {
+        Stored(await _manager.CreateAsync(Tenant("globex", "https://auth.example.com/tenants/acme/eu"), Ct));
+
+        var outer = await _manager.CreateAsync(Tenant("acme", "https://auth.example.com/tenants/acme"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(outer));
+    }
+
+    /// <summary>
     /// A tenant created through the manager is stored under a generation of its own and served at once, without
     /// waiting for the next reading of the store.
     /// </summary>

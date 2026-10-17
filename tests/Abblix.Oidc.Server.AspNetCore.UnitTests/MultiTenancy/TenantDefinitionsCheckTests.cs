@@ -149,6 +149,37 @@ public class TenantDefinitionsCheckTests
         => Assert.Null(FailureOf(Tenant("acme", first), Tenant("globex", second)));
 
     /// <summary>
+    /// The refusal names both tenants, the outer one first, whichever order they are listed in, so a list read from a
+    /// store leaves both out and the manager refuses to add either one beside the other.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ANestedIssuer_IsRefusedNamingTheOuterTenantAndTheInnerOne(bool innerFirst)
+    {
+        var outer = Tenant("acme", "https://auth.example.com/tenants/acme");
+        var inner = Tenant("globex", "https://auth.example.com/tenants/acme/eu");
+
+        var refusal = Assert.Single(new TenantDefinitionsCheck().Check(innerFirst ? [inner, outer] : [outer, inner]));
+
+        Assert.Equal(["acme", "globex"], refusal.TenantIds);
+    }
+
+    /// <summary>
+    /// Tenants on hosts of their own may share a mutual-TLS host, which serves clients presenting a certificate and
+    /// takes no end user's sign-in, so their paths there do not nest.
+    /// </summary>
+    [Fact]
+    public void TenantsSharingAMutualTlsHost_AreNotNested()
+    {
+        var mtls = new Uri("https://mtls.example.com");
+
+        Assert.Null(FailureOf(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), MtlsBaseUri = mtls },
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com/eu"), MtlsBaseUri = mtls }));
+    }
+
+    /// <summary>
     /// The store of tenants is read again every period by a timer, so a period it cannot keep is refused at
     /// startup.
     /// </summary>
