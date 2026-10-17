@@ -107,12 +107,8 @@ public class BackChannelAuthenticationGrantHandler(
         if (ResolveProcessor(clientInfo) is not { } processor)
             return NotConfiguredForDelivery();
 
-        // Validate that the client is allowed to access the token endpoint for this mode
-        var accessError = processor.ValidateTokenEndpointAccess();
-        if (accessError != null)
-        {
-            return accessError;
-        }
+        if (TokenEndpointRefusal(clientInfo, processor) is { } refusal)
+            return refusal;
 
         // Try to retrieve the corresponding backchannel authentication request from storage
         var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
@@ -334,6 +330,25 @@ public class BackChannelAuthenticationGrantHandler(
         => clientInfo.BackChannelTokenDeliveryMode is { Length: > 0 } deliveryMode
             ? serviceProvider.GetKeyedService<IBackChannelGrantProcessor>(deliveryMode)
             : null;
+
+    /// <summary>
+    /// Why this client may not redeem a request at the token endpoint, or null when it may.
+    /// </summary>
+    /// <remarks>
+    /// Decided from the client's registered metadata alone, so it runs before any storage lookup. CIBA Core 1.0
+    /// section 10.1: "The Client MUST be authenticated", and a client registered with the method "none" is
+    /// registered as not authenticating. The delivery mode then decides whether its tokens are fetched here at all.
+    /// </remarks>
+    private static OidcError? TokenEndpointRefusal(ClientInfo clientInfo, IBackChannelGrantProcessor processor)
+    {
+        if (clientInfo is { ClientType: ClientType.Public })
+        {
+            return new OidcError(
+                ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
+        }
+
+        return processor.ValidateTokenEndpointAccess();
+    }
 
     /// <summary>
     /// The refusal for a client whose backchannel token delivery mode is missing or unsupported, worded as

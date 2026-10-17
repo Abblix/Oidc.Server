@@ -40,7 +40,9 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackCh
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
-        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba))
+        // CIBA Core 1.0 section 7.1: "The Client MUST authenticate to the Backchannel Authentication Endpoint". A
+        // client registered with the method "none" authenticates nobody, so the flow is not open to it.
+        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba) || clientInfo is { ClientType: ClientType.Public })
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
