@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ReplayPrevention;
@@ -16,17 +17,17 @@ partial class ConfiguredReplayCache
         EventId = LogEvents.Tokens.ConfiguredReplayCache.ReplayDetected,
         Level = LogLevel.Debug,
         Message = "JWT replay detected for jti {JwtId}")]
-    private partial void LogReplayDetected(string JwtId);
+    private partial void LogReplayDetected(Sanitized JwtId);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.ConfiguredReplayCache.MarkedAsUsed,
         Level = LogLevel.Debug,
         Message = "Marked jti {JwtId} as used, remembered until {ExpiresAt}")]
-    private partial void LogMarkedAsUsed(string JwtId, DateTimeOffset ExpiresAt);
+    private partial void LogMarkedAsUsed(Sanitized JwtId, DateTimeOffset ExpiresAt);
 
     [LoggerMessage(
         EventId = LogEvents.Tokens.ConfiguredReplayCache.Released,
         Level = LogLevel.Debug,
         Message = "Released jti {JwtId}, so it reads as fresh again")]
-    private partial void LogReleased(string JwtId);
+    private partial void LogReleased(Sanitized JwtId);
 }

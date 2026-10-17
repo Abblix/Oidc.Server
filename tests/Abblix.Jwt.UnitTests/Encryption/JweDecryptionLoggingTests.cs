@@ -52,18 +52,19 @@ public class JweDecryptionLoggingTests
         Assert.Equal(2, entry.Value("KeyCount"));
         Assert.Equal(EncryptionAlgorithms.KeyManagement.Aes128KW, entry.Value("Algorithm"));
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, entry.Value("EncryptionAlgorithm"));
-        Assert.Equal("sender-key", entry.Value("KeyId"));
+        Assert.Equal("sender-key", entry.Value("KeyId")?.ToString());
     }
 
     /// <summary>
     /// The header is the sender's text: an algorithm this server does not register is not written, and a key
-    /// identifier reaches the record cut short and without the line breaks that could pose as another record.
+    /// identifier reaches the record through <see cref="Sanitized"/>, cut short and without the line breaks that could
+    /// pose as another record.
     /// </summary>
     [Fact]
     public async Task SendersHeaderValues_ReachTheRecordOnlyInASafeForm()
     {
         var jwtParts = await EncryptTo(NewKey("sender-key"));
-        var keyId = "line\r\nforged record " + new string('k', 200);
+        var keyId = "line\r\nforged record " + new string('k', Sanitized.MaxLength);
         jwtParts[0] = EncodeHeader("unknown-alg", EncryptionAlgorithms.ContentEncryption.Aes128Gcm, keyId);
 
         var result = await _encryptor.DecryptAsync(
@@ -75,10 +76,10 @@ public class JweDecryptionLoggingTests
         var entry = Assert.Single(_logger.Entries);
         Assert.Equal(LogEvents.Jwt.NoDecryptionKeyOpened, entry.EventId);
         Assert.NotEqual("unknown-alg", entry.Value("Algorithm"));
-        var recorded = Assert.IsType<string>(entry.Value("KeyId"));
-        Assert.True(recorded.Length < keyId.Length);
+        var recorded = Assert.IsType<Sanitized>(entry.Value("KeyId")).ToString();
         Assert.DoesNotContain(recorded, char.IsControl);
         Assert.StartsWith("line", recorded);
+        Assert.EndsWith(Sanitized.TruncationMark, recorded);
     }
 
     /// <summary>
@@ -157,39 +158,4 @@ public class JweDecryptionLoggingTests
         Algorithm = EncryptionAlgorithms.KeyManagement.Aes128KW,
         KeyValue = CryptoRandom.GetRandomBytes(16),
     };
-
-    private sealed record Entry(LogLevel Level, int EventId, IReadOnlyList<KeyValuePair<string, object?>> State)
-    {
-        public object? Value(string name) => State.Single(pair => pair.Key == name).Value;
-    }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        private readonly List<Entry> _entries = [];
-
-        public IReadOnlyList<Entry> Entries
-        {
-            get
-            {
-                lock (_entries)
-                    return [.. _entries];
-            }
-        }
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var values = state as IReadOnlyList<KeyValuePair<string, object?>> ?? [];
-            lock (_entries)
-                _entries.Add(new Entry(logLevel, eventId.Id, values));
-        }
-    }
 }

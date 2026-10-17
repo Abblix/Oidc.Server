@@ -12,10 +12,21 @@ namespace Abblix.Utils;
 
 /// <summary>
 /// A type that sanitizes a given string by removing control characters and escaping special characters
-/// to prevent log injection attacks.
+/// to prevent log injection attacks, and cuts it short so a crafted value cannot make a record of its own size.
 /// </summary>
 public readonly record struct Sanitized
 {
+    /// <summary>
+    /// The most characters of the source written to the log. Long enough for an issuer, a redirect address or a key
+    /// identifier a real party sends; a longer value is cut there and ends with <see cref="TruncationMark"/>.
+    /// </summary>
+    public const int MaxLength = 256;
+
+    /// <summary>
+    /// Ends a value cut at <see cref="MaxLength"/>, so a reader does not take the shortened value for the whole one.
+    /// </summary>
+    public const string TruncationMark = "...";
+
     /// <summary>
     /// Characters kept in escaped form. The line breaks and the tab are control characters too, and are escaped
     /// rather than stripped because the escape keeps them readable in the log.
@@ -64,17 +75,31 @@ public readonly record struct Sanitized
         if (string.IsNullOrEmpty(source))
             return string.Empty;
 
+        var truncated = source.Length > MaxLength;
+        if (truncated)
+            source = source[..CutAt(source)];
+
         // Copy-on-write: a clean string, the usual case, is returned as is and never copied.
         var firstUnsafe = IndexOfUnsafe(source);
         if (firstUnsafe < 0)
-            return source;
+            return truncated ? source + TruncationMark : source;
 
-        var builder = new StringBuilder(source, 0, firstUnsafe, source.Length);
+        var builder = new StringBuilder(source, 0, firstUnsafe, source.Length + TruncationMark.Length);
         for (var i = firstUnsafe; i < source.Length; i++)
             AppendSanitized(builder, source[i]);
 
+        if (truncated)
+            builder.Append(TruncationMark);
+
         return builder.ToString();
     }
+
+    /// <summary>
+    /// Where a source longer than <see cref="MaxLength"/> is cut: never between the two halves of a surrogate pair,
+    /// which would leave a character that is not one.
+    /// </summary>
+    private static int CutAt(string source)
+        => char.IsHighSurrogate(source[MaxLength - 1]) ? MaxLength - 1 : MaxLength;
 
     private static int IndexOfUnsafe(string source)
     {

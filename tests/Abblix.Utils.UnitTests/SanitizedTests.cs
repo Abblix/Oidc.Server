@@ -137,6 +137,44 @@ public class SanitizedTests
     /// Tests that a null input returns null.
     /// </summary>
     [Fact]
+    public void ToString_ShouldKeepAValueOfTheMaximumLengthWhole()
+    {
+        var input = new string('a', Sanitized.MaxLength);
+
+        Assert.Equal(input, Sanitized.Value(input).ToString());
+    }
+
+    [Fact]
+    public void ToString_ShouldCutALongerValueAndMarkTheCut()
+    {
+        var input = new string('a', Sanitized.MaxLength) + "tail";
+
+        var result = Sanitized.Value(input).ToString();
+
+        Assert.Equal(new string('a', Sanitized.MaxLength) + Sanitized.TruncationMark, result);
+    }
+
+    [Fact]
+    public void ToString_ShouldCutBeforeEscaping()
+    {
+        var input = new string('\n', Sanitized.MaxLength + 1);
+
+        var result = Sanitized.Value(input).ToString();
+
+        Assert.Equal(string.Concat(Enumerable.Repeat("\\n", Sanitized.MaxLength)) + Sanitized.TruncationMark, result);
+    }
+
+    [Fact]
+    public void ToString_ShouldNotSplitASurrogatePairAtTheCut()
+    {
+        var input = new string('a', Sanitized.MaxLength - 1) + "\U0001F600" + "tail";
+
+        var result = Sanitized.Value(input).ToString();
+
+        Assert.Equal(new string('a', Sanitized.MaxLength - 1) + Sanitized.TruncationMark, result);
+    }
+
+    [Fact]
     public void ToString_ShouldHandleNullInput()
     {
         const string? input = null;

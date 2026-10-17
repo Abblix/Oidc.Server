@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -22,5 +23,5 @@ partial class SoftwareStatementValidator
         EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerNotTrusted,
         Level = LogLevel.Debug,
         Message = "Software statement issuer {Issuer} is not trusted")]
-    private partial void LogIssuerNotTrusted(string Issuer);
+    private partial void LogIssuerNotTrusted(Sanitized Issuer);
 }

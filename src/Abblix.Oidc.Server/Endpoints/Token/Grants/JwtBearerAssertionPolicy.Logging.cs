@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -16,35 +17,35 @@ partial class JwtBearerAssertionPolicy
 		EventId = LogEvents.Endpoints.JwtBearer.MissingExpiration,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion missing required 'exp' claim for issuer {Issuer}, client {ClientId}")]
-	private partial void LogMissingExpiration(string ClientId, string Issuer);
+	private partial void LogMissingExpiration(string ClientId, Sanitized Issuer);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.AlgorithmNotAllowed,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: algorithm {Algorithm} not allowed for issuer {Issuer}, client {ClientId}")]
-	private partial void LogAlgorithmNotAllowed(string? Algorithm, string Issuer, string ClientId);
+	private partial void LogAlgorithmNotAllowed(Sanitized Algorithm, Sanitized Issuer, string ClientId);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.TokenTypeNotAllowed,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: token type '{TokenType}' not in allowed types [{AllowedTypes}], client {ClientId}, issuer {Issuer}")]
-	private partial void LogTokenTypeNotAllowed(string TokenType, string AllowedTypes, string ClientId, string Issuer);
+	private partial void LogTokenTypeNotAllowed(Sanitized TokenType, string AllowedTypes, string ClientId, Sanitized Issuer);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.TokenOfAnotherKind,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: token type '{TokenType}' names another kind of token, client {ClientId}, issuer {Issuer}")]
-	private partial void LogTokenOfAnotherKind(string? TokenType, string ClientId, string Issuer);
+	private partial void LogTokenOfAnotherKind(Sanitized TokenType, string ClientId, Sanitized Issuer);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.MissingIssuedAt,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: missing 'iat' claim but MaxJwtAge is configured, client {ClientId}, issuer {Issuer}")]
-	private partial void LogMissingIssuedAt(string ClientId, string Issuer);
+	private partial void LogMissingIssuedAt(string ClientId, Sanitized Issuer);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.TooOld,
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: JWT too old. Issued at {IssuedAt}, age {JwtAge}, max allowed {MaxAge}, client {ClientId}, issuer {Issuer}")]
-	private partial void LogTooOld(DateTimeOffset IssuedAt, TimeSpan JwtAge, TimeSpan MaxAge, string ClientId, string Issuer);
+	private partial void LogTooOld(DateTimeOffset IssuedAt, TimeSpan JwtAge, TimeSpan MaxAge, string ClientId, Sanitized Issuer);
 }
