@@ -46,69 +46,14 @@ namespace Abblix.Jwt;
 public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
 {
     /// <summary>
-    /// Creates a fresh copy of JsonSerializerOptions excluding this converter to avoid infinite recursion.
-    /// </summary>
-    private static JsonSerializerOptions CreateOptionsForDerivedType(JsonSerializerOptions options)
-    {
-        var result = new JsonSerializerOptions
-        {
-            // A JWK omits an absent member rather than serializing it as null (RFC 7517): a public-only key
-            // carries no private-key parameters, so the JWKS must not emit "d": null etc. This is forced here,
-            // independent of the host's options, because it is a property of JWK serialization itself.
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            PropertyNamingPolicy = options.PropertyNamingPolicy,
-            WriteIndented = options.WriteIndented,
-            PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive,
-        };
-
-        // Copy only non-JsonWebKeyConverter instances from original options
-        foreach (var converter in options.Converters)
-        {
-            if (converter is JsonWebKeyConverter)
-                continue;
-            
-            result.Converters.Add(converter);
-        }
-
-        return result;
-    }
-
-    /// <summary>
     /// Reads a <see cref="JsonWebKey"/> from the JSON payload, dispatching to the matching
     /// concrete subtype (<see cref="RsaJsonWebKey"/>, <see cref="EllipticCurveJsonWebKey"/>,
     /// or <see cref="OctetJsonWebKey"/>) based on the <c>kty</c> property.
     /// </summary>
     public override JsonWebKey? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType != JsonTokenType.StartObject)
-        {
-            throw new JsonException("Expected StartObject token");
-        }
-
-        using var document = JsonDocument.ParseValue(ref reader);
-        var root = document.RootElement;
-
-        if (!root.TryGetProperty(JsonWebKeyPropertyNames.KeyType, out var ktyElement))
-        {
-            throw new JsonException($"Missing required '{JsonWebKeyPropertyNames.KeyType}' property");
-        }
-
-        var kty = ktyElement.GetString();
-        if (string.IsNullOrEmpty(kty))
-        {
-            throw new JsonException($"'{JsonWebKeyPropertyNames.KeyType}' property cannot be null or empty");
-        }
-
-        var rawJson = root.GetRawText();
-        var serializerOptions = CreateOptionsForDerivedType(options);
-
-        return kty switch
-        {
-            JsonWebKeyTypes.Rsa => JsonSerializer.Deserialize<RsaJsonWebKey>(rawJson, serializerOptions),
-            JsonWebKeyTypes.EllipticCurve => JsonSerializer.Deserialize<EllipticCurveJsonWebKey>(rawJson, serializerOptions),
-            JsonWebKeyTypes.Octet => JsonSerializer.Deserialize<OctetJsonWebKey>(rawJson, serializerOptions),
-            _ => throw new JsonException($"Unknown key type: {kty}"),
-        };
+        var (keyType, json) = JsonWebKeyDocument.Read(ref reader);
+        return JsonWebKeySubtypes.Deserialize(keyType, json, JsonWebKeySerializerOptions.For(options));
     }
 
     /// <summary>
@@ -117,11 +62,5 @@ public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
     /// member.
     /// </summary>
     public override void Write(Utf8JsonWriter writer, JsonWebKey value, JsonSerializerOptions options)
-    {
-        var serializerOptions = CreateOptionsForDerivedType(options);
-
-        // Serialize the concrete type, which will include the KeyType property
-        var element = JsonSerializer.SerializeToElement(value, value.GetType(), serializerOptions);
-        element.WriteTo(writer);
-    }
+        => JsonWebKeySubtypes.Serialize(writer, value, JsonWebKeySerializerOptions.For(options));
 }
