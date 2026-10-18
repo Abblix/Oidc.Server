@@ -11,8 +11,8 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// How a key imported from the platform's elliptic-curve parameters is named. A key imported from a certificate
-/// declares no algorithm, so the curve decides the one it signs under.
+/// How a key imported from the platform's elliptic-curve parameters is named, and refused on a curve the library
+/// does not support. A key imported without an algorithm, as from a certificate, takes the one its curve binds.
 /// </summary>
 public class EllipticCurveJsonWebKeyExtensionsTests
 {
@@ -46,5 +46,17 @@ public class EllipticCurveJsonWebKeyExtensionsTests
         var parameters = ecdsa.ExportParameters(false);
 
         Assert.Throws<InvalidOperationException>(() => new EllipticCurveJsonWebKey().Apply(parameters));
+    }
+
+    /// <summary>
+    /// A key naming a curve outside the three is refused when it is turned into the platform's parameters, rather
+    /// than read as one of the three and failing later at a signature.
+    /// </summary>
+    [Fact]
+    public void AKeyOnAnUnsupportedCurve_IsRefusedAsPlatformParameters()
+    {
+        var key = new EllipticCurveJsonWebKey { Curve = "secp256k1", X = [1], Y = [1] };
+
+        Assert.Throws<InvalidOperationException>(() => key.ToEcParameters());
     }
 }

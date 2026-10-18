@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -21,7 +20,7 @@ public static class JsonWebKeyExtensions
     /// </summary>
     /// <remarks>
     /// A key qualifies by declaring the algorithm, or - when it declares none, which RFC 7517 section 4.4 permits
-    /// and a certificate-imported key always does - by its material being able to perform it, per
+    /// and a key imported from an RSA certificate always does - by its material being able to perform it, per
     /// <see cref="AlgorithmSupportExtensions.SupportsAlgorithm"/>.
     /// <para>
     /// Order is left to the caller, deliberately. Ranking a declared <c>alg</c> above an undeclared one would
@@ -101,7 +100,7 @@ public static class JsonWebKeyExtensions
     /// material can perform it.
     /// </summary>
     /// <remarks>
-    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, and a key imported from a certificate never carries one.
+    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, and a key imported from an RSA certificate never carries one.
     /// Treating an undeclared algorithm as a disqualification would drop exactly those keys; treating it as
     /// "anything goes" would hand an RSA key to an ECDSA algorithm and fail at the signature instead of at the
     /// selection. Asking the material settles it, and RFC 7518 sections 3.1 and 3.4 make the answer exact.

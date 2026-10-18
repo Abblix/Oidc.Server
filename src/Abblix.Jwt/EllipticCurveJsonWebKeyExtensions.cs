@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-
 using System.Security.Cryptography;
 
 namespace Abblix.Jwt;
@@ -74,10 +73,11 @@ public static class EllipticCurveJsonWebKeyExtensions
     /// <exception cref="InvalidOperationException">Thrown when the curve type is not supported.</exception>
     public static ECParameters ToEcParameters(this EllipticCurveJsonWebKey key)
     {
-        // The curve is resolved before the coordinates are read, so an unsupported curve is reported as such
+        var curve = NamedCurves.For(key);
+
         return new ECParameters
         {
-            Curve = NamedCurves.For(key),
+            Curve = curve,
             Q = new ECPoint
             {
                 X = key.X ?? throw new InvalidOperationException("X coordinate is required for elliptic curve key"),

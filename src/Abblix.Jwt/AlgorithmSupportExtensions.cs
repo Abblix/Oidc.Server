@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-
 using System.Collections.Frozen;
 
 namespace Abblix.Jwt;
@@ -83,7 +82,7 @@ public static class AlgorithmSupportExtensions
     /// </summary>
     /// <remarks>
     /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, so a key may simply not say what it is for - and a key
-    /// imported from a certificate never does. Such a key is not "unknown", it is answerable: RFC 7518 section 3.1
+    /// imported from an RSA certificate never does. Such a key is not "unknown", it is answerable: RFC 7518 section 3.1
     /// binds each algorithm to a key type, and section 3.4 binds each ECDSA algorithm to one curve. Asking the
     /// material is therefore exact, and it is the only question that matters at the point of use, since a
     /// declaration is a claim while the material is the fact.
