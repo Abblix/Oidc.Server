@@ -46,8 +46,12 @@ internal sealed class KeyRingRetirement(KeyRingSchedule schedule)
 
         foreach (var usage in new[] { PublicKeyUsages.Signature, PublicKeyUsages.Encryption })
         {
-            // Oldest first, so each key's successor is simply the next one along. The newest serving a role has
-            // no successor and therefore never retires: it is the key currently producing, or the one about to.
+            // Oldest first, so a key's successor is the next minted key along. An adopted key is never the
+            // successor of another: adopted keys of one role are all replaced by the first minted key, and taking
+            // one for the next would retire the other as soon as the minted key took over, while the tokens it
+            // signed still had their lifetime to run. A key with no minted key after it has no successor and never
+            // retires: it is the key currently producing, the one about to, or the adopted key of a role nobody
+            // mints for.
             var byOldest = opened
                 .Where(key => OpenedKey.Serves(key.Key, usage))
                 .OrderBy(key => key.CreatedAt)
@@ -56,7 +60,7 @@ internal sealed class KeyRingRetirement(KeyRingSchedule schedule)
             for (var index = 0; index < byOldest.Count; index++)
             {
                 var key = byOldest[index];
-                var successor = index + 1 < byOldest.Count ? byOldest[index + 1] : null;
+                var successor = byOldest.Skip(index + 1).FirstOrDefault(later => !later.IsAdopted);
 
                 if (successor is null || now <= successor.CreatedAt + propagation + keepRetiredFor)
                     expired.Remove(key.Id);

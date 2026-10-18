@@ -13,6 +13,9 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </summary>
 internal sealed record OpenedKey(string Id, JsonWebKey Key, DateTimeOffset CreatedAt)
 {
+    /// <summary>Whether the key was adopted from the host rather than minted by the ring.</summary>
+    public bool IsAdopted => AdoptedEntries.IsAdopted(Id);
+
     /// <summary>
     /// Whether a key may serve a role: either it names that role, or it names none and is therefore unrestricted.
     /// </summary>
