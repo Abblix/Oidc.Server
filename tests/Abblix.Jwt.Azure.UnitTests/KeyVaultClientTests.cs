@@ -258,7 +258,9 @@ public sealed class KeyVaultClientTests : IDisposable
             TestContext.Current.CancellationToken);
 
         Assert.Null(key);
-        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]
@@ -363,7 +365,9 @@ public sealed class KeyVaultClientTests : IDisposable
 
         // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
         // record naming the algorithm, or the failure reads as tokens encrypted to another key.
-        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]

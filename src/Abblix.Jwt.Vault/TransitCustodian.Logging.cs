@@ -23,10 +23,10 @@ partial class TransitCustodian
     [LoggerMessage(
         EventId = LogEvents.TransitCustodian.AlgorithmNotServed,
         Level = LogLevel.Warning,
-        Message = "Vault Transit does not serve '{Algorithm}' for key '{KeyId}', so the token was refused without " +
+        Message = "Vault Transit does not serve '{Algorithm}' for key '{KeyId}', so the encrypted message was refused without " +
                   "asking Vault. Transit decrypts under RSA-OAEP-256 and agrees no ECDH-ES; " +
-                  "a key published with an algorithm the store cannot serve makes every token sent to it fail " +
-                  "this way, so check the key's configured algorithm if this repeats.")]
+                  "a key configured with an algorithm the store cannot serve makes every message encrypted to it " +
+                  "fail this way, so check the key's configured algorithm if this repeats.")]
     private partial void LogAlgorithmNotServed(Sanitized Algorithm, string KeyId);
 
     [LoggerMessage(

@@ -322,7 +322,9 @@ public sealed class VaultTransitClientTests : IDisposable
 
         // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
         // record naming the algorithm, or the failure reads as tokens encrypted to another key.
-        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     /// <summary>
@@ -343,7 +345,9 @@ public sealed class VaultTransitClientTests : IDisposable
 
         Assert.Null(key);
         Assert.Null(handler.LastRequest);
-        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]

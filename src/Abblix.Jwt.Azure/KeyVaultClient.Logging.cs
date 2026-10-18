@@ -27,9 +27,9 @@ partial class KeyVaultClient
     [LoggerMessage(
         EventId = LogEvents.KeyVaultClient.AlgorithmNotServed,
         Level = LogLevel.Warning,
-        Message = "Key Vault does not serve '{Algorithm}' for key '{KeyId}', so the token was refused without " +
+        Message = "Key Vault does not serve '{Algorithm}' for key '{KeyId}', so the encrypted message was refused without " +
                   "asking the vault. Key Vault decrypts under the RSA algorithms and agrees no ECDH-ES; " +
-                  "a key published with an algorithm the store cannot serve makes every token sent to it fail " +
-                  "this way, so check the key's configured algorithm if this repeats.")]
+                  "a key configured with an algorithm the store cannot serve makes every message encrypted to it " +
+                  "fail this way, so check the key's configured algorithm if this repeats.")]
     private static partial void LogAlgorithmNotServed(ILogger logger, Sanitized Algorithm, string KeyId);
 }
