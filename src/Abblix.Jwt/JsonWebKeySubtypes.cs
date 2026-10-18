@@ -31,7 +31,6 @@ internal static class JsonWebKeySubtypes
     /// <summary>Writes <paramref name="value"/> in its concrete subtype's shape.</summary>
     public static void Serialize(Utf8JsonWriter writer, JsonWebKey value, JsonSerializerOptions options)
     {
-        // Serialize the concrete type, which will include the KeyType property
         var element = JsonSerializer.SerializeToElement(value, value.GetType(), options);
         element.WriteTo(writer);
     }

@@ -26,15 +26,18 @@ namespace Abblix.Jwt;
 /// type is <c>RsaJsonWebKey</c>).
 /// </para>
 /// <para>
-/// Switching to <c>[JsonPolymorphic]</c> alone breaks one of those two scenarios:
+/// Switching to <c>[JsonPolymorphic]</c> fails whichever way it is done:
 /// </para>
 /// <list type="bullet">
-/// <item><description>Keep the derived <c>[JsonInclude]</c> override AND add <c>[JsonPolymorphic]</c>
-/// → "kty" gets written twice in polymorphic context (once by STJ as the discriminator, once by
-/// the derived property), producing invalid JSON.</description></item>
-/// <item><description>Drop the derived <c>[JsonInclude]</c> override → "kty" disappears whenever a
-/// concrete subtype is serialized directly, because <c>[JsonPolymorphic]</c> only writes the
-/// discriminator when STJ sees the abstract base type.</description></item>
+/// <item><description>Keep the derived <c>[JsonInclude]</c> override and add <c>[JsonPolymorphic]</c>: the
+/// serializer refuses to build the contract, because the subtype's "kty" property conflicts with the
+/// discriminator's metadata name.</description></item>
+/// <item><description>Drop the derived <c>[JsonInclude]</c> override: "kty" disappears whenever a
+/// concrete subtype is serialized directly, because <c>[JsonPolymorphic]</c> writes the
+/// discriminator only when the serializer sees the base type.</description></item>
+/// <item><description>Either way, reading would need "kty" as the object's first member unless the host
+/// enables <c>AllowOutOfOrderMetadataProperties</c>, which a library cannot impose: a key in RFC 7638
+/// member order (e, kty, n), or one from another party's JWK Set, would fail to read.</description></item>
 /// </list>
 /// <para>
 /// This converter bridges both write modes by always serializing through the concrete subtype's

@@ -11,13 +11,13 @@ using System.Text.Json.Serialization;
 namespace Abblix.Jwt;
 
 /// <summary>
-/// The options a key's concrete subtype is serialized with: the host's naming and formatting, without
-/// <see cref="JsonWebKeyConverter"/> itself, which would otherwise call back into itself.
+/// The options a key's concrete subtype is serialized with: the host's naming and formatting, with absent members
+/// always omitted.
 /// </summary>
 internal static class JsonWebKeySerializerOptions
 {
     /// <summary>
-    /// Creates a fresh copy of JsonSerializerOptions excluding this converter to avoid infinite recursion.
+    /// A copy of the host's options that omits absent members whatever the host chose.
     /// </summary>
     public static JsonSerializerOptions For(JsonSerializerOptions options)
     {
@@ -32,14 +32,8 @@ internal static class JsonWebKeySerializerOptions
             PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive,
         };
 
-        // Copy only non-JsonWebKeyConverter instances from original options
         foreach (var converter in options.Converters)
-        {
-            if (converter is JsonWebKeyConverter)
-                continue;
-
             result.Converters.Add(converter);
-        }
 
         return result;
     }
