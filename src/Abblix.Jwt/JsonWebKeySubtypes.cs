@@ -30,8 +30,7 @@ internal static class JsonWebKeySubtypes
 
     /// <summary>Writes <paramref name="value"/> in its concrete subtype's shape.</summary>
     public static void Serialize(Utf8JsonWriter writer, JsonWebKey value, JsonSerializerOptions options)
-    {
-        var element = JsonSerializer.SerializeToElement(value, value.GetType(), options);
-        element.WriteTo(writer);
-    }
+        // Straight into the caller's writer: going through a JsonElement would re-escape every string on the way
+        // out, so the base64 of 'x5c' would publish each of its plus signs as a Unicode escape
+        => JsonSerializer.Serialize(writer, value, value.GetType(), options);
 }
