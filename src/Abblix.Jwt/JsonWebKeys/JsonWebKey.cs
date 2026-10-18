@@ -78,7 +78,7 @@ public abstract record JsonWebKey
     /// </summary>
     [JsonPropertyName(JsonWebKeyPropertyNames.Certificates)]
     [JsonPropertyOrder(5)]
-    [JsonConverter(typeof(ArrayConverter<byte[]?, Base64UrlTextEncoderConverter>))]
+    [JsonConverter(typeof(ArrayConverter<byte[]?, Base64TextEncoderConverter>))]
     public byte[][]? Certificates { get; set; }
 
     /// <summary>

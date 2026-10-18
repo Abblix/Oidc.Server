@@ -7,6 +7,7 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
@@ -604,5 +605,44 @@ public class JsonWebKeySerializationTests
         var rsa = Assert.IsType<RsaJsonWebKey>(read);
         Assert.Equal("abc", rsa.KeyId);
         Assert.Equal(key.Modulus, rsa.Modulus);
+    }
+
+    /// <summary>
+    /// Certificate bytes chosen so that standard base64 and base64url differ in every character class: they encode
+    /// to "+/+/AQ==" in base64 and "-_-_AQ" in base64url.
+    /// </summary>
+    private static readonly byte[] CertificateBytes = [0xfb, 0xff, 0xbf, 0x01];
+
+    /// <summary>
+    /// The certificates of 'x5c' are written in standard base64, as RFC 7517 section 4.7 requires, so a reader
+    /// decoding them as base64 gets the certificate back.
+    /// </summary>
+    [Fact]
+    public void Certificates_AreWrittenInStandardBase64()
+    {
+        var key = new RsaJsonWebKey { KeyId = "abc", Certificates = [CertificateBytes] };
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize<JsonWebKey>(key))!;
+
+        var written = json["x5c"]![0]!.GetValue<string>();
+        Assert.Equal(CertificateBytes, Convert.FromBase64String(written));
+    }
+
+    /// <summary>A chain another party publishes in standard base64 is read.</summary>
+    [Fact]
+    public void Certificates_InStandardBase64_AreRead()
+    {
+        var key = JsonSerializer.Deserialize<JsonWebKey>("""{"kty":"RSA","x5c":["+/+/AQ=="]}""");
+
+        Assert.Equal(CertificateBytes, Assert.Single(key!.Certificates!));
+    }
+
+    /// <summary>A chain stored in base64url before 'x5c' was written in standard base64 still reads.</summary>
+    [Fact]
+    public void Certificates_InBase64Url_AreStillRead()
+    {
+        var key = JsonSerializer.Deserialize<JsonWebKey>("""{"kty":"RSA","x5c":["-_-_AQ"]}""");
+
+        Assert.Equal(CertificateBytes, Assert.Single(key!.Certificates!));
     }
 }
