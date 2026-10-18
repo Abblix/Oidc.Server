@@ -27,7 +27,7 @@ namespace Abblix.Jwt.UnitTests;
 /// call a real one makes. That keeps the envelope, the ring projection and the minting race under test without a
 /// live Vault, while the crypto itself is the library's own shipped JWE path rather than a test double.
 /// </remarks>
-public sealed class KeyRingTests : IDisposable
+public sealed partial class KeyRingTests : IDisposable
 {
     private const string KeyEncryptionKeyName = "oidc-kek";
 
@@ -77,6 +77,9 @@ public sealed class KeyRingTests : IDisposable
         /// <summary>How many more writes succeed before the next one fails, or <c>null</c> while writes succeed.</summary>
         public int? WritesBeforeFailure { get; set; }
 
+        /// <summary>Whether a load lists the entries newest-written first, as a store with its own order may.</summary>
+        public bool ListsInReverse { get; set; }
+
         private int _loads;
 
         /// <summary>How many loads have been attempted. Written on the timer's thread, read on the test's.</summary>
@@ -98,7 +101,7 @@ public sealed class KeyRingTests : IDisposable
                 throw new InvalidOperationException("the ring store did not answer this once");
             }
 
-            return Entries.ToList();
+            return ListsInReverse ? Entries.AsEnumerable().Reverse().ToList() : Entries.ToList();
         }
 
         public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
