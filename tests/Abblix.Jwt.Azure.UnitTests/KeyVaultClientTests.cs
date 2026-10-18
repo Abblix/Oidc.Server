@@ -240,16 +240,19 @@ public sealed class KeyVaultClientTests : IDisposable
     public async Task UnwrapKeyAsync_RejectsUnsupportedAlgorithm_WithoutCallingTheVault()
     {
         // An algorithm this store cannot unwrap must be refused outright. Mapping it to something the vault does
-        // accept would decrypt under an algorithm the caller never asked for.
+        // accept would decrypt under an algorithm the caller never asked for. The refusal is a null, as for any
+        // token that does not open, since the algorithm is the sender's choice.
         var handler = new StubHttpMessageHandler(_ =>
             throw new InvalidOperationException("the vault must not be called for an unsupported algorithm"));
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).UnwrapKeyAsync(
+        var key = await ClientOver(handler).UnwrapKeyAsync(
             "oidc-enc/v1",
             EncryptionAlgorithms.KeyManagement.EcdhEs,
             new JsonWebTokenHeader(new JsonObject()),
             [5, 5],
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
     }
 
     [Fact]
@@ -334,7 +337,8 @@ public sealed class KeyVaultClientTests : IDisposable
 
     /// <summary>
     /// The store refuses ECDH-ES rather than pretending: Key Vault exposes no key-agreement primitive, so a
-    /// silent fallback would derive a shared secret that is not the one the peer derived.
+    /// fallback would derive a shared secret that is not the one the peer derived. The refusal is a null, as for
+    /// any token that does not open, since the algorithm is the sender's choice.
     /// </summary>
     [Fact]
     public async Task AgreeKeyAsync_IsRefused_BecauseKeyVaultHasNoAgreementPrimitive()
@@ -343,9 +347,11 @@ public sealed class KeyVaultClientTests : IDisposable
         var handler = new StubHttpMessageHandler(_ =>
             StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).AgreeKeyAsync(
+        var secret = await ClientOver(handler).AgreeKeyAsync(
             "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(secret);
     }
 
     [Fact]
