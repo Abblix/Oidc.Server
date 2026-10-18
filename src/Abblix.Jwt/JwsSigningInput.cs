@@ -17,25 +17,25 @@ namespace Abblix.Jwt;
 /// </summary>
 internal static class JwsSigningInput
 {
-	/// <summary>
-	/// The signing input, BASE64URL(header) + '.' + BASE64URL(payload), and the decoded signature; false when the
-	/// signature is not valid base64url, which makes the token malformed.
-	/// </summary>
-	public static bool TryRead(
-		string[] jwt,
-		out byte[] signingInput,
-		[NotNullWhen(true)] out byte[]? signature)
-	{
-		signingInput = Encoding.UTF8.GetBytes($"{jwt[0]}.{jwt[1]}");
-		try
-		{
-			signature = Base64Url.DecodeFromChars(jwt[2]);
-			return true;
-		}
-		catch (FormatException)
-		{
-			signature = null;
-			return false;
-		}
-	}
+    /// <summary>
+    /// The signing input, BASE64URL(header) + '.' + BASE64URL(payload), and the decoded signature; false when the
+    /// signature is not valid base64url, which makes the token malformed.
+    /// </summary>
+    public static bool TryRead(
+        string[] jwt,
+        out byte[] signingInput,
+        [NotNullWhen(true)] out byte[]? signature)
+    {
+        signingInput = Encoding.UTF8.GetBytes($"{jwt[0]}.{jwt[1]}");
+        try
+        {
+            signature = Base64Url.DecodeFromChars(jwt[2]);
+            return true;
+        }
+        catch (FormatException)
+        {
+            signature = null;
+            return false;
+        }
+    }
 }
