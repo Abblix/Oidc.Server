@@ -18,7 +18,7 @@ namespace Abblix.Jwt;
 /// algorithms the host added or replaced - with no registration-time bookkeeping to keep in sync.
 /// </summary>
 /// <remarks>
-/// The enumerated key types mirror the dispatch switch in <see cref="JsonWebTokenSigner"/>: a signer
+/// The enumerated key types mirror the dispatch switch in <see cref="KeyedSignatureCheck"/>: a signer
 /// registered for any other <see cref="JsonWebKey"/> subtype is unreachable at run time, so it is
 /// deliberately not advertised. The enumeration order (none, RSA, EC, octet) is the order these
 /// algorithms appear in the discovery document, which consumers read verbatim.

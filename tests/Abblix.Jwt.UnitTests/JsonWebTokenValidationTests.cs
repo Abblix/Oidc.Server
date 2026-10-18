@@ -1370,7 +1370,7 @@ public partial class JsonWebTokenValidationTests
 
     /// <summary>
     /// Verifies that signing a token whose header explicitly carries case-variant 'none' fails to issue.
-    /// Adjacent verification for JsonWebTokenSigner.cs:49: the existing byte-exact == comparison there
+    /// Adjacent verification for JwsTokenSigner.SignAsync: the existing byte-exact == comparison there
     /// means a header alg of 'None'/'NONE'/'nOnE' is treated as an unknown algorithm, not as the
     /// special unsigned-token contradiction. With an RSA signing key (declared alg=RS256), signing
     /// fails at the algorithm-mismatch check; either way it throws InvalidOperationException.

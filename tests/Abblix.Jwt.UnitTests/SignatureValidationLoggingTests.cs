@@ -22,12 +22,12 @@ public class SignatureValidationLoggingTests
     [Fact]
     public async Task KeyIdNoKeyMatches_ReachesTheRecordWithoutItsLineBreaks()
     {
-        var logger = new RecordingLogger<JsonWebTokenSigner>();
+        var logger = new RecordingLogger<JwsSignatureVerifier>();
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddSingleton<ILogger<JsonWebTokenSigner>>(logger);
+        services.AddSingleton<ILogger<JwsSignatureVerifier>>(logger);
         var signer = services.BuildServiceProvider().GetRequiredService<IJsonWebTokenSigner>();
         var header = new JsonWebTokenHeader(new JsonObject
         {

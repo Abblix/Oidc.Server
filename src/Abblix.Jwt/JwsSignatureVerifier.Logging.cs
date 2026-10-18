@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt;
 
-partial class JsonWebTokenSigner
+partial class JwsSignatureVerifier
 {
     [LoggerMessage(
         EventId = LogEvents.Jwt.NoSigningKeys,

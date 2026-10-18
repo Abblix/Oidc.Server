@@ -265,7 +265,9 @@ public class RsaKeyFloorTests
         services.AddKeyedSingleton<ISignatureAlgorithm<RsaJsonWebKey>>(
             SigningAlgorithms.RS256, (_, _) => new RsaSigner(SigningAlgorithms.RS256));
 
-        return new JsonWebTokenSigner(log, services.BuildServiceProvider(), NoSigning.Instance);
+        return new JsonWebTokenSigner(
+            new JwsTokenSigner(NoSigning.Instance),
+            new JwsSignatureVerifier(log, new KeyedSignatureCheck(services.BuildServiceProvider())));
     }
 
     /// <summary>The signing seam, which the verify path never reaches.</summary>
@@ -280,7 +282,7 @@ public class RsaKeyFloorTests
             => throw new NotSupportedException("The verify path does not sign.");
     }
 
-    private sealed class CapturingLogger : ILogger<JsonWebTokenSigner>
+    private sealed class CapturingLogger : ILogger<JwsSignatureVerifier>
     {
         private readonly List<(LogLevel Level, string Message)> _entries = [];
 
