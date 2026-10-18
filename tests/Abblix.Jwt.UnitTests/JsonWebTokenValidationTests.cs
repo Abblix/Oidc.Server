@@ -362,7 +362,7 @@ public partial class JsonWebTokenValidationTests
     /// JWS on the issuer-keys trust branch without a ResolveIssuerSigningKeys resolver returns
     /// <see cref="JwtError.InvalidToken"/> rather than throwing
     /// <see cref="InvalidOperationException"/>. Closes the second of the two NotNull-throw
-    /// hotspots in <c>JsonWebTokenValidator</c>.
+    /// hotspots, now in <c>JwsSignatureValidator</c>.
     /// </summary>
     [Fact]
     public async Task JwsWithoutSigningKeysResolver_ReturnsInvalidTokenError()
@@ -865,7 +865,7 @@ public partial class JsonWebTokenValidationTests
 
         // Platform-specific behavior: Windows throws ArgumentOutOfRangeException for out-of-range timestamps
         // Linux may silently accept them. Both are acceptable - the key is no unhandled exception occurs.
-        // The try-catch in JsonWebTokenValidator ensures graceful handling on all platforms.
+        // The try-catch in JsonWebTokenPayload ensures graceful handling on all platforms.
         if (result.TryGetFailure(out var error))
         {
             // Expected on Windows: validation fails with InvalidToken error
@@ -904,7 +904,7 @@ public partial class JsonWebTokenValidationTests
 
         // Platform-specific behavior: Windows throws ArgumentOutOfRangeException for out-of-range timestamps
         // Linux may silently accept them. Both are acceptable - the key is no unhandled exception occurs.
-        // The try-catch in JsonWebTokenValidator ensures graceful handling on all platforms.
+        // The try-catch in JsonWebTokenPayload ensures graceful handling on all platforms.
         if (result.TryGetFailure(out var error))
         {
             // Expected on Windows: validation fails with InvalidToken error
@@ -946,7 +946,7 @@ public partial class JsonWebTokenValidationTests
 
         // Platform-specific behavior: Windows throws ArgumentOutOfRangeException for out-of-range timestamps
         // Linux may silently accept them. Both are acceptable - the key is no unhandled exception occurs.
-        // The try-catch in JsonWebTokenValidator ensures graceful handling on all platforms.
+        // The try-catch in JsonWebTokenPayload ensures graceful handling on all platforms.
         if (result.TryGetFailure(out var error))
         {
             // Expected on Windows: validation fails with InvalidToken error

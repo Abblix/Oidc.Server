@@ -49,8 +49,6 @@ internal sealed class JweValidation(
 		var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
 
 		// DecryptAsync is byte-oriented; the inner JWS is UTF-8 text.
-		return result.Match<Result<string, JwtValidationError>>(
-			innerJwtBytes => Encoding.UTF8.GetString(innerJwtBytes),
-			error => error);
+		return result.MapSuccess(Encoding.UTF8.GetString);
 	}
 }

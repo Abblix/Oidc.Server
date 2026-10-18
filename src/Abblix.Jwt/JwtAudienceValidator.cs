@@ -29,8 +29,8 @@ internal static class JwtAudienceValidator
                 : token;
         }
 
-        // The same split as the issuer above, and corrected in the same change because it was the same
-        // defect one method down: requiring aud to be present said nothing about who may check it.
+        // The same split as in JwtIssuerValidator: requiring aud to be present says nothing about who may check
+        // it.
         if (!parameters.Options.HasFlag(ValidationOptions.ValidateAudience))
             return token;
 
