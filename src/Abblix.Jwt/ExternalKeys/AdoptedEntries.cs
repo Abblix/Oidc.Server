@@ -46,9 +46,9 @@ internal static class AdoptedEntries
     }
 
     /// <summary>
-    /// The creation date of each key named in <paramref name="ids"/>, in the same order: each key is one tick older
+    /// The creation date of each key named in <paramref name="ids"/>, in the same order: each key is one second older
     /// than the one listed before it, so the ring signs with the first listed key rather than with whichever its
-    /// store lists first.
+    /// store lists first. A second rather than a tick, because a store may keep times only to the millisecond.
     /// </summary>
     /// <param name="entries">The ring's entries, which may already hold part of the set.</param>
     /// <param name="ids">The entry ids of the set, in the order the host listed the keys.</param>
@@ -68,14 +68,14 @@ internal static class AdoptedEntries
             var written = entries.FirstOrDefault(entry => entry.Id == ids[index]);
             if (written is not null)
             {
-                first = written.CreatedAt + TimeSpan.FromTicks(index);
+                first = written.CreatedAt + TimeSpan.FromSeconds(index);
                 break;
             }
         }
 
         var dates = new DateTimeOffset[ids.Length];
         for (var index = 0; index < dates.Length; index++)
-            dates[index] = first - TimeSpan.FromTicks(index);
+            dates[index] = first - TimeSpan.FromSeconds(index);
 
         return dates;
     }

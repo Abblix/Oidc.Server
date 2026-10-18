@@ -104,6 +104,97 @@ public sealed partial class KeyRingTests
     }
 
     /// <summary>
+    /// The host's order survives a store that keeps creation times only to the millisecond, on a clock that is
+    /// not on a millisecond.
+    /// </summary>
+    [Fact]
+    public async Task TheFirstListedAdoptedKeySigns_InAStoreKeepingMilliseconds()
+    {
+        var store = new FakeStore { KeepsMilliseconds = true, ListsInReverse = true };
+        var (ring, _) = CreateRing(
+            store, now: Now.AddTicks(12_345), adoptedKeys: [AdoptableSigningKey("first"), AdoptableSigningKey("second")]);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("first", Published(ring, PublicKeyUsages.Signature).First());
+    }
+
+    /// <summary>
+    /// Pods adopting in the same rotation period date the set alike whatever their clocks read, so a set written
+    /// partly by one and partly by another keeps the host's order.
+    /// </summary>
+    [Fact]
+    public async Task PodsAdoptingInOnePeriod_DateTheSetAlike()
+    {
+        var adopted = new[] { AdoptableSigningKey("first"), AdoptableSigningKey("second") };
+        var (oneStore, ofOne) = (new FakeStore(), new FakeStore());
+        var (one, _) = CreateRing(oneStore, adoptedKeys: adopted);
+        var (other, _) = CreateRing(ofOne, now: Now + TimeSpan.FromSeconds(5), adoptedKeys: adopted);
+
+        await one.RefreshAsync(TestContext.Current.CancellationToken);
+        await other.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            oneStore.Entries.Where(entry => entry.Id.StartsWith("adopted-")).Select(entry => (entry.Id, entry.CreatedAt)),
+            ofOne.Entries.Where(entry => entry.Id.StartsWith("adopted-")).Select(entry => (entry.Id, entry.CreatedAt)));
+    }
+
+    /// <summary>
+    /// A key without <c>use</c> serves both roles, so beside an adopted encryption key it puts two adopted keys in
+    /// the encryption role. With encryption keys minted, both stay until the minted encryption key has served the
+    /// retention window.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithoutUseBesideAnEncryptionKey_StaysUntilTheMintedEncryptionKeyHasServedTheRetention()
+    {
+        var store = new FakeStore();
+        var propagation = TimeSpan.FromHours(1);
+        var adopted = new[] { UnrestrictedKey("both"), AdoptableEncryptionKey("enc") };
+        var (adopting, _) = CreateRing(
+            store, propagation: propagation, encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            adoptedKeys: adopted);
+        await adopting.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var (afterTakeover, _) = CreateRing(
+            store, propagation: propagation, now: Now + propagation + TimeSpan.FromMinutes(1),
+            encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        await afterTakeover.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("both", Published(afterTakeover, PublicKeyUsages.Encryption));
+        Assert.Contains("enc", Published(afterTakeover, PublicKeyUsages.Encryption));
+
+        var (afterRetention, _) = CreateRing(
+            store, propagation: propagation, now: Now + propagation + TimeSpan.FromDays(30) + TimeSpan.FromMinutes(1),
+            encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        await afterRetention.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(Published(afterRetention, PublicKeyUsages.Encryption), id => id is "both" or "enc");
+    }
+
+    /// <summary>
+    /// With nothing minted for encryption, a key without <c>use</c> and an encryption key adopted beside it both stay
+    /// in the encryption role for good.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithoutUseBesideAnEncryptionKey_NeverRetires_WhenNothingIsMintedForEncryption()
+    {
+        var store = new FakeStore();
+        var (adopting, _) = CreateRing(store, adoptedKeys: [UnrestrictedKey("both"), AdoptableEncryptionKey("enc")]);
+        await adopting.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var (later, _) = CreateRing(store, now: Now + TimeSpan.FromDays(90));
+        await later.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(["both", "enc"], Published(later, PublicKeyUsages.Encryption).Order());
+    }
+
+    private static JsonWebKey UnrestrictedKey(string keyId)
+        => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = keyId, Usage = null };
+
+    private static JsonWebKey AdoptableEncryptionKey(string keyId)
+        => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256)
+            with { KeyId = keyId };
+
+    /// <summary>
     /// A set completed by a later refresh keeps the host's order: the key written later is not newer than the one
     /// written first, so the first listed key still signs.
     /// </summary>

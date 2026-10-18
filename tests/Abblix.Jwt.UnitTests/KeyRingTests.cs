@@ -80,6 +80,9 @@ public sealed partial class KeyRingTests : IDisposable
         /// <summary>Whether a load lists the entries newest-written first, as a store with its own order may.</summary>
         public bool ListsInReverse { get; set; }
 
+        /// <summary>Whether a write keeps the creation time only to the nearest millisecond, as some databases do.</summary>
+        public bool KeepsMilliseconds { get; set; }
+
         private int _loads;
 
         /// <summary>How many loads have been attempted. Written on the timer's thread, read on the test's.</summary>
@@ -122,6 +125,16 @@ public sealed partial class KeyRingTests : IDisposable
 
             if (Entries.Any(entry => entry.Id == key.Id))
                 return Task.FromResult(false);
+
+            if (KeepsMilliseconds)
+            {
+                // Rounded to the nearest millisecond, as a database column of that precision rounds
+                var milliseconds = Math.Round((double)key.CreatedAt.UtcTicks / TimeSpan.TicksPerMillisecond);
+                key = key with
+                {
+                    CreatedAt = new DateTimeOffset((long)milliseconds * TimeSpan.TicksPerMillisecond, TimeSpan.Zero),
+                };
+            }
 
             Entries.Add(key);
             return Task.FromResult(true);
