@@ -143,7 +143,7 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        var entry = Assert.Single(validated!);
+        var entry = Assert.Single(validated);
         Assert.Equal("payment_initiation", entry!["type"]!.GetValue<string>());
     }
 
@@ -162,7 +162,7 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        Assert.Equal(2, validated!.Count);
+        Assert.Equal(2, validated.Count);
         Assert.Equal("payment_initiation", validated[0]!["type"]!.GetValue<string>());
         Assert.Equal("account_information", validated[1]!["type"]!.GetValue<string>());
     }
@@ -223,7 +223,7 @@ public class AuthorizationDetailsPolicyTests
         Assert.NotNull(validated);
         Assert.Equal(
             ["consent", "payment_initiation", "account_information"],
-            validated!.Select(node => node!["type"]!.GetValue<string>()).ToArray());
+            validated.Select(node => node!["type"]!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        Assert.Equal(raw.ToJsonString(), validated!.ToJsonString());
+        Assert.Equal(raw.ToJsonString(), validated.ToJsonString());
     }
 
     // ───────────────────────────────────────────────────────────────────────
@@ -318,7 +318,7 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        var wire = validated!.ToJsonString();
+        var wire = validated.ToJsonString();
         Assert.Contains("\"amount\":\"200.00\"", wire);
         Assert.DoesNotContain("500.00", wire);
     }
@@ -341,7 +341,7 @@ public class AuthorizationDetailsPolicyTests
         var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        var wire = validated!.ToJsonString();
+        var wire = validated.ToJsonString();
         Assert.Contains("\"amount\":\"1000.00\"", wire);
         Assert.DoesNotContain("5000.00", wire);
     }
@@ -364,7 +364,7 @@ public class AuthorizationDetailsPolicyTests
         var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        var wire = validated!.ToJsonString();
+        var wire = validated.ToJsonString();
         // Still an array, though only one action survived deduplication. The single-or-array
         // convention belongs to JWT claims such as aud (RFC 7519 Section 4.1.3); RFC 9396
         // Section 2.2 defines actions as an array of strings and canonicalisation is precisely
@@ -385,7 +385,7 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        Assert.Equal(wire, validated!.ToJsonString());
+        Assert.Equal(wire, validated.ToJsonString());
     }
 
     [Fact]
@@ -775,7 +775,7 @@ public class AuthorizationDetailsPolicyTests
         var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, TestContext.Current.CancellationToken);
 
         Assert.NotNull(descriptor);
-        Assert.Equal("Payment transfer", descriptor!.Title);
+        Assert.Equal("Payment transfer", descriptor.Title);
         Assert.Equal("Transfer 500 EUR to IBAN DE02 ...", descriptor.Summary);
         Assert.NotNull(descriptor.Details);
         Assert.Contains(descriptor.Details!,

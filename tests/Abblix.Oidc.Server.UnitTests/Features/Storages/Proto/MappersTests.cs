@@ -143,7 +143,7 @@ public class MappersTests
         Assert.Single(proto.UserInfo);
         var result = RequestedClaimsMapper.FromProto(proto);
         Assert.NotNull(result);
-        Assert.NotNull(result!.UserInfo);
+        Assert.NotNull(result.UserInfo);
         Assert.True(result.UserInfo!.ContainsKey("email"));
     }
 

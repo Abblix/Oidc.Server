@@ -138,7 +138,7 @@ public class RequestObjectFetcherTests
         // Assert - the payload bound onto a fresh model (the outside-only state is gone) and the drop was logged.
         Assert.True(result.TryGetSuccess(out var value));
         Assert.NotSame(request, value);
-        Assert.Null(value!.State);
+        Assert.Null(value.State);
         _logger.Verify(
             l => l.Log(
                 LogLevel.Warning,

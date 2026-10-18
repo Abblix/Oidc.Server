@@ -132,7 +132,7 @@ public partial class MultiTenancyRegistrationTests
             .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
 
         var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
-        Assert.Equal(acme.SigningKeys!.Last().KeyId, header[JwtClaimTypes.KeyId]?.GetValue<string>());
+        Assert.Equal(acme.SigningKeys.Last().KeyId, header[JwtClaimTypes.KeyId]?.GetValue<string>());
     }
 
     /// <summary>
@@ -171,7 +171,7 @@ public partial class MultiTenancyRegistrationTests
 
         var acme = tenants.Single(tenant => tenant.Id == "acme");
         var globex = tenants.Single(tenant => tenant.Id == "globex");
-        Assert.Equal(acme.SigningKeys!.Single().KeyId, await KeyIdAtAsync(acme));
-        Assert.Equal(globex.SigningKeys!.Single().KeyId, await KeyIdAtAsync(globex));
+        Assert.Equal(acme.SigningKeys.Single().KeyId, await KeyIdAtAsync(acme));
+        Assert.Equal(globex.SigningKeys.Single().KeyId, await KeyIdAtAsync(globex));
     }
 }

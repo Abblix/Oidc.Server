@@ -129,7 +129,7 @@ public class RequestedSubjectValidatorTests
         var error = await _validator.ValidateAsync(context);
 
         Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidRequest, error!.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>

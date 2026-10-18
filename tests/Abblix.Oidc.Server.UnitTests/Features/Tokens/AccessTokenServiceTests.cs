@@ -408,7 +408,7 @@ public class AccessTokenServiceTests
         Assert.Equal("EMP123", capturedToken.Payload["employee_id"]?.GetValue<string>());
         var roles = capturedToken.Payload["roles"]?.AsArray();
         Assert.NotNull(roles);
-        Assert.Equal(2, roles!.Count);
+        Assert.Equal(2, roles.Count);
         Assert.Equal("admin", roles[0]?.GetValue<string>());
         Assert.Equal("developer", roles[1]?.GetValue<string>());
     }

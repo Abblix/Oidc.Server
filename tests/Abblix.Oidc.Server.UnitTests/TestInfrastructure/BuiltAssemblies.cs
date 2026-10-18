@@ -41,7 +41,7 @@ internal static class BuiltAssemblies
         // names neither the staleness nor the folder. Taken from where this assembly is running rather
         // than written down, so it cannot drift from what it describes.
         var built = Path.Combine(
-            Path.GetFileName(Path.GetDirectoryName(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar))!)!,
+            Path.GetFileName(Path.GetDirectoryName(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar))!),
             Path.GetFileName(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar)));
 
         foreach (var area in new[] { "src", "tests" })

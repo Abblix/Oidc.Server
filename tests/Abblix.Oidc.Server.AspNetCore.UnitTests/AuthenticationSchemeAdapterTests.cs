@@ -452,7 +452,7 @@ public class AuthenticationSchemeAdapterTests
 		var result = await RoundTripAsync(Session());
 
 		Assert.NotNull(result);
-		Assert.Equal("user123", result!.Subject);
+		Assert.Equal("user123", result.Subject);
 		Assert.Equal("session456", result.SessionId);
 		Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_700_000_000), result.AuthenticationTime);
 		Assert.Equal("TestProvider", result.IdentityProvider);

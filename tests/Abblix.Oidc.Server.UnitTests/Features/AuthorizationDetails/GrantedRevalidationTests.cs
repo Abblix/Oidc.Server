@@ -131,7 +131,7 @@ public class GrantedRevalidationTests
             GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
-        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public class GrantedRevalidationTests
             GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
-        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public class GrantedRevalidationTests
             GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
-        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ public class GrantedRevalidationTests
             GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
-        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
     }
 
     private static IAuthorizationDetailsPolicy PolicyWith<TValidator>()

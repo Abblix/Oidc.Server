@@ -89,7 +89,7 @@ public class UserClaimsProviderTests
             requested: Requested(claimName, essential));
 
         Assert.NotNull(claims);
-        Assert.Equal("Jane", (string?)claims![IanaClaimTypes.Name]);
+        Assert.Equal("Jane", (string?)claims[IanaClaimTypes.Name]);
         Assert.False(claims.ContainsKey(claimName));
     }
 
@@ -133,7 +133,7 @@ public class UserClaimsProviderTests
             requested: Requested(IanaClaimTypes.Email, essential: true));
 
         Assert.NotNull(claims);
-        Assert.Equal("jane@example.com", (string?)claims![IanaClaimTypes.Email]);
+        Assert.Equal("jane@example.com", (string?)claims[IanaClaimTypes.Email]);
         Assert.Equal(true, (bool?)claims[IanaClaimTypes.EmailVerified]);
     }
 
@@ -159,7 +159,7 @@ public class UserClaimsProviderTests
             requested: Requested(IanaClaimTypes.Email, essential: true));
 
         Assert.NotNull(claims);
-        Assert.Equal(ClientFacingSubject, (string?)claims![JwtClaimTypes.Subject]);
+        Assert.Equal(ClientFacingSubject, (string?)claims[JwtClaimTypes.Subject]);
     }
 
     private async Task<JsonObject?> GetClaimsAsync(

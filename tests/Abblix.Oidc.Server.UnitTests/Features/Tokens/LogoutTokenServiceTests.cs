@@ -409,7 +409,7 @@ public class LogoutTokenServiceTests
 
         var events = capturedToken.Payload.Json[IanaClaimTypes.Events] as JsonObject;
         Assert.NotNull(events);
-        Assert.True(events!.ContainsKey(LogoutTokenEvents.BackChannelLogout));
+        Assert.True(events.ContainsKey(LogoutTokenEvents.BackChannelLogout));
     }
 
     /// <summary>

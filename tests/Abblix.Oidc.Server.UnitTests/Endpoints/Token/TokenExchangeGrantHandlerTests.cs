@@ -310,7 +310,7 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
         var nested = grant.Context.Actor["act"] as JsonObject;
         Assert.NotNull(nested);
-        Assert.Equal("prev-actor", nested!["sub"]!.GetValue<string>());
+        Assert.Equal("prev-actor", nested["sub"]!.GetValue<string>());
     }
 
     [Fact]

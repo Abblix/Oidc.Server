@@ -522,7 +522,7 @@ public class IdentityTokenServiceTests
         var cHash = capturedToken!.Payload[IanaClaimTypes.CHash];
         Assert.NotNull(cHash);
         Assert.IsType<string>(cHash?.GetValue<string>());
-        Assert.NotEmpty(cHash!.GetValue<string>());
+        Assert.NotEmpty(cHash.GetValue<string>());
     }
 
     /// <summary>
@@ -557,7 +557,7 @@ public class IdentityTokenServiceTests
         var atHash = capturedToken!.Payload[IanaClaimTypes.AtHash];
         Assert.NotNull(atHash);
         Assert.IsType<string>(atHash?.GetValue<string>());
-        Assert.NotEmpty(atHash!.GetValue<string>());
+        Assert.NotEmpty(atHash.GetValue<string>());
     }
 
     /// <summary>
@@ -593,8 +593,8 @@ public class IdentityTokenServiceTests
 
         Assert.NotNull(cHash);
         Assert.NotNull(atHash);
-        Assert.NotEmpty(cHash!.GetValue<string>());
-        Assert.NotEmpty(atHash!.GetValue<string>());
+        Assert.NotEmpty(cHash.GetValue<string>());
+        Assert.NotEmpty(atHash.GetValue<string>());
         Assert.NotEqual(cHash.GetValue<string>(), atHash.GetValue<string>());
     }
 
@@ -748,7 +748,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.NotNull(result!.Token);
+        Assert.NotNull(result.Token);
         Assert.Equal(EncodedToken, result.EncodedJwt);
     }
 
