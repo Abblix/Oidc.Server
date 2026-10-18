@@ -20,7 +20,7 @@ internal sealed class RsaKeySender(string algorithm, RSAEncryptionPadding paddin
 	/// <summary>The JWE Encrypted Key: <paramref name="keyToEncrypt"/> under <paramref name="rsaKey"/>.</summary>
 	/// <exception cref="InvalidOperationException">The key's modulus is shorter than the algorithm requires.</exception>
 	/// <exception cref="CryptographicException">The platform refused the key to encrypt; a key longer than the
-	/// padding leaves room for is refused this way, with the platform naming the limit.</exception>
+	/// padding leaves room for is refused this way, by the platform's own exception.</exception>
 	public byte[] EncryptKey(RsaJsonWebKey rsaKey, byte[] keyToEncrypt)
 	{
 		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on
