@@ -75,6 +75,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<JweKeyAttempt>();
         services.TryAddSingleton<LocalKeyEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
+        services.TryAddSingleton<JwsTokenSigner>();
+        services.TryAddSingleton<JwsSignatureVerifier>();
+        services.TryAddSingleton<KeyedSignatureCheck>();
 
         // The signing seam behind IJsonWebTokenSigner is a composition of key-owning backends (IDataSigner):
         // the in-process LocalKeySigner owns private-bearing keys and is the sole backend by default. A host
