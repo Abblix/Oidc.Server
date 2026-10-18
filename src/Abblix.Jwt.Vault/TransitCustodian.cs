@@ -83,9 +83,9 @@ internal sealed partial class TransitCustodian(
         byte[] encryptedKey,
         CancellationToken cancellationToken)
     {
+        // The algorithm is the token sender's choice, so one Transit does not serve is a token that does not open.
         if (algorithm != EncryptionAlgorithms.KeyManagement.RsaOaep256)
-            throw new NotSupportedException(
-                $"The Vault Transit store unwraps {EncryptionAlgorithms.KeyManagement.RsaOaep256} only; got '{algorithm}'.");
+            return null;
 
         var (name, version) = TransitKeyId.Parse(keyId);
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
@@ -104,13 +104,12 @@ internal sealed partial class TransitCustodian(
     }
 
     /// <summary>
-    /// Derives the ECDH-ES shared secret. Vault Transit exposes no key-agreement primitive, so this store does not
-    /// support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
+    /// Refuses the ECDH-ES agreement with null. Vault Transit exposes no key-agreement primitive, so this store does
+    /// not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
     /// </summary>
-    public Task<byte[]> AgreeKeyAsync(
+    public Task<byte[]?> AgreeKeyAsync(
         string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
-        => throw new NotSupportedException(
-            "Vault Transit exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
+        => Task.FromResult<byte[]?>(null);
 
     /// <summary>
     /// Enumerates every version of the Transit key as a public-only JWK (RSA or EC, per the Transit key type).

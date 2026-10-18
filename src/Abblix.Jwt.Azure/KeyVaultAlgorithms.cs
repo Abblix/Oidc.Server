@@ -48,10 +48,12 @@ internal static class KeyVaultAlgorithms
             ? signatureAlgorithm
             : throw new NotSupportedException($"The Azure Key Vault store does not sign '{algorithm}'.");
 
-    /// <summary>The SDK's name for the JWE key-management <paramref name="algorithm"/>.</summary>
-    /// <exception cref="NotSupportedException">The vault is not asked to unwrap under this algorithm.</exception>
-    public static EncryptionAlgorithm ForUnwrapping(string algorithm)
-        => KeyUnwrapAlgorithms.TryGetValue(algorithm, out var encryptionAlgorithm)
-            ? encryptionAlgorithm
-            : throw new NotSupportedException($"The Azure Key Vault store does not unwrap '{algorithm}'.");
+    /// <summary>
+    /// The SDK's name for the JWE key-management <paramref name="algorithm"/>, or null when the vault is not asked to
+    /// unwrap under it.
+    /// </summary>
+    public static EncryptionAlgorithm? ForUnwrapping(string algorithm)
+        // Typed explicitly: the SDK type converts implicitly from a string, so a bare null becomes an algorithm with
+        // no name rather than no algorithm.
+        => KeyUnwrapAlgorithms.TryGetValue(algorithm, out var encryptionAlgorithm) ? encryptionAlgorithm : default(EncryptionAlgorithm?);
 }
