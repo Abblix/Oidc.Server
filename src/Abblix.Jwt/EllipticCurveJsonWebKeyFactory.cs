@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-
 using System.Security.Cryptography;
 using Abblix.Utils;
 
@@ -17,13 +16,8 @@ internal static class EllipticCurveJsonWebKeyFactory
     /// <inheritdoc cref="JsonWebKeyFactory.CreateEllipticCurve"/>
     public static EllipticCurveJsonWebKey CreateEllipticCurve(string curve, string algorithm)
     {
-        var ecCurve = curve switch
-        {
-            EllipticCurveTypes.P256 => ECCurve.NamedCurves.nistP256,
-            EllipticCurveTypes.P384 => ECCurve.NamedCurves.nistP384,
-            EllipticCurveTypes.P521 => ECCurve.NamedCurves.nistP521,
-            _ => throw new ArgumentException($"Unsupported elliptic curve: {curve}", nameof(curve))
-        };
+        var ecCurve = NamedCurves.Named(curve)
+            ?? throw new ArgumentException($"Unsupported elliptic curve: {curve}", nameof(curve));
 
         using var ecdsa = ECDsa.Create(ecCurve);
         var parameters = ecdsa.ExportParameters(true);

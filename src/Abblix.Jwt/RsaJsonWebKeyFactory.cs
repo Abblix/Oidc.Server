@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-
 using System.Security.Cryptography;
 using Abblix.Utils;
 
@@ -15,7 +14,7 @@ namespace Abblix.Jwt;
 internal static class RsaJsonWebKeyFactory
 {
     /// <inheritdoc cref="JsonWebKeyFactory.CreateRsa"/>
-    public static RsaJsonWebKey CreateRsa(string usage, string? algorithm = null, int keySize = 2048)
+    public static RsaJsonWebKey CreateRsa(string usage, string? algorithm, int keySize)
     {
         if (usage is not (PublicKeyUsages.Signature or PublicKeyUsages.Encryption))
         {

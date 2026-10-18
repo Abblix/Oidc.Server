@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-
 using System.Security.Cryptography;
 using Abblix.Utils;
 
@@ -15,7 +14,7 @@ namespace Abblix.Jwt;
 internal static class OctetJsonWebKeyFactory
 {
     /// <inheritdoc cref="JsonWebKeyFactory.CreateHmac"/>
-    public static OctetJsonWebKey CreateHmac(string algorithm, int? keySize = null)
+    public static OctetJsonWebKey CreateHmac(string algorithm, int? keySize)
     {
         var size = keySize ?? algorithm switch
         {

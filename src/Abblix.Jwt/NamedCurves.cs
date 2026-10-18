@@ -35,13 +35,20 @@ internal static class NamedCurves
 
     /// <summary>The platform curve the key's <c>crv</c> names.</summary>
     /// <exception cref="InvalidOperationException">The curve is not one this library supports.</exception>
-    public static ECCurve For(EllipticCurveJsonWebKey key) => key.Curve switch
+    public static ECCurve For(EllipticCurveJsonWebKey key) => Named(key.Curve)
+        ?? throw new InvalidOperationException(
+            $"Unsupported elliptic curve: {key.Curve}. " +
+            $"Supported curves: {EllipticCurveTypes.P256}, {EllipticCurveTypes.P384}, {EllipticCurveTypes.P521}");
+
+    /// <summary>
+    /// The platform curve a JWK <c>crv</c> name stands for, or <c>null</c> for a curve this library does not
+    /// support, which each caller refuses in its own terms.
+    /// </summary>
+    public static ECCurve? Named(string? curve) => curve switch
     {
         EllipticCurveTypes.P256 => ECCurve.NamedCurves.nistP256,
         EllipticCurveTypes.P384 => ECCurve.NamedCurves.nistP384,
         EllipticCurveTypes.P521 => ECCurve.NamedCurves.nistP521,
-        _ => throw new InvalidOperationException(
-            $"Unsupported elliptic curve: {key.Curve}. " +
-            $"Supported curves: {EllipticCurveTypes.P256}, {EllipticCurveTypes.P384}, {EllipticCurveTypes.P521}"),
+        _ => null,
     };
 }
