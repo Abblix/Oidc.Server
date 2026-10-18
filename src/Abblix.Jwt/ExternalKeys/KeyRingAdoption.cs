@@ -41,8 +41,11 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
         IKeyRingStore source,
         CancellationToken cancellationToken)
     {
-        if (policy.AdoptedKeys.Count == 0 || entries.Any(entry => !entry.Id.StartsWith(AdoptedPrefix, StringComparison.Ordinal)))
+        if (policy.AdoptedKeys.Count == 0 ||
+            entries.Any(entry => !entry.Id.StartsWith(AdoptedPrefix, StringComparison.Ordinal)))
+        {
             return false;
+        }
 
         // Dated one rotation period back, which is what makes it the active key: the key minted in this same
         // refresh is younger than the propagation window, so it is published and verifiable while this one keeps

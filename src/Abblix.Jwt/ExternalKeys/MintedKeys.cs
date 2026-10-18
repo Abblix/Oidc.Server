@@ -77,8 +77,8 @@ public sealed record MintedKeys
     public string ContentEncryptionAlgorithm { get; init; } = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
     /// <summary>
-    /// Keys the server already signs with, taken into an EMPTY ring so the move to minted keys does not change
-    /// which key is producing on the day it happens. Normally set through
+    /// Keys the server already signs with, taken into a ring that has minted nothing yet so the move to minted keys
+    /// does not change which key is producing on the day it happens. Normally set through
     /// <see cref="IMintedKeysBuilder.AdoptExistingKeys"/> rather than written here.
     /// </summary>
     /// <remarks>
@@ -88,10 +88,11 @@ public sealed record MintedKeys
     /// while the minted key serves out its propagation window - the old key keeps signing, the new one is
     /// published, and the changeover happens once clients have had the window to fetch it.
     /// <para>
-    /// Adoption happens only into an empty ring. That is what makes leaving the call in place harmless: once the
-    /// ring holds anything the keys are never taken again, so a key that has since retired is not resurrected,
+    /// Adoption happens only until the ring holds its first minted key. That is what makes leaving the call in place
+    /// harmless: from then on the keys are never taken again, so a key that has since retired is not resurrected,
     /// and pods racing to adopt settle it the same way they settle minting - one insert wins and the rest drop
-    /// what they built.
+    /// what they built. Until then every refresh takes the whole set again, so a set whose writing stopped partway
+    /// is completed by the next refresh.
     /// </para>
     /// </remarks>
     public IReadOnlyList<JsonWebKey> AdoptedKeys { get; init; } = [];

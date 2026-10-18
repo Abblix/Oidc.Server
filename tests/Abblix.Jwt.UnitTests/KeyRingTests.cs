@@ -991,11 +991,11 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// Adoption happens only into an empty ring, which is what makes leaving the call in a host's registration
-    /// harmless: a key the ring has since retired is not brought back by the next refresh.
+    /// Adoption happens only until the ring holds a minted key, which is what makes leaving the call in a host's
+    /// registration harmless: a key the ring has since retired is not brought back by the next refresh.
     /// </summary>
     [Fact]
-    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAnything()
+    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAMintedKey()
     {
         var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
             with { KeyId = "from-certificate" };

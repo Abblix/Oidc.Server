@@ -32,8 +32,8 @@ public interface IMintedKeysBuilder
     /// <returns>The same builder, so the <c>PersistRingTo...</c> call follows.</returns>
     /// <remarks>
     /// This is a migration call and is meant to be deleted once the ring has rotated past the keys it names, but
-    /// nothing breaks if it is not: keys are taken only into an EMPTY ring, so from the first entry onward the
-    /// call does nothing. See <see cref="MintedKeys.AdoptedKeys"/> for what adoption does to the ordering.
+    /// nothing breaks if it is not: keys are taken only until the ring holds its first minted key, so from then on
+    /// the call does nothing. See <see cref="MintedKeys.AdoptedKeys"/> for what adoption does to the ordering.
     /// </remarks>
     IMintedKeysBuilder AdoptExistingKeys(params JsonWebKey[] keys);
 }

@@ -11,7 +11,7 @@ namespace Abblix.Jwt.ExternalKeys;
 /// One refresh of a ring (Pipeline): adopt, mint, read again, open, retire, in that order. It holds no
 /// partition of its own, so one serves every ring of a policy.
 /// </summary>
-/// <param name="adoption">Seeds an empty ring with the keys a host hands over.</param>
+/// <param name="adoption">Seeds a ring that has minted nothing yet with the keys a host hands over.</param>
 /// <param name="minting">Writes the keys due on the rotation grid.</param>
 /// <param name="opening">Opens the stored entries.</param>
 /// <param name="schedule">The clock and the periods a retired key is kept by.</param>
