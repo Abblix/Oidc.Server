@@ -208,8 +208,10 @@ public class EcdhEsKeyAgreementTests
 		Assert.Equal(recipientKey.Curve, ephemeralKey.Curve);
 		Assert.True(ephemeralKey.HasPublicKey);
 		Assert.False(ephemeralKey.HasPrivateKey);
-		Assert.False(((JsonObject)header.Json[JwtClaimTypes.EphemeralPublicKey]!)
-			.ContainsKey(JsonWebKeyPropertyNames.PrivateExponent));
+		// The wire form a recipient reads: the ephemeral key's own public members and nothing else
+		Assert.Equal(
+			["crv", "kty", "x", "y"],
+			((JsonObject)header.Json[JwtClaimTypes.EphemeralPublicKey]!).Select(member => member.Key).Order());
 
 		// Assert: the recipient re-derives exactly the same CEK from the published header
 		Assert.True(encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var rederivedKey));
