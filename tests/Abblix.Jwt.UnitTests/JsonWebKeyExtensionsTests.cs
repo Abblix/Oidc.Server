@@ -67,8 +67,8 @@ public class JsonWebKeyExtensionsTests
     /// <summary>
     /// A key declaring no algorithm is answerable, not unknown: RFC 7518 section 3.1 binds each signature
     /// algorithm to a key type and section 3.4 binds each ECDSA one to a single curve, so the material settles
-    /// what the declaration left open. This is the ordinary case for a certificate-imported key, which never
-    /// carries an <c>alg</c>.
+    /// what the declaration left open. This is the ordinary case for a key imported from an RSA certificate, which
+    /// never carries an <c>alg</c>.
     /// </summary>
     [Theory]
     [InlineData(SigningAlgorithms.RS256, true)]
