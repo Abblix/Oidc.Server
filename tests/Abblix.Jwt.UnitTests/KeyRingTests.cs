@@ -132,6 +132,13 @@ public sealed class KeyRingTests : IDisposable
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<KeyEnvelope>();
+
+        // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
+        // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
+        services.AddSingleton(timeProvider ?? new FakeTimeProvider(now ?? Now));
+        services.AddSingleton(
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }));
 
         // Opening an envelope is a custodian unwrap, so the external decryption backend must be on the seam: the
         // KEK is public-only, and that is what routes its unwrap out of process.
@@ -139,26 +146,16 @@ public sealed class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        var envelope = new KeyEnvelope(provider.GetRequiredService<IJsonWebTokenEncryptor>());
-
-        // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
-        // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
-        var time = timeProvider ?? new FakeTimeProvider(now ?? Now);
-
-        var ring = new KeyRing(
-            store,
-            provider.GetRequiredService<IKeyCustodian>(),
-            envelope,
-            new MintedKeys
-            {
-                KeyEncryptionKeyName = KeyEncryptionKeyName,
-                RotateEvery = TimeSpan.FromDays(30),
-                EncryptionAlgorithm = encryptionAlgorithm,
-                KeepRetiredFor = keepRetiredFor,
-                AdoptedKeys = adoptedKeys ?? [],
-            },
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
-            time);
+        var policy = new MintedKeys
+        {
+            KeyEncryptionKeyName = KeyEncryptionKeyName,
+            RotateEvery = TimeSpan.FromDays(30),
+            EncryptionAlgorithm = encryptionAlgorithm,
+            KeepRetiredFor = keepRetiredFor,
+            AdoptedKeys = adoptedKeys ?? [],
+        };
+        var steps = new KeyRingRefreshBuilder(provider, policy);
+        var ring = new KeyRing(store, steps.Refresh, steps.Schedule);
 
         return (ring, store);
     }
@@ -1018,6 +1015,27 @@ public sealed class KeyRingTests : IDisposable
             () => ring.RefreshAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("public-only", refusal.Message);
+    }
+
+    /// <summary>
+    /// A refused key refuses the whole set before anything is stored. Were the keys listed before it stored, the
+    /// next refresh would find the ring not empty, adopt nothing and refuse nothing, and the server would run on
+    /// without the refused key and with no error left to say so.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithNoPrivateHalf_LeavesNothingAdopted()
+    {
+        var complete = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "complete" };
+        var publicOnly = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            .Sanitize(includePrivateKeys: false) with { KeyId = "public-only" };
+
+        var (ring, store) = CreateRing(adoptedKeys: [complete, publicOnly]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Empty(store.Entries);
     }
 
     /// <summary>
