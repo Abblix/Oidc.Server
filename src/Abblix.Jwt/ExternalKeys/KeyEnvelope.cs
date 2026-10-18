@@ -79,7 +79,9 @@ internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
             bytes => bytes,
             error => throw new InvalidOperationException(
                 $"Cannot open a key envelope: the custodian did not unwrap it ({error.ErrorDescription}). The KEK " +
-                "version this envelope names may have been retired, which strands every key wrapped under it."));
+                "version this envelope names may have been retired, which strands every key wrapped under it, or " +
+                "the custodian does not serve the key wrap algorithm the envelope was sealed under, which its own " +
+                "log names."));
 
         return JsonSerializer.Deserialize<JsonWebKey>(Encoding.UTF8.GetString(plaintext))
             ?? throw new InvalidOperationException("A key envelope opened to a null key.");

@@ -21,6 +21,9 @@ internal static class LogEvents
 
         /// <summary>Key Vault rejected an unwrap, so the CEK could not be recovered.</summary>
         public const int UnwrapRejected = Base + 1;
+
+        /// <summary>A token named a key management algorithm Key Vault does not serve, so it was refused.</summary>
+        public const int AlgorithmNotServed = Base + 2;
     }
 
     /// <summary>Blob key-ring events. Range 1100-1199.</summary>

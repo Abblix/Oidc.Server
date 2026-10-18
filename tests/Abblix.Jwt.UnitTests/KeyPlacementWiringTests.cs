@@ -362,7 +362,7 @@ public class KeyPlacementWiringTests
             CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
-        public Task<byte[]> AgreeKeyAsync(
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 

@@ -136,7 +136,7 @@ public class ExternalSignerTests
             string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 
-        public Task<byte[]> AgreeKeyAsync(
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 

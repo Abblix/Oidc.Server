@@ -118,12 +118,18 @@ public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
     /// Unwraps (decrypts) a CEK with a Key Vault RSA key under the given key-management algorithm (RSA-OAEP-256,
     /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null when the vault rejects
     /// the ciphertext, so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
-    /// mitigation relies on. The JWE header is unused: an RSA unwrap needs only the ciphertext.
+    /// mitigation relies on, and for any other algorithm, without calling the vault. The JWE header is unused: an
+    /// RSA unwrap needs only the ciphertext.
     /// </summary>
     public Task<byte[]?> UnwrapKeyAsync(
         string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
     {
-        var encryptionAlgorithm = KeyVaultAlgorithms.ForUnwrapping(algorithm);
+        // The algorithm is the token sender's choice, so one the vault does not serve is a token that does not open.
+        if (KeyVaultAlgorithms.ForUnwrapping(algorithm) is not { } encryptionAlgorithm)
+        {
+            LogAlgorithmNotServed(_logger, algorithm, keyId);
+            return Task.FromResult<byte[]?>(null);
+        }
 
         // The rejected-ciphertext catch stays INSIDE the classification, and the order is the whole point: a 400
         // must become null before anything reads it as a custodian failure, or the padding-oracle mitigation is
@@ -152,13 +158,16 @@ public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
     }
 
     /// <summary>
-    /// Derives the ECDH-ES shared secret. Azure Key Vault exposes no key-agreement primitive, so this store does
-    /// not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE) can.
+    /// Refuses the ECDH-ES agreement with null. Azure Key Vault exposes no key-agreement primitive, so this store
+    /// does not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE)
+    /// can.
     /// </summary>
-    public Task<byte[]> AgreeKeyAsync(
+    public Task<byte[]?> AgreeKeyAsync(
         string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
-        => throw new NotSupportedException(
-            "Azure Key Vault exposes no ECDH key-agreement primitive; ECDH-ES is not supported by this store.");
+    {
+        LogAlgorithmNotServed(_logger, algorithm, keyId);
+        return Task.FromResult<byte[]?>(null);
+    }
 
     /// <summary>
     /// Enumerates every enabled version of the Key Vault key as a public-only JWK (RSA or EC, per the key type),

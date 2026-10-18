@@ -13,6 +13,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Abblix.Tests.Shared;
 using Xunit;
 using Abblix.Jwt.ExternalKeys;
 
@@ -303,32 +304,51 @@ public sealed class VaultTransitClientTests : IDisposable
 
     /// <summary>
     /// The store refuses ECDH-ES rather than pretending: Transit exposes no key-agreement primitive, so a
-    /// silent fallback would derive a shared secret that is not the one the peer derived, and the failure
-    /// would surface as an undecryptable token far from its cause.
+    /// fallback would derive a shared secret that is not the one the peer derived. The refusal is a null, as for
+    /// any token that does not open: the algorithm is the sender's choice, so a thrown refusal would let any
+    /// sender turn a token into a server fault.
     /// </summary>
     [Fact]
     public async Task AgreeKeyAsync_IsRefused_BecauseTransitHasNoAgreementPrimitive()
     {
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
+        var logger = new RecordingLogger<TransitCustodian>();
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).AgreeKeyAsync(
+        var secret = await ClientOver(handler, logger).AgreeKeyAsync(
             "oidc-enc:1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
 
+        Assert.Null(secret);
         Assert.Null(handler.LastRequest);
+
+        // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
+        // record naming the algorithm, or the failure reads as tokens encrypted to another key.
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
-    [Fact]
-    public async Task DecryptAsync_RejectsUnsupportedAlgorithm_WithoutCallingTransit()
+    /// <summary>
+    /// Transit decrypts under RSA-OAEP-256 only, and a token naming RSA-OAEP or RSA1_5 for the same RSA key is the
+    /// sender's choice: it is refused like any token that does not open, without calling Transit.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep)]
+    public async Task DecryptAsync_RefusesAnAlgorithmTransitDoesNotServe_WithoutCallingTransit(string algorithm)
     {
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
-        var client = ClientOver(handler);
+        var logger = new RecordingLogger<TransitCustodian>();
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => client.UnwrapKeyAsync(
-            "oidc-enc:1", EncryptionAlgorithms.KeyManagement.Rsa1_5, new JsonWebTokenHeader(new JsonObject()),
-            [1], TestContext.Current.CancellationToken));
+        var key = await ClientOver(handler, logger).UnwrapKeyAsync(
+            "oidc-enc:1", algorithm, new JsonWebTokenHeader(new JsonObject()),
+            [1], TestContext.Current.CancellationToken);
 
+        Assert.Null(key);
         Assert.Null(handler.LastRequest);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]

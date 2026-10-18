@@ -58,6 +58,6 @@ public class KeyVaultAlgorithmsTests
         if (AlgorithmsVaultUnwraps.Contains(algorithm))
             Assert.Equal(algorithm, KeyVaultAlgorithms.ForUnwrapping(algorithm).ToString());
         else
-            Assert.Throws<NotSupportedException>(() => KeyVaultAlgorithms.ForUnwrapping(algorithm));
+            Assert.Null(KeyVaultAlgorithms.ForUnwrapping(algorithm));
     }
 }

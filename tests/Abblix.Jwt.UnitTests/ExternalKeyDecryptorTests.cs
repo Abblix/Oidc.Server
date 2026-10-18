@@ -207,6 +207,9 @@ public class ExternalKeyDecryptorTests
         public int UnwrapCalls { get; private set; }
         public int AgreeCalls { get; private set; }
 
+        /// <summary>Answers an agreement the way a custodian with no agreement primitive does.</summary>
+        public bool RefusesAgreement { get; init; }
+
         // This custodian holds only encryption keys, so the library never routes a signing operation here.
         public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
             => throw new NotSupportedException("This decryption custodian holds no signing keys.");
@@ -238,16 +241,19 @@ public class ExternalKeyDecryptorTests
             return aes.TryUnwrapKey(encryptedKey, out var unwrapped) ? unwrapped : null;
         }
 
-        public Task<byte[]> AgreeKeyAsync(
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId,
             string algorithm,
             JsonWebKey ephemeralPublicKey,
             CancellationToken cancellationToken)
         {
             AgreeCalls++;
+            if (RefusesAgreement)
+                return Task.FromResult<byte[]?>(null);
+
             using var recipient = ((EllipticCurveJsonWebKey)fullKey).ToEcdh();
             using var ephemeral = ((EllipticCurveJsonWebKey)ephemeralPublicKey).ToEcdh();
-            return Task.FromResult(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
+            return Task.FromResult<byte[]?>(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
         }
 
         public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
@@ -333,6 +339,27 @@ public class ExternalKeyDecryptorTests
             TestContext.Current.CancellationToken);
 
         Assert.Null(key);
+    }
+
+    /// <summary>
+    /// A custodian that cannot agree refuses with null, and the token is refused the way a key that does not open
+    /// is: the algorithm is the sender's choice, so nothing the custodian answers may become a server fault.
+    /// </summary>
+    [Fact]
+    public async Task ExternalEcdhEs_ACustodianThatCannotAgree_RefusesTheToken()
+    {
+        var fullKey = JsonWebKeyFactory.CreateEllipticCurve(
+            EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs) with { KeyId = "ext-ec" };
+        var custodian = new FakeKeyCustodian(fullKey) { RefusesAgreement = true };
+        var decryptor = new ExternalKeyDecryptor(custodian, BuildProvider(custodian));
+        var (_, _, publicOnly, header) = ExternalEcdhEs();
+
+        var key = await decryptor.DecryptKeyAsync(
+            header, publicOnly, EncryptionAlgorithms.KeyManagement.EcdhEs, [],
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
+        Assert.Equal(1, custodian.AgreeCalls);
     }
 
     internal const string MalformedAgreementPartyUInfo = "apu";

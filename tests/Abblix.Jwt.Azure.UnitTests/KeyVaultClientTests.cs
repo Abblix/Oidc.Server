@@ -11,8 +11,10 @@ using Azure;
 using Azure.Identity;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Abblix.Tests.Shared;
 using Xunit;
 using Abblix.Jwt.ExternalKeys;
 
@@ -32,12 +34,15 @@ public sealed class KeyVaultClientTests : IDisposable
     // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
     private readonly List<HttpClient> _httpClients = [];
 
-    private KeyVaultClient ClientOver(StubHttpMessageHandler handler, TimeProvider? timeProvider = null)
+    private KeyVaultClient ClientOver(
+        StubHttpMessageHandler handler,
+        TimeProvider? timeProvider = null,
+        ILogger<KeyVaultClient>? logger = null)
     {
         var httpClient = new HttpClient(handler);
         _httpClients.Add(httpClient);
         return new KeyVaultClient(
-            NullLogger<KeyVaultClient>.Instance,
+            logger ?? NullLogger<KeyVaultClient>.Instance,
             new AzureKeyVaultOptions { KeyVaultUri = VaultUri },
             new StaticTokenCredential(),
             httpClient,
@@ -240,16 +245,23 @@ public sealed class KeyVaultClientTests : IDisposable
     public async Task UnwrapKeyAsync_RejectsUnsupportedAlgorithm_WithoutCallingTheVault()
     {
         // An algorithm this store cannot unwrap must be refused outright. Mapping it to something the vault does
-        // accept would decrypt under an algorithm the caller never asked for.
+        // accept would decrypt under an algorithm the caller never asked for. The refusal is a null, as for any
+        // token that does not open, since the algorithm is the sender's choice.
         var handler = new StubHttpMessageHandler(_ =>
             throw new InvalidOperationException("the vault must not be called for an unsupported algorithm"));
+        var logger = new RecordingLogger<KeyVaultClient>();
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).UnwrapKeyAsync(
+        var key = await ClientOver(handler, logger: logger).UnwrapKeyAsync(
             "oidc-enc/v1",
             EncryptionAlgorithms.KeyManagement.EcdhEs,
             new JsonWebTokenHeader(new JsonObject()),
             [5, 5],
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]
@@ -334,7 +346,8 @@ public sealed class KeyVaultClientTests : IDisposable
 
     /// <summary>
     /// The store refuses ECDH-ES rather than pretending: Key Vault exposes no key-agreement primitive, so a
-    /// silent fallback would derive a shared secret that is not the one the peer derived.
+    /// fallback would derive a shared secret that is not the one the peer derived. The refusal is a null, as for
+    /// any token that does not open, since the algorithm is the sender's choice.
     /// </summary>
     [Fact]
     public async Task AgreeKeyAsync_IsRefused_BecauseKeyVaultHasNoAgreementPrimitive()
@@ -343,9 +356,19 @@ public sealed class KeyVaultClientTests : IDisposable
         var handler = new StubHttpMessageHandler(_ =>
             StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).AgreeKeyAsync(
+        var logger = new RecordingLogger<KeyVaultClient>();
+
+        var secret = await ClientOver(handler, logger: logger).AgreeKeyAsync(
             "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(secret);
+
+        // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
+        // record naming the algorithm, or the failure reads as tokens encrypted to another key.
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]

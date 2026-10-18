@@ -24,6 +24,9 @@ internal static class LogEvents
 
         /// <summary>Transit could not answer, and the endpoints were told whether to come back.</summary>
         public const int CustodianFailed = Base + 2;
+
+        /// <summary>A token named a key management algorithm Transit does not serve, so it was refused.</summary>
+        public const int AlgorithmNotServed = Base + 3;
     }
 
     /// <summary>KV key-ring events. Range 1100-1199.</summary>

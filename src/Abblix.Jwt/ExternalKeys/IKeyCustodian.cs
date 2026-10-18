@@ -53,9 +53,11 @@ public interface IKeyCustodian
     /// <param name="header">The JWE header; AES-GCM-KW reads its <c>iv</c> / <c>tag</c> parameters from it.</param>
     /// <param name="encryptedKey">The wrapped or RSA-encrypted CEK from the JWE Encrypted Key.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
-    /// <returns>The recovered CEK, or null on any failure. Returning null rather than throwing keeps a
-    /// decryption failure indistinguishable from a wrong key, which the RFC 7516 section 11.5 mitigation upstream
-    /// relies on to close the Bleichenbacher / padding-oracle side channel.</returns>
+    /// <returns>The recovered CEK, or null on any failure, an algorithm the custodian does not serve included.
+    /// Returning null rather than throwing keeps a decryption failure indistinguishable from a wrong key, which the
+    /// RFC 7516 section 11.5 mitigation upstream relies on to close the Bleichenbacher / padding-oracle side
+    /// channel; and the algorithm is the token sender's choice, so a thrown refusal would let any sender turn a
+    /// token into a server fault.</returns>
     Task<byte[]?> UnwrapKeyAsync(
         string keyId,
         string algorithm,
@@ -72,8 +74,10 @@ public interface IKeyCustodian
     /// <param name="algorithm">The JWE <c>alg</c> value (ECDH-ES or an ECDH-ES+A*KW variant).</param>
     /// <param name="ephemeralPublicKey">The originator's ephemeral public key from the <c>epk</c> header.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
-    /// <returns>The raw ECDH shared secret Z (the agreement's field-sized X-coordinate).</returns>
-    Task<byte[]> AgreeKeyAsync(
+    /// <returns>The raw ECDH shared secret Z (the agreement's field-sized X-coordinate), or null when the custodian
+    /// cannot agree with this key: like the algorithm of an unwrap, ECDH-ES is the token sender's choice, so a
+    /// custodian with no agreement primitive refuses the token rather than faulting on it.</returns>
+    Task<byte[]?> AgreeKeyAsync(
         string keyId,
         string algorithm,
         JsonWebKey ephemeralPublicKey,

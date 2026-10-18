@@ -1,14 +1,13 @@
 // Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
-// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+// SPDX-License-Identifier: Apache-2.0
 //
-// This software is provided 'as-is', without any express or implied warranty.
-// Licensing terms, including free-of-charge use, are stated in LICENSE.md
-// in the official repository at https://github.com/Abblix/Oidc.Server
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
 
 using Microsoft.Extensions.Logging;
 
-namespace Abblix.Jwt.Vault.UnitTests;
+namespace Abblix.Tests.Shared;
 
 /// <summary>
 /// Keeps what was logged, so a test can assert on the line an operator will read. A message that nobody checks

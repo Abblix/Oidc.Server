@@ -43,7 +43,10 @@ internal sealed class ExternalEcdhEsRecipient(IKeyCustodian custodian, EcdhEsCon
                 || contentKey.DerivationFor(header, algorithm, encryptedKey) is not { } derivation)
                 return null;
 
-            var sharedSecretZ = await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken);
+            if (await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken)
+                is not { } sharedSecretZ)
+                return null;
+
             try
             {
                 return EcdhEsContentKey.From(sharedSecretZ, header, derivation, encryptedKey);
