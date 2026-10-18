@@ -34,12 +34,12 @@ internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IData
         //
         // Measured from the modulus rather than from RSA.KeySize, which reports the imported octet count -
         // an external key is public-only and its modulus is all there is to read.
-        if (key is RsaJsonWebKey rsaKey && rsaKey.ModulusBitLength() is var bits and < JsonWebKeyExtensions.MinimumRsaKeyBits)
+        if (key is RsaJsonWebKey rsaKey && rsaKey.ModulusBitLength() is var bits and < KeySizeFloors.MinimumRsaKeyBits)
         {
             throw new ArgumentException(
                 $"The signing key (kid={key.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
-                $"least {JsonWebKeyExtensions.MinimumRsaKeyBits} bits " +
-                $"{JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm)}, and this deployment would " +
+                $"least {KeySizeFloors.MinimumRsaKeyBits} bits " +
+                $"{KeySizeFloors.RsaSectionForOrNothing(algorithm)}, and this deployment would " +
                 "not be able to verify what it signed with this key.",
                 nameof(key));
         }

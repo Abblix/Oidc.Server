@@ -13,7 +13,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Verifies how <see cref="JsonWebKeyExtensions.ToJsonWebKey"/> derives the JWK <c>use</c> from a certificate's
+/// Verifies how <see cref="CertificateJsonWebKeyExtensions.ToJsonWebKey"/> derives the JWK <c>use</c> from a certificate's
 /// Key Usage extension: one value for a single-purpose certificate, and no <c>use</c> (never a multi-valued
 /// string such as "sig enc") for one that permits both signing and encryption, per RFC 7517 &#167;4.2.
 /// </summary>
@@ -107,7 +107,7 @@ public class JsonWebKeyExtensionsTests
 
     /// <summary>
     /// Every algorithm this library recognizes, except "none", is met by some key: the requirement table behind
-    /// <see cref="JsonWebKeyExtensions.SupportsAlgorithm"/> is held complete here rather than by a default arm,
+    /// <see cref="AlgorithmSupportExtensions.SupportsAlgorithm"/> is held complete here rather than by a default arm,
     /// so an algorithm added to either catalog fails this test until its key requirement is written down.
     /// </summary>
     [Theory]

@@ -50,11 +50,11 @@ internal static class SigningKeyFloor
             (int Bits, int Floor)? measured = key switch
             {
                 RsaJsonWebKey rsaKey
-                    when JsonWebKeyExtensions.MinimumRsaKeyBitsFor(algorithm) is { } floor
+                    when KeySizeFloors.MinimumRsaKeyBitsFor(algorithm) is { } floor
                     => (rsaKey.ModulusBitLength(), floor),
 
                 OctetJsonWebKey { KeyValue: { } keyValue }
-                    when JsonWebKeyExtensions.MinimumHmacKeyBits(algorithm) is { } floor
+                    when KeySizeFloors.MinimumHmacKeyBits(algorithm) is { } floor
                     => (keyValue.Length << 3, floor),
 
                 _ => null,
