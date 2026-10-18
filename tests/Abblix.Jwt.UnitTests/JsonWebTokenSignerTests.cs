@@ -7,6 +7,7 @@
 
 using System.Buffers.Text;
 using System.Text.Json.Nodes;
+using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,12 +22,18 @@ public class JsonWebTokenSignerTests
     private static readonly JsonWebKey SigningKey =
         JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
-    private static IJsonWebTokenSigner Signer()
+    private static IJsonWebTokenSigner Signer(IKeyCustodian? custodian = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
+        if (custodian != null)
+        {
+            services.AddSingleton(custodian);
+            services.ComposeExternalKeyBackends();
+        }
+
         return services.BuildServiceProvider().GetRequiredService<IJsonWebTokenSigner>();
     }
 
@@ -69,7 +76,11 @@ public class JsonWebTokenSignerTests
         Assert.False(header.ContainsKey("kid"));
     }
 
-    /// <summary>A header asking for an unsigned token contradicts the key it is handed, so nothing is issued.</summary>
+    /// <summary>
+    /// A header asking for an unsigned token contradicts the key it is handed, so nothing is issued. The key's private
+    /// half is held by a custodian that signs whatever it is asked to, as a host's own may: nothing after the signer
+    /// would refuse, and the token would go out marked unsigned while carrying a signature.
+    /// </summary>
     [Fact]
     public async Task AHeaderNamingNone_WithAKey_IsRefused()
     {
@@ -77,10 +88,12 @@ public class JsonWebTokenSignerTests
         token.Header.Algorithm = SigningAlgorithms.None;
 
         // A key declaring no algorithm, so the refusal is the unsigned header's and not a mismatch with the key
-        var keyNamingNoAlgorithm = SigningKey with { Algorithm = null };
+        var publicOnlyKey = SigningKey.Sanitize(includePrivateKeys: false) with { Algorithm = null };
+        var custodian = new CountingCustodian();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Signer().SignAsync(token, keyNamingNoAlgorithm, TestContext.Current.CancellationToken));
+            () => Signer(custodian).SignAsync(token, publicOnlyKey, TestContext.Current.CancellationToken));
+        Assert.Equal(0, custodian.SignCalls);
     }
 
     /// <summary>A header naming another algorithm than the key declares is refused rather than signed under either.</summary>
@@ -107,5 +120,35 @@ public class JsonWebTokenSignerTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => Signer().ValidateAsync(
             ["e30", "e30", "AQAB"], header, new JsonWebKey[] { keyWithoutPublicHalf }.ToAsyncEnumerable(),
             TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>Signs under whatever algorithm it is asked for, checking nothing, and counts the requests.</summary>
+    private sealed class CountingCustodian : IKeyCustodian
+    {
+        public int SignCalls { get; private set; }
+
+        public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+        {
+            SignCalls++;
+            return Task.FromResult<byte[]>([1]);
+        }
+
+        public Task<byte[]?> UnwrapKeyAsync(
+            string keyId,
+            string algorithm,
+            JsonWebTokenHeader header,
+            byte[] encryptedKey,
+            CancellationToken cancellationToken)
+            => Task.FromResult<byte[]?>(null);
+
+        public Task<byte[]?> AgreeKeyAsync(
+            string keyId,
+            string algorithm,
+            JsonWebKey ephemeralPublicKey,
+            CancellationToken cancellationToken)
+            => Task.FromResult<byte[]?>(null);
+
+        public IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(string keyName, CancellationToken cancellationToken)
+            => AsyncEnumerable.Empty<KeyVersion>();
     }
 }
