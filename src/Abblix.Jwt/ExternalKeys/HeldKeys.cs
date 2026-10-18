@@ -29,7 +29,7 @@ internal sealed class HeldKeys(KeyRingSchedule schedule)
             .ProduceFirst(opened => opened.CreatedAt, schedule.Now, schedule.Propagation)
             .Select(opened => opened.Key.Sanitize(includePrivateKeys));
 
-    /// <inheritdoc />
+    /// <inheritdoc cref="IKeyRing.NewestKeyCreatedAt" />
     /// <remarks>
     /// Read off the keys this instance has opened, which is what it would serve if asked right now, rather than
     /// off the store: a custodian that cannot be reached must not read as a ring that has stopped rotating.

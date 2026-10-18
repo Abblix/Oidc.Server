@@ -10,7 +10,7 @@ using Abblix.DependencyInjection;
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// Composes the steps of a refresh for one policy (Builder): sealing and opening share the key-encryption key
+/// Composes the steps of a refresh for one policy (Composition Root): sealing and opening share the key-encryption key
 /// lookup, and every step that dates a key reads the same schedule.
 /// </summary>
 internal sealed class KeyRingRefreshBuilder

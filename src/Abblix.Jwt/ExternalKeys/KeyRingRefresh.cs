@@ -8,7 +8,7 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// One refresh of a ring (Template Method): adopt, mint, read again, open, retire, in that order. It holds no
+/// One refresh of a ring (Pipeline): adopt, mint, read again, open, retire, in that order. It holds no
 /// partition of its own, so one serves every ring of a policy.
 /// </summary>
 /// <param name="adoption">Seeds an empty ring with the keys a host hands over.</param>

@@ -8,7 +8,7 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// Builds the ring of a partition (Factory Method), composed of the steps of a refresh.
+/// Builds the ring of a partition (Simple Factory), composed of the steps of a refresh.
 /// </summary>
 internal sealed class KeyRingFactory
 {
