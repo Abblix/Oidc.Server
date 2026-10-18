@@ -17,6 +17,9 @@ namespace Abblix.Jwt.Encryption;
 /// <param name="algorithm">The PBES2 algorithm, which fixes the PRF and the key size and salts the derivation.</param>
 internal sealed class Pbes2KeyDerivation(string algorithm)
 {
+	/// <summary>
+	/// The PBKDF2 pseudorandom function and the derived KEK size for this algorithm.
+	/// </summary>
 	private readonly (HashAlgorithmName Prf, int KeyEncryptionKeySize) _parameters = algorithm switch
 	{
 		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW => (HashAlgorithmName.SHA256, 16),

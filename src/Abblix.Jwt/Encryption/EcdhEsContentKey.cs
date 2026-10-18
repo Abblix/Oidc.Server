@@ -60,24 +60,19 @@ internal sealed class EcdhEsContentKey(IServiceProvider serviceProvider)
 	}
 
 	/// <summary>
-	/// The Content Encryption Key the shared secret <paramref name="sharedSecretZ"/> yields under
-	/// <paramref name="algorithm"/>, or null when the token does not open with it.
+	/// What the shared secret is to yield under <paramref name="algorithm"/>, or null when the token cannot be opened
+	/// whatever the secret: decided before the agreement, so a token that fails these checks costs no operation with
+	/// the private key, which in the external path is a call to the custodian.
 	/// </summary>
 	/// <remarks>
-	/// The key-wrapping variants derive a key encryption key of the size the algorithm names and unwrap the encrypted
-	/// key with it. Direct Key Agreement takes the derived key as the Content Encryption Key, so the encrypted key must
-	/// be empty and the key is sized for the content encryption algorithm 'enc' names, which is also the KDF's
-	/// AlgorithmID there.
+	/// The key-wrapping variants derive a key encryption key of the size the algorithm names. Direct Key Agreement
+	/// takes the derived key as the Content Encryption Key, so the Encrypted Key must be empty and the key is sized for
+	/// the content encryption algorithm 'enc' names, which is also the KDF's AlgorithmID there.
 	/// </remarks>
-	public byte[]? From(byte[] sharedSecretZ, JsonWebTokenHeader header, string algorithm, byte[] encryptedKey)
+	public EcdhEsDerivation? DerivationFor(JsonWebTokenHeader header, string algorithm, byte[] encryptedKey)
 	{
 		if (KeyWrapSize(algorithm) is { } keyEncryptionKeySize)
-		{
-			var keyEncryptionKey = Derive(sharedSecretZ, header, algorithm, keyEncryptionKeySize);
-			using var aes = Aes.Create();
-			aes.Key = keyEncryptionKey;
-			return aes.TryUnwrapKey(encryptedKey, out var contentEncryptionKey) ? contentEncryptionKey : null;
-		}
+			return new EcdhEsDerivation(algorithm, keyEncryptionKeySize, Unwraps: true);
 
 		if (encryptedKey.Length != 0)
 			return null;
@@ -87,7 +82,26 @@ internal sealed class EcdhEsContentKey(IServiceProvider serviceProvider)
 			    is not { } contentEncryptor)
 			return null;
 
-		return Derive(sharedSecretZ, header, contentEncryptionAlgorithm, contentEncryptor.KeySizeInBytes);
+		return new EcdhEsDerivation(contentEncryptionAlgorithm, contentEncryptor.KeySizeInBytes, Unwraps: false);
+	}
+
+	/// <summary>
+	/// The Content Encryption Key the shared secret <paramref name="sharedSecretZ"/> yields, or null when the
+	/// Encrypted Key does not unwrap with the derived key.
+	/// </summary>
+	public static byte[]? From(
+		byte[] sharedSecretZ,
+		JsonWebTokenHeader header,
+		EcdhEsDerivation derivation,
+		byte[] encryptedKey)
+	{
+		var derivedKey = Derive(sharedSecretZ, header, derivation.AlgorithmId, derivation.KeySizeInBytes);
+		if (!derivation.Unwraps)
+			return derivedKey;
+
+		using var aes = Aes.Create();
+		aes.Key = derivedKey;
+		return aes.TryUnwrapKey(encryptedKey, out var contentEncryptionKey) ? contentEncryptionKey : null;
 	}
 
 	/// <summary>

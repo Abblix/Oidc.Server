@@ -33,7 +33,7 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	public string Algorithm => algorithm;
 
 	/// <summary>
-	/// The PBKDF2 pseudorandom function and the derived KEK size for this algorithm.
+	/// Derives the key encryption key from the password, the same way on both sides.
 	/// </summary>
 	private readonly Pbes2KeyDerivation _derivation = new(algorithm);
 

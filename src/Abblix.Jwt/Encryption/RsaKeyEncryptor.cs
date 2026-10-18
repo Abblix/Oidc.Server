@@ -7,7 +7,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
-using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -26,13 +25,13 @@ namespace Abblix.Jwt.Encryption;
 /// This is a stateless service that can be registered as a singleton in DI.
 /// A Facade over <see cref="RsaKeySender"/> and <see cref="RsaKeyRecipient"/>, which do the two sides.
 /// </remarks>
-internal sealed class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm)
+internal sealed class RsaKeyEncryptor(string algorithm)
 	: IKeyManagementAlgorithm<RsaJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;
 
-	private readonly RsaKeySender _sender = new(logger, algorithm, PaddingFor(algorithm));
+	private readonly RsaKeySender _sender = new(algorithm, PaddingFor(algorithm));
 
 	private readonly RsaKeyRecipient _recipient = new(PaddingFor(algorithm));
 

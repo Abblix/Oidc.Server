@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Security.Cryptography;
-using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -14,16 +13,14 @@ namespace Abblix.Jwt.Encryption;
 /// The encrypting side of RSA key encryption (RFC 7518 sections 4.2 and 4.3): refuses a key too short for the
 /// algorithm and encrypts the Content Encryption Key under the recipient's public key.
 /// </summary>
-/// <param name="logger">Where a key that did not fit is explained.</param>
 /// <param name="algorithm">The RSA key encryption algorithm.</param>
 /// <param name="padding">The padding the algorithm names.</param>
-internal sealed class RsaKeySender(ILogger logger, string algorithm, RSAEncryptionPadding padding)
+internal sealed class RsaKeySender(string algorithm, RSAEncryptionPadding padding)
 {
-	private readonly RsaKeyEncryptionFailure _failure = new(logger, algorithm);
-
 	/// <summary>The JWE Encrypted Key: <paramref name="keyToEncrypt"/> under <paramref name="rsaKey"/>.</summary>
 	/// <exception cref="InvalidOperationException">The key's modulus is shorter than the algorithm requires.</exception>
-	/// <exception cref="CryptographicException">The key to encrypt does not fit in the padding.</exception>
+	/// <exception cref="CryptographicException">The platform refused the key to encrypt; a key longer than the
+	/// padding leaves room for is refused this way, with the platform naming the limit.</exception>
 	public byte[] EncryptKey(RsaJsonWebKey rsaKey, byte[] keyToEncrypt)
 	{
 		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on
@@ -44,7 +41,7 @@ internal sealed class RsaKeySender(ILogger logger, string algorithm, RSAEncrypti
 		// RSA encryption output is always the key size in bytes
 		var encryptedKey = new byte[rsa.KeySize / 8];
 		if (!rsa.TryEncrypt(keyToEncrypt, encryptedKey, padding, out var bytesWritten))
-			throw _failure.Of(keyToEncrypt, rsa);
+			throw new CryptographicException($"The platform did not encrypt the key using {algorithm}.");
 
 		return bytesWritten < encryptedKey.Length ? encryptedKey[..bytesWritten] : encryptedKey;
 	}

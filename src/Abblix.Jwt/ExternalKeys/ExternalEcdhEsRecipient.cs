@@ -39,13 +39,14 @@ internal sealed class ExternalEcdhEsRecipient(IKeyCustodian custodian, EcdhEsCon
         // null, as it does in process, rather than throwing.
         try
         {
-            if (EcdhEsContentKey.EphemeralKeyFor(header, recipientKey) is not { } ephemeralKey)
+            if (EcdhEsContentKey.EphemeralKeyFor(header, recipientKey) is not { } ephemeralKey
+                || contentKey.DerivationFor(header, algorithm, encryptedKey) is not { } derivation)
                 return null;
 
             var sharedSecretZ = await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken);
             try
             {
-                return contentKey.From(sharedSecretZ, header, algorithm, encryptedKey);
+                return EcdhEsContentKey.From(sharedSecretZ, header, derivation, encryptedKey);
             }
             finally
             {

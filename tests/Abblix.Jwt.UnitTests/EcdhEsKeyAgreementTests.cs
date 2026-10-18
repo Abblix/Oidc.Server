@@ -100,6 +100,23 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
+	/// 'apu' and 'epk' come from the token, so a malformed one is a refusal of it rather than a fault: RFC 7516
+	/// section 11.5 has the caller answer it like any key that does not open.
+	/// </summary>
+	[Theory]
+	[InlineData(ExternalKeyDecryptorTests.MalformedAgreementPartyUInfo)]
+	[InlineData(ExternalKeyDecryptorTests.MalformedEphemeralKey)]
+	public void TryDecryptKey_AMalformedHeader_Fails(string malformed)
+	{
+		var header = CreateAppendixCHeader();
+		ExternalKeyDecryptorTests.Malform(header, malformed);
+
+		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
+
+		Assert.False(encryptor.TryDecryptKey(header, CreateAppendixCRecipientKey(), [], out _));
+	}
+
+	/// <summary>
 	/// RFC 7518 section 4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct -
 	/// equal values collapse the producer and recipient identities the KDF is meant to bind.
 	/// </summary>

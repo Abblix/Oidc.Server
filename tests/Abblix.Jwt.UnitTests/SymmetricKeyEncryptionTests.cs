@@ -526,12 +526,37 @@ public class SymmetricKeyEncryptionTests
 
 		var header = new JsonWebTokenHeader(new JsonObject
 		{
-			["iv"] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(ivSize)),
-			["tag"] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(tagSize)),
+			[JwtClaimTypes.KeyWrapInitializationVector] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(ivSize)),
+			[JwtClaimTypes.KeyWrapAuthenticationTag] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(tagSize)),
 		});
 
 		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
 
 		Assert.False(encryptor.TryDecryptKey(header, keyEncryptionKey, CryptoRandom.GetRandomBytes(32), out _));
+	}
+
+	/// <summary>
+	/// The key encryption key must be the size the algorithm names. A shorter key is a valid AES key too, so without the
+	/// size check a 128-bit key would open A256GCMKW tokens; this wraps a key with a 128-bit key and presents it as
+	/// A256GCMKW, where it must not open.
+	/// </summary>
+	[Fact]
+	public void AesGcmKeyWrap_DecryptKey_RefusesAKeyOfAnotherSize()
+	{
+		var keyValue = CryptoRandom.GetRandomBytes(16);
+		var keyEncryptionKey = new OctetJsonWebKey
+		{
+			KeyId = "kek",
+			Algorithm = EncryptionAlgorithms.KeyManagement.Aes128Gcmkw,
+			KeyValue = keyValue,
+		};
+		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
+		var header = new JsonWebTokenHeader(new JsonObject());
+		var encryptedKey = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw)
+			.EncryptKey(header, keyEncryptionKey, contentEncryptionKey);
+
+		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+
+		Assert.False(encryptor.TryDecryptKey(header, keyEncryptionKey, encryptedKey, out _));
 	}
 }

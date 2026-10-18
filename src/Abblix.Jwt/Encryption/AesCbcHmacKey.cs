@@ -22,22 +22,16 @@ namespace Abblix.Jwt.Encryption;
 /// <param name="algorithm">The AES-CBC-HMAC algorithm, which fixes the key size and the hash.</param>
 internal sealed class AesCbcHmacKey(string algorithm)
 {
-	private readonly HashAlgorithmName _hash = algorithm switch
+	private readonly (HashAlgorithmName Hash, int HalfSize) _parameters = algorithm switch
 	{
-		EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256 => HashAlgorithmName.SHA256,
-		EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384 => HashAlgorithmName.SHA384,
-		EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512 => HashAlgorithmName.SHA512,
+		EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256 => (HashAlgorithmName.SHA256, 128 / 8),
+		EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384 => (HashAlgorithmName.SHA384, 192 / 8),
+		EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512 => (HashAlgorithmName.SHA512, 256 / 8),
 		_ => throw new InvalidOperationException($"Unsupported AES-CBC-HMAC algorithm: {algorithm}"),
 	};
 
 	/// <summary>The size in bytes of each half of the Content Encryption Key.</summary>
-	public int HalfSize { get; } = algorithm switch
-	{
-		EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256 => 128 / 8,
-		EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384 => 192 / 8,
-		EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512 => 256 / 8,
-		_ => throw new InvalidOperationException($"Unsupported AES-CBC-HMAC algorithm: {algorithm}"),
-	};
+	public int HalfSize => _parameters.HalfSize;
 
 	/// <summary>
 	/// The MAC key (the first half of <paramref name="contentEncryptionKey"/>) and the encryption key (the second),
@@ -57,6 +51,6 @@ internal sealed class AesCbcHmacKey(string algorithm)
 
 		var macInput = ArrayExtensions.Concat(additionalAuthenticatedData, initializationVector, ciphertext, al);
 
-		return CryptographicOperations.HmacData(_hash, macKey, macInput)[..HalfSize];
+		return CryptographicOperations.HmacData(_parameters.Hash, macKey, macInput)[..HalfSize];
 	}
 }

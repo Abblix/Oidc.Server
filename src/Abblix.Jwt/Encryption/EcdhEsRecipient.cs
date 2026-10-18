@@ -29,7 +29,8 @@ internal sealed class EcdhEsRecipient(string algorithm, EcdhEsContentKey content
 	{
 		try
 		{
-			if (EcdhEsContentKey.EphemeralKeyFor(header, recipientKey) is not { } ephemeralKey)
+			if (EcdhEsContentKey.EphemeralKeyFor(header, recipientKey) is not { } ephemeralKey
+			    || contentKey.DerivationFor(header, algorithm, encryptedKey) is not { } derivation)
 				return null;
 
 			using var recipient = recipientKey.ToEcdh();
@@ -37,7 +38,7 @@ internal sealed class EcdhEsRecipient(string algorithm, EcdhEsContentKey content
 			var sharedSecretZ = recipient.DeriveRawSecretAgreement(ephemeral.PublicKey);
 			try
 			{
-				return contentKey.From(sharedSecretZ, header, algorithm, encryptedKey);
+				return EcdhEsContentKey.From(sharedSecretZ, header, derivation, encryptedKey);
 			}
 			finally
 			{
