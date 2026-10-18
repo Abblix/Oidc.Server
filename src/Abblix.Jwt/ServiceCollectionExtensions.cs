@@ -67,7 +67,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJsonWebTokens(this IServiceCollection services)
     {
         services.TryAddSingleton<IJsonWebTokenCreator, JsonWebTokenCreator>();
-        services.TryAddSingleton<IJsonWebTokenValidator, JsonWebTokenValidator>();
+        services.AddTokenValidation();
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<JweEncryption>();
         services.TryAddSingleton<JweDecryption>();

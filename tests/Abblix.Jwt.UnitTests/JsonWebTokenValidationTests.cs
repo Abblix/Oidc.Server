@@ -362,7 +362,7 @@ public partial class JsonWebTokenValidationTests
     /// JWS on the issuer-keys trust branch without a ResolveIssuerSigningKeys resolver returns
     /// <see cref="JwtError.InvalidToken"/> rather than throwing
     /// <see cref="InvalidOperationException"/>. Closes the second of the two NotNull-throw
-    /// hotspots in <c>JsonWebTokenValidator</c>.
+    /// hotspots, now in <c>JwsSignatureValidator</c>.
     /// </summary>
     [Fact]
     public async Task JwsWithoutSigningKeysResolver_ReturnsInvalidTokenError()
@@ -381,6 +381,40 @@ public partial class JsonWebTokenValidationTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("ResolveIssuerSigningKeys", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// The header links run before the claims links, so a token whose signature does not verify is refused before
+    /// any check the host supplied is invoked: those are the host's code, and a forged token must not reach it.
+    /// The control is the same token signed with the right key, which does reach both checks.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task TheHostsChecks_RunOnlyForATokenWhoseSignatureVerifies(bool signedWithTheRightKey, bool reached)
+    {
+        var jwt = await IssueToken(CreateValidToken(), signedWithTheRightKey ? SigningKey : WrongSigningKey);
+        var issuerChecked = false;
+        var audienceChecked = false;
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ValidateIssuer = _ =>
+            {
+                issuerChecked = true;
+                return Task.FromResult(true);
+            },
+            ValidateAudience = _ =>
+            {
+                audienceChecked = true;
+                return Task.FromResult(true);
+            },
+        };
+
+        var result = await ServiceProvider.GetRequiredService<IJsonWebTokenValidator>().ValidateAsync(jwt, parameters);
+
+        Assert.Equal(signedWithTheRightKey, result.TryGetSuccess(out _));
+        Assert.Equal(reached, issuerChecked);
+        Assert.Equal(reached, audienceChecked);
     }
 
     /// <summary>
@@ -831,7 +865,7 @@ public partial class JsonWebTokenValidationTests
 
         // Platform-specific behavior: Windows throws ArgumentOutOfRangeException for out-of-range timestamps
         // Linux may silently accept them. Both are acceptable - the key is no unhandled exception occurs.
-        // The try-catch in JsonWebTokenValidator ensures graceful handling on all platforms.
+        // The try-catch in JsonWebTokenPayload ensures graceful handling on all platforms.
         if (result.TryGetFailure(out var error))
         {
             // Expected on Windows: validation fails with InvalidToken error
@@ -870,7 +904,7 @@ public partial class JsonWebTokenValidationTests
 
         // Platform-specific behavior: Windows throws ArgumentOutOfRangeException for out-of-range timestamps
         // Linux may silently accept them. Both are acceptable - the key is no unhandled exception occurs.
-        // The try-catch in JsonWebTokenValidator ensures graceful handling on all platforms.
+        // The try-catch in JsonWebTokenPayload ensures graceful handling on all platforms.
         if (result.TryGetFailure(out var error))
         {
             // Expected on Windows: validation fails with InvalidToken error
@@ -912,7 +946,7 @@ public partial class JsonWebTokenValidationTests
 
         // Platform-specific behavior: Windows throws ArgumentOutOfRangeException for out-of-range timestamps
         // Linux may silently accept them. Both are acceptable - the key is no unhandled exception occurs.
-        // The try-catch in JsonWebTokenValidator ensures graceful handling on all platforms.
+        // The try-catch in JsonWebTokenPayload ensures graceful handling on all platforms.
         if (result.TryGetFailure(out var error))
         {
             // Expected on Windows: validation fails with InvalidToken error
