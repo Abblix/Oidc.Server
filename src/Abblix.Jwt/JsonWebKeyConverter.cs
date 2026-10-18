@@ -35,7 +35,7 @@ namespace Abblix.Jwt;
 /// <item><description>Drop the derived <c>[JsonInclude]</c> override: "kty" disappears whenever a
 /// concrete subtype is serialized directly, because <c>[JsonPolymorphic]</c> writes the
 /// discriminator only when the serializer sees the base type.</description></item>
-/// <item><description>Either way, reading would need "kty" as the object's first member unless the host
+/// <item><description>Dropping it, reading would also need "kty" as the object's first member unless the host
 /// enables <c>AllowOutOfOrderMetadataProperties</c>, which a library cannot impose: a key in RFC 7638
 /// member order (e, kty, n), or one from another party's JWK Set, would fail to read.</description></item>
 /// </list>
@@ -46,7 +46,7 @@ namespace Abblix.Jwt;
 /// regression test that covers polymorphic AND direct serialization paths.
 /// </para>
 /// </remarks>
-public class JsonWebKeyConverter : JsonConverter<JsonWebKey>
+public sealed class JsonWebKeyConverter : JsonConverter<JsonWebKey>
 {
     /// <summary>
     /// Reads a <see cref="JsonWebKey"/> from the JSON payload, dispatching to the matching
