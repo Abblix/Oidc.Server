@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Collections.Concurrent;
-using Abblix.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -26,6 +25,7 @@ internal sealed class KeyRings(
     IKeyRingStore store,
     IKeyRingPartitions partitionsKept) : IKeyRings
 {
+    private readonly KeyRingFactory _factory = new(serviceProvider, policy, store);
     private readonly ConcurrentDictionary<string, KeyRing> _rings = new(StringComparer.Ordinal);
 
     // When each partition was last refreshed by an opening: the refresh loop's first round need not refresh such a
@@ -157,7 +157,7 @@ internal sealed class KeyRings(
 
         // Kept only once refreshed, so a ring whose first key could not be minted is built again on the next try
         // rather than served empty
-        var ring = _rings.TryGetValue(partition, out var built) ? built : Build(partition);
+        var ring = _rings.TryGetValue(partition, out var built) ? built : _factory.Build(partition);
         await ring.RefreshAsync(new PartitionedKeyRingStore(round, partition), cancellationToken);
         _rings.TryAdd(partition, ring);
         _openedAt[partition] = Now;
@@ -216,7 +216,7 @@ internal sealed class KeyRings(
     /// issuer was served finishes with that issuer's keys rather than failing for want of them.
     /// </remarks>
     public KeyRing Ring(string partition)
-        => _rings.TryGetValue(partition, out var built) ? built : _rings.GetOrAdd(Kept(partition), Build);
+        => _rings.TryGetValue(partition, out var built) ? built : _rings.GetOrAdd(Kept(partition), _factory.Build);
 
     /// <summary>
     /// <paramref name="partition"/>, when the ring keeps it.
@@ -238,21 +238,4 @@ internal sealed class KeyRings(
             : $"The key ring keeps no partition '{partition}' among the {kept.Count} it keeps.");
     }
 
-    private KeyRing Build(string partition)
-    {
-        // Adopted keys would be seeded into every ring, so each partition would serve the others' keys, and only
-        // the unnamed partition is sure to be the ring's one
-        if (partition != KeyRingOptions.DefaultPartition && policy.AdoptedKeys.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"Existing keys are adopted into a key ring, and its partition '{partition}' is named, so other " +
-                "partitions may come beside it: the same keys would be seeded into each, letting a party trusting " +
-                "one partition's keys verify another's tokens. Adopt keys only into the unnamed partition of a " +
-                "ring serving one issuer.");
-        }
-
-        return serviceProvider.CreateService<KeyRing>(
-            Dependency.Override(policy),
-            Dependency.Override<IKeyRingStore>(new PartitionedKeyRingStore(store, partition)));
-    }
 }

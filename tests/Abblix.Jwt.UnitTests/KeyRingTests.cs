@@ -74,6 +74,9 @@ public sealed class KeyRingTests : IDisposable
         /// <summary>Whether a load hangs until its token is canceled, instead of answering.</summary>
         public bool BlockUntilCancelled { get; set; }
 
+        /// <summary>How many more writes succeed before the next one fails, or <c>null</c> while writes succeed.</summary>
+        public int? WritesBeforeFailure { get; set; }
+
         private int _loads;
 
         /// <summary>How many loads have been attempted. Written on the timer's thread, read on the test's.</summary>
@@ -100,6 +103,17 @@ public sealed class KeyRingTests : IDisposable
 
         public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
         {
+            if (WritesBeforeFailure is { } remaining)
+            {
+                if (remaining == 0)
+                {
+                    WritesBeforeFailure = null;
+                    throw new InvalidOperationException("the ring store did not take this write");
+                }
+
+                WritesBeforeFailure = remaining - 1;
+            }
+
             Entries.AddRange(AddedByAnotherPod);
             AddedByAnotherPod.Clear();
 
@@ -132,6 +146,13 @@ public sealed class KeyRingTests : IDisposable
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<KeyEnvelope>();
+
+        // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
+        // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
+        services.AddSingleton(timeProvider ?? new FakeTimeProvider(now ?? Now));
+        services.AddSingleton(
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }));
 
         // Opening an envelope is a custodian unwrap, so the external decryption backend must be on the seam: the
         // KEK is public-only, and that is what routes its unwrap out of process.
@@ -139,26 +160,16 @@ public sealed class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        var envelope = new KeyEnvelope(provider.GetRequiredService<IJsonWebTokenEncryptor>());
-
-        // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
-        // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
-        var time = timeProvider ?? new FakeTimeProvider(now ?? Now);
-
-        var ring = new KeyRing(
-            store,
-            provider.GetRequiredService<IKeyCustodian>(),
-            envelope,
-            new MintedKeys
-            {
-                KeyEncryptionKeyName = KeyEncryptionKeyName,
-                RotateEvery = TimeSpan.FromDays(30),
-                EncryptionAlgorithm = encryptionAlgorithm,
-                KeepRetiredFor = keepRetiredFor,
-                AdoptedKeys = adoptedKeys ?? [],
-            },
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
-            time);
+        var policy = new MintedKeys
+        {
+            KeyEncryptionKeyName = KeyEncryptionKeyName,
+            RotateEvery = TimeSpan.FromDays(30),
+            EncryptionAlgorithm = encryptionAlgorithm,
+            KeepRetiredFor = keepRetiredFor,
+            AdoptedKeys = adoptedKeys ?? [],
+        };
+        var steps = new KeyRingRefreshBuilder(provider, policy);
+        var ring = new KeyRing(store, steps.Refresh, steps.Schedule);
 
         return (ring, store);
     }
@@ -980,11 +991,11 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// Adoption happens only into an empty ring, which is what makes leaving the call in a host's registration
-    /// harmless: a key the ring has since retired is not brought back by the next refresh.
+    /// Adoption happens only until the ring holds a minted key, which is what makes leaving the call in a host's
+    /// registration harmless: a key the ring has since retired is not brought back by the next refresh.
     /// </summary>
     [Fact]
-    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAnything()
+    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAMintedKey()
     {
         var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
             with { KeyId = "from-certificate" };
@@ -1018,6 +1029,93 @@ public sealed class KeyRingTests : IDisposable
             () => ring.RefreshAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("public-only", refusal.Message);
+    }
+
+    /// <summary>
+    /// A refused key refuses the whole set before anything is stored. Were the keys listed before it stored, the
+    /// next refresh would find the ring not empty, adopt nothing and refuse nothing, and the server would run on
+    /// without the refused key and with no error left to say so.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithNoPrivateHalf_LeavesNothingAdopted()
+    {
+        var complete = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "complete" };
+        var publicOnly = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            .Sanitize(includePrivateKeys: false) with { KeyId = "public-only" };
+
+        var (ring, store) = CreateRing(adoptedKeys: [complete, publicOnly]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// A key that cannot be named refuses the set before anything is stored, as a key without its private half
+    /// does: an RSA key carrying its private exponent but no modulus passes the private-half check, and its
+    /// thumbprint, which names the entry, needs the modulus.
+    /// </summary>
+    [Fact]
+    public async Task AKeyThatCannotBeNamed_LeavesNothingAdopted()
+    {
+        var complete = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "complete" };
+        var noModulus = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "no-modulus", Modulus = null };
+
+        var (ring, store) = CreateRing(adoptedKeys: [complete, noModulus]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// A set whose writing stopped partway is completed by the next refresh. The ring then holds an adopted key
+    /// and nothing minted, and taking that for the end of adoption would leave the rest of the set out for good,
+    /// with nothing reporting the loss.
+    /// </summary>
+    [Fact]
+    public async Task AnAdoptedSetWrittenPartway_IsCompletedByTheNextRefresh()
+    {
+        var first = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "first" };
+        var second = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "second" };
+
+        var store = new FakeStore { WritesBeforeFailure = 1 };
+        var (ring, _) = CreateRing(store, adoptedKeys: [first, second]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Single(store.Entries);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var published = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId);
+        Assert.Contains("first", published);
+        Assert.Contains("second", published);
+    }
+
+    /// <summary>
+    /// The id of a minted entry is what every pod, of this release and of the next, computes for the same period,
+    /// so it is held exactly: a release naming the period differently would find no key for the current one and
+    /// mint a second, or find the previous period's key and skip a rotation.
+    /// </summary>
+    [Fact]
+    public async Task AMintedEntry_IsNamedAfterItsRoleAndThePeriodItsClockIsIn()
+    {
+        var (ring, store) = CreateRing();
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // The test clock reads 2026-07-17T12:00Z, and a thirty-day grid counted from year one puts it in the period
+        // that began 2026-07-04T00:00Z
+        var minted = Assert.Single(store.Entries);
+        Assert.Equal($"{PublicKeyUsages.Signature}-{SigningAlgorithms.RS256}-20260704T000000Z", minted.Id);
     }
 
     /// <summary>
