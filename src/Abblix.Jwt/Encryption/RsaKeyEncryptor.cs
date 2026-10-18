@@ -7,7 +7,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
-using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -24,14 +23,19 @@ namespace Abblix.Jwt.Encryption;
 /// upstream in <see cref="JsonWebTokenEncryptor"/> by the RFC 7516 section 11.5 mitigation (a failed CEK
 /// decryption is replaced with a random CEK so the outcome is uniform), not in this encryptor.
 /// This is a stateless service that can be registered as a singleton in DI.
+/// A Facade over <see cref="RsaKeySender"/> and <see cref="RsaKeyRecipient"/>, which do the two sides.
 /// </remarks>
-internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, string algorithm)
+internal sealed class RsaKeyEncryptor(string algorithm)
 	: IKeyManagementAlgorithm<RsaJsonWebKey>
 {
 	/// <inheritdoc />
 	public string Algorithm => algorithm;
 
-	private readonly RSAEncryptionPadding _padding = algorithm switch
+	private readonly RsaKeySender _sender = new(algorithm, PaddingFor(algorithm));
+
+	private readonly RsaKeyRecipient _recipient = new(PaddingFor(algorithm));
+
+	private static RSAEncryptionPadding PaddingFor(string algorithm) => algorithm switch
 	{
 		// - Section 4.3: RSA-OAEP uses RSAES-OAEP with default parameters (SHA-1)
 		EncryptionAlgorithms.KeyManagement.RsaOaep => RSAEncryptionPadding.OaepSHA1,
@@ -47,75 +51,7 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 
 	/// <inheritdoc />
 	public byte[] EncryptKey(JsonWebTokenHeader header, RsaJsonWebKey rsaKey, byte[] keyToEncrypt)
-	{
-		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on
-		// the platform's importer. Checked before the import, which is what introduces that dependence.
-		// See ModulusBitLength, both for the platform split and for why padding on that scale is not the
-		// benign one-octet quirk the specification records.
-		const int minimumKeySize = JsonWebKeyExtensions.MinimumRsaKeyBits;
-		var bits = rsaKey.ModulusBitLength();
-		if (bits < minimumKeySize)
-		{
-			throw new InvalidOperationException(
-				$"The key (kid={rsaKey.KeyId}) has a {bits}-bit modulus. {algorithm} requires at least " +
-				$"{minimumKeySize} bits per RFC 7518 {JsonWebKeyExtensions.RsaSectionFor(algorithm)}.");
-		}
-
-		using var rsa = rsaKey.ToRsa();
-
-		// Allocate buffer for encrypted output - RSA encryption output is always the key size in bytes
-		var encryptedKey = new byte[rsa.KeySize / 8];
-		if (!rsa.TryEncrypt(keyToEncrypt, encryptedKey, _padding, out var bytesWritten))
-		{
-			throw DiagnosticException(keyToEncrypt, rsa);
-		}
-
-		// Successful encryption
-		if (bytesWritten < encryptedKey.Length)
-		{
-			var result = new byte[bytesWritten];
-			Buffer.BlockCopy(encryptedKey, 0, result, 0, bytesWritten);
-			return result;
-		}
-
-		return encryptedKey;
-	}
-
-	/// <summary>
-	/// The RFC 3447 section bounding the plaintext for the padding in hand. NOT RFC 7518, which states no
-	/// such limit anywhere - Section 4 is two sentences about what JWE does with a CEK, and 4.2 and 4.3
-	/// both defer to RFC 3447 for the operation itself.
-	/// </summary>
-	private string PlaintextLimitSection => _padding == RSAEncryptionPadding.Pkcs1
-		? "RFC 3447 Section 7.2.1"
-		: "RFC 3447 Section 7.1.1";
-
-	private CryptographicException DiagnosticException(byte[] keyToEncrypt, RSA rsa)
-	{
-		// Calculate theoretical maximum CEK size for diagnostics
-		var keySizeBytes = rsa.KeySize / 8;
-
-		// The limits come from RFC 3447, which RFC 7518 defers to for both padding schemes:
-		// - RSA1_5: k - 11 octets (Section 7.2.1)
-		// - RSA-OAEP with SHA-1: k - 2*20 - 2 = k - 42 (Section 7.1.1)
-		// - RSA-OAEP with SHA-256: k - 2*32 - 2 = k - 66 (Section 7.1.1)
-		var maxContentEncryptionKeySize = algorithm switch
-		{
-			EncryptionAlgorithms.KeyManagement.Rsa1_5 => keySizeBytes - 11,
-			EncryptionAlgorithms.KeyManagement.RsaOaep => keySizeBytes - 42,
-			EncryptionAlgorithms.KeyManagement.RsaOaep256 => keySizeBytes - 66,
-			_ => keySizeBytes
-		};
-
-		// Log diagnostic information before throwing
-		LogEncryptionFailed(algorithm, rsa.KeySize, keyToEncrypt.Length, maxContentEncryptionKeySize);
-
-		return new CryptographicException(
-			$"Failed to encrypt Content Encryption Key using {algorithm} with {rsa.KeySize}-bit RSA key. " +
-			$"CEK size: {keyToEncrypt.Length} bytes, theoretical maximum: {maxContentEncryptionKeySize} bytes. " +
-			$"The CEK may be too large: {PlaintextLimitSection} bounds the plaintext by the modulus size " +
-			"less the padding overhead.");
-	}
+		=> _sender.EncryptKey(rsaKey, keyToEncrypt);
 
 	/// <inheritdoc />
 	public bool TryDecryptKey(
@@ -124,28 +60,7 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		byte[] encryptedKey,
 		[NotNullWhen(true)] out byte[]? decryptedKey)
 	{
-		try
-		{
-			// Allocate buffer - RSA decryption output is always <= input size
-			var buffer = new byte[encryptedKey.Length];
-
-			using var rsa = rsaKey.ToRsa();
-			if (rsa.TryDecrypt(encryptedKey, buffer, _padding, out var bytesWritten))
-			{
-				// Trim to actual size
-				decryptedKey = new byte[bytesWritten];
-				Buffer.BlockCopy(buffer, 0, decryptedKey, 0, bytesWritten);
-				return true;
-			}
-
-			decryptedKey = null;
-			return false;
-		}
-		catch (CryptographicException)
-		{
-			// Decryption failed - wrong key or corrupted data
-			decryptedKey = null;
-			return false;
-		}
+		decryptedKey = _recipient.TryDecryptKey(rsaKey, encryptedKey);
+		return decryptedKey != null;
 	}
 }

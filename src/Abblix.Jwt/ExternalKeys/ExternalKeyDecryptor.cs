@@ -5,11 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Collections.Frozen;
-using System.Security.Cryptography;
-using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
-
 using Abblix.Jwt.Encryption;
 
 namespace Abblix.Jwt.ExternalKeys;
@@ -18,41 +13,14 @@ namespace Abblix.Jwt.ExternalKeys;
 /// The external-custodian decryption backend (<see cref="IContentKeyDecryptor"/>): owns public-only keys and recovers
 /// the Content Encryption Key through an <see cref="IKeyCustodian"/> (an HSM/KMS/vault), addressing it by the
 /// key's <c>kid</c>. RSA decryption and symmetric unwrap are single remote calls; ECDH-ES sends only the
-/// agreement to the custodian and runs the Concat KDF and any AES key unwrap in process on the returned shared
-/// secret. Anything the custodian cannot serve (an algorithm with no external form, or one that does not match
-/// the key type) returns null, so the RFC 7516 section 11.5 mitigation upstream sees a uniform failure.
+/// agreement to the custodian (<see cref="ExternalEcdhEsRecipient"/>). Anything the custodian cannot serve (an
+/// algorithm with no external form, or one that does not match the key type) returns null, so the RFC 7516
+/// section 11.5 mitigation upstream sees a uniform failure.
 /// </summary>
 internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProvider serviceProvider)
     : IContentKeyDecryptor
 {
-    /// <summary>The RSA key-transport algorithms an external RSA key can decrypt.</summary>
-    private static readonly FrozenSet<string> ExternalRsaAlgorithms = FrozenSet.Create(
-        StringComparer.Ordinal,
-        EncryptionAlgorithms.KeyManagement.RsaOaep,
-        EncryptionAlgorithms.KeyManagement.RsaOaep256,
-        EncryptionAlgorithms.KeyManagement.Rsa1_5);
-
-    /// <summary>
-    /// The symmetric key-management algorithms whose unwrap an external custodian can perform. Direct encryption
-    /// (dir) and PBES2 are excluded by construction: dir's CEK is the shared secret itself, and PBES2 derives the
-    /// KEK from the secret by a password KDF, so neither has a remote unwrap form.
-    /// </summary>
-    private static readonly FrozenSet<string> ExternallyUnwrappableAlgorithms = FrozenSet.Create(
-        StringComparer.Ordinal,
-        EncryptionAlgorithms.KeyManagement.Aes128KW,
-        EncryptionAlgorithms.KeyManagement.Aes192KW,
-        EncryptionAlgorithms.KeyManagement.Aes256KW,
-        EncryptionAlgorithms.KeyManagement.Aes128Gcmkw,
-        EncryptionAlgorithms.KeyManagement.Aes192Gcmkw,
-        EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
-
-    /// <summary>The ECDH-ES family an external EC key can agree.</summary>
-    private static readonly FrozenSet<string> EcdhEsAlgorithms = FrozenSet.Create(
-        StringComparer.Ordinal,
-        EncryptionAlgorithms.KeyManagement.EcdhEs,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW);
+    private readonly ExternalEcdhEsRecipient _ecdhEs = new(custodian, new EcdhEsContentKey(serviceProvider));
 
     /// <summary>Owns any public-only key: its private half lives with the custodian, not in process.</summary>
     public bool CanDecrypt(JsonWebKey key) => !key.HasPrivateKey;
@@ -74,146 +42,18 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
         {
             // RSA decrypt and symmetric unwrap are single remote calls. The algorithm must match the key type,
             // mirroring the keyed-DI validation the in-process path gets for free.
-            RsaJsonWebKey when ExternalRsaAlgorithms.Contains(algorithm)
+            RsaJsonWebKey when ExternalKeyAlgorithms.Rsa.Contains(algorithm)
                 => await custodian.UnwrapKeyAsync(keyId, algorithm, header, encryptedKey, cancellationToken),
 
-            OctetJsonWebKey when ExternallyUnwrappableAlgorithms.Contains(algorithm)
+            OctetJsonWebKey when ExternalKeyAlgorithms.Unwrappable.Contains(algorithm)
                 => await custodian.UnwrapKeyAsync(keyId, algorithm, header, encryptedKey, cancellationToken),
 
-            // ECDH-ES: only the agreement needs the private key, so only it is remote; the KDF and any AES key
-            // unwrap run locally on the returned shared secret.
-            EllipticCurveJsonWebKey ecKey when EcdhEsAlgorithms.Contains(algorithm)
-                => await AgreeExternallyAsync(header, ecKey, algorithm, encryptedKey, keyId, cancellationToken),
+            // ECDH-ES: only the agreement needs the private key, so only it is remote.
+            EllipticCurveJsonWebKey ecKey when ExternalKeyAlgorithms.EcdhEs.Contains(algorithm)
+                => await _ecdhEs.TryDecryptKeyAsync(header, ecKey, algorithm, encryptedKey, keyId, cancellationToken),
 
             // dir / PBES2, or an algorithm that does not match the key type: no external form, uniform null.
             _ => null,
         };
     }
-
-    /// <summary>
-    /// External ECDH-ES: the custodian performs the agreement with the recipient's private key and returns the
-    /// raw shared secret Z; the Concat KDF and any AES key unwrap run locally. Mirrors the guards of the
-    /// in-process EcdhEsKeyEncryptor.TryDecryptKey - only the agreement step is remote.
-    /// </summary>
-    private async Task<byte[]?> AgreeExternallyAsync(
-        JsonWebTokenHeader header,
-        EllipticCurveJsonWebKey recipientKey,
-        string algorithm,
-        byte[] encryptedKey,
-        string keyId,
-        CancellationToken cancellationToken)
-    {
-        // 'epk', 'apu' and 'apv' come from the attacker-supplied header, so a malformed value fails as a uniform
-        // null (mirroring the in-process EcdhEsKeyEncryptor.TryDecryptKey) rather than throwing.
-        try
-        {
-            if (AgreementEphemeralKey(header, recipientKey) is not { } ephemeralKey)
-                return null;
-
-            // Z is the raw ECDH shared secret (NIST SP 800-56A / RFC 7518 section 4.6); here it comes from the
-            // custodian rather than an in-process agreement, but the KDF over it is identical.
-            var sharedSecretZ = await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken);
-            try
-            {
-                // Strategy by agreement mode: the key-wrapping variants unwrap the CEK with the derived key, while
-                // Direct Key Agreement takes the derived key as the CEK itself.
-                return KeyWrapSize(algorithm) is { } keyEncryptionKeySize
-                    ? UnwrapWithDerivedKey(sharedSecretZ, header, algorithm, encryptedKey, keyEncryptionKeySize)
-                    : DeriveDirectContentKey(sharedSecretZ, header, encryptedKey);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(sharedSecretZ);
-            }
-        }
-        catch (JsonException)
-        {
-            return null; // malformed 'epk'
-        }
-        catch (FormatException)
-        {
-            return null; // malformed base64url in 'apu' / 'apv'
-        }
-        catch (CryptographicException)
-        {
-            return null; // agreement or key-unwrap failure
-        }
-    }
-
-    /// <summary>
-    /// The originator's ephemeral public key, or null when the header cannot carry an agreement with
-    /// <paramref name="recipientKey"/>.
-    /// </summary>
-    private static EllipticCurveJsonWebKey? AgreementEphemeralKey(
-        JsonWebTokenHeader header,
-        EllipticCurveJsonWebKey recipientKey)
-    {
-        // RFC 7518 section 4.6.2: when both 'apu' and 'apv' are present they must differ, otherwise the producer
-        // and recipient identities collapse and the KDF binding loses meaning.
-        var apu = header.AgreementPartyUInfo;
-        var apv = header.AgreementPartyVInfo;
-        if (apu != null && apv != null && string.Equals(apu, apv, StringComparison.Ordinal))
-            return null;
-
-        // The originator's ephemeral public key is mandatory and must live on the recipient's curve.
-        if (header.EphemeralPublicKey is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey)
-            return null;
-
-        return string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal) ? ephemeralKey : null;
-    }
-
-    private static byte[]? UnwrapWithDerivedKey(
-        byte[] sharedSecretZ,
-        JsonWebTokenHeader header,
-        string algorithm,
-        byte[] encryptedKey,
-        int keyEncryptionKeySize)
-    {
-        var keyEncryptionKey = ConcatKeyDerivation.DeriveKey(
-            sharedSecretZ,
-            algorithm,
-            header.AgreementPartyUInfo,
-            header.AgreementPartyVInfo,
-            keyEncryptionKeySize);
-
-        using var aes = Aes.Create();
-        aes.Key = keyEncryptionKey;
-        return aes.TryUnwrapKey(encryptedKey, out var contentEncryptionKey) ? contentEncryptionKey : null;
-    }
-
-    /// <summary>
-    /// Direct Key Agreement: the encrypted key must be empty and the derived key IS the CEK, sized for the content
-    /// encryption algorithm named by 'enc'.
-    /// </summary>
-    private byte[]? DeriveDirectContentKey(byte[] sharedSecretZ, JsonWebTokenHeader header, byte[] encryptedKey)
-    {
-        if (encryptedKey.Length != 0)
-            return null;
-
-        if (header.EncryptionAlgorithm is not { } contentEncryptionAlgorithm)
-            return null;
-
-        var encryptor = serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm);
-        if (encryptor == null)
-            return null;
-
-        return ConcatKeyDerivation.DeriveKey(
-            sharedSecretZ,
-            contentEncryptionAlgorithm,
-            header.AgreementPartyUInfo,
-            header.AgreementPartyVInfo,
-            encryptor.KeySizeInBytes);
-    }
-
-    /// <summary>
-    /// The RFC 3394 KEK size for the ECDH-ES key-wrapping variants, or null for Direct Key Agreement where the
-    /// derived key is the CEK itself. Mirrors EcdhEsKeyEncryptor's mode selection for the remote path.
-    /// </summary>
-    private static int? KeyWrapSize(string algorithm) => algorithm switch
-    {
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW => 128 >> 3,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW => 192 >> 3,
-        EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => 256 >> 3,
-        _ => null,
-    };
 }

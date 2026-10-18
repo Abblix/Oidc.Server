@@ -70,8 +70,7 @@ public class RsaKeyFloorTests
     [Fact]
     public void EncryptKey_AKeyBelowTheFloor_IsRefused()
     {
-        var encryptor = new RsaKeyEncryptor(
-            NullLogger<RsaKeyEncryptor>.Instance, EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        var encryptor = new RsaKeyEncryptor(EncryptionAlgorithms.KeyManagement.RsaOaep256);
 
         var error = Assert.Throws<InvalidOperationException>(
             () => encryptor.EncryptKey(HeaderFor(EncryptionAlgorithms.KeyManagement.RsaOaep256),
@@ -92,8 +91,7 @@ public class RsaKeyFloorTests
     [Fact]
     public void EncryptKey_AKeyAtTheFloor_Encrypts()
     {
-        var encryptor = new RsaKeyEncryptor(
-            NullLogger<RsaKeyEncryptor>.Instance, EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        var encryptor = new RsaKeyEncryptor(EncryptionAlgorithms.KeyManagement.RsaOaep256);
 
         var encrypted = encryptor.EncryptKey(
             HeaderFor(EncryptionAlgorithms.KeyManagement.RsaOaep256),

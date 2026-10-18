@@ -8,7 +8,6 @@
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
-using System.Text;
 using Abblix.Utils;
 
 namespace Abblix.Jwt.Encryption;
@@ -34,15 +33,9 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	public string Algorithm => algorithm;
 
 	/// <summary>
-	/// The PBKDF2 pseudorandom function and the derived KEK size for this algorithm.
+	/// Derives the key encryption key from the password, the same way on both sides.
 	/// </summary>
-	private readonly (HashAlgorithmName Prf, int KeyEncryptionKeySize) _parameters = algorithm switch
-	{
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW => (HashAlgorithmName.SHA256, 16),
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW => (HashAlgorithmName.SHA384, 24),
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => (HashAlgorithmName.SHA512, 32),
-		_ => throw new ArgumentException($"Unsupported PBES2 algorithm: {algorithm}", nameof(algorithm))
-	};
+	private readonly Pbes2KeyDerivation _derivation = new(algorithm);
 
 	// RFC 7518 section 4.8.1.1: the 'p2s' salt input MUST be at least 8 octets.
 	private const int MinSaltInputSize = 8;
@@ -79,7 +72,7 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		header.Pbes2SaltInput = Base64Url.EncodeToString(saltInput);
 		header.Pbes2IterationCount = DefaultIterationCount;
 
-		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, DefaultIterationCount);
+		var keyEncryptionKey = _derivation.KeyEncryptionKey(password, saltInput, DefaultIterationCount);
 		using var aes = Aes.Create();
 		aes.Key = keyEncryptionKey;
 		return aes.EncryptKeyWrap(keyToEncrypt);
@@ -119,28 +112,11 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		if (saltInput.Length < MinSaltInputSize)
 			return false;
 
-		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, iterationCount);
+		var keyEncryptionKey = _derivation.KeyEncryptionKey(password, saltInput, iterationCount);
 
 		// The unwrap's integrity register check rejects tampered input and wrong-password attempts.
 		using var aes = Aes.Create();
 		aes.Key = keyEncryptionKey;
 		return aes.TryUnwrapKey(encryptedKey, out decryptedKey);
-	}
-
-	/// <summary>
-	/// Derives the Key Encryption Key per RFC 7518 section 4.8.1: PBKDF2 with the salt
-	/// <c>UTF8(alg) || 0x00 || p2s</c>, the algorithm's HMAC PRF and the KEK length the
-	/// algorithm name declares.
-	/// </summary>
-	private byte[] DeriveKeyEncryptionKey(byte[] password, byte[] saltInput, int iterationCount)
-	{
-		var algorithmName = Encoding.UTF8.GetBytes(algorithm);
-
-		var salt = new byte[algorithmName.Length + 1 + saltInput.Length];
-		algorithmName.CopyTo(salt, 0);
-		salt[algorithmName.Length] = 0;
-		saltInput.CopyTo(salt, algorithmName.Length + 1);
-
-		return Rfc2898DeriveBytes.Pbkdf2(password, salt, iterationCount, _parameters.Prf, _parameters.KeyEncryptionKeySize);
 	}
 }
