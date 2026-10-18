@@ -118,14 +118,18 @@ public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
     /// Unwraps (decrypts) a CEK with a Key Vault RSA key under the given key-management algorithm (RSA-OAEP-256,
     /// RSA-OAEP or RSA1_5). Key Vault decrypts a raw JWE ciphertext directly. Returns null when the vault rejects
     /// the ciphertext, so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
-    /// mitigation relies on. The JWE header is unused: an RSA unwrap needs only the ciphertext.
+    /// mitigation relies on, and for any other algorithm, without calling the vault. The JWE header is unused: an
+    /// RSA unwrap needs only the ciphertext.
     /// </summary>
     public Task<byte[]?> UnwrapKeyAsync(
         string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
     {
         // The algorithm is the token sender's choice, so one the vault does not serve is a token that does not open.
         if (KeyVaultAlgorithms.ForUnwrapping(algorithm) is not { } encryptionAlgorithm)
+        {
+            LogAlgorithmNotServed(_logger, algorithm, keyId);
             return Task.FromResult<byte[]?>(null);
+        }
 
         // The rejected-ciphertext catch stays INSIDE the classification, and the order is the whole point: a 400
         // must become null before anything reads it as a custodian failure, or the padding-oracle mitigation is
@@ -160,7 +164,10 @@ public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
     /// </summary>
     public Task<byte[]?> AgreeKeyAsync(
         string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
-        => Task.FromResult<byte[]?>(null);
+    {
+        LogAlgorithmNotServed(_logger, algorithm, keyId);
+        return Task.FromResult<byte[]?>(null);
+    }
 
     /// <summary>
     /// Enumerates every enabled version of the Key Vault key as a public-only JWK (RSA or EC, per the key type),

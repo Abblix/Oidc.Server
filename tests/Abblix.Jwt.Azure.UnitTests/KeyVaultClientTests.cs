@@ -11,6 +11,7 @@ using Azure;
 using Azure.Identity;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -32,12 +33,15 @@ public sealed class KeyVaultClientTests : IDisposable
     // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
     private readonly List<HttpClient> _httpClients = [];
 
-    private KeyVaultClient ClientOver(StubHttpMessageHandler handler, TimeProvider? timeProvider = null)
+    private KeyVaultClient ClientOver(
+        StubHttpMessageHandler handler,
+        TimeProvider? timeProvider = null,
+        ILogger<KeyVaultClient>? logger = null)
     {
         var httpClient = new HttpClient(handler);
         _httpClients.Add(httpClient);
         return new KeyVaultClient(
-            NullLogger<KeyVaultClient>.Instance,
+            logger ?? NullLogger<KeyVaultClient>.Instance,
             new AzureKeyVaultOptions { KeyVaultUri = VaultUri },
             new StaticTokenCredential(),
             httpClient,
@@ -244,8 +248,9 @@ public sealed class KeyVaultClientTests : IDisposable
         // token that does not open, since the algorithm is the sender's choice.
         var handler = new StubHttpMessageHandler(_ =>
             throw new InvalidOperationException("the vault must not be called for an unsupported algorithm"));
+        var logger = new RecordingLogger<KeyVaultClient>();
 
-        var key = await ClientOver(handler).UnwrapKeyAsync(
+        var key = await ClientOver(handler, logger: logger).UnwrapKeyAsync(
             "oidc-enc/v1",
             EncryptionAlgorithms.KeyManagement.EcdhEs,
             new JsonWebTokenHeader(new JsonObject()),
@@ -253,6 +258,7 @@ public sealed class KeyVaultClientTests : IDisposable
             TestContext.Current.CancellationToken);
 
         Assert.Null(key);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
     }
 
     [Fact]
@@ -347,11 +353,17 @@ public sealed class KeyVaultClientTests : IDisposable
         var handler = new StubHttpMessageHandler(_ =>
             StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        var secret = await ClientOver(handler).AgreeKeyAsync(
+        var logger = new RecordingLogger<KeyVaultClient>();
+
+        var secret = await ClientOver(handler, logger: logger).AgreeKeyAsync(
             "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
             TestContext.Current.CancellationToken);
 
         Assert.Null(secret);
+
+        // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
+        // record naming the algorithm, or the failure reads as tokens encrypted to another key.
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
     }
 
     [Fact]

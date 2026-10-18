@@ -20,7 +20,7 @@ namespace Abblix.Jwt.Vault;
 /// engine and this custodian only moves bytes across the boundary.
 /// </summary>
 /// <remarks>
-/// What Transit can do decides what this custodian supports: it signs and it unwraps RSA-OAEP, and it exposes no
+/// What Transit can do decides what this custodian supports: it signs and it unwraps RSA-OAEP-256, and it exposes no
 /// key-agreement primitive, so ECDH-ES is out. That is a property of the engine, which is why the engine is in
 /// the name.
 /// </remarks>
@@ -73,7 +73,8 @@ internal sealed partial class TransitCustodian(
     /// the standard JWE ciphertext is framed as <c>vault:v&lt;version&gt;:&lt;base64&gt;</c> with the version the
     /// <c>kid</c> names, addressing the exact version that wrapped the CEK. Returns null on a decryption failure
     /// (HTTP 400) so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
-    /// mitigation depends on; a 403/5xx (bad token, sealed Vault) still throws. The JWE header is unused: RSA-OAEP
+    /// mitigation depends on, and for any other algorithm, without calling Vault; a 403/5xx (bad token, sealed
+    /// Vault) still throws. The JWE header is unused: RSA-OAEP
     /// unwrap needs only the ciphertext.
     /// </summary>
     public async Task<byte[]?> UnwrapKeyAsync(
@@ -85,7 +86,10 @@ internal sealed partial class TransitCustodian(
     {
         // The algorithm is the token sender's choice, so one Transit does not serve is a token that does not open.
         if (algorithm != EncryptionAlgorithms.KeyManagement.RsaOaep256)
+        {
+            LogAlgorithmNotServed(algorithm, keyId);
             return null;
+        }
 
         var (name, version) = TransitKeyId.Parse(keyId);
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
@@ -109,7 +113,10 @@ internal sealed partial class TransitCustodian(
     /// </summary>
     public Task<byte[]?> AgreeKeyAsync(
         string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
-        => Task.FromResult<byte[]?>(null);
+    {
+        LogAlgorithmNotServed(algorithm, keyId);
+        return Task.FromResult<byte[]?>(null);
+    }
 
     /// <summary>
     /// Enumerates every version of the Transit key as a public-only JWK (RSA or EC, per the Transit key type).

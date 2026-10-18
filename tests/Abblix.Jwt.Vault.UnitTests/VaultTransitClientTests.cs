@@ -311,13 +311,18 @@ public sealed class VaultTransitClientTests : IDisposable
     public async Task AgreeKeyAsync_IsRefused_BecauseTransitHasNoAgreementPrimitive()
     {
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
+        var logger = new RecordingLogger<TransitCustodian>();
 
-        var secret = await ClientOver(handler).AgreeKeyAsync(
+        var secret = await ClientOver(handler, logger).AgreeKeyAsync(
             "oidc-enc:1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
             TestContext.Current.CancellationToken);
 
         Assert.Null(secret);
         Assert.Null(handler.LastRequest);
+
+        // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
+        // record naming the algorithm, or the failure reads as tokens encrypted to another key.
+        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
     }
 
     /// <summary>
@@ -330,14 +335,15 @@ public sealed class VaultTransitClientTests : IDisposable
     public async Task DecryptAsync_RefusesAnAlgorithmTransitDoesNotServe_WithoutCallingTransit(string algorithm)
     {
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(HttpStatusCode.OK, new { }));
-        var client = ClientOver(handler);
+        var logger = new RecordingLogger<TransitCustodian>();
 
-        var key = await client.UnwrapKeyAsync(
+        var key = await ClientOver(handler, logger).UnwrapKeyAsync(
             "oidc-enc:1", algorithm, new JsonWebTokenHeader(new JsonObject()),
             [1], TestContext.Current.CancellationToken);
 
         Assert.Null(key);
         Assert.Null(handler.LastRequest);
+        Assert.Equal(LogEvents.TransitCustodian.AlgorithmNotServed, Assert.Single(logger.Entries).EventId);
     }
 
     [Fact]
