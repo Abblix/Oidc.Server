@@ -586,4 +586,23 @@ public class JsonWebKeySerializationTests
         foreach (var absent in new[] { "d", "p", "q", "dp", "dq", "qi", "x5c", "x5t" })
             Assert.False(jsonDoc.RootElement.TryGetProperty(absent, out _), $"'{absent}' must be absent, not null");
     }
+
+    /// <summary>
+    /// A host that registers the key converter among its own converters still reads and writes a key: the converter
+    /// answers only for the base type, so serializing the concrete subtype with the host's converters does not call
+    /// back into it.
+    /// </summary>
+    [Fact]
+    public void AKey_RoundTrips_WhenTheHostRegistersTheConverterItself()
+    {
+        var hostOptions = new JsonSerializerOptions { Converters = { new JsonWebKeyConverter() } };
+        var key = new RsaJsonWebKey { KeyId = "abc", Exponent = [1, 0, 1], Modulus = [0xAB, 0xCD] };
+
+        var json = JsonSerializer.Serialize<JsonWebKey>(key, hostOptions);
+        var read = JsonSerializer.Deserialize<JsonWebKey>(json, hostOptions);
+
+        var rsa = Assert.IsType<RsaJsonWebKey>(read);
+        Assert.Equal("abc", rsa.KeyId);
+        Assert.Equal(key.Modulus, rsa.Modulus);
+    }
 }
