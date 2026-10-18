@@ -628,6 +628,20 @@ public class JsonWebKeySerializationTests
         Assert.Equal(CertificateBytes, Convert.FromBase64String(written));
     }
 
+    /// <summary>
+    /// The base64 of 'x5c' reaches the published key as written, without its '+' escaped, so a consumer comparing
+    /// the published text sees the encoding RFC 7517 names.
+    /// </summary>
+    [Fact]
+    public void Certificates_ArePublishedWithoutEscaping()
+    {
+        var key = new RsaJsonWebKey { KeyId = "abc", Certificates = [CertificateBytes] };
+
+        var json = JsonSerializer.Serialize<JsonWebKey>(key);
+
+        Assert.Contains("\"x5c\":[\"+/+/AQ==\"]", json);
+    }
+
     /// <summary>A chain another party publishes in standard base64 is read.</summary>
     [Fact]
     public void Certificates_InStandardBase64_AreRead()
