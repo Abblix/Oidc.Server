@@ -384,6 +384,40 @@ public partial class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// The header links run before the claims links, so a token whose signature does not verify is refused before
+    /// any check the host supplied is invoked: those are the host's code, and a forged token must not reach it.
+    /// The control is the same token signed with the right key, which does reach both checks.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task TheHostsChecks_RunOnlyForATokenWhoseSignatureVerifies(bool signedWithTheRightKey, bool reached)
+    {
+        var jwt = await IssueToken(CreateValidToken(), signedWithTheRightKey ? SigningKey : WrongSigningKey);
+        var issuerChecked = false;
+        var audienceChecked = false;
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            ValidateIssuer = _ =>
+            {
+                issuerChecked = true;
+                return Task.FromResult(true);
+            },
+            ValidateAudience = _ =>
+            {
+                audienceChecked = true;
+                return Task.FromResult(true);
+            },
+        };
+
+        var result = await ServiceProvider.GetRequiredService<IJsonWebTokenValidator>().ValidateAsync(jwt, parameters);
+
+        Assert.Equal(signedWithTheRightKey, result.TryGetSuccess(out _));
+        Assert.Equal(reached, issuerChecked);
+        Assert.Equal(reached, audienceChecked);
+    }
+
+    /// <summary>
     /// Verifies that empty string input fails validation.
     /// Tests edge case of completely empty token input.
     /// Returns JwtError.MalformedToken.

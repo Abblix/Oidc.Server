@@ -68,6 +68,10 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IJsonWebTokenCreator, JsonWebTokenCreator>();
         services.TryAddSingleton<IJsonWebTokenValidator, JsonWebTokenValidator>();
+        services.TryAddSingleton<JwsValidation>();
+        services.TryAddSingleton<JwsHeaderChain>();
+        services.TryAddSingleton<JwtClaimsChain>();
+        services.TryAddSingleton<JweValidation>();
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<JweEncryption>();
         services.TryAddSingleton<JweDecryption>();
