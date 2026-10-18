@@ -53,8 +53,11 @@ internal sealed class EcdhEsContentKey(IServiceProvider serviceProvider)
 		if (apu != null && apv != null && string.Equals(apu, apv, StringComparison.Ordinal))
 			return null;
 
-		if (header.EphemeralPublicKey is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey)
+		if (!header.TryReadEphemeralPublicKey(out var epk) ||
+			epk is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey)
+		{
 			return null;
+		}
 
 		return string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal) ? ephemeralKey : null;
 	}

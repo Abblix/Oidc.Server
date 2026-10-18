@@ -5,10 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -87,43 +84,19 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'crit' (Critical) header parameter (RFC 7515 section 4.1.11): names of JOSE header parameters
-    /// that the recipient MUST understand and process. Returns null when 'crit' is absent.
+    /// Reads the 'crit' (Critical) header parameter (RFC 7515 section 4.1.11): names of JOSE header parameters
+    /// that the recipient MUST understand and process.
     /// </summary>
-    /// <exception cref="JsonException">Thrown when 'crit' is present but is not a JSON array of strings.</exception>
-    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "JsonWebTokenHeader is a typed view over untrusted external JSON. Returning null on a malformed 'crit' would silently coerce a producer-spec violation into accepted state - RFC 7515 section 4.1.11 requires the recipient to reject it, and the validator's critical-headers pass relies on this getter surfacing the parse error.")]
-    public IReadOnlyList<string>? Critical
-    {
-        get
-        {
-            if (!Json.TryGetPropertyValue(JwtClaimTypes.Critical, out var node) || node is null)
-                return null;
-            if (node is not JsonArray array)
-                throw new JsonException($"'{JwtClaimTypes.Critical}' header must be a JSON array");
+    /// <param name="critical">The names, or <c>null</c> when 'crit' is absent.</param>
+    /// <returns>
+    /// False when 'crit' is present but is not a JSON array of strings, which RFC 7515 section 4.1.11 requires the
+    /// recipient to reject, so it cannot be mistaken for an absent 'crit'.
+    /// </returns>
+    public bool TryReadCritical(out IReadOnlyList<string>? critical)
+        => JsonHeaderParameters.TryReadStrings(Json, JwtClaimTypes.Critical, out critical);
 
-            var result = new string[array.Count];
-            for (var i = 0; i < array.Count; i++)
-            {
-                if (array[i] is not JsonValue value || !value.TryGetValue<string>(out var name))
-                    throw new JsonException($"'{JwtClaimTypes.Critical}' header must contain only strings");
-                result[i] = name;
-            }
-            return result;
-        }
-        set
-        {
-            if (value is null)
-            {
-                Json.Remove(JwtClaimTypes.Critical);
-                return;
-            }
-            var array = new JsonArray();
-            foreach (var name in value)
-                array.Add(name);
-            Json[JwtClaimTypes.Critical] = array;
-        }
-    }
+    /// <summary>Sets the 'crit' header parameter, or removes it when <paramref name="critical"/> is null.</summary>
+    public void SetCritical(IReadOnlyList<string>? critical) => JsonHeaderParameters.SetStrings(Json, JwtClaimTypes.Critical, critical);
 
     /// <summary>
     /// The 'jku' (JWK Set URL) header parameter (RFC 7515 section 4.1.2): a URI referring to a JSON Web
@@ -142,27 +115,20 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'jwk' (JSON Web Key) header parameter (RFC 7515 section 4.1.3): the public key used to
-    /// verify the JWS, embedded directly in the JOSE header as a JWK. Returns null when
-    /// 'jwk' is absent. Trust is the consumer's responsibility - for example, DPoP (RFC 9449)
-    /// binds this key to the request via a separate confirmation claim.
+    /// Reads the 'jwk' (JSON Web Key) header parameter (RFC 7515 section 4.1.3): the public key used to
+    /// verify the JWS, embedded directly in the JOSE header as a JWK. Trust is the consumer's responsibility -
+    /// for example, DPoP (RFC 9449) binds this key to the request via a separate confirmation claim.
     /// </summary>
-    /// <exception cref="JsonException">Thrown when 'jwk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
-    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "Deserialize<JsonWebKey> can throw JsonException when 'jwk' is malformed. Returning null on a malformed JWK would let a downstream consumer (DPoP, federation) silently treat the absence of trust material as success - the parse error must surface.")]
-    public JsonWebKey? VerificationKey
-    {
-        get => Json.TryGetPropertyValue(JwtClaimTypes.JsonWebKeyHeader, out var node) && node is JsonObject obj
-                ? obj.Deserialize<JsonWebKey>()
-                : null;
-        set
-        {
-            if (value is not null)
-                Json[JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(value);
-            else
-                Json.Remove(JwtClaimTypes.JsonWebKeyHeader);
-        }
-    }
+    /// <param name="key">The key, or <c>null</c> when 'jwk' is absent or is not a JSON object.</param>
+    /// <returns>
+    /// False when 'jwk' is an object that is not a valid JWK (an unknown 'kty', say), so a consumer cannot take a
+    /// malformed key for the absence of one.
+    /// </returns>
+    public bool TryReadVerificationKey(out JsonWebKey? key) => JsonHeaderParameters.TryReadKey(Json, JwtClaimTypes.JsonWebKeyHeader, out key);
+
+    /// <summary>Sets the 'jwk' header parameter, or removes it when <paramref name="key"/> is null.</summary>
+    public void SetVerificationKey(JsonWebKey? key)
+        => JsonHeaderParameters.SetKey(Json, JwtClaimTypes.JsonWebKeyHeader, key);
 
     /// <summary>
     /// The 'x5u' (X.509 URL) header parameter (RFC 7515 section 4.1.5): a URI referring to an X.509
@@ -185,40 +151,17 @@ public class JsonWebTokenHeader(JsonObject json)
     /// the leaf. Returns the raw base64 strings; consumers are responsible for decoding to
     /// <c>X509Certificate2</c> and validating the chain per RFC 5280.
     /// </summary>
-    /// <exception cref="JsonException">Thrown when 'x5c' is present but is not a JSON array of strings.</exception>
-    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "Returning null on a malformed 'x5c' array would let a host treat 'no certificate chain available' identically to 'producer sent a wrong shape', collapsing two distinct conditions a chain-validating consumer must distinguish.")]
-    public IReadOnlyList<string>? Certificates
-    {
-        get
-        {
-            if (!Json.TryGetPropertyValue(JwtClaimTypes.X509CertificateChain, out var node) || node is null)
-                return null;
-            if (node is not JsonArray array)
-                throw new JsonException($"'{JwtClaimTypes.X509CertificateChain}' header must be a JSON array");
+    /// <param name="certificates">The chain, or <c>null</c> when 'x5c' is absent.</param>
+    /// <returns>
+    /// False when 'x5c' is present but is not a JSON array of strings, which a chain-validating consumer must tell
+    /// apart from a token that carries no chain.
+    /// </returns>
+    public bool TryReadCertificates(out IReadOnlyList<string>? certificates)
+        => JsonHeaderParameters.TryReadStrings(Json, JwtClaimTypes.X509CertificateChain, out certificates);
 
-            var result = new string[array.Count];
-            for (var i = 0; i < array.Count; i++)
-            {
-                if (array[i] is not JsonValue value || !value.TryGetValue<string>(out var cert))
-                    throw new JsonException($"'{JwtClaimTypes.X509CertificateChain}' header must contain only strings");
-                result[i] = cert;
-            }
-            return result;
-        }
-        set
-        {
-            if (value is null)
-            {
-                Json.Remove(JwtClaimTypes.X509CertificateChain);
-                return;
-            }
-            var array = new JsonArray();
-            foreach (var cert in value)
-                array.Add(cert);
-            Json[JwtClaimTypes.X509CertificateChain] = array;
-        }
-    }
+    /// <summary>Sets the 'x5c' header parameter, or removes it when <paramref name="certificates"/> is null.</summary>
+    public void SetCertificates(IReadOnlyList<string>? certificates)
+        => JsonHeaderParameters.SetStrings(Json, JwtClaimTypes.X509CertificateChain, certificates);
 
     /// <summary>
     /// The 'x5t' (X.509 SHA-1 Thumbprint) header parameter (RFC 7515 section 4.1.7): base64url-encoded
@@ -265,37 +208,19 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'epk' header parameter (RFC 7518 section 4.6.1.1): the originator's ephemeral public key for
-    /// ECDH-ES key agreement, carried as a JWK with public members only. Returns null when absent.
+    /// Reads the 'epk' header parameter (RFC 7518 section 4.6.1.1): the originator's ephemeral public key for
+    /// ECDH-ES key agreement, carried as a JWK with public members only.
     /// </summary>
-    /// <exception cref="JsonException">Thrown when 'epk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
-    [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "The 'epk' comes from an untrusted JWE header. Returning null on a malformed JWK would make " +
-                        "'producer sent garbage' indistinguishable from 'parameter absent'; the ECDH-ES decryptor " +
-                        "must observe the difference to reject the token instead of skipping key agreement.")]
-    public JsonWebKey? EphemeralPublicKey
-    {
-        get => Json.TryGetPropertyValue(JwtClaimTypes.EphemeralPublicKey, out var node) && node is JsonObject obj
-            ? obj.Deserialize<JsonWebKey>()
-            : null;
-        set
-        {
-            if (value is not null)
-                Json[JwtClaimTypes.EphemeralPublicKey] = JsonSerializer.SerializeToNode(value, EphemeralKeySerializerOptions);
-            else
-                Json.Remove(JwtClaimTypes.EphemeralPublicKey);
-        }
-    }
+    /// <param name="key">The key, or <c>null</c> when 'epk' is absent or is not a JSON object.</param>
+    /// <returns>
+    /// False when 'epk' is an object that is not a valid JWK (an unknown 'kty', say): it comes from an untrusted
+    /// JWE header, and the ECDH-ES decryptor must reject the token rather than skip key agreement.
+    /// </returns>
+    public bool TryReadEphemeralPublicKey(out JsonWebKey? key) => JsonHeaderParameters.TryReadKey(Json, JwtClaimTypes.EphemeralPublicKey, out key);
 
-    /// <summary>
-    /// Serializer options for the 'epk' header parameter: absent JWK members must be omitted, not
-    /// written as JSON nulls - the wire form carries only the members the ephemeral key actually has
-    /// (kty, crv, x, y), matching what conformant JOSE peers emit and expect.
-    /// </summary>
-    private static readonly JsonSerializerOptions EphemeralKeySerializerOptions = new()
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    /// <summary>Sets the 'epk' header parameter, or removes it when <paramref name="key"/> is null.</summary>
+    public void SetEphemeralPublicKey(JsonWebKey? key)
+        => JsonHeaderParameters.SetKeyOmittingAbsentMembers(Json, JwtClaimTypes.EphemeralPublicKey, key);
 
     /// <summary>
     /// The 'apu' header parameter (RFC 7518 section 4.6.1.2): base64url-encoded Agreement PartyUInfo

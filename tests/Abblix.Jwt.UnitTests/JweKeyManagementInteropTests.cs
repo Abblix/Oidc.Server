@@ -236,8 +236,8 @@ public class JweKeyManagementInteropTests
 			EncryptionAlgorithm = contentEncAlg,
 			AgreementPartyUInfo = "QWxpY2U",
 			AgreementPartyVInfo = "Qm9i",
-			EphemeralPublicKey = (EllipticCurveJsonWebKey)senderKey.Sanitize(includePrivateKeys: false),
 		};
+		header.SetEphemeralPublicKey(senderKey.Sanitize(includePrivateKeys: false));
 
 		// Act - Abblix re-derives the KEK from the recipient private key and their 'epk', then unwraps
 		var encryptor = new EcdhEsKeyEncryptor(keyEncAlg, ServiceProvider);

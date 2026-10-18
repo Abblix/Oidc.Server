@@ -72,7 +72,7 @@ public partial class JsonWebTokenValidationTests
     public async Task EmbeddedJwkHeaderKey_IgnoredInDefaultTrustMode_Rejected()
     {
         var token = CreateValidToken();
-        token.Header.VerificationKey = WrongSigningKey; // attacker advertises their own key in the header
+        token.Header.SetVerificationKey(WrongSigningKey); // attacker advertises their own key in the header
         var forged = await IssueToken(token, WrongSigningKey);
 
         // Default model: verify against the host's issuer keys, not the header. The offered key is refused.

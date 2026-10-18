@@ -62,10 +62,5 @@ internal sealed class EcdhEsRecipient(string algorithm, EcdhEsContentKey content
 			// Malformed base64url in the 'apu'/'apv' header parameters
 			return null;
 		}
-		catch (JsonException)
-		{
-			// Malformed 'epk' header parameter
-			return null;
-		}
 	}
 }
