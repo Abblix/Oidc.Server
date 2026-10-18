@@ -114,8 +114,8 @@ internal sealed class ProofValidator(
     /// </summary>
     private static ProofError? ValidateJwkShape(JsonWebTokenHeader header, out JsonWebKey jwk)
     {
-        jwk = header.TryReadVerificationKey(out var embedded)
-            ? embedded.NotNull(nameof(embedded))
+        jwk = header.TryReadVerificationKey(out var embedded) && embedded is not null
+            ? embedded
             : throw new InvalidOperationException(
                 $"The header '{JwtClaimTypes.JsonWebKeyHeader}' was verified, so it holds a valid key.");
         if (jwk.HasPrivateKey)

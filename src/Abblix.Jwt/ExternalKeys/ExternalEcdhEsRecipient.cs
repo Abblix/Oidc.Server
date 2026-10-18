@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Security.Cryptography;
-using System.Text.Json;
 using Abblix.Jwt.Encryption;
 
 namespace Abblix.Jwt.ExternalKeys;
@@ -39,7 +38,7 @@ internal sealed class ExternalEcdhEsRecipient(IKeyCustodian custodian, EcdhEsCon
         // null, as it does in process, rather than throwing.
         try
         {
-            if (EcdhEsContentKey.EphemeralKeyFor(header, recipientKey) is not { } ephemeralKey
+            if (EcdhEsEphemeralKey.For(header, recipientKey) is not { } ephemeralKey
                 || contentKey.DerivationFor(header, algorithm, encryptedKey) is not { } derivation)
                 return null;
 
@@ -55,10 +54,6 @@ internal sealed class ExternalEcdhEsRecipient(IKeyCustodian custodian, EcdhEsCon
             {
                 CryptographicOperations.ZeroMemory(sharedSecretZ);
             }
-        }
-        catch (JsonException)
-        {
-            return null; // malformed 'epk'
         }
         catch (FormatException)
         {

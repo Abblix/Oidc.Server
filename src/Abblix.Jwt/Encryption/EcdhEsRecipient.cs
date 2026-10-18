@@ -29,7 +29,7 @@ internal sealed class EcdhEsRecipient(string algorithm, EcdhEsContentKey content
 	{
 		try
 		{
-			if (EcdhEsContentKey.EphemeralKeyFor(header, recipientKey) is not { } ephemeralKey
+			if (EcdhEsEphemeralKey.For(header, recipientKey) is not { } ephemeralKey
 			    || contentKey.DerivationFor(header, algorithm, encryptedKey) is not { } derivation)
 				return null;
 

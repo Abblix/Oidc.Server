@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
@@ -92,7 +93,7 @@ public class JsonWebTokenHeaderTests
         Assert.True(header.TryReadVerificationKey(out var parsed));
 
         Assert.NotNull(parsed);
-        Assert.Equal(key.KeyType, parsed!.KeyType);
+        Assert.Equal(key.KeyType, parsed.KeyType);
         Assert.Equal(key.KeyId, parsed.KeyId);
     }
 
@@ -104,6 +105,33 @@ public class JsonWebTokenHeaderTests
         var header = new JsonWebTokenHeader(json);
 
         Assert.False(header.TryReadVerificationKey(out _));
+    }
+
+    /// <summary>A 'jwk' that is not a JSON object is malformed, as a 'crit' that is not an array is.</summary>
+    [Fact]
+    public void VerificationKey_PresentAsAString_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = "not a key" };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadVerificationKey(out _));
+    }
+
+    /// <summary>
+    /// An 'epk' carries only the members the ephemeral key has (kty, crv, x, y), the wire form conformant JOSE peers
+    /// emit and expect, with no absent member written as a JSON null.
+    /// </summary>
+    [Fact]
+    public void EphemeralPublicKey_IsWrittenWithItsOwnMembersOnly()
+    {
+        using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        var key = new EllipticCurveJsonWebKey().Apply(ecdh.ExportParameters(false)) with { Algorithm = null };
+        var header = EmptyHeader();
+
+        header.SetEphemeralPublicKey(key);
+
+        var written = header.Json[JwtClaimTypes.EphemeralPublicKey]!.AsObject().Select(member => member.Key);
+        Assert.Equal(["crv", "kty", "x", "y"], written.Order());
     }
 
     /// <summary>An 'epk' that is an object but no valid key is malformed, not absent.</summary>
@@ -126,7 +154,7 @@ public class JsonWebTokenHeaderTests
         Assert.True(header.TryReadVerificationKey(out var parsed));
 
         Assert.NotNull(parsed);
-        Assert.Equal(key.KeyType, parsed!.KeyType);
+        Assert.Equal(key.KeyType, parsed.KeyType);
         Assert.Equal(key.KeyId, parsed.KeyId);
     }
 

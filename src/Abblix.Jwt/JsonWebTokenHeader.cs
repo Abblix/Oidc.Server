@@ -119,10 +119,10 @@ public class JsonWebTokenHeader(JsonObject json)
     /// verify the JWS, embedded directly in the JOSE header as a JWK. Trust is the consumer's responsibility -
     /// for example, DPoP (RFC 9449) binds this key to the request via a separate confirmation claim.
     /// </summary>
-    /// <param name="key">The key, or <c>null</c> when 'jwk' is absent or is not a JSON object.</param>
+    /// <param name="key">The key, or <c>null</c> when 'jwk' is absent.</param>
     /// <returns>
-    /// False when 'jwk' is an object that is not a valid JWK (an unknown 'kty', say), so a consumer cannot take a
-    /// malformed key for the absence of one.
+    /// False when 'jwk' is not a JSON object or is not a valid JWK (an unknown 'kty', say), so a consumer cannot take
+    /// a malformed key for the absence of one.
     /// </returns>
     public bool TryReadVerificationKey(out JsonWebKey? key) => JsonHeaderParameters.TryReadKey(Json, JwtClaimTypes.JsonWebKeyHeader, out key);
 
@@ -211,16 +211,16 @@ public class JsonWebTokenHeader(JsonObject json)
     /// Reads the 'epk' header parameter (RFC 7518 section 4.6.1.1): the originator's ephemeral public key for
     /// ECDH-ES key agreement, carried as a JWK with public members only.
     /// </summary>
-    /// <param name="key">The key, or <c>null</c> when 'epk' is absent or is not a JSON object.</param>
+    /// <param name="key">The key, or <c>null</c> when 'epk' is absent.</param>
     /// <returns>
-    /// False when 'epk' is an object that is not a valid JWK (an unknown 'kty', say): it comes from an untrusted
-    /// JWE header, and the ECDH-ES decryptor must reject the token rather than skip key agreement.
+    /// False when 'epk' is not a JSON object or is not a valid JWK (an unknown 'kty', say): it comes from an
+    /// untrusted JWE header, and the ECDH-ES decryptor must reject the token rather than skip key agreement.
     /// </returns>
     public bool TryReadEphemeralPublicKey(out JsonWebKey? key) => JsonHeaderParameters.TryReadKey(Json, JwtClaimTypes.EphemeralPublicKey, out key);
 
     /// <summary>Sets the 'epk' header parameter, or removes it when <paramref name="key"/> is null.</summary>
     public void SetEphemeralPublicKey(JsonWebKey? key)
-        => JsonHeaderParameters.SetKeyOmittingAbsentMembers(Json, JwtClaimTypes.EphemeralPublicKey, key);
+        => JsonHeaderParameters.SetKey(Json, JwtClaimTypes.EphemeralPublicKey, key);
 
     /// <summary>
     /// The 'apu' header parameter (RFC 7518 section 4.6.1.2): base64url-encoded Agreement PartyUInfo

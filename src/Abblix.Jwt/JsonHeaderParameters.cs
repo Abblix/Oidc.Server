@@ -7,7 +7,6 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 
 namespace Abblix.Jwt;
 
@@ -57,14 +56,16 @@ internal static class JsonHeaderParameters
     }
 
     /// <summary>
-    /// Reads a header parameter holding a JWK: true with <c>null</c> when it is absent or is not an object, false when
-    /// it is an object that is not a valid JWK.
+    /// Reads a header parameter holding a JWK: true with <c>null</c> when it is absent, false when it is not an
+    /// object or is an object that is not a valid JWK.
     /// </summary>
     public static bool TryReadKey(JsonObject json, string name, out JsonWebKey? key)
     {
         key = null;
-        if (!json.TryGetPropertyValue(name, out var node) || node is not JsonObject obj)
+        if (!json.TryGetPropertyValue(name, out var node) || node is null)
             return true;
+        if (node is not JsonObject obj)
+            return false;
 
         try
         {
@@ -86,21 +87,4 @@ internal static class JsonHeaderParameters
             json.Remove(name);
     }
 
-    /// <summary>
-    /// Writes a header parameter holding a JWK with absent members omitted rather than written as JSON nulls, the
-    /// wire form conformant JOSE peers emit and expect for an ephemeral key (kty, crv, x, y only); removes it when
-    /// the key is null.
-    /// </summary>
-    public static void SetKeyOmittingAbsentMembers(JsonObject json, string name, JsonWebKey? key)
-    {
-        if (key is not null)
-            json[name] = JsonSerializer.SerializeToNode(key, OmittingAbsentMembers);
-        else
-            json.Remove(name);
-    }
-
-    private static readonly JsonSerializerOptions OmittingAbsentMembers = new()
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 }
