@@ -38,7 +38,7 @@ public class AddOidcCorsTests
         var policy = BuildOidcPolicy();
 
         Assert.NotNull(policy);
-        Assert.True(policy!.AllowAnyOrigin);
+        Assert.True(policy.AllowAnyOrigin);
         Assert.False(policy.SupportsCredentials);
     }
 
@@ -49,7 +49,7 @@ public class AddOidcCorsTests
             services.Configure<OidcCorsOptions>(o => o.AllowedOrigins.Add("https://spa.example.com")));
 
         Assert.NotNull(policy);
-        Assert.False(policy!.AllowAnyOrigin);
+        Assert.False(policy.AllowAnyOrigin);
         Assert.Equal(["https://spa.example.com"], policy.Origins);
     }
 
@@ -62,7 +62,7 @@ public class AddOidcCorsTests
             OidcConstants.CorsPolicyName, p => p.WithOrigins("https://trusted.example.com"))));
 
         Assert.NotNull(policy);
-        Assert.False(policy!.AllowAnyOrigin);
+        Assert.False(policy.AllowAnyOrigin);
         Assert.Equal(["https://trusted.example.com"], policy.Origins);
     }
 
@@ -73,6 +73,6 @@ public class AddOidcCorsTests
         var policy = BuildOidcPolicy(services => services.AddOidcCors());
 
         Assert.NotNull(policy);
-        Assert.True(policy!.AllowAnyOrigin);
+        Assert.True(policy.AllowAnyOrigin);
     }
 }

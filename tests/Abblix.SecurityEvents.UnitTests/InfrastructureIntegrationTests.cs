@@ -249,7 +249,7 @@ public class InfrastructureIntegrationTests
 
         // Signed OVER the bad header, so the token is genuine and only its structure is wrong. A header
         // edited after signing would fail on the signature instead and prove nothing.
-        built.Token.Header.Critical = ["not-a-real-header"];
+        built.Token.Header.SetCritical(["not-a-real-header"]);
 
         var compact = await host.GetRequiredService<ISecurityEventTokenSigner>()
             .SignAsync(built, TestContext.Current.CancellationToken);

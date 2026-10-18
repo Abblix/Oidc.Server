@@ -40,7 +40,7 @@ public class JsonSerializationBinderRarTests
         var merged = await binder.BindModelAsync(jwtPayload, baseRequest);
 
         Assert.NotNull(merged);
-        Assert.Equal("client-123", merged!.ClientId);
+        Assert.Equal("client-123", merged.ClientId);
         Assert.NotNull(merged.AuthorizationDetails);
         Assert.Equal(WireJson, merged.AuthorizationDetails!.ToJsonString());
     }
@@ -66,7 +66,7 @@ public class JsonSerializationBinderRarTests
         Assert.NotNull(merged);
         // JAR is the integrity-protected source - JWT-side value wins over the
         // outer raw form parameter on conflict (RFC 9101 section 5).
-        Assert.Equal(WireJson, merged!.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(WireJson, merged.AuthorizationDetails!.ToJsonString());
     }
 
     [Fact]
@@ -83,6 +83,6 @@ public class JsonSerializationBinderRarTests
         var merged = await binder.BindModelAsync(jwtPayload, baseRequest);
 
         Assert.NotNull(merged);
-        Assert.Null(merged!.AuthorizationDetails);
+        Assert.Null(merged.AuthorizationDetails);
     }
 }

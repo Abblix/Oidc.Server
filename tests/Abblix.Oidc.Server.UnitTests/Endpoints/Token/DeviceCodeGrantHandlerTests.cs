@@ -219,7 +219,7 @@ public class DeviceCodeGrantHandlerTests
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(UserId, grant!.AuthSession.Subject);
+        Assert.Equal(UserId, grant.AuthSession.Subject);
     }
 
     /// <summary>

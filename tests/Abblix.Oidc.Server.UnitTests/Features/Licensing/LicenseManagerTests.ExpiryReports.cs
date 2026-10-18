@@ -94,7 +94,7 @@ public partial class LicenseManagerTests
         var active = manager.GenerateActiveLicense(Moment);
 
         Assert.NotNull(active);
-        Assert.Equal(5, active!.ClientLimit);
+        Assert.Equal(5, active.ClientLimit);
         Assert.Equal(1, active.IssuerLimit);
     }
 
@@ -120,7 +120,7 @@ public partial class LicenseManagerTests
         var active = manager.GenerateActiveLicense(Moment);
 
         Assert.NotNull(active);
-        Assert.Equal(5, active!.ClientLimit);
+        Assert.Equal(5, active.ClientLimit);
         Assert.Equal(1, active.IssuerLimit);
     }
 
@@ -148,7 +148,7 @@ public partial class LicenseManagerTests
         var active = manager.GenerateActiveLicense(Moment);
 
         Assert.NotNull(active);
-        Assert.Equal(5, active!.ClientLimit);
+        Assert.Equal(5, active.ClientLimit);
         Assert.Equal(1, active.IssuerLimit);
     }
 
@@ -181,7 +181,7 @@ public partial class LicenseManagerTests
         {
             var active = manager.GenerateActiveLicense(Moment);
             Assert.NotNull(active);
-            Assert.Equal(50, active!.ClientLimit);
+            Assert.Equal(50, active.ClientLimit);
         }
         finally
         {
@@ -247,7 +247,7 @@ public partial class LicenseManagerTests
         // manager that never took the licenses in, which is silent for a reason nobody wants.
         var active = manager.GenerateActiveLicense(Moment);
         Assert.NotNull(active);
-        Assert.Equal(50, active!.ClientLimit);
+        Assert.Equal(50, active.ClientLimit);
     }
 
     /// <summary>
@@ -331,7 +331,7 @@ public partial class LicenseManagerTests
         // took no licenses in, which is silent for a reason nobody wants.
         var active = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
         Assert.NotNull(active);
-        Assert.Equal(50, active!.ClientLimit);
+        Assert.Equal(50, active.ClientLimit);
     }
 
     /// <summary>
@@ -355,7 +355,7 @@ public partial class LicenseManagerTests
         {
             var active = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
             Assert.NotNull(active);
-            Assert.Equal(5, active!.ClientLimit);
+            Assert.Equal(5, active.ClientLimit);
         }
         finally
         {
@@ -397,7 +397,7 @@ public partial class LicenseManagerTests
         {
             var active = manager.GenerateActiveLicense(Moment);
             Assert.NotNull(active);
-            Assert.Equal(5, active!.ClientLimit);
+            Assert.Equal(5, active.ClientLimit);
         }
         finally
         {

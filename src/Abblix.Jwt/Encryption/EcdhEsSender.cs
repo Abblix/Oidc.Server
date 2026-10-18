@@ -63,12 +63,12 @@ internal sealed class EcdhEsSender(string algorithm)
 		using var ephemeral = ECDiffieHellman.Create(recipient.ExportParameters(false).Curve);
 
 		var ephemeralParameters = ephemeral.ExportParameters(false);
-		header.EphemeralPublicKey = new EllipticCurveJsonWebKey().Apply(ephemeralParameters) with
+		header.SetEphemeralPublicKey(new EllipticCurveJsonWebKey().Apply(ephemeralParameters) with
 		{
 			// 'epk' carries the ephemeral public key only: no private material by construction
 			// (public export above), and none of the optional JWK members Apply infers.
 			Algorithm = null,
-		};
+		});
 
 		// Z is the raw ECDH shared secret named by NIST SP 800-56A and RFC 7518 section 4.6. DeriveRawSecretAgreement
 		// yields exactly what the fused DeriveKeyFromHash would hash internally, so the derived key is byte-identical

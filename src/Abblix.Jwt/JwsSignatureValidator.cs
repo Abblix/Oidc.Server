@@ -57,7 +57,7 @@ internal sealed class JwsSignatureValidator(IJsonWebTokenSigner signer)
     /// resolving by <c>iss</c> would either no-op or - worse - reintroduce the auto-trust
     /// surface this branch exists to keep closed.
     /// </summary>
-    /// <param name="token">The parsed token; its <see cref="JsonWebTokenHeader.VerificationKey"/>
+    /// <param name="token">The parsed token; its <see cref="JsonWebTokenHeader.TryReadVerificationKey"/>
     /// supplies the candidate key.</param>
     /// <param name="jwtParts">The three compact-serialization segments
     /// (<c>header.payload.signature</c>) needed to recompute and compare the signature.</param>
@@ -68,12 +68,7 @@ internal sealed class JwsSignatureValidator(IJsonWebTokenSigner signer)
     private async Task<Result<JsonWebToken, JwtValidationError>> ValidateEmbeddedKeyAsync(
         JsonWebToken token, string[] jwtParts)
     {
-        JsonWebKey? embeddedJwk;
-        try
-        {
-            embeddedJwk = token.Header.VerificationKey;
-        }
-        catch (JsonException)
+        if (!token.Header.TryReadVerificationKey(out var embeddedJwk))
         {
             return new JwtValidationError(
                 JwtError.InvalidHeader,

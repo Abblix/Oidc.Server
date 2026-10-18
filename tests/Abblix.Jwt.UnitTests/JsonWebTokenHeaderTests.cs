@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
@@ -77,7 +78,8 @@ public class JsonWebTokenHeaderTests
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.VerificationKey);
+        Assert.True(header.TryReadVerificationKey(out var key));
+        Assert.Null(key);
     }
 
     [Fact]
@@ -88,11 +90,58 @@ public class JsonWebTokenHeaderTests
         var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = keyJson };
         var header = new JsonWebTokenHeader(json);
 
-        var parsed = header.VerificationKey;
+        Assert.True(header.TryReadVerificationKey(out var parsed));
 
         Assert.NotNull(parsed);
-        Assert.Equal(key.KeyType, parsed!.KeyType);
+        Assert.Equal(key.KeyType, parsed.KeyType);
         Assert.Equal(key.KeyId, parsed.KeyId);
+    }
+
+    /// <summary>A 'jwk' that is an object but no valid key is malformed, not absent.</summary>
+    [Fact]
+    public void VerificationKey_PresentAsAnInvalidKey_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = new JsonObject { ["kty"] = "unknown" } };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadVerificationKey(out _));
+    }
+
+    /// <summary>A 'jwk' that is not a JSON object is malformed, as a 'crit' that is not an array is.</summary>
+    [Fact]
+    public void VerificationKey_PresentAsAString_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = "not a key" };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadVerificationKey(out _));
+    }
+
+    /// <summary>
+    /// An 'epk' carries only the members the ephemeral key has (kty, crv, x, y), the wire form conformant JOSE peers
+    /// emit and expect, with no absent member written as a JSON null.
+    /// </summary>
+    [Fact]
+    public void EphemeralPublicKey_IsWrittenWithItsOwnMembersOnly()
+    {
+        using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        var key = new EllipticCurveJsonWebKey().Apply(ecdh.ExportParameters(false)) with { Algorithm = null };
+        var header = EmptyHeader();
+
+        header.SetEphemeralPublicKey(key);
+
+        var written = header.Json[JwtClaimTypes.EphemeralPublicKey]!.AsObject().Select(member => member.Key);
+        Assert.Equal(["crv", "kty", "x", "y"], written.Order());
+    }
+
+    /// <summary>An 'epk' that is an object but no valid key is malformed, not absent.</summary>
+    [Fact]
+    public void EphemeralPublicKey_PresentAsAnInvalidKey_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.EphemeralPublicKey] = new JsonObject { ["kty"] = "unknown" } };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadEphemeralPublicKey(out _));
     }
 
     [Fact]
@@ -101,11 +150,11 @@ public class JsonWebTokenHeaderTests
         var header = EmptyHeader();
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
 
-        header.VerificationKey = key;
-        var parsed = header.VerificationKey;
+        header.SetVerificationKey(key);
+        Assert.True(header.TryReadVerificationKey(out var parsed));
 
         Assert.NotNull(parsed);
-        Assert.Equal(key.KeyType, parsed!.KeyType);
+        Assert.Equal(key.KeyType, parsed.KeyType);
         Assert.Equal(key.KeyId, parsed.KeyId);
     }
 
@@ -113,9 +162,9 @@ public class JsonWebTokenHeaderTests
     public void VerificationKey_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.VerificationKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
+        header.SetVerificationKey(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false));
 
-        header.VerificationKey = null;
+        header.SetVerificationKey(null);
 
         Assert.False(header.Json.ContainsKey(JwtClaimTypes.JsonWebKeyHeader));
     }
@@ -160,7 +209,8 @@ public class JsonWebTokenHeaderTests
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.Certificates);
+        Assert.True(header.TryReadCertificates(out var chain));
+        Assert.Null(chain);
     }
 
     [Fact]
@@ -174,7 +224,7 @@ public class JsonWebTokenHeaderTests
         };
         var header = new JsonWebTokenHeader(json);
 
-        var chain = header.Certificates;
+        Assert.True(header.TryReadCertificates(out var chain));
 
         Assert.NotNull(chain);
         Assert.Equal([leaf, intermediate], chain);
@@ -186,27 +236,28 @@ public class JsonWebTokenHeaderTests
         var header = EmptyHeader();
         var chain = new[] { "MIIDleaf==", "MIIDintermediate==" };
 
-        header.Certificates = chain;
+        header.SetCertificates(chain);
 
-        Assert.Equal(chain, header.Certificates);
+        Assert.True(header.TryReadCertificates(out var read));
+        Assert.Equal(chain, read);
     }
 
     [Fact]
-    public void Certificates_PresentAsNonArray_Throws()
+    public void Certificates_PresentAsNonArray_IsMalformed()
     {
         var json = new JsonObject { [JwtClaimTypes.X509CertificateChain] = "MIIDleaf==" };
         var header = new JsonWebTokenHeader(json);
 
-        Assert.Throws<JsonException>(() => header.Certificates);
+        Assert.False(header.TryReadCertificates(out _));
     }
 
     [Fact]
     public void Certificates_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.Certificates = ["MIIDleaf=="];
+        header.SetCertificates(["MIIDleaf=="]);
 
-        header.Certificates = null;
+        header.SetCertificates(null);
 
         Assert.False(header.Json.ContainsKey(JwtClaimTypes.X509CertificateChain));
     }

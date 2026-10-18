@@ -407,8 +407,8 @@ public class ExternalKeyDecryptorTests
         {
             Algorithm = EncryptionAlgorithms.KeyManagement.EcdhEs,
             EncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
-            EphemeralPublicKey = ephemeral.Sanitize(includePrivateKeys: false),
         };
+        header.SetEphemeralPublicKey(ephemeral.Sanitize(includePrivateKeys: false));
 
         return (custodian, decryptor, publicOnly, header);
     }

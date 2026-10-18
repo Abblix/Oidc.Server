@@ -53,7 +53,7 @@ public class AddPairwiseSubjectIdentifiersTests
         using var provider = services.BuildServiceProvider();
         var settings = provider.GetService<PairwiseSubjectSettings>();
         Assert.NotNull(settings);
-        Assert.Equal(ValidSalt, settings!.Salt);
+        Assert.Equal(ValidSalt, settings.Salt);
     }
 
     /// <summary>Each way a salt can be unusable is refused where the instance is handed over.</summary>
@@ -116,7 +116,7 @@ public class AddPairwiseSubjectIdentifiersTests
         // The control: the binder really did build one, so what follows is about the salt rather than about a
         // section that bound to nothing.
         Assert.NotNull(bound);
-        Assert.Null(bound!.Salt);
+        Assert.Null(bound.Salt);
 
         Assert.Throws<ArgumentException>(
             () => new ServiceCollection().AddPairwiseSubjectIdentifiers(bound));

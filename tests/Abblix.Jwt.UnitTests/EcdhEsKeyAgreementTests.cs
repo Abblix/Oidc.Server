@@ -154,7 +154,7 @@ public class EcdhEsKeyAgreementTests
 		var foreignCurveKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384);
 
 		var header = CreateAppendixCHeader();
-		header.EphemeralPublicKey = (EllipticCurveJsonWebKey)foreignCurveKey.Sanitize(includePrivateKeys: false);
+		header.SetEphemeralPublicKey(foreignCurveKey.Sanitize(includePrivateKeys: false));
 
 		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
 
@@ -203,12 +203,15 @@ public class EcdhEsKeyAgreementTests
 
 		// Assert: 'epk' carries a public-only EC key on the recipient's curve; encrypted key is empty
 		Assert.Empty(encryptedKey);
-		var ephemeralKey = Assert.IsType<EllipticCurveJsonWebKey>(header.EphemeralPublicKey);
+		Assert.True(header.TryReadEphemeralPublicKey(out var epk));
+		var ephemeralKey = Assert.IsType<EllipticCurveJsonWebKey>(epk);
 		Assert.Equal(recipientKey.Curve, ephemeralKey.Curve);
 		Assert.True(ephemeralKey.HasPublicKey);
 		Assert.False(ephemeralKey.HasPrivateKey);
-		Assert.False(((JsonObject)header.Json[JwtClaimTypes.EphemeralPublicKey]!)
-			.ContainsKey(JsonWebKeyPropertyNames.PrivateExponent));
+		// The wire form a recipient reads: the ephemeral key's own public members and nothing else
+		Assert.Equal(
+			["crv", "kty", "x", "y"],
+			((JsonObject)header.Json[JwtClaimTypes.EphemeralPublicKey]!).Select(member => member.Key).Order());
 
 		// Assert: the recipient re-derives exactly the same CEK from the published header
 		Assert.True(encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var rederivedKey));
