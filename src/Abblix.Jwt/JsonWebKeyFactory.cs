@@ -5,8 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Security.Cryptography;
-using Abblix.Utils;
 
 namespace Abblix.Jwt;
 
@@ -29,46 +27,7 @@ public static class JsonWebKeyFactory
     /// <paramref name="keySize"/> is below <see cref="KeySizeFloors.MinimumRsaKeyBits"/> - a size
     /// this library would refuse to sign or encrypt with, so it does not produce one either.</exception>
     public static RsaJsonWebKey CreateRsa(string usage, string? algorithm = null, int keySize = 2048)
-    {
-        if (usage is not (PublicKeyUsages.Signature or PublicKeyUsages.Encryption))
-        {
-            throw new ArgumentException(
-                $"Invalid usage specified. Valid options are '{PublicKeyUsages.Signature}' for signing" +
-                $" or '{PublicKeyUsages.Encryption}' for encryption.",
-                nameof(usage));
-        }
-
-        if (keySize < KeySizeFloors.MinimumRsaKeyBits)
-        {
-            throw new ArgumentException(
-                $"An RSA key of {keySize} bits cannot be used for JOSE: RFC 7518 requires at least " +
-                $"{KeySizeFloors.MinimumRsaKeyBits}, and this library refuses to sign or encrypt " +
-                "with anything smaller. Raise the configured key size.",
-                nameof(keySize));
-        }
-
-        using var rsa = RSA.Create();
-        rsa.KeySize = keySize;
-        var parameters = rsa.ExportParameters(true);
-
-        var key = new RsaJsonWebKey
-        {
-            KeyId = parameters.ToKeyId(),
-            Algorithm = algorithm,
-            Usage = usage,
-            Exponent = parameters.Exponent,
-            Modulus = parameters.Modulus,
-            PrivateExponent = parameters.D,
-            FirstPrimeFactor = parameters.P,
-            SecondPrimeFactor = parameters.Q,
-            FirstFactorCrtExponent = parameters.DP,
-            SecondFactorCrtExponent = parameters.DQ,
-            FirstCrtCoefficient = parameters.InverseQ,
-        };
-
-        return key;
-
-    }
+        => RsaJsonWebKeyFactory.CreateRsa(usage, algorithm, keySize);
 
     /// <summary>
     /// Creates an Elliptic Curve JsonWebKey with a specified curve.
@@ -77,31 +36,7 @@ public static class JsonWebKeyFactory
     /// <param name="algorithm">The signing algorithm. Common values: ES256, ES384, ES512.</param>
     /// <returns>A <see cref="EllipticCurveJsonWebKey"/> suitable for ECDSA signing operations.</returns>
     public static EllipticCurveJsonWebKey CreateEllipticCurve(string curve, string algorithm)
-    {
-        var ecCurve = curve switch
-        {
-            EllipticCurveTypes.P256 => ECCurve.NamedCurves.nistP256,
-            EllipticCurveTypes.P384 => ECCurve.NamedCurves.nistP384,
-            EllipticCurveTypes.P521 => ECCurve.NamedCurves.nistP521,
-            _ => throw new ArgumentException($"Unsupported elliptic curve: {curve}", nameof(curve))
-        };
-
-        using var ecdsa = ECDsa.Create(ecCurve);
-        var parameters = ecdsa.ExportParameters(true);
-
-        var key = new EllipticCurveJsonWebKey
-        {
-            KeyId = ComputeEcKeyId(parameters),
-            Algorithm = algorithm,
-            Usage = PublicKeyUsages.Signature,
-            Curve = curve,
-            X = parameters.Q.X,
-            Y = parameters.Q.Y,
-            PrivateKey = parameters.D,
-        };
-
-        return key;
-    }
+        => EllipticCurveJsonWebKeyFactory.CreateEllipticCurve(curve, algorithm);
 
     /// <summary>
     /// Creates a symmetric (Octet) JsonWebKey for HMAC signing.
@@ -110,52 +45,5 @@ public static class JsonWebKeyFactory
     /// <param name="keySize">The key size in bytes. Defaults based on algorithm: HS256=32, HS384=48, HS512=64.</param>
     /// <returns>A <see cref="OctetJsonWebKey"/> suitable for HMAC signing operations.</returns>
     public static OctetJsonWebKey CreateHmac(string algorithm, int? keySize = null)
-    {
-        var size = keySize ?? algorithm switch
-        {
-            SigningAlgorithms.HS256 => 32, // 256 bits
-            SigningAlgorithms.HS384 => 48, // 384 bits
-            SigningAlgorithms.HS512 => 64, // 512 bits
-            _ => throw new ArgumentException($"Unsupported HMAC algorithm: {algorithm}", nameof(algorithm))
-        };
-
-        var keyValue = CryptoRandom.GetRandomBytes(size);
-
-        var key = new OctetJsonWebKey
-        {
-            KeyId = SHA256.HashData(keyValue).ToHexString(),
-            Algorithm = algorithm,
-            Usage = PublicKeyUsages.Signature,
-            KeyValue = keyValue,
-        };
-
-        return key;
-    }
-
-    private static string ToKeyId(this RSAParameters parameters)
-    {
-        var keyMaterial = (parameters.Modulus, parameters.Exponent) switch
-        {
-            ({} modulus, {} exponent) => modulus.Concat(exponent),
-            ({} modulus, null) => modulus,
-            (null, {} exponent) => exponent,
-            (null, null) => Array.Empty<byte>(),
-        };
-
-        return SHA256.HashData(keyMaterial).ToHexString();
-    }
-
-    private static string ComputeEcKeyId(ECParameters parameters)
-    {
-        var keyMaterial = (parameters.Q.X, parameters.Q.Y) switch
-        {
-            ({} x, {} y) => x.Concat(y),
-            ({} x, null) => x,
-            (null, {} y) => y,
-            (null, null) => [],
-        };
-
-        return SHA256.HashData(keyMaterial).ToHexString();
-    }
-
+        => OctetJsonWebKeyFactory.CreateHmac(algorithm, keySize);
 }
