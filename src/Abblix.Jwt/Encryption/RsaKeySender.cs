@@ -27,13 +27,13 @@ internal sealed class RsaKeySender(string algorithm, RSAEncryptionPadding paddin
 		// the platform's importer. Checked before the import, which is what introduces that dependence.
 		// See ModulusBitLength, both for the platform split and for why padding on that scale is not the
 		// benign one-octet quirk the specification records.
-		const int minimumKeySize = JsonWebKeyExtensions.MinimumRsaKeyBits;
+		const int minimumKeySize = KeySizeFloors.MinimumRsaKeyBits;
 		var bits = rsaKey.ModulusBitLength();
 		if (bits < minimumKeySize)
 		{
 			throw new InvalidOperationException(
 				$"The key (kid={rsaKey.KeyId}) has a {bits}-bit modulus. {algorithm} requires at least " +
-				$"{minimumKeySize} bits per RFC 7518 {JsonWebKeyExtensions.RsaSectionFor(algorithm)}.");
+				$"{minimumKeySize} bits per RFC 7518 {KeySizeFloors.RsaSectionFor(algorithm)}.");
 		}
 
 		using var rsa = rsaKey.ToRsa();

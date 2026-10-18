@@ -28,7 +28,7 @@ public class InMemoryKeyRingTests
         // These tests care about which keys are offered and in what order, never about the strength of
         // one. The floor is what the factory will mint, so a smaller size is refused where it is created
         // rather than at the first signature.
-        RsaKeySize = JsonWebKeyExtensions.MinimumRsaKeyBits,
+        RsaKeySize = KeySizeFloors.MinimumRsaKeyBits,
     };
 
     private static InMemoryKeyRing CreateRing(TimeProvider timeProvider, LocalKeys? policy = null)

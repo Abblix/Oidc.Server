@@ -26,7 +26,7 @@ public static class JsonWebKeyFactory
     /// this library will mint.</param>
     /// <returns>A <see cref="RsaJsonWebKey"/> configured for the specified algorithm.</returns>
     /// <exception cref="ArgumentException">The usage is neither signing nor encryption, or
-    /// <paramref name="keySize"/> is below <see cref="JsonWebKeyExtensions.MinimumRsaKeyBits"/> - a size
+    /// <paramref name="keySize"/> is below <see cref="KeySizeFloors.MinimumRsaKeyBits"/> - a size
     /// this library would refuse to sign or encrypt with, so it does not produce one either.</exception>
     public static RsaJsonWebKey CreateRsa(string usage, string? algorithm = null, int keySize = 2048)
     {
@@ -38,11 +38,11 @@ public static class JsonWebKeyFactory
                 nameof(usage));
         }
 
-        if (keySize < JsonWebKeyExtensions.MinimumRsaKeyBits)
+        if (keySize < KeySizeFloors.MinimumRsaKeyBits)
         {
             throw new ArgumentException(
                 $"An RSA key of {keySize} bits cannot be used for JOSE: RFC 7518 requires at least " +
-                $"{JsonWebKeyExtensions.MinimumRsaKeyBits}, and this library refuses to sign or encrypt " +
+                $"{KeySizeFloors.MinimumRsaKeyBits}, and this library refuses to sign or encrypt " +
                 "with anything smaller. Raise the configured key size.",
                 nameof(keySize));
         }

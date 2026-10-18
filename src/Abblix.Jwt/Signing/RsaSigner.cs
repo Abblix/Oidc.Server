@@ -30,7 +30,7 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	/// seam. So the floor below runs in both directions, and deleting it would leave a custodian
 	/// deployment with nothing refusing an undersized key published in a peer's JWKS.
 	/// </remarks>
-	private const int MinimumKeySizeBits = JsonWebKeyExtensions.MinimumRsaKeyBits;
+	private const int MinimumKeySizeBits = KeySizeFloors.MinimumRsaKeyBits;
 
 	private readonly (HashAlgorithmName hashAlgorithm, RSASignaturePadding padding) _parameters = GetAlgorithmParameters(algorithm);
 
@@ -52,7 +52,7 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 			throw new ArgumentException(
 				$"The signing key (kid={rsaKey.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
 				$"least {MinimumKeySizeBits} bits per RFC 7518 " +
-				$"{JsonWebKeyExtensions.RsaSectionFor(algorithm)}.",
+				$"{KeySizeFloors.RsaSectionFor(algorithm)}.",
 				nameof(rsaKey));
 
 		using var rsa = rsaKey.ToRsa();

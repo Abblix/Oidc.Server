@@ -47,7 +47,7 @@ public class CompositeSignerKeyFloorTests
                 TestContext.Current.CancellationToken));
 
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
-        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+        Assert.Contains(KeySizeFloors.MinimumRsaKeyBits.ToString(), error.Message);
 
         // The COMPOSED sentence, not the pieces. Two functions can each return something correct and
         // still produce a message that says "per RFC 7518" twice, which is exactly what happened: the
@@ -71,7 +71,7 @@ public class CompositeSignerKeyFloorTests
         var composite = new CompositeSigner([new ExternalKeys.ExternalKeySigner(custodian)]);
 
         var signature = await composite.SignAsync(
-            PublicOnlyKey(JsonWebKeyExtensions.MinimumRsaKeyBits), SigningAlgorithms.RS256, SampleData,
+            PublicOnlyKey(KeySizeFloors.MinimumRsaKeyBits), SigningAlgorithms.RS256, SampleData,
             TestContext.Current.CancellationToken);
 
         Assert.True(custodian.WasAsked);
@@ -97,7 +97,7 @@ public class CompositeSignerKeyFloorTests
                 TestContext.Current.CancellationToken));
 
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
-        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+        Assert.Contains(KeySizeFloors.MinimumRsaKeyBits.ToString(), error.Message);
 
         // The arm with no section of its own has to read as a sentence too - stated positively, because
         // the negative form cannot fail here: this arm never begins with "per", so a doubled prefix

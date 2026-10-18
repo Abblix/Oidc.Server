@@ -73,13 +73,13 @@ public class SignedMetadataProvider(
     /// Names the algorithm to sign with: the one the key declares, or the standard one for its kind.
     /// </summary>
     /// <remarks>
-    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL on a key, and the rest of this server honours that - a key
+    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL on a key, and the rest of this server honors that - a key
     /// declaring no algorithm is usable with any compatible one (see
     /// <c>JsonWebKeyExtensions.FirstByAlgorithmAsync</c>). Reading the algorithm straight off the key
     /// inverted that rule here, and since a key imported from an RSA certificate declares none, every such
     /// deployment answered its discovery endpoint with an error once signed metadata was switched on.
     /// The fallback for elliptic-curve keys follows the curve, the same pairing
-    /// <c>JsonWebKeyExtensions.Apply</c> uses when it imports one.
+    /// <c>EllipticCurveJsonWebKeyExtensions.Apply</c> uses when it imports one.
     /// </remarks>
     private static string SigningAlgorithmFor(JsonWebKey signingKey)
     {
