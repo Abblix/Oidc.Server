@@ -16,9 +16,6 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <param name="schedule">The clock and the rotation period an adopted key is dated by.</param>
 internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy, KeyRingSchedule schedule)
 {
-    /// <summary>What every adopted entry's id begins with, and no minted entry's does.</summary>
-    private const string AdoptedPrefix = "adopted-";
-
     /// <summary>
     /// Takes the keys the server already signs with into a ring that has minted nothing yet, and reports whether it
     /// claimed any, whether this pod's claim won or another's did.
@@ -41,33 +38,18 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
         IKeyRingStore source,
         CancellationToken cancellationToken)
     {
-        if (policy.AdoptedKeys.Count == 0 ||
-            entries.Any(entry => !entry.Id.StartsWith(AdoptedPrefix, StringComparison.Ordinal)))
-        {
+        if (policy.AdoptedKeys.Count == 0 || entries.Any(entry => !AdoptedEntries.IsAdopted(entry.Id)))
             return false;
-        }
-
-        // Dated one rotation period back, which is what makes it the active key: the key minted in this same
-        // refresh is younger than the propagation window, so it is published and verifiable while this one keeps
-        // producing, and it takes over once the window has passed.
-        var createdAt = schedule.Now - schedule.RotateEvery;
 
         // Every key is checked, and named, before the custodian is asked or anything is stored, so a refused set
         // leaves the ring without the keys listed before the refused one
-        var ids = new string[policy.AdoptedKeys.Count];
-        for (var index = 0; index < ids.Length; index++)
-        {
-            var key = policy.AdoptedKeys[index];
-            if (!key.HasPrivateKey)
-            {
-                throw new InvalidOperationException(
-                    $"The key '{key.KeyId}' has no private half, so it cannot be adopted: an adopted key is the " +
-                    "one that produces until the minted key's propagation window has passed, and producing needs " +
-                    "the private half. Pass the key as it is loaded from its certificate or store.");
-            }
+        var ids = AdoptedEntries.IdsFor(policy.AdoptedKeys);
 
-            ids[index] = AdoptedPrefix + key.ComputeJwkThumbprintBase64Url();
-        }
+        // Dated a rotation period before the current one, which is what makes the first of them the active key:
+        // the key minted in this same refresh is younger than the propagation window, so it is published and
+        // verifiable while this one keeps producing, and it takes over once the window has passed. The date is
+        // read off the rotation grid rather than the clock, so every pod adopting in one period dates the set alike.
+        var dates = AdoptedEntries.DatesFor(entries, ids, schedule.CurrentPeriodStart - schedule.RotateEvery);
 
         var sealedKeys = await sealing.SealAllAsync(policy.AdoptedKeys, cancellationToken);
         for (var index = 0; index < sealedKeys.Count; index++)
@@ -76,7 +58,7 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
             {
                 Id = ids[index],
                 Jwe = sealedKeys[index],
-                CreatedAt = createdAt,
+                CreatedAt = dates[index],
             };
 
             _ = await source.TryAddAsync(entry, cancellationToken);
