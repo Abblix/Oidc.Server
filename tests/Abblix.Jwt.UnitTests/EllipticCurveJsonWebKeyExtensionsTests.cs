@@ -38,6 +38,12 @@ public class EllipticCurveJsonWebKeyExtensionsTests
         Assert.Equal(algorithm, key.Algorithm);
     }
 
+    /// <summary>A key is not generated on a curve outside the three, and the caller's argument is what is refused.</summary>
+    [Fact]
+    public void GeneratingAKeyOnAnUnsupportedCurve_IsRefused()
+        => Assert.Throws<ArgumentException>(
+            () => JsonWebKeyFactory.CreateEllipticCurve("secp256k1", SigningAlgorithms.ES256));
+
     /// <summary>A curve outside the three is refused rather than imported under a name it does not have.</summary>
     [Fact]
     public void AnImportedKeyOnAnUnsupportedCurve_IsRefused()
