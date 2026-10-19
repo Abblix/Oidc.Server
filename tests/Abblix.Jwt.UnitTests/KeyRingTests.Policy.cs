@@ -38,14 +38,14 @@ public sealed partial class KeyRingTests
     /// still adopts every existing key and serves them, the first listed signing.
     /// </summary>
     [Theory]
-    [InlineData(10675199)]
-    [InlineData(1500 * 366)]
-    public async Task ARingThatBarelyRotates_AdoptsEveryExistingKey(int rotateEveryDays)
+    [InlineData(long.MaxValue)]
+    [InlineData(TimeSpan.TicksPerDay * 1500 * 366)]
+    public async Task ARingThatBarelyRotates_AdoptsEveryExistingKey(long rotateEveryTicks)
     {
         var current = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         var older = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
-        var (ring, _) = CreateRing(rotateEvery: TimeSpan.FromDays(rotateEveryDays), adoptedKeys: [current, older]);
+        var (ring, _) = CreateRing(rotateEvery: TimeSpan.FromTicks(rotateEveryTicks), adoptedKeys: [current, older]);
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
 
         var served = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId).ToList();

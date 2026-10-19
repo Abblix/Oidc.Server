@@ -433,6 +433,21 @@ public class InMemoryKeyRingTests
     }
 
     /// <summary>
+    /// A host that registered a ring of its own still gets the clock from the call: token validation reads it, and a
+    /// host using this package alone has nothing else registering one.
+    /// </summary>
+    [Fact]
+    public async Task ARingOfTheHostsOwn_StillLeavesTheClockRegistered()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(Mock.Of<IKeyRing>());
+        services.AddInMemoryKeyRing(Policy);
+        await using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<TimeProvider>());
+    }
+
+    /// <summary>
     /// A ring keeping a retired key for less than the time a new key is announced before it signs would drop the
     /// key still signing, so the new one would sign before clients could have fetched it. The ring refuses such a
     /// policy when it is made, the moment it learns how long that announcement is.

@@ -34,6 +34,10 @@ internal static class LocalKeyRingServiceCollectionExtensions
         // it registers
         KeyRingPolicyChecks.EnsureRotatable(policy);
 
+        // The ring reads the clock, and so does token validation, while this package is consumable without the
+        // registrations that would otherwise have supplied one: registered even when the host's own ring stands
+        services.TryAddSingleton(TimeProvider.System);
+
         // A ring is registered once, and a later call takes no effect: its policy is not checked against the settings
         // either, or the host would be refused over a policy no ring runs
         if (services.Any(descriptor => descriptor.ServiceType == typeof(IKeyRing)))
@@ -47,10 +51,6 @@ internal static class LocalKeyRingServiceCollectionExtensions
                 ring => KeyRingPolicyChecks.IsRetainedThroughAnnouncement(policy, ring.KeyRolloverPropagation),
                 KeyRingPolicyChecks.RetainedThroughAnnouncement)
             .ValidateOnStart();
-
-        // The ring reads the clock, and this package is consumable without the registrations that would otherwise
-        // have supplied one.
-        services.TryAddSingleton(TimeProvider.System);
 
         services.TryAddSingleton<IKeyRing>(
             serviceProvider => serviceProvider.CreateService<InMemoryKeyRing>(Dependency.Override(policy)));
