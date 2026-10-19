@@ -54,4 +54,10 @@
     <InternalsVisibleTo Include="Abblix.Jwt.UnitTests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Holds every type here to ten dependencies as S1200 counts them, so a type that grows past that fails the
+         build where the change is made. The limit is a rule parameter, which .editorconfig cannot set. -->
+    <AdditionalFiles Include="SonarLint.xml" />
+  </ItemGroup>
+
 </Project>
