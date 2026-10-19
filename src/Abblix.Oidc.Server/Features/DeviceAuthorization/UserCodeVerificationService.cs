@@ -47,8 +47,7 @@ public partial class UserCodeVerificationService(
         var clientIp = requestInfoProvider.SourceName();
 
         // Check rate limiting before attempting verification
-        var rateLimitCheck = await rateLimiter.CheckAsync(userCode, clientIp);
-        if (rateLimitCheck.TryGetFailure(out var refusal))
+        if (await rateLimiter.CheckAsync(userCode, clientIp) is { } refusal)
         {
             // A refusal that followed from attempts against THIS code stays indistinguishable from an
             // unknown code: only a value the server issued can have such attempts, so naming the refusal
@@ -114,7 +113,7 @@ public partial class UserCodeVerificationService(
         // and answers whether it names a live authorization, which is the question a guesser is asking.
         // Without this it is the same oracle with no counting at all, and the one that grants.
         var clientIp = requestInfoProvider.SourceName();
-        if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
+        if (await rateLimiter.CheckAsync(userCode, clientIp) is not null)
             return false;
 
         var result = await storage.TryGetByUserCodeAsync(userCode);
@@ -189,7 +188,7 @@ public partial class UserCodeVerificationService(
 
         // Counted like verification and approval: this answers the same question about the same input.
         var clientIp = requestInfoProvider.SourceName();
-        if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
+        if (await rateLimiter.CheckAsync(userCode, clientIp) is not null)
             return false;
 
         var result = await storage.TryGetByUserCodeAsync(userCode);

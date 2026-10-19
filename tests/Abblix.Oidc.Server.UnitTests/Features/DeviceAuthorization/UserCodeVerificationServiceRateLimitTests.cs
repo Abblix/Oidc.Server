@@ -439,7 +439,7 @@ public class UserCodeVerificationServiceRateLimitTests
 
         await limiter.RecordFailureAsync(TheCode, Address);
 
-        Assert.True((await limiter.CheckAsync(TheCode, Address)).TryGetSuccess(out _));
+        Assert.Null(await limiter.CheckAsync(TheCode, Address));
     }
 
     /// <summary>
@@ -580,7 +580,7 @@ public class UserCodeVerificationServiceRateLimitTests
             new FakeTimeProvider(_now),
             Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
 
-        Assert.True((await limiter.CheckAsync(TheCode, Address)).TryGetFailure(out var refusal));
+        var refusal = Assert.IsType<UserCodeRateLimited>(await limiter.CheckAsync(TheCode, Address));
         Assert.True(refusal.AboutThisCode);
     }
 

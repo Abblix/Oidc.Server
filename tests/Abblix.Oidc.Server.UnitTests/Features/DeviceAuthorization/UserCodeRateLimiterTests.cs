@@ -108,7 +108,7 @@ public class UserCodeRateLimiterTests
     {
         await Fail(2);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -133,7 +133,7 @@ public class UserCodeRateLimiterTests
 
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), retryAfter.RetryAfter);
     }
 
@@ -161,7 +161,7 @@ public class UserCodeRateLimiterTests
 
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(spent, retryAfter.RetryAfter >= TimeSpan.FromMinutes(5));
     }
 
@@ -190,7 +190,7 @@ public class UserCodeRateLimiterTests
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
         // Five minutes of life from the first attempt, two of them already gone.
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromMinutes(3), retryAfter.RetryAfter);
     }
 
@@ -217,7 +217,7 @@ public class UserCodeRateLimiterTests
 
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromMilliseconds(1500), retryAfter.RetryAfter);
     }
 
@@ -240,7 +240,7 @@ public class UserCodeRateLimiterTests
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
         // Two seconds from the fourth failure, which has only just happened.
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(2), retryAfter.RetryAfter);
     }
 
@@ -253,7 +253,7 @@ public class UserCodeRateLimiterTests
         await Fail(3);
         _time.Advance(TimeSpan.FromSeconds(1));
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -264,7 +264,7 @@ public class UserCodeRateLimiterTests
     {
         await Fail(5);
 
-        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -276,7 +276,7 @@ public class UserCodeRateLimiterTests
         await Fail(5);
         await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -318,7 +318,7 @@ public class UserCodeRateLimiterTests
 
         await Fail(3);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -338,7 +338,7 @@ public class UserCodeRateLimiterTests
 
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.True(retryAfter.RetryAfter > TimeSpan.Zero);
     }
 
@@ -355,7 +355,7 @@ public class UserCodeRateLimiterTests
 
         var result = await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier);
 
-        Assert.Equal(refused, result.TryGetFailure(out _));
+        Assert.Equal(refused, result is not null);
     }
 
     /// <summary>
@@ -379,7 +379,7 @@ public class UserCodeRateLimiterTests
 
         var result = await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(secondsLeft), retryAfter.RetryAfter);
     }
 
@@ -399,7 +399,7 @@ public class UserCodeRateLimiterTests
 
         var result = await limiter.CheckAsync(OtherUserCode, "198.51.100.23");
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(secondsLeft), retryAfter.RetryAfter);
     }
 
@@ -412,7 +412,7 @@ public class UserCodeRateLimiterTests
         await Fail(5);
         _time.Advance(CodeLifetime - OneTick);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -424,7 +424,7 @@ public class UserCodeRateLimiterTests
         await Fail(5);
         _time.Advance(CodeLifetime + OneTick);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -437,7 +437,7 @@ public class UserCodeRateLimiterTests
         await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
         _time.Advance(CodeLifetime - OneTick);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -466,7 +466,7 @@ public class UserCodeRateLimiterTests
         _time.Advance(TimeSpan.FromMinutes(2));
         await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -488,12 +488,12 @@ public class UserCodeRateLimiterTests
         _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
         await Fail(5);
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
 
         // Past that record's own end, with the rungs it names still stored.
         _time.Advance(TimeSpan.FromMinutes(2));
 
-        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -507,7 +507,7 @@ public class UserCodeRateLimiterTests
 
         _time.Advance(RateLimitWindow - OneTick);
 
-        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -523,7 +523,7 @@ public class UserCodeRateLimiterTests
 
         _time.Advance(RateLimitWindow - OneTick);
 
-        Assert.True((await limiter.CheckAsync(OtherUserCode, "198.51.100.23")).TryGetFailure(out _));
+        Assert.NotNull(await limiter.CheckAsync(OtherUserCode, "198.51.100.23"));
     }
 
     /// <summary>
@@ -541,7 +541,7 @@ public class UserCodeRateLimiterTests
         for (var i = 0; i < UserCodeRateLimiter.AttemptLadderLength; i++)
             await limiter.RecordFailureAsync(UserCode, $"203.0.113.{i + 1}");
 
-        Assert.True((await limiter.CheckAsync(UserCode, "198.51.100.23")).TryGetFailure(out _));
+        Assert.NotNull(await limiter.CheckAsync(UserCode, "198.51.100.23"));
     }
 
     /// <summary>
@@ -558,8 +558,8 @@ public class UserCodeRateLimiterTests
         for (var i = 0; i < 10; i++)
             await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
 
-        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetFailure(out _));
-        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -574,7 +574,7 @@ public class UserCodeRateLimiterTests
 
         _time.Advance(TimeSpan.FromMinutes(1));
 
-        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -615,7 +615,7 @@ public class UserCodeRateLimiterTests
         for (var i = 0; i < 10; i++)
             await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
 
-        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, "198.51.100.23")).TryGetSuccess(out _));
+        Assert.Null(await _rateLimiter.CheckAsync(OtherUserCode, "198.51.100.23"));
     }
 
     /// <summary>
@@ -642,7 +642,7 @@ public class UserCodeRateLimiterTests
 
         var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(10), retryAfter.RetryAfter);
     }
 
@@ -660,7 +660,7 @@ public class UserCodeRateLimiterTests
 
         await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
 
-        Assert.True((await limiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.NotNull(await limiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -673,7 +673,7 @@ public class UserCodeRateLimiterTests
 
         await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
 
-        Assert.True((await limiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await limiter.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -695,7 +695,7 @@ public class UserCodeRateLimiterTests
 
         var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromMilliseconds(2500), retryAfter.RetryAfter);
     }
 
@@ -800,7 +800,7 @@ public class UserCodeRateLimiterTests
 
         var underThatName = await limiter.CheckAsync(UserCode, UserCodeRateLimiter.SourceNotSeen);
 
-        Assert.True(underThatName.TryGetFailure(out _));
+        Assert.NotNull(underThatName);
         Assert.Contains(
             _logs.Entries,
             entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.AddressCapReached);

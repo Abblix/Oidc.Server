@@ -148,7 +148,7 @@ public class LostUpdateTests
         // failure on record would let the next attempt straight through.
         var result = await LimiterOver(RealStorage(cache)).CheckAsync(UserCode, ClientIdentifier);
 
-        Assert.True(result.TryGetFailure(out var retryAfter));
+        var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(1), retryAfter.RetryAfter);
     }
 
@@ -192,7 +192,7 @@ public class LostUpdateTests
         await after.RecordFailureAsync(UserCode, ClientIdentifier);
         await after.RecordFailureAsync(UserCode, ClientIdentifier);
 
-        Assert.True((await after.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await after.CheckAsync(UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -252,7 +252,7 @@ public class LostUpdateTests
         await after.RecordFailureAsync(UserCode, ClientIdentifier);
         await after.RecordFailureAsync(UserCode, ClientIdentifier);
 
-        Assert.True((await after.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+        Assert.Null(await after.CheckAsync(UserCode, ClientIdentifier));
     }
 
     private DeviceAuthorizationStorage DeviceStorageOver(IEntityStorage storage)

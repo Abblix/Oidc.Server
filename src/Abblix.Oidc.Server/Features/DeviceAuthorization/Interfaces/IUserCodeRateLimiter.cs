@@ -33,13 +33,11 @@ public interface IUserCodeRateLimiter
     /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
     /// see one.</param>
     /// <returns>
-    /// A <see cref="Result{TSuccess, TFailure}"/> containing:
-    /// - Success (<c>true</c>): The verification attempt is allowed to proceed.
-    /// - Failure (<see cref="UserCodeRateLimited"/>): the attempt is refused, with how long before it may
-    ///   be made again and whether the refusal follows from attempts against this very code - which decides
-    ///   whether a caller may be told anything at all.
+    /// Null when the attempt may proceed. Otherwise the refusal, with how long before the attempt may be made again
+    /// and whether it follows from attempts against this very code - which decides whether a caller may be told
+    /// anything at all.
     /// </returns>
-    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier);
+    Task<UserCodeRateLimited?> CheckAsync(string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
