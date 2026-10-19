@@ -19,7 +19,8 @@ csharp_style_namespace_declarations = file_scoped:suggestion
 # Size and complexity at Sonar's default limits, held by the build rather than by the dashboard: warnings
 # are errors here, so a file, class or method growing past one fails where the change is made. A method
 # that is one exhaustive switch over a set of values becomes a table a test holds complete; one with real
-# logic is split along a named pattern. Never suppressed.
+# logic is split along a named pattern. Never suppressed. Abblix.Jwt holds S1200 to ten rather than the default
+# through its own SonarLint.xml, since a rule's limit is a parameter this file cannot set.
 dotnet_diagnostic.S104.severity = warning
 dotnet_diagnostic.S138.severity = warning
 dotnet_diagnostic.S1541.severity = warning
