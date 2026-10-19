@@ -41,7 +41,7 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 				$"per RFC 7518 section 3.2; got {keyValue.Length} bytes.",
 				nameof(octetKey));
 
-		using var hmac = CreateHmac(keyValue);
+		using var hmac = HmacAlgorithms.Create(algorithm, keyValue);
 		return hmac.ComputeHash(data);
 	}
 
@@ -58,7 +58,7 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 		if (keyValue.Length < GetMinimumKeyLengthBytes())
 			return false;
 
-		using var hmac = CreateHmac(keyValue);
+		using var hmac = HmacAlgorithms.Create(algorithm, keyValue);
 		var computedSignature = hmac.ComputeHash(data);
 		return CryptographicOperations.FixedTimeEquals(signature, computedSignature);
 	}
@@ -70,21 +70,4 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 	private int GetMinimumKeyLengthBytes()
 		=> (KeySizeFloors.MinimumHmacKeyBits(algorithm)
 			?? throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}")) >> 3;
-
-	/// <summary>
-	/// Creates an HMAC instance for the configured algorithm and key.
-	/// </summary>
-	/// <param name="keyValue">The symmetric key bytes.</param>
-	/// <returns>An HMAC instance configured for the algorithm.</returns>
-	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
-	private HMAC CreateHmac(byte[] keyValue)
-	{
-		return algorithm switch
-		{
-			SigningAlgorithms.HS256 => new HMACSHA256(keyValue),
-			SigningAlgorithms.HS384 => new HMACSHA384(keyValue),
-			SigningAlgorithms.HS512 => new HMACSHA512(keyValue),
-			_ => throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}")
-		};
-	}
 }

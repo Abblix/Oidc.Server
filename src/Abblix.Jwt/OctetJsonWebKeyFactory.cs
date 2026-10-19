@@ -16,13 +16,9 @@ internal static class OctetJsonWebKeyFactory
     /// <inheritdoc cref="JsonWebKeyFactory.CreateHmac"/>
     public static OctetJsonWebKey CreateHmac(string algorithm, int? keySize)
     {
-        var size = keySize ?? algorithm switch
-        {
-            SigningAlgorithms.HS256 => 32, // 256 bits
-            SigningAlgorithms.HS384 => 48, // 384 bits
-            SigningAlgorithms.HS512 => 64, // 512 bits
-            _ => throw new ArgumentException($"Unsupported HMAC algorithm: {algorithm}", nameof(algorithm))
-        };
+        // By default exactly the floor the signer holds a key to, read from the one place that states it
+        var size = keySize ?? (KeySizeFloors.MinimumHmacKeyBits(algorithm)
+            ?? throw new ArgumentException($"Unsupported HMAC algorithm: {algorithm}", nameof(algorithm))) >> 3;
 
         var keyValue = CryptoRandom.GetRandomBytes(size);
 

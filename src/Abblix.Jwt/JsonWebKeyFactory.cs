@@ -41,7 +41,8 @@ public static class JsonWebKeyFactory
     /// Creates a symmetric (Octet) JsonWebKey for HMAC signing.
     /// </summary>
     /// <param name="algorithm">The HMAC algorithm. Common values: HS256, HS384, HS512.</param>
-    /// <param name="keySize">The key size in bytes. Defaults based on algorithm: HS256=32, HS384=48, HS512=64.</param>
+    /// <param name="keySize">The key size in bytes. Defaults to the smallest key the signer accepts for the
+    /// algorithm, the size of its hash output.</param>
     /// <returns>A <see cref="OctetJsonWebKey"/> suitable for HMAC signing operations.</returns>
     public static OctetJsonWebKey CreateHmac(string algorithm, int? keySize = null)
         => OctetJsonWebKeyFactory.CreateHmac(algorithm, keySize);
