@@ -246,4 +246,97 @@ public class InMemoryKeyRingTests
         using var serviceProvider = services.BuildServiceProvider();
         Assert.IsType<InMemoryKeyRing>(serviceProvider.GetRequiredService<IKeyRing>());
     }
+
+    /// <summary>
+    /// Two requests arriving as a key is due both sign with the new one: the one that read the clock first and
+    /// waited for the other to rotate does not choose its key as of a moment before the rotation it then sees.
+    /// </summary>
+    [Fact]
+    public void RequestsDuringARotation_AllProduceWithTheNewKey()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var moment = new AsyncLocal<DateTimeOffset?>();
+        var holdNextRead = new AsyncLocal<bool>();
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var clock = new Mock<TimeProvider>();
+        clock.Setup(time => time.GetUtcNow()).Returns(() =>
+        {
+            if (holdNextRead.Value)
+            {
+                holdNextRead.Value = false;
+                held.Set();
+                release.Wait(TimeSpan.FromSeconds(5), ct);
+            }
+
+            return moment.Value ?? DateTimeOffset.UnixEpoch;
+        });
+
+        var ring = CreateRing(clock.Object, Policy with { EncryptionAlgorithm = null });
+        var retired = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
+
+        var due = DateTimeOffset.UnixEpoch + Policy.RotateEvery + TimeSpan.FromDays(1);
+        string? first = null;
+        Exception? failure = null;
+        var firstThread = new Thread(() =>
+        {
+            moment.Value = due;
+            holdNextRead.Value = true;
+            try
+            {
+                first = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId;
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }) { IsBackground = true };
+        firstThread.Start();
+        Assert.True(held.Wait(TimeSpan.FromSeconds(5), ct));
+
+        string? second = null;
+        var secondThread = new Thread(() =>
+        {
+            moment.Value = due + TimeSpan.FromSeconds(1);
+            try
+            {
+                second = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId;
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }) { IsBackground = true };
+        secondThread.Start();
+
+        // The second request gets as far as it can while the first is held in its clock read: waiting, or done
+        Assert.True(SpinWait.SpinUntil(
+            () => secondThread.ThreadState.HasFlag(ThreadState.WaitSleepJoin) ||
+                  secondThread.ThreadState.HasFlag(ThreadState.Stopped),
+            TimeSpan.FromSeconds(5)));
+        release.Set();
+        Assert.True(firstThread.Join(TimeSpan.FromSeconds(5)));
+        Assert.True(secondThread.Join(TimeSpan.FromSeconds(5)));
+
+        Assert.Null(failure);
+        Assert.NotEqual(retired, first);
+        Assert.Equal(first, second);
+    }
+
+    /// <summary>
+    /// A policy that never rotates, given as the longest span there is, keeps serving its key across years
+    /// instead of failing on the arithmetic of its own periods.
+    /// </summary>
+    [Fact]
+    public async Task APolicyThatNeverRotates_KeepsItsKeyAcrossYears()
+    {
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time, Policy with { RotateEvery = TimeSpan.MaxValue });
+        var key = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
+
+        time.Advance(TimeSpan.FromDays(3650));
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(key, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId);
+    }
 }
