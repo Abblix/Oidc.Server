@@ -31,9 +31,12 @@ internal static class KeyRingSetupServiceCollectionExtensions
         // has run. The partitions are the host's when it registered any, whichever side of AddKeyRing it did, and
         // the settings' otherwise. The store is resolved here too, and only here, so a container validating itself
         // as it is built leaves a missing store to the startup validation AddKeyRing registers.
+        // The builder of the first registration is the one the ring runs on, and the one every check of its policy
+        // reads, since both take it from here
+        services.TryAddSingleton(builder);
         services.TryAddSingleton(
             serviceProvider => new KeyRingSetup(
-                builder.Policy,
+                serviceProvider.GetRequiredService<MintedKeysBuilder>().Policy,
                 serviceProvider.GetService<IKeyRingPartitions>() ??
                 serviceProvider.CreateService<OptionsKeyRingPartitions>(),
                 serviceProvider.GetRequiredService<IKeyRingStore>()));

@@ -49,16 +49,12 @@ internal static class KeyRingOptionsServiceCollectionExtensions
     /// Arms the startup check that the custodian serves the algorithm the ring seals its keys under.
     /// </summary>
     /// <param name="services">The service collection the ring is registered in.</param>
-    /// <param name="builder">The builder holding the ring's policy as later calls leave it.</param>
     /// <remarks>
-    /// The builder is registered the way the ring's setup is, the first one winning, so the check judges the policy
-    /// the ring runs on rather than that of a later call no ring follows.
+    /// The check reads the builder the ring's setup registers, so it judges the policy the ring runs on rather than
+    /// that of a later call no ring follows.
     /// </remarks>
-    internal static IServiceCollection AddKeyWrapAlgorithmCheck(
-        this IServiceCollection services,
-        MintedKeysBuilder builder)
+    internal static IServiceCollection AddKeyWrapAlgorithmCheck(this IServiceCollection services)
     {
-        services.TryAddSingleton(builder);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<KeyRingOptions>, KeyWrapAlgorithmCheck>());
         return services;
     }
