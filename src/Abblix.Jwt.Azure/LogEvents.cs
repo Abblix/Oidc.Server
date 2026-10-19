@@ -10,14 +10,14 @@ namespace Abblix.Jwt.Azure;
 
 /// <summary>
 /// The numeric event ids for this package's structured logs, grouped by the class that emits them so a dashboard
-/// keys off the id rather than the message text. Ids are local to this assembly.
+/// keys off the id rather than the message text. Ids are unique across the library's packages, which log into one process.
 /// </summary>
 internal static class LogEvents
 {
-    /// <summary>Key Vault custodian events. Range 1000-1099.</summary>
+    /// <summary>Key Vault custodian events. Range 13000-13099.</summary>
     internal static class KeyVaultClient
     {
-        private const int Base = 1000;
+        private const int Base = 13000;
 
         /// <summary>Key Vault rejected an unwrap, so the CEK could not be recovered.</summary>
         public const int UnwrapRejected = Base + 1;
@@ -26,10 +26,10 @@ internal static class LogEvents
         public const int AlgorithmNotServed = Base + 2;
     }
 
-    /// <summary>Blob key-ring events. Range 1100-1199.</summary>
+    /// <summary>Blob key-ring events. Range 13100-13199.</summary>
     internal static class BlobKeyRingStore
     {
-        private const int Base = 1100;
+        private const int Base = 13100;
 
         /// <summary>This pod won a period and wrote its key into the ring.</summary>
         public const int PeriodMinted = Base + 1;

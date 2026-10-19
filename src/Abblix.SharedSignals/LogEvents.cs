@@ -18,11 +18,11 @@ namespace Abblix.SharedSignals;
 public static class LogEvents
 {
     /// <summary>
-    /// The transmitter role: 2000-2099.
+    /// The transmitter role: 15000-15099.
     /// </summary>
     public static class Transmitter
     {
-        private const int Base = 2000;
+        private const int Base = 15000;
 
         /// <summary>A delivery sweep failed as a whole, and will be attempted again.</summary>
         public const int PushSweepFailed = Base + 1;
