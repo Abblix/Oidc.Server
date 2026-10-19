@@ -23,7 +23,7 @@ internal sealed class KeyRingParts
     /// <param name="kept">The partitions to keep.</param>
     public KeyRingParts(IServiceProvider provider, MintedKeys policy, IKeyRingStore store, IKeyRingPartitions kept)
     {
-        var setup = new KeyRingSetup(policy, kept);
+        var setup = new KeyRingSetup(policy, kept, store);
         Registry = new KeyRingRegistry(new KeyRingFactory(provider, policy, store), setup);
         var opening = new KeyRingPartitionOpening(
             Registry,
@@ -31,10 +31,10 @@ internal sealed class KeyRingParts
             provider.GetRequiredService<TimeProvider>());
         Rings = new KeyRings(
             Registry,
-            new KeyRingPartitionsOpening(opening, store),
-            new KeyRingEntriesRemoval(store));
+            new KeyRingPartitionsOpening(opening, setup),
+            new KeyRingEntriesRemoval(setup));
         Check = new KeyRingStartupCheck(setup, provider.GetRequiredService<IKeyCustodian>());
-        Rounds = new KeyRingRounds(Registry, setup, store);
+        Rounds = new KeyRingRounds(Registry, setup);
     }
 
     public KeyRingRegistry Registry { get; }

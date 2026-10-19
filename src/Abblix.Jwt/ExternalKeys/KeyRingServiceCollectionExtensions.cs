@@ -27,20 +27,23 @@ internal static class KeyRingServiceCollectionExtensions
         // A factory, unlike the plain registrations around it, because the policy is a per-call value the container
         // knows nothing about: every part of the ring takes it from here and everything else is resolved normally.
         // It is read off the builder rather than captured, so a call chained after AddKeyRing - AdoptExistingKeys -
-        // still reaches the ring: this factory runs when the container builds, by which time the whole chain has
-        // run. The partitions are the host's when it registered any, whichever side of AddKeyRing it did, and the
-        // settings' otherwise.
+        // still reaches the ring: this factory runs when the ring is first asked for, by which time the whole chain
+        // has run. The partitions are the host's when it registered any, whichever side of AddKeyRing it did, and
+        // the settings' otherwise. The store is resolved here too, and only here: a container validating itself as
+        // it is built then leaves a missing store to the startup validation, which names the call that supplies one.
         services.TryAddSingleton(
             serviceProvider => new KeyRingSetup(
                 builder.Policy,
                 serviceProvider.GetService<IKeyRingPartitions>() ??
-                serviceProvider.CreateService<OptionsKeyRingPartitions>()));
+                serviceProvider.CreateService<OptionsKeyRingPartitions>(),
+                serviceProvider.GetRequiredService<IKeyRingStore>()));
 
         services.TryAddSingleton(
-            serviceProvider => new KeyRingFactory(
-                serviceProvider,
-                serviceProvider.GetRequiredService<KeyRingSetup>().Policy,
-                serviceProvider.GetRequiredService<IKeyRingStore>()));
+            serviceProvider =>
+            {
+                var setup = serviceProvider.GetRequiredService<KeyRingSetup>();
+                return new KeyRingFactory(serviceProvider, setup.Policy, setup.Store);
+            });
 
         services.TryAddSingleton<KeyRingRegistry>();
         services.TryAddSingleton<KeyRingPartitionOpening>();

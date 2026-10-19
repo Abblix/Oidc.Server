@@ -314,14 +314,20 @@ public class KeyPlacementWiringTests
         Assert.Null(provider.GetService<CustodianHeldKeys>());
     }
 
-    [Fact]
-    public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse(
+        bool validateOnBuild)
     {
         var services = WithCustodian();
+        services.AddLogging();
         services.AddJsonWebTokens();
         services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
 
-        using var provider = services.BuildServiceProvider();
+        // A host in Development validates the container as it is built, and the refusal still has to be ours
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
 
         var error = await Assert.ThrowsAsync<OptionsValidationException>(
             () => provider.GetRequiredService<IAsyncStartupValidator>()

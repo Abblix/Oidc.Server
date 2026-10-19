@@ -11,9 +11,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// Starts the refresh rounds of the partitions kept.
 /// </summary>
 /// <param name="rings">The ring of each partition.</param>
-/// <param name="setup">The partitions to keep.</param>
-/// <param name="store">The store every partition shares.</param>
-internal sealed class KeyRingRounds(KeyRingRegistry rings, KeyRingSetup setup, IKeyRingStore store)
+/// <param name="setup">The partitions to keep and the store they share.</param>
+internal sealed class KeyRingRounds(KeyRingRegistry rings, KeyRingSetup setup)
 {
     /// <summary>
     /// Starts a refresh round: the ring of every partition kept, each with its view of one read of the store taken
@@ -23,7 +22,7 @@ internal sealed class KeyRingRounds(KeyRingRegistry rings, KeyRingSetup setup, I
     /// ring starts with does.</param>
     public IReadOnlyList<(string Partition, KeyRing Ring, IKeyRingStore Source)> BeginRound(bool exceptOpened = false)
     {
-        var round = new KeyRingStoreRound(store);
+        var round = new KeyRingStoreRound(setup.Store);
         return setup.PartitionsKept.Kept
             .Where(partition => !exceptOpened || !rings.WasOpened(partition))
             .Select(partition => (

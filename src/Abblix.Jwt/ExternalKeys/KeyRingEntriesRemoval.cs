@@ -10,15 +10,15 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <summary>
 /// Removes the entries of partitions from the store, each partition on its own, over one read of the store.
 /// </summary>
-/// <param name="store">The store every partition shares.</param>
-internal sealed class KeyRingEntriesRemoval(IKeyRingStore store)
+/// <param name="setup">The store every partition shares.</param>
+internal sealed class KeyRingEntriesRemoval(KeyRingSetup setup)
 {
     /// <inheritdoc cref="IKeyRings.DeleteAsync"/>
     public async Task<IReadOnlyDictionary<string, Exception>> DeleteAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken)
     {
-        var round = new KeyRingStoreRound(store);
+        var round = new KeyRingStoreRound(setup.Store);
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
         foreach (var partition in partitions)
         {

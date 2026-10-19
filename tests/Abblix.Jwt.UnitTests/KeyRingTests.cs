@@ -251,42 +251,6 @@ public sealed partial class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// Deleting a partition removes its entries from the store and leaves another partition's entries in place.
-    /// </summary>
-    [Fact]
-    public async Task DeletingAPartition_RemovesItsEntriesAlone()
-    {
-        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
-        foreach (var (_, ring, source) in rings.BeginRound())
-            await ring.RefreshAsync(source, TestContext.Current.CancellationToken);
-
-        var failures = await rings.DeleteAsync(["acme"], TestContext.Current.CancellationToken);
-
-        Assert.Empty(failures);
-        Assert.DoesNotContain(store.Entries, entry => entry.Id.StartsWith("acme.", StringComparison.Ordinal));
-        Assert.Contains(store.Entries, entry => entry.Id.StartsWith("globex.", StringComparison.Ordinal));
-    }
-
-    /// <summary>
-    /// A deletion stopped before it starts removes nothing and reports every partition it was asked for as
-    /// cancelled.
-    /// </summary>
-    [Fact]
-    public async Task ACancelledDeletion_KeepsTheEntries_AndReportsEveryPartition()
-    {
-        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
-        foreach (var (_, ring, source) in rings.BeginRound())
-            await ring.RefreshAsync(source, TestContext.Current.CancellationToken);
-        var stored = store.Entries.Count;
-
-        var failures = await rings.DeleteAsync(["acme", "globex"], new CancellationToken(canceled: true));
-
-        Assert.Equal(["acme", "globex"], failures.Keys.Order(StringComparer.Ordinal));
-        Assert.All(failures.Values, failure => Assert.IsType<OperationCanceledException>(failure));
-        Assert.Equal(stored, store.Entries.Count);
-    }
-
-    /// <summary>
     /// The refresh service brings up every partition before the server serves anything, so no issuer starts
     /// without keys.
     /// </summary>
@@ -1348,7 +1312,11 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _, store) = CreateRings(propagation, time, null, "acme", "globex");
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, rings.Check, rings.Rounds, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await ArmTheLoop(time, propagation / 2, store);
@@ -1388,7 +1356,11 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, ring, store) = CreateRings(propagation, time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, rings.Check, rings.Rounds, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await ArmTheLoop(time, propagation / 2, store);
@@ -1429,7 +1401,11 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _, store) = CreateRings(propagation, time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, rings.Check, rings.Rounds, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await ArmTheLoop(time, propagation / 2, store);

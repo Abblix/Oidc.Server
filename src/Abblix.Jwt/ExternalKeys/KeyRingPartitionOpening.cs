@@ -22,16 +22,16 @@ internal sealed class KeyRingPartitionOpening(
     TimeProvider timeProvider)
 {
     /// <summary>
-    /// Whether the ring of <paramref name="partition"/> is built and current: kept, or opened within half a refresh
-    /// period.
+    /// Whether the ring of <paramref name="partition"/> is built and current: among <paramref name="kept"/>, or
+    /// opened within half a refresh period.
     /// </summary>
     /// <remarks>
     /// Half a period, because a ring opened but not yet kept waits for the loop's next round once it is kept: opened
     /// within the window and kept at its end, it is refreshed again within one and a half periods, short of the
     /// propagation window a pod must not miss a new key for.
     /// </remarks>
-    public bool IsCurrent(string partition)
-        => rings.IsCurrent(partition, options.Value.RefreshPeriod / 2, timeProvider.GetUtcNow());
+    public bool IsCurrent(string partition, IReadOnlyCollection<string> kept)
+        => rings.IsCurrent(partition, kept, options.Value.RefreshPeriod / 2, timeProvider.GetUtcNow());
 
     /// <summary>
     /// Builds the ring of <paramref name="partition"/> when it is not built yet and refreshes it from

@@ -50,16 +50,17 @@ internal sealed class KeyRingRegistry(KeyRingFactory factory, KeyRingSetup setup
     }
 
     /// <summary>
-    /// Whether the ring of <paramref name="partition"/> is built and current: kept, so the refresh loop keeps it
-    /// current, or opened less than <paramref name="window"/> before <paramref name="now"/>. A ring built and left
-    /// out of the kept partitions since, as a tenant dropped and served again, has missed its refreshes.
+    /// Whether the ring of <paramref name="partition"/> is built and current: among <paramref name="kept"/>, so the
+    /// refresh loop keeps it current, or opened less than <paramref name="window"/> before <paramref name="now"/>. A
+    /// ring built and left out of the kept partitions since, as a tenant dropped and served again, has missed its
+    /// refreshes.
     /// </summary>
-    public bool IsCurrent(string partition, TimeSpan window, DateTimeOffset now)
+    public bool IsCurrent(string partition, IReadOnlyCollection<string> kept, TimeSpan window, DateTimeOffset now)
     {
         if (!_rings.ContainsKey(partition))
             return false;
 
-        if (setup.PartitionsKept.Kept.Contains(partition, StringComparer.Ordinal))
+        if (kept.Contains(partition, StringComparer.Ordinal))
             return true;
 
         return _openedAt.TryGetValue(partition, out var openedAt) && now - openedAt < window;

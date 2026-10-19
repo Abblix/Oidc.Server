@@ -11,16 +11,18 @@ namespace Abblix.Jwt.ExternalKeys;
 /// Readies the rings of several partitions to serve, each on its own, over one read of the store.
 /// </summary>
 /// <param name="opening">Readies the ring of each partition.</param>
-/// <param name="store">The store every partition shares.</param>
-internal sealed class KeyRingPartitionsOpening(KeyRingPartitionOpening opening, IKeyRingStore store)
+/// <param name="setup">The partitions kept and the store they share.</param>
+internal sealed class KeyRingPartitionsOpening(KeyRingPartitionOpening opening, KeyRingSetup setup)
 {
     /// <inheritdoc cref="IKeyRings.OpenAsync"/>
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken)
     {
-        var due = partitions.Where(partition => !opening.IsCurrent(partition)).ToArray();
-        var round = new KeyRingStoreRound(store);
+        // Read once for the whole opening: a host's own partitions may be read from a database
+        var kept = setup.PartitionsKept.Kept;
+        var due = partitions.Where(partition => !opening.IsCurrent(partition, kept)).ToArray();
+        var round = new KeyRingStoreRound(setup.Store);
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
         for (var index = 0; index < due.Length; index++)
         {
