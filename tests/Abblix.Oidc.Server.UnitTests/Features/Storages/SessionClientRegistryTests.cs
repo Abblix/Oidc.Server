@@ -135,34 +135,71 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
-    /// The records of one session expire together, measured from the first client, so a session whose record
-    /// has expired starts a new list rather than one with an older client still sitting above the gap.
+    /// The records of one session expire together, a retention after its last authorization, so a session whose
+    /// record has expired starts a new list rather than one with an older client still sitting above the gap.
     /// </summary>
     [Fact]
-    public async Task A_client_signing_in_later_leaves_with_the_first_one()
+    public async Task Clients_are_forgotten_a_retention_after_the_last_authorization()
     {
         var registry = Registry();
         await registry.AddClientAsync(SessionId, "first", Ct);
         _time.Advance(Retention / 2);
         await registry.AddClientAsync(SessionId, "second", Ct);
 
-        _time.Advance(Retention / 2 + TimeSpan.FromSeconds(1));
+        _time.Advance(Retention + TimeSpan.FromSeconds(1));
         await registry.AddClientAsync(SessionId, "third", Ct);
 
         Assert.Equal(["third"], await registry.GetClientsAsync(SessionId, Ct));
     }
 
     [Fact]
-    public async Task Clients_stay_listed_until_the_retention_counted_from_the_first_one_has_passed()
+    public async Task Clients_stay_listed_until_the_retention_counted_from_the_last_authorization_has_passed()
     {
         var registry = Registry();
         await registry.AddClientAsync(SessionId, "first", Ct);
         _time.Advance(Retention / 2);
         await registry.AddClientAsync(SessionId, "second", Ct);
 
-        _time.Advance(Retention / 2 - TimeSpan.FromSeconds(1));
+        _time.Advance(Retention - TimeSpan.FromSeconds(1));
 
         Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A session kept under its id by a re-authentication outlives a retention from its first client, and its
+    /// logout still names the client that signed in before then.
+    /// </summary>
+    [Fact]
+    public async Task A_client_signing_in_again_keeps_the_list_past_a_retention_from_the_first_one()
+    {
+        var registry = Registry();
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(TimeSpan.FromDays(25));
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(TimeSpan.FromDays(15));
+        await registry.AddClientAsync(SessionId, "second", Ct);
+
+        _time.Advance(TimeSpan.FromDays(10));
+
+        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// The note that a client is already recorded lives as long as the list, so a client signing in again after a
+    /// retention from its first sign-in takes no second position.
+    /// </summary>
+    [Fact]
+    public async Task A_client_signing_in_again_after_a_retention_from_its_first_sign_in_takes_no_second_position()
+    {
+        var registry = Registry();
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention / 2);
+        await registry.AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention / 2 + TimeSpan.FromSeconds(1));
+
+        await registry.AddClientAsync(SessionId, "first", Ct);
+
+        Assert.Null(await StoredPositionAsync(3));
     }
 
     /// <summary>

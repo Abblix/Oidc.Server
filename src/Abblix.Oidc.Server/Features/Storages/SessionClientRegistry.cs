@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
 /// Keeps the clients of a session as a numbered list in entity storage, one key per client, under a generation
-/// that bounds how long the list lives.
+/// that bounds how long the list lives: a retention after the session's last authorization.
 /// </summary>
 /// <remarks>
 /// A client is added by claiming the first free position of the current generation, so two authorizations
@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// </remarks>
 /// <param name="storage">Where the records are claimed and read.</param>
 /// <param name="keyFactory">Names the generation, each position and each client.</param>
-/// <param name="options">Supplies how long a generation lasts.</param>
+/// <param name="options">Supplies how long a generation lasts after the session's last authorization.</param>
 /// <param name="clock">Supplies the moment a generation's end is measured from.</param>
 /// <param name="logger">Reports a session whose list is full.</param>
 public partial class SessionClientRegistry(
@@ -76,7 +76,10 @@ public partial class SessionClientRegistry(
                 keyFactory.SessionClientsGenerationKey(sessionId), false, cancellationToken);
 
             if (current?.Id == generation.Id)
+            {
+                await ExtendAsync(sessionId, current, cancellationToken);
                 return;
+            }
         }
     }
 
@@ -187,6 +190,48 @@ public partial class SessionClientRegistry(
         }
 
         LogSessionClientsExhausted(sessionId, clientId, MaxClientsPerSession);
+    }
+
+    /// <summary>
+    /// Moves the end of a generation, and of every record in it, to a whole retention from now.
+    /// </summary>
+    /// <remarks>
+    /// A session goes on under its id when its end user signs in again, so the list lasts a retention after the
+    /// session's last authorization rather than its first, a bound the host can choose. The records are moved
+    /// before the generation, so none expires before the generation that lists them.
+    /// </remarks>
+    private async Task ExtendAsync(
+        string sessionId, Proto.SessionClientsGeneration generation, CancellationToken cancellationToken)
+    {
+        var expiresAt = clock.GetUtcNow() + options.Value.SessionClientsRetention;
+
+        // A generation started by this authorization already ends there
+        if (expiresAt <= generation.ExpiresAt.ToDateTimeOffset())
+            return;
+
+        var storageOptions = new StorageOptions { AbsoluteExpiration = expiresAt };
+        for (var position = 1; position <= MaxClientsPerSession; position++)
+        {
+            var positionKey = keyFactory.SessionClientKey(sessionId, generation.Id, position);
+            var recorded = await storage.GetAsync<Proto.SessionClient>(positionKey, false, cancellationToken);
+            if (recorded == null)
+                break;
+
+            await storage.SetAsync(positionKey, recorded, storageOptions, cancellationToken);
+            await storage.SetAsync(
+                keyFactory.SessionClientMarkerKey(sessionId, generation.Id, recorded.ClientId),
+                recorded,
+                storageOptions,
+                cancellationToken);
+        }
+
+        var extended = new Proto.SessionClientsGeneration
+        {
+            Id = generation.Id,
+            ExpiresAt = Timestamp.FromDateTimeOffset(expiresAt),
+        };
+        await storage.SetAsync(
+            keyFactory.SessionClientsGenerationKey(sessionId), extended, storageOptions, cancellationToken);
     }
 
     /// <summary>
