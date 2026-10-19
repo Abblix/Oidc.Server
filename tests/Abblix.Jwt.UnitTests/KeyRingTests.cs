@@ -264,7 +264,6 @@ public sealed partial class KeyRingTests : IDisposable
             new RecordingLogger<KeyRingRefreshService>(),
             rings.Check,
             rings.Rounds,
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
             time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -1315,7 +1314,6 @@ public sealed partial class KeyRingTests : IDisposable
             logger,
             rings.Check,
             rings.Rounds,
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
             time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -1359,7 +1357,6 @@ public sealed partial class KeyRingTests : IDisposable
             logger,
             rings.Check,
             rings.Rounds,
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
             time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -1404,7 +1401,6 @@ public sealed partial class KeyRingTests : IDisposable
             logger,
             rings.Check,
             rings.Rounds,
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
             time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);

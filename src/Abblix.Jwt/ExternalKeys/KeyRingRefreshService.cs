@@ -8,7 +8,6 @@
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -32,7 +31,6 @@ internal sealed partial class KeyRingRefreshService(
     ILogger<KeyRingRefreshService> logger,
     KeyRingStartupCheck check,
     KeyRingRounds rounds,
-    IOptions<KeyRingOptions> options,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />
@@ -41,8 +39,8 @@ internal sealed partial class KeyRingRefreshService(
         await check.CheckAsync(cancellationToken);
 
         // A partition opened before this start was refreshed then, so it is not refreshed again now
-        foreach (var (_, ring, source) in rounds.BeginRound(exceptOpened: true))
-            await ring.RefreshAsync(source, cancellationToken);
+        foreach (var refresh in rounds.BeginRound(exceptOpened: true))
+            await refresh.RefreshAsync(cancellationToken);
 
         await base.StartAsync(cancellationToken);
     }
@@ -50,17 +48,17 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var period = options.Value.RefreshPeriod;
+        var period = rounds.Period;
         using var timer = new PeriodicTimer(period, timeProvider);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             // Each partition on its own: one whose keys cannot be opened leaves the others current
-            foreach (var (partition, ring, source) in rounds.BeginRound())
+            foreach (var refresh in rounds.BeginRound())
             {
                 try
                 {
-                    await ring.RefreshAsync(source, stoppingToken);
+                    await refresh.RefreshAsync(stoppingToken);
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {
@@ -68,7 +66,7 @@ internal sealed partial class KeyRingRefreshService(
                     // Letting it escape would end ExecuteAsync, and the host's default behavior for a faulted
                     // background service is to stop the process - so the pods would leave one after another over a
                     // single rotation window while still holding perfectly good keys.
-                    LogRefreshFailed(exception, partition, period);
+                    LogRefreshFailed(exception, refresh.Partition, period);
                 }
             }
         }

@@ -34,7 +34,7 @@ internal sealed class KeyRingParts
             new KeyRingPartitionsOpening(opening, setup),
             new KeyRingEntriesRemoval(setup));
         Check = new KeyRingStartupCheck(setup, provider.GetRequiredService<IKeyCustodian>());
-        Rounds = new KeyRingRounds(Registry, setup);
+        Rounds = new KeyRingRounds(Registry, setup, provider.GetRequiredService<IOptions<KeyRingOptions>>());
     }
 
     public KeyRingRegistry Registry { get; }
@@ -60,6 +60,6 @@ internal sealed class KeyRingParts
 
     public Task CheckAsync(CancellationToken cancellationToken) => Check.CheckAsync(cancellationToken);
 
-    public IReadOnlyList<(string Partition, KeyRing Ring, IKeyRingStore Source)> BeginRound(bool exceptOpened = false)
+    public IReadOnlyList<KeyRingPartitionRefresh> BeginRound(bool exceptOpened = false)
         => Rounds.BeginRound(exceptOpened);
 }
