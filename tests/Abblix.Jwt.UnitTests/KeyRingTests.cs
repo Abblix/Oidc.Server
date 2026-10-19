@@ -154,7 +154,8 @@ public sealed partial class KeyRingTests : IDisposable
         string? encryptionAlgorithm = null,
         TimeSpan? keepRetiredFor = null,
         TimeProvider? timeProvider = null,
-        IReadOnlyList<JsonWebKey>? adoptedKeys = null)
+        IReadOnlyList<JsonWebKey>? adoptedKeys = null,
+        TimeSpan? rotateEvery = null)
     {
         store ??= new FakeStore();
 
@@ -179,7 +180,7 @@ public sealed partial class KeyRingTests : IDisposable
         var policy = new MintedKeys
         {
             KeyEncryptionKeyName = KeyEncryptionKeyName,
-            RotateEvery = TimeSpan.FromDays(30),
+            RotateEvery = rotateEvery ?? TimeSpan.FromDays(30),
             EncryptionAlgorithm = encryptionAlgorithm,
             KeepRetiredFor = keepRetiredFor,
             AdoptedKeys = adoptedKeys ?? [],

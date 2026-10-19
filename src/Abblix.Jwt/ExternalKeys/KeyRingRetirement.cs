@@ -62,7 +62,7 @@ internal sealed class KeyRingRetirement(KeyRingSchedule schedule)
                 var key = byOldest[index];
                 var successor = byOldest.Skip(index + 1).FirstOrDefault(later => !later.IsAdopted);
 
-                if (successor is null || now <= successor.CreatedAt + propagation + keepRetiredFor)
+                if (successor is null || IsStillNeeded(now - successor.CreatedAt, propagation, keepRetiredFor))
                     expired.Remove(key.Id);
             }
         }
@@ -81,4 +81,16 @@ internal sealed class KeyRingRetirement(KeyRingSchedule schedule)
 
         return live;
     }
+
+    /// <summary>
+    /// Whether a key whose successor was minted <paramref name="sinceSuccessor"/> ago may still verify a token: its
+    /// successor is still being announced, or has signed for no longer than the retention.
+    /// </summary>
+    /// <remarks>
+    /// Compared one period after the other rather than added to a date, so a retention given as the longest span
+    /// there is does not overflow. The first comparison also keeps a negative interval, from a clock that moved back,
+    /// away from the subtraction.
+    /// </remarks>
+    private static bool IsStillNeeded(TimeSpan sinceSuccessor, TimeSpan propagation, TimeSpan keepRetiredFor)
+        => sinceSuccessor <= propagation || sinceSuccessor - propagation <= keepRetiredFor;
 }

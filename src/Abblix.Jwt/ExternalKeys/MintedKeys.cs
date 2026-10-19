@@ -54,7 +54,7 @@ public sealed record MintedKeys
     /// <remarks>
     /// A new key does not sign the moment it appears. It is published and verifiable for
     /// <c>KeyRingOptions.KeyRolloverPropagation</c> first, so a client whose JWKS cache is stale never meets a token
-    /// signed by a key it lacks. Keep this comfortably larger than that window.
+    /// signed by a key it lacks. Keep this comfortably larger than that window. Must be positive.
     /// </remarks>
     public TimeSpan RotateEvery { get; init; } = TimeSpan.FromDays(30);
 
@@ -66,7 +66,7 @@ public sealed record MintedKeys
     /// This must outlast every token the key signed. Removing it early does not degrade anything gracefully: the
     /// key vanishes from <c>/jwks</c> and every unexpired token it signed stops verifying, which is why the
     /// default errs long rather than short. Set it explicitly only to say "no token of mine lives longer than
-    /// this", and remember refresh tokens are signed too, not just access tokens.
+    /// this", and remember refresh tokens are signed too, not just access tokens. Must not be negative.
     /// </remarks>
     public TimeSpan? KeepRetiredFor { get; init; }
 

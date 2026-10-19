@@ -339,4 +339,125 @@ public class InMemoryKeyRingTests
 
         Assert.Equal(key, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId);
     }
+
+    /// <summary>
+    /// A policy that never forgets a retired key, given as the longest span there is, keeps the retired key across
+    /// two rotations instead of failing on the arithmetic of its own periods.
+    /// </summary>
+    [Fact]
+    public async Task APolicyThatNeverForgets_KeepsTheRetiredKeys()
+    {
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time, Policy with { KeepRetiredFor = TimeSpan.MaxValue });
+        var first = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
+
+        time.Advance(Policy.RotateEvery * 2.5);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+        time.Advance(Policy.RotateEvery * 2.5);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var keys = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId).ToList();
+        Assert.Equal(3, keys.Count);
+        Assert.Contains(first, keys);
+    }
+
+    /// <summary>
+    /// A policy that never rotates keeps serving its key when the clock moves backwards, as it does when a host's
+    /// clock is corrected.
+    /// </summary>
+    [Fact]
+    public void APolicyThatNeverRotates_KeepsItsKey_WhenTheClockMovesBack()
+    {
+        var now = DateTimeOffset.UnixEpoch + TimeSpan.FromDays(1);
+        var clock = new Mock<TimeProvider>();
+        clock.Setup(time => time.GetUtcNow()).Returns(() => now);
+        var ring = CreateRing(clock.Object, Policy with { RotateEvery = TimeSpan.MaxValue });
+        var key = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
+
+        now = DateTimeOffset.UnixEpoch;
+
+        Assert.Equal(key, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId);
+    }
+
+    /// <summary>
+    /// A policy the ring cannot rotate on stops the host while it registers the ring: a rotation period that is not
+    /// positive mints a key for every request, and a negative retention drops a key while it still signs.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 7)]
+    [InlineData(-1, 7)]
+    [InlineData(30, -1)]
+    public void APolicyTheRingCannotRotateOn_IsRefusedAtRegistration(int rotateEveryDays, int keepRetiredForDays)
+    {
+        var policy = Policy with
+        {
+            RotateEvery = TimeSpan.FromDays(rotateEveryDays),
+            KeepRetiredFor = TimeSpan.FromDays(keepRetiredForDays),
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ServiceCollection().AddInMemoryKeyRing(policy));
+    }
+
+    /// <summary>
+    /// A host whose settings announce a new key for longer than its policy keeps a retired one does not start, rather
+    /// than starting and failing every request for a key once the ring is first made.
+    /// </summary>
+    [Fact]
+    public async Task ARetentionShorterThanTheAnnouncementOfANewKey_StopsTheHostAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromDays(30));
+        services.AddInMemoryKeyRing(Policy);
+        await using var provider = services.BuildServiceProvider();
+
+        await Assert.ThrowsAsync<OptionsValidationException>(() => provider
+            .GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A second registration takes no effect, so its policy does not stop the host: the ring registered first runs.
+    /// </summary>
+    [Fact]
+    public async Task ASecondRegistration_DoesNotStopTheHost_OverAPolicyNoRingRuns()
+    {
+        var services = new ServiceCollection();
+        services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromHours(2));
+        services.AddInMemoryKeyRing(Policy);
+        services.AddInMemoryKeyRing(Policy with { KeepRetiredFor = TimeSpan.FromHours(1) });
+        await using var provider = services.BuildServiceProvider();
+
+        await provider
+            .GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// A host that registered a ring of its own still gets the clock from the call: token validation reads it, and a
+    /// host using this package alone has nothing else registering one.
+    /// </summary>
+    [Fact]
+    public async Task ARingOfTheHostsOwn_StillLeavesTheClockRegistered()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(Mock.Of<IKeyRing>());
+        services.AddInMemoryKeyRing(Policy);
+        await using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<TimeProvider>());
+    }
+
+    /// <summary>
+    /// A ring keeping a retired key for less than the time a new key is announced before it signs would drop the
+    /// key still signing, so the new one would sign before clients could have fetched it. The ring refuses such a
+    /// policy when it is made, the moment it learns how long that announcement is.
+    /// </summary>
+    [Fact]
+    public void ARetentionShorterThanTheAnnouncementOfANewKey_IsRefused()
+    {
+        var options = Options.Create(new KeyRingOptions { KeyRolloverPropagation = TimeSpan.FromHours(2) });
+        var policy = Policy with { KeepRetiredFor = TimeSpan.FromHours(1) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InMemoryKeyRing(policy, options, new FakeTimeProvider()));
+    }
 }

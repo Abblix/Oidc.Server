@@ -135,6 +135,8 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="builder">The builder returned by the custodian registration.</param>
     /// <param name="policy">What to mint, how often, and which key seals it.</param>
     /// <returns>The builder whose <c>PersistRingTo...</c> call says where the ring lives.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="MintedKeys.RotateEvery"/> is not positive, or
+    /// <see cref="MintedKeys.KeepRetiredFor"/> is negative.</exception>
     /// <remarks>
     /// This is the weaker posture of the two, which is why it is named rather than defaulted: the private half is
     /// unwrapped into process memory and stays there, so a compromised process yields the key itself, not merely
@@ -161,6 +163,8 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="services">The service collection to add to.</param>
     /// <param name="policy">What to mint, how often, and which key-encryption key seals it.</param>
     /// <returns>A builder for the call that supplies the store.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="MintedKeys.RotateEvery"/> is not positive, or
+    /// <see cref="MintedKeys.KeepRetiredFor"/> is negative.</exception>
     /// <remarks>
     /// This registers the ring and nothing else. What the ring's keys are then USED for is the caller's
     /// concern: an OpenID Provider publishes them at its JWKS endpoint, a client protects stored sessions with
@@ -177,6 +181,12 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="services">The service collection to add to.</param>
     /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
     /// <returns>The same collection, so calls chain.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="LocalKeys.RotateEvery"/> is not positive, or
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is negative.</exception>
+    /// <exception cref="Microsoft.Extensions.Options.OptionsValidationException">
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is shorter than <see cref="KeyRingOptions.KeyRolloverPropagation"/>:
+    /// raised when the host starts, or at the first read of the key ring's settings where no host runs the startup
+    /// validation.</exception>
     /// <remarks>
     /// The answer for a host with no HSM or KMS, which is most of them. It rotates, and it keeps retired keys
     /// long enough that what they produced stays readable - the two things a ring is for.

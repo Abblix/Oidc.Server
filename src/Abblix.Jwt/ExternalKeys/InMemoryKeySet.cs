@@ -10,11 +10,12 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <summary>
 /// The keys the in-memory ring minted, rotated on its policy, each operation under one lock.
 /// </summary>
-/// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
-/// <param name="timeProvider">When a rotation happens and which key produces.</param>
-internal sealed class InMemoryKeySet(LocalKeys policy, TimeProvider timeProvider)
+internal sealed class InMemoryKeySet
 {
-    private readonly InMemoryKeyMinting _minting = new(policy);
+    private readonly LocalKeys _policy;
+    private readonly TimeSpan _propagation;
+    private readonly TimeProvider _timeProvider;
+    private readonly InMemoryKeyMinting _minting;
     private readonly List<InMemoryMintedKey> _keys = [];
 
     /// <summary>
@@ -25,21 +26,34 @@ internal sealed class InMemoryKeySet(LocalKeys policy, TimeProvider timeProvider
     private readonly Lock _gate = new();
 
     /// <summary>
+    /// Takes the policy the set rotates on.
+    /// </summary>
+    /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
+    /// <param name="propagation">How long a new key is announced before it produces.</param>
+    /// <param name="timeProvider">When a rotation happens and which key produces.</param>
+    public InMemoryKeySet(LocalKeys policy, TimeSpan propagation, TimeProvider timeProvider)
+    {
+        _policy = policy;
+        _propagation = propagation;
+        _timeProvider = timeProvider;
+        _minting = new InMemoryKeyMinting(policy, propagation);
+    }
+
+    /// <summary>
     /// Rotates the set, then answers the keys of <paramref name="usage"/>, the one producing now first.
     /// </summary>
     /// <param name="usage">The role of the keys.</param>
     /// <param name="includePrivateKeys">Whether the private halves are kept.</param>
-    /// <param name="propagation">How long a new key is announced before it produces.</param>
-    public IEnumerable<JsonWebKey> RotateAndServe(string usage, bool includePrivateKeys, TimeSpan propagation)
+    public IEnumerable<JsonWebKey> RotateAndServe(string usage, bool includePrivateKeys)
     {
         using (_gate.EnterScope())
         {
-            RotateHeld(timeProvider.GetUtcNow());
+            RotateHeld(_timeProvider.GetUtcNow());
 
             return _keys
                 .Where(minted => minted.Key.Usage == usage)
                 .ToList()
-                .ProduceFirst(minted => minted.CreatedAt, timeProvider.GetUtcNow(), propagation)
+                .ProduceFirst(minted => minted.CreatedAt, _timeProvider.GetUtcNow(), _propagation)
                 .Select(minted => minted.Key.Sanitize(includePrivateKeys))
                 .ToList();
         }
@@ -63,7 +77,7 @@ internal sealed class InMemoryKeySet(LocalKeys policy, TimeProvider timeProvider
     {
         using (_gate.EnterScope())
         {
-            RotateHeld(timeProvider.GetUtcNow());
+            RotateHeld(_timeProvider.GetUtcNow());
         }
     }
 
@@ -88,7 +102,18 @@ internal sealed class InMemoryKeySet(LocalKeys policy, TimeProvider timeProvider
             _keys.RemoveAll(minted =>
                 minted.Key.Usage == usage &&
                 minted.CreatedAt != newest &&
-                now - minted.CreatedAt > policy.RotateEvery + policy.KeepRetiredFor);
+                IsRetiredLongEnough(now - minted.CreatedAt));
         }
     }
+
+    /// <summary>
+    /// Whether a key of <paramref name="age"/> has been retired for longer than the policy keeps it.
+    /// </summary>
+    /// <remarks>
+    /// The two periods are compared one after the other rather than summed, so a policy that never rotates or never
+    /// forgets, given as the longest span there is, does not overflow. The first comparison also keeps a negative
+    /// age, from a clock that moved back, away from the subtraction.
+    /// </remarks>
+    private bool IsRetiredLongEnough(TimeSpan age)
+        => age > _policy.RotateEvery && age - _policy.RotateEvery > _policy.KeepRetiredFor;
 }
