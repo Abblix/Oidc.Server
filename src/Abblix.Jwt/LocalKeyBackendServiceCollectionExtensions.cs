@@ -29,11 +29,11 @@ internal static class LocalKeyBackendServiceCollectionExtensions
         // the family; the composite then routes each key to the backend that owns it and fails closed when
         // none does.
         //
-        // Placed through the family cursor rather than TryAddEnumerable, because this method is called more
-        // than once by design - the OIDC registration performs it, and so does the security-event one - so a
-        // host may well have composed the family in between. TryAddEnumerable dedupes against plain
-        // descriptors and a composed family is keyed, so it would leave a second copy beside the composite
-        // that silently wins the resolve.
+        // Placed through the family cursor rather than TryAddEnumerable, because AddJsonWebTokens, which performs
+        // this, is called more than once by design - the OIDC registration calls it, and so does the
+        // security-event one - so a host may well have composed the family in between. TryAddEnumerable
+        // dedupes against plain descriptors and a composed family is keyed, so it would leave a second copy
+        // beside the composite that silently wins the resolve.
         services.Decompose<IDataSigner>().AddLast(ServiceDescriptor.Singleton<IDataSigner, LocalKeySigner>());
 
         // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam in every respect: the
