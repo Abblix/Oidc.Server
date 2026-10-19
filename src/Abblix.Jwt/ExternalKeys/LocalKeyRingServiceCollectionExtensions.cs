@@ -34,6 +34,11 @@ internal static class LocalKeyRingServiceCollectionExtensions
         // it registers
         KeyRingPolicyChecks.EnsureRotatable(policy);
 
+        // A ring is registered once, and a later call takes no effect: its policy is not checked against the settings
+        // either, or the host would be refused over a policy no ring runs
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(IKeyRing)))
+            return services;
+
         // The announcement of a new key is a setting, final only once every configuration has run, so the
         // retention is checked against it when the host starts: the ring itself is made on its first use, which
         // would let the host start and then fail every request for a key

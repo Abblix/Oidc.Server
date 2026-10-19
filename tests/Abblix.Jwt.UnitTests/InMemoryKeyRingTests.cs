@@ -416,6 +416,23 @@ public class InMemoryKeyRingTests
     }
 
     /// <summary>
+    /// A second registration takes no effect, so its policy does not stop the host: the ring registered first runs.
+    /// </summary>
+    [Fact]
+    public async Task ASecondRegistration_DoesNotStopTheHost_OverAPolicyNoRingRuns()
+    {
+        var services = new ServiceCollection();
+        services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromHours(2));
+        services.AddInMemoryKeyRing(Policy);
+        services.AddInMemoryKeyRing(Policy with { KeepRetiredFor = TimeSpan.FromHours(1) });
+        await using var provider = services.BuildServiceProvider();
+
+        await provider
+            .GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// A ring keeping a retired key for less than the time a new key is announced before it signs would drop the
     /// key still signing, so the new one would sign before clients could have fetched it. The ring refuses such a
     /// policy when it is made, the moment it learns how long that announcement is.

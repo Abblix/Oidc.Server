@@ -73,6 +73,12 @@ internal static class AdoptedEntries
             }
         }
 
+        // Each later key is dated a second before the one listed ahead of it, so the first needs that many seconds
+        // above the earliest instant there is: a ring that never rotates dates its set at that instant
+        var room = TimeSpan.FromSeconds(ids.Length - 1);
+        if (first - DateTimeOffset.MinValue < room)
+            first = DateTimeOffset.MinValue + room;
+
         var dates = new DateTimeOffset[ids.Length];
         for (var index = 0; index < dates.Length; index++)
             dates[index] = first - TimeSpan.FromSeconds(index);

@@ -182,8 +182,11 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
     /// <returns>The same collection, so calls chain.</returns>
     /// <exception cref="ArgumentOutOfRangeException"><see cref="LocalKeys.RotateEvery"/> is not positive, or
-    /// <see cref="LocalKeys.KeepRetiredFor"/> is negative. A retention shorter than
-    /// <see cref="KeyRingOptions.KeyRolloverPropagation"/> stops the host at startup.</exception>
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is negative.</exception>
+    /// <exception cref="Microsoft.Extensions.Options.OptionsValidationException">
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is shorter than <see cref="KeyRingOptions.KeyRolloverPropagation"/>:
+    /// raised when the host starts, or at the first read of the key ring's settings where no host runs the startup
+    /// validation.</exception>
     /// <remarks>
     /// The answer for a host with no HSM or KMS, which is most of them. It rotates, and it keeps retired keys
     /// long enough that what they produced stays readable - the two things a ring is for.

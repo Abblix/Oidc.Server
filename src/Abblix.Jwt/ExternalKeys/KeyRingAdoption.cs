@@ -45,7 +45,8 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
         // leaves the ring without the keys listed before the refused one
         var ids = AdoptedEntries.IdsFor(policy.AdoptedKeys);
 
-        // Dated a rotation period before the current one, which is what makes the first of them the active key:
+        // Dated a rotation period before the current one, or at the earliest instant there is for a ring that
+        // never rotates, which is what makes the first of them the active key:
         // the key minted in this same refresh is younger than the propagation window, so it is published and
         // verifiable while this one keeps producing, and it takes over once the window has passed. The date is
         // read off the rotation grid rather than the clock, so every pod adopting in one period dates the set alike.

@@ -34,20 +34,23 @@ public sealed partial class KeyRingTests
     }
 
     /// <summary>
-    /// A ring that never rotates, given as the longest span there is, still adopts existing keys and serves them,
-    /// though its rotation grid has no period before the current one to date them in.
+    /// A ring rotating so rarely that its grid has no room before the current period, as one that never rotates,
+    /// still adopts every existing key and serves them, the first listed signing.
     /// </summary>
-    [Fact]
-    public async Task ARingThatNeverRotates_AdoptsExistingKeys()
+    [Theory]
+    [InlineData(10675199)]
+    [InlineData(1500 * 366)]
+    public async Task ARingThatBarelyRotates_AdoptsEveryExistingKey(int rotateEveryDays)
     {
-        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var current = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var older = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
-        var (ring, _) = CreateRing(rotateEvery: TimeSpan.MaxValue, adoptedKeys: [adopted]);
+        var (ring, _) = CreateRing(rotateEvery: TimeSpan.FromDays(rotateEveryDays), adoptedKeys: [current, older]);
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(
-            adopted.KeyId,
-            ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId));
+        var served = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId).ToList();
+        Assert.Equal(current.KeyId, served[0]);
+        Assert.Contains(older.KeyId, served);
     }
 
     /// <summary>
