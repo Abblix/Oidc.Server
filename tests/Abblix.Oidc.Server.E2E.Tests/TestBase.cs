@@ -95,6 +95,22 @@ public abstract class TestBase(TestFactory factory)
         return parsed;
     }
 
+    /// <summary>
+    /// The parameters of an OpenID authorization code request with PKCE for <paramref name="clientId"/>, redirected
+    /// to the test redirect address, with a fresh state and nonce.
+    /// </summary>
+    protected static Dictionary<string, string> CodeFlowParameters(string clientId, string codeChallenge) => new()
+    {
+        [AuthorizationRequest.Parameters.ClientId] = clientId,
+        [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+        [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+        [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+        [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+        [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+        [AuthorizationRequest.Parameters.CodeChallenge] = codeChallenge,
+        [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+    };
+
     protected static async Task<string> AuthorizeAndExtractCodeAsync(
         HttpClient client,
         DiscoveryDocument discovery,

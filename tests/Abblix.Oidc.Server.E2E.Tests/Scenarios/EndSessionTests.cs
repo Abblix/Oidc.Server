@@ -14,8 +14,12 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Net.Http.Headers;
 using Xunit;
 using EndSessionParameters = Abblix.Oidc.Server.Model.EndSessionRequest.Parameters;
@@ -243,40 +247,12 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task A_client_with_a_front_channel_logout_uri_is_signed_out_through_a_framed_page()
     {
-        // On its own host: authorizing adds this client to the session the test host keeps for the whole
-        // process, and that addition never goes away - a shared host would hand every later end-session test a
-        // client to notify through the front channel, turning their redirects into this page.
-        await using var host = Factory.WithWebHostBuilder(_ => { });
-        var client = host.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-            BaseAddress = TestServerAddress.BaseAddress,
-        });
-
-        var discovery = await FetchDiscoveryAsync(client);
-        var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
-
-        // Authorizing is what ties the client to the session; without it the OP has nobody to notify.
-        var (_, challenge) = GeneratePkcePair();
-        await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
-
-        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
+        var (response, body) = await LogOutAFrontChannelClientAsync(clientId => new Dictionary<string, string>
         {
             [EndSessionParameters.ClientId] = clientId,
             [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
         });
 
-        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.IsSuccessStatusCode, $"/end_session failed: {(int)response.StatusCode} {body}");
         Assert.Equal(MediaTypeNames.Text.Html, response.Content.Headers.ContentType?.MediaType);
         Assert.Contains(FrontChannelLogoutUri.OriginalString, body);
@@ -315,6 +291,72 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A logout naming a return address but no client, as a client library sends when its caller passes no ID token,
+    /// still ends the session once the end user confirms it, and sends nobody to the address: nothing confirms it,
+    /// and OpenID Connect RP-Initiated Logout 1.0 section 3 says the OP "MUST NOT perform post-logout redirection"
+    /// then.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_ends_the_session_and_redirects_nowhere()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
+            [EndSessionParameters.State] = "af0ifjsldkj",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// With nobody signed in there is no session to end and nobody to ask, and the address no client confirms is still
+    /// not where the end user is sent: the answer is 204 with no Location.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_with_no_session_answers_no_content()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Replace(
+                ServiceDescriptor.Singleton<IAuthSessionService>(new MutableAuthSessionService(TimeProvider.System)))));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
+            [EndSessionParameters.State] = "af0ifjsldkj",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A client signed in to the session is still told of the logout through the framed page, and the page sends the
+    /// end user nowhere afterwards, since the request named no client to confirm the address it gave.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_notifies_through_a_page_that_navigates_nowhere()
+    {
+        var (response, body) = await LogOutAFrontChannelClientAsync(_ => new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+        });
+
+        Assert.True(response.IsSuccessStatusCode, $"/end_session failed: {(int)response.StatusCode} {body}");
+        Assert.Contains(FrontChannelLogoutUri.OriginalString, body);
+        Assert.DoesNotContain(RegisteredPostLogoutUri, body);
+    }
+
+    /// <summary>
     /// An ID token is the one type this server issues that names a client in its audience - OpenID Connect
     /// Core 1.0 Section 2: the aud claim "MUST contain the OAuth 2.0 client_id of the Relying Party as an
     /// audience value". The shared token validator accepts only the issuer, so this endpoint checks the ID
@@ -343,6 +385,34 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     private const string IdentityTokenName = "id_token";
+
+    /// <summary>
+    /// Signs a client with a front-channel logout address in to the session and logs the session out with the
+    /// parameters given for that client, confirmed; returns the answer and its body.
+    /// </summary>
+    private async Task<(HttpResponseMessage Response, string Body)> LogOutAFrontChannelClientAsync(
+        Func<string, Dictionary<string, string>> logoutParameters)
+    {
+        // On its own host: authorizing adds this client to the session the test host keeps for the whole
+        // process, and that addition never goes away - a shared host would hand every later end-session test a
+        // client to notify through the front channel, turning their redirects into this page.
+        await using var host = Factory.WithWebHostBuilder(_ => { });
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
+
+        // Authorizing is what ties the client to the session; without it the OP has nobody to notify.
+        var (_, challenge) = GeneratePkcePair();
+        await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(clientId, challenge));
+
+        var response = await EndSessionConfirmedAsync(client, discovery, logoutParameters(clientId));
+        return (response, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
 
     /// <summary>
     /// Registers a client that additionally asks to be signed out through the front channel.

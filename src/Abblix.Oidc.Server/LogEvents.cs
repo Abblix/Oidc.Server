@@ -165,6 +165,7 @@ internal static class LogEvents
             private const int Base = 2080;
 
             public const int InvalidPostLogoutRedirectUri = Base + 1;
+            public const int RedirectWithoutClientIgnored = Base + 2;
         }
 
         /// <summary>
