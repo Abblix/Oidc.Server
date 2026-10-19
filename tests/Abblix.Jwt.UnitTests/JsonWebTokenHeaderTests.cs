@@ -144,6 +144,24 @@ public class JsonWebTokenHeaderTests
         Assert.False(header.TryReadEphemeralPublicKey(out _));
     }
 
+    /// <summary>
+    /// An 'epk' naming one of its members twice is malformed, as any key is (RFC 7517 section 4): a JWE header parsed
+    /// as text keeps both, and the key is read with neither.
+    /// </summary>
+    [Theory]
+    [InlineData("", true)]
+    [InlineData(""","kid":"a","kid":"b" """, false)]
+    public void EphemeralPublicKey_NamingAMemberTwice_IsMalformed(string extraMembers, bool readable)
+    {
+        using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        var key = new EllipticCurveJsonWebKey().Apply(ecdh.ExportParameters(false)) with { Algorithm = null };
+        var keyJson = JsonSerializer.Serialize<JsonWebKey>(key);
+        var epk = keyJson[..^1] + extraMembers.TrimEnd() + "}";
+        var json = JsonNode.Parse($$"""{"{{JwtClaimTypes.EphemeralPublicKey}}":{{epk}}}""")!.AsObject();
+
+        Assert.Equal(readable, new JsonWebTokenHeader(json).TryReadEphemeralPublicKey(out _));
+    }
+
     [Fact]
     public void VerificationKey_SetThenGet_RoundTrips()
     {

@@ -16,7 +16,8 @@ namespace Abblix.Jwt;
 internal static class JsonWebKeyDocument
 {
     /// <summary>The key's <c>kty</c> and the raw JSON of the whole object.</summary>
-    /// <exception cref="JsonException">The value is not an object, or its <c>kty</c> is missing or empty.</exception>
+    /// <exception cref="JsonException">The value is not an object, names a member twice, or its <c>kty</c> is missing
+    /// or empty.</exception>
     public static (string KeyType, string Json) Read(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -26,6 +27,8 @@ internal static class JsonWebKeyDocument
 
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
+
+        JsonMemberNames.RefuseRepeated(root, "key");
 
         if (!root.TryGetProperty(JsonWebKeyPropertyNames.KeyType, out var ktyElement))
         {

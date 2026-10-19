@@ -104,6 +104,28 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
             await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
     }
 
+    /// <summary>
+    /// A JWK Set is described with the member name its converter reads, whatever naming policy the host keeps, so a
+    /// client generated from the document registers keys the server finds.
+    /// </summary>
+    [Fact]
+    public async Task SwashbuckleDescribesAKeySetWithItsKeysMember_WhateverTheHostsNamingPolicy()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(
+                options => options.JsonSerializerOptions.PropertyNamingPolicy = null);
+            services.AddSwaggerGen(options => options.SwaggerDoc(Document, new OpenApiInfo()));
+        }));
+
+        var document = host.Services.GetRequiredService<ISwaggerProvider>().GetSwagger(Document);
+        var json = JsonNode.Parse(
+            await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken))!;
+
+        var properties = json["components"]!["schemas"]![nameof(JsonWebKeySet)]!["properties"]!.AsObject();
+        Assert.Equal(["keys"], properties.Select(property => property.Key));
+    }
+
     /// <summary>The OpenAPI generator ASP.NET Core ships builds the document with the library's endpoints in it.</summary>
     [Fact]
     public async Task TheAspNetCoreGeneratorBuildsTheDocumentWithTheLibrarysEndpoints()
