@@ -18,7 +18,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Unit tests for symmetric key encryption algorithms in JWE (JSON Web Encryption).
-/// Tests AES-GCM Key Wrap (A128GCMKW, A192GCMKW, A256GCMKW) and Direct Key Agreement (dir).
+/// Tests AES-GCM Key Wrap (A128GCMKW, A192GCMKW, A256GCMKW) and Direct Encryption (dir).
 /// Verifies RFC 7518 Section 4.5 (Direct Encryption) and Section 4.7 (AES-GCM Key Wrap).
 /// </summary>
 public class SymmetricKeyEncryptionTests
@@ -116,7 +116,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests "dir" (Direct Key Agreement) with all content encryption algorithms.
+	/// Tests "dir" (Direct Encryption) with all content encryption algorithms.
 	/// Verifies RFC 7518 Section 4.5 - the shared symmetric key is used directly as the CEK.
 	/// </summary>
 	[Theory]
@@ -192,7 +192,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests that Direct Key Agreement requires the shared key to match the CEK size.
+	/// Tests that Direct Encryption requires the shared key to match the CEK size.
 	/// Per RFC 7518 Section 4.5: "the symmetric key value MUST be the same as the CEK".
 	/// The mismatch is rejected by the "dir" key encryptor itself with a message naming the
 	/// key-configuration cause, before the content encryptor is ever invoked.
@@ -268,7 +268,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests that Direct Key Agreement produces empty encrypted_key field.
+	/// Tests that Direct Encryption produces empty encrypted_key field.
 	/// Per RFC 7518 Section 4.5: "The JWE Encrypted Key value is the empty octet sequence."
 	/// </summary>
 	[Fact]

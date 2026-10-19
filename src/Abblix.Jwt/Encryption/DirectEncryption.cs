@@ -56,12 +56,12 @@ internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey
 	{
 		var contentEncryptionKey = sharedKey.KeyValue
 		          ?? throw new InvalidOperationException(
-			          "Direct key agreement (dir) requires an OctetJsonWebKey with KeyValue");
+			          "Direct encryption (dir) requires an OctetJsonWebKey with KeyValue");
 
 		if (contentEncryptionKey.Length != keySizeInBytes)
 		{
 			throw new InvalidOperationException(
-				$"Direct key agreement (dir) requires the shared symmetric key to match the content " +
+				$"Direct encryption (dir) requires the shared symmetric key to match the content " +
 				$"encryption key size. Expected {keySizeInBytes} bytes, actual: {contentEncryptionKey.Length} bytes.");
 		}
 
@@ -70,7 +70,7 @@ internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey
 
 	/// <inheritdoc />
 	/// <remarks>
-	/// For direct key agreement, the symmetric key IS the Content Encryption Key.
+	/// For direct encryption, the symmetric key IS the Content Encryption Key.
 	/// Per RFC 7518 Section 4.5: "The JWE Encrypted Key value is the empty octet sequence."
 	/// This method validates the key and returns an empty array.
 	/// </remarks>
@@ -85,7 +85,7 @@ internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey
 		if (!keyToEncrypt.SequenceEqual(sharedKey.KeyValue))
 		{
 			throw new InvalidOperationException(
-				"For direct key agreement (dir), the Content Encryption Key must be the same as the shared symmetric key");
+				"For direct encryption (dir), the Content Encryption Key must be the same as the shared symmetric key");
 		}
 
 		// Return empty octet sequence per RFC 7518 Section 4.5
@@ -94,7 +94,7 @@ internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey
 
 	/// <inheritdoc />
 	/// <remarks>
-	/// For direct key agreement, the encrypted key is always empty.
+	/// For direct encryption, the encrypted key is always empty.
 	/// The shared symmetric key is used directly as the Content Encryption Key.
 	/// </remarks>
 	public bool TryDecryptKey(
