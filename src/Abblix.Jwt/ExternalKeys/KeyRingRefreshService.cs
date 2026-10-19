@@ -30,17 +30,18 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </remarks>
 internal sealed partial class KeyRingRefreshService(
     ILogger<KeyRingRefreshService> logger,
-    KeyRings rings,
+    KeyRingStartupCheck check,
+    KeyRingRounds rounds,
     IOptions<KeyRingOptions> options,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await rings.CheckAsync(cancellationToken);
+        await check.CheckAsync(cancellationToken);
 
         // A partition opened before this start was refreshed then, so it is not refreshed again now
-        foreach (var (_, ring, source) in rings.BeginRound(exceptOpened: true))
+        foreach (var (_, ring, source) in rounds.BeginRound(exceptOpened: true))
             await ring.RefreshAsync(source, cancellationToken);
 
         await base.StartAsync(cancellationToken);
@@ -55,7 +56,7 @@ internal sealed partial class KeyRingRefreshService(
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             // Each partition on its own: one whose keys cannot be opened leaves the others current
-            foreach (var (partition, ring, source) in rings.BeginRound())
+            foreach (var (partition, ring, source) in rounds.BeginRound())
             {
                 try
                 {

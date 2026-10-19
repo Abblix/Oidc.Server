@@ -314,20 +314,61 @@ public class KeyPlacementWiringTests
         Assert.Null(provider.GetService<CustodianHeldKeys>());
     }
 
-    [Fact]
-    public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse(
+        bool validateOnBuild)
     {
         var services = WithCustodian();
+        services.AddLogging();
         services.AddJsonWebTokens();
         services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
 
-        using var provider = services.BuildServiceProvider();
+        // A host in Development validates the container as it is built, and the refusal still has to be ours
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
 
         var error = await Assert.ThrowsAsync<OptionsValidationException>(
             () => provider.GetRequiredService<IAsyncStartupValidator>()
                 .ValidateAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IKeyRingStore), Assert.Single(error.Failures));
+    }
+
+    /// <summary>
+    /// A key ring registered by itself, with no placement call in front of it, is refused at startup without a
+    /// store just as the minting placement is, and starts with one.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task AKeyRingRegisteredByItself_IsRefusedAtStartup_OnlyWithoutAStore(
+        bool validateOnBuild,
+        bool withStore)
+    {
+        var services = WithCustodian();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        if (withStore)
+            services.AddSingleton(new Mock<IKeyRingStore>().Object);
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek" });
+
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
+        var validation = provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
+
+        if (withStore)
+        {
+            await validation;
+            return;
+        }
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(() => validation);
+        Assert.Equal(typeof(KeyRingOptions), error.OptionsType);
     }
 
     /// <summary>

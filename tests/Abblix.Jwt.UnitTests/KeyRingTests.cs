@@ -194,7 +194,7 @@ public sealed partial class KeyRingTests : IDisposable
     /// The rings of <paramref name="partitions"/> over one store, built as the container builds them, with the first
     /// partition's ring.
     /// </summary>
-    private (KeyRings Rings, KeyRing Ring, FakeStore Store) CreateRings(
+    private (KeyRingParts Rings, KeyRing Ring, FakeStore Store) CreateRings(
         TimeSpan propagation,
         TimeProvider time,
         IReadOnlyList<JsonWebKey>? adoptedKeys = null,
@@ -218,7 +218,7 @@ public sealed partial class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        var rings = new KeyRings(
+        var rings = new KeyRingParts(
             provider,
             new MintedKeys
             {
@@ -262,7 +262,8 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _, _) = CreateRings(propagation, time, null, "acme", "globex");
         var service = new KeyRingRefreshService(
             new RecordingLogger<KeyRingRefreshService>(),
-            rings,
+            rings.Check,
+            rings.Rounds,
             Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
             time);
 
@@ -299,7 +300,7 @@ public sealed partial class KeyRingTests : IDisposable
         Assert.Contains(store.Entries, stored => stored.Id == "sig-RS256-1");
     }
 
-    private static Task<IReadOnlyDictionary<string, Exception>> Open(KeyRings rings, params string[] partitions)
+    private static Task<IReadOnlyDictionary<string, Exception>> Open(KeyRingParts rings, params string[] partitions)
         => rings.OpenAsync(partitions, TestContext.Current.CancellationToken);
 
     // The clock of the rings RingsKeeping builds, which a test moves on
@@ -309,7 +310,7 @@ public sealed partial class KeyRingTests : IDisposable
     /// Rings keeping the partitions <paramref name="kept"/> names, as a host registering its own does, over a fresh
     /// store, with keys from <paramref name="custodian"/>.
     /// </summary>
-    private (KeyRings Rings, FakeStore Store) RingsKeeping(
+    private (KeyRingParts Rings, FakeStore Store) RingsKeeping(
         IKeyRingPartitions kept,
         IKeyCustodian custodian,
         params JsonWebKey[] adoptedKeys)
@@ -327,7 +328,7 @@ public sealed partial class KeyRingTests : IDisposable
         _providers.Add(provider);
 
         var policy = new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName, AdoptedKeys = adoptedKeys };
-        return (new KeyRings(provider, policy, store, kept), store);
+        return (new KeyRingParts(provider, policy, store, kept), store);
     }
 
     private static IKeyRingPartitions Keeping(params string[] partitions)
@@ -539,7 +540,7 @@ public sealed partial class KeyRingTests : IDisposable
 
         using var provider = services.BuildServiceProvider();
 
-        var round = provider.GetRequiredService<KeyRings>().BeginRound();
+        var round = provider.GetRequiredService<KeyRingRounds>().BeginRound();
         Assert.Equal(["globex"], round.Select(entry => entry.Partition));
     }
 
@@ -1311,7 +1312,11 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _, store) = CreateRings(propagation, time, null, "acme", "globex");
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, rings, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await ArmTheLoop(time, propagation / 2, store);
@@ -1351,7 +1356,11 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, ring, store) = CreateRings(propagation, time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, rings, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await ArmTheLoop(time, propagation / 2, store);
@@ -1392,7 +1401,11 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _, store) = CreateRings(propagation, time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, rings, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }),
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await ArmTheLoop(time, propagation / 2, store);

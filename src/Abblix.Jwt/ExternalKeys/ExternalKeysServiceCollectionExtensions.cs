@@ -163,18 +163,6 @@ public static class ExternalKeysServiceCollectionExtensions
     public static IMintedKeysBuilder UseKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
     {
         var services = ChoosePlacement(builder, KeyPlacement.InProcess, nameof(UseKeysInProcess));
-
-        // This placement, unlike the other, needs somewhere to keep the ring, and a builder cannot force the call
-        // that supplies it. Nothing else in the container reveals the omission: the ring simply fails to resolve on
-        // first use, long after startup. Checking here is what the recorded placement is for.
-        services.AddOptions<KeyPlacementChoice>()
-            .Validate<IServiceProvider>(
-                (choice, serviceProvider) =>
-                    choice.ChosenPlacement != KeyPlacement.InProcess ||
-                    serviceProvider.GetService<IKeyRingStore>() is not null,
-                $"{nameof(UseKeysInProcess)} needs an {nameof(IKeyRingStore)} to share the keys it mints, and none "
-                + "is registered. Follow it with a PersistRingTo... call from the custodian's package.");
-
         return services.AddKeyRing(policy);
     }
 
@@ -257,25 +245,7 @@ public static class ExternalKeysServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
 
         var builder = new MintedKeysBuilder(services, policy);
-
-        // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
-        // container knows nothing about: everything else the ring needs is resolved normally. It is read off the
-        // builder rather than captured, so a call chained after this one - AdoptExistingKeys - still reaches the
-        // ring: this factory runs when the container builds, by which time the whole chain has run. The partitions
-        // are the host's when it registered any, whichever side of this call it did, and the settings' otherwise.
-        services.TryAddSingleton(
-            serviceProvider => serviceProvider.CreateService<KeyRings>(
-                Dependency.Override(builder.Policy),
-                Dependency.Override(
-                    serviceProvider.GetService<IKeyRingPartitions>() ??
-                    serviceProvider.CreateService<OptionsKeyRingPartitions>())));
-
-        // Every contract is an alias to the one set of rings. Registering one with its own factory instead would
-        // build a SECOND ring: the refresh service would keep one current while every consumer read the other,
-        // which fails as a server publishing keys it never rotates.
-        services.TryAddSingleton<IKeyRings>(serviceProvider => serviceProvider.GetRequiredService<KeyRings>());
-        services.TryAddSingleton<IKeyRing>(serviceProvider =>
-            serviceProvider.GetRequiredService<KeyRings>().Ring(KeyRingOptions.DefaultPartition));
+        services.AddKeyRingParts(builder);
 
         // A partition names its entries in the store, so it must be a name every store accepts, and one the default
         // partition can tell from its own entries
@@ -285,7 +255,17 @@ public static class ExternalKeysServiceCollectionExtensions
                     ring.Partitions.All(KeyRingOptions.IsPartitionName),
             $"{nameof(KeyRingOptions)}.{nameof(KeyRingOptions.Partitions)} must name at least one partition, each " +
             "once, and each of letters, digits, '-', '_' and '~' only: a partition's name goes in front of its " +
-            "entries' ids in the store.");
+            "entries' ids in the store.")
+
+            // The ring needs somewhere to keep its keys, and a builder cannot force the call that supplies it.
+            // Checked at startup, because the ring resolves its store only when first asked for, and a container
+            // validating itself as it is built does not see that far
+            .Validate<IServiceProvider>(
+                (_, serviceProvider) => serviceProvider.GetService<IKeyRingStore>() is not null,
+                $"The key ring needs an {nameof(IKeyRingStore)} to share the keys it mints, and none is registered. " +
+                $"Follow {nameof(UseKeysInProcess)} or {nameof(AddKeyRing)} with a PersistRingTo... call from the " +
+                $"store's package, or register an {nameof(IKeyRingStore)} of your own.")
+            .ValidateOnStart();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
 
