@@ -408,17 +408,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
 
         // Authorizing is what ties the client to the session; without it the OP has nobody to notify.
         var (_, challenge) = GeneratePkcePair();
-        await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
+        await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(clientId, challenge));
 
         var response = await EndSessionConfirmedAsync(client, discovery, logoutParameters(clientId));
         return (response, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
