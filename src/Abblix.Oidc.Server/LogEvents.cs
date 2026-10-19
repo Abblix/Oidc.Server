@@ -21,6 +21,12 @@ namespace Abblix.Oidc.Server;
 /// Read the neighbours before taking a number. Several windows are narrower than they look, because
 /// something that is not theirs sits inside them, and an id already in a deployment's alerts cannot move -
 /// so a class needing one more takes a second window rather than displacing anybody.
+///
+/// The library's packages log into one process, so their numbers come from one space, and each package
+/// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11099, less the two windows below;
+/// Abblix.Oidc.Server.AspNetCore 10500-10599; Abblix.Oidc.Server.SharedSignals 10800-10899;
+/// Abblix.Jwt.Vault 12000-12299; Abblix.Jwt.Azure 13000-13199; Abblix.SecurityEvents 14000-14199;
+/// Abblix.SharedSignals 15000-15099. A new package takes the next free thousand.
 /// </remarks>
 internal static class LogEvents
 {

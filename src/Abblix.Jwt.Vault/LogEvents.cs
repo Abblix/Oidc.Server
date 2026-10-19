@@ -10,14 +10,14 @@ namespace Abblix.Jwt.Vault;
 
 /// <summary>
 /// The numeric event ids for this package's structured logs, grouped by the class that emits them so a dashboard
-/// keys off the id rather than the message text. Ids are local to this assembly.
+/// keys off the id rather than the message text. Ids are unique across the library's packages, which log into one process.
 /// </summary>
 internal static class LogEvents
 {
-    /// <summary>Transit custodian events. Range 1000-1099.</summary>
+    /// <summary>Transit custodian events. Range 12000-12099.</summary>
     internal static class TransitCustodian
     {
-        private const int Base = 1000;
+        private const int Base = 12000;
 
         /// <summary>Transit rejected an unwrap, so the CEK could not be recovered.</summary>
         public const int UnwrapRejected = Base + 1;
@@ -29,10 +29,10 @@ internal static class LogEvents
         public const int AlgorithmNotServed = Base + 3;
     }
 
-    /// <summary>KV key-ring events. Range 1100-1199.</summary>
+    /// <summary>KV key-ring events. Range 12100-12199.</summary>
     internal static class KeyValueStore
     {
-        private const int Base = 1100;
+        private const int Base = 12100;
 
         /// <summary>This pod won a period and wrote its key into the ring.</summary>
         public const int PeriodMinted = Base + 1;
@@ -41,10 +41,10 @@ internal static class LogEvents
         public const int MintRaceLost = Base + 2;
     }
 
-    /// <summary>Token login and renewal events. Range 1200-1299.</summary>
+    /// <summary>Token login and renewal events. Range 12200-12299.</summary>
     internal static class TokenLifecycle
     {
-        private const int Base = 1200;
+        private const int Base = 12200;
 
         /// <summary>A login produced a token and its lease.</summary>
         public const int LoggedIn = Base + 1;
