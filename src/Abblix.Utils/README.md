@@ -35,7 +35,7 @@ The stripping runs in `ToString()`, so it protects the formatted message; a sink
 
 ### Cryptographic encodings and randomness
 
-`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in, and `CertificateId` with `ICertificateProvider` abstracts certificate lookup.
+`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in.
 
 ### JSON converters for wire formats
 
