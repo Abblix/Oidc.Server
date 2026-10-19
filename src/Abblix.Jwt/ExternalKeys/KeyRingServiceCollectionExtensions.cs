@@ -20,10 +20,9 @@ internal static class KeyRingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="builder">The builder holding the ring's policy.</param>
-    public static void AddKeyRingParts(this IServiceCollection services, MintedKeysBuilder builder)
-    {
-        services.AddKeyRingSetup(builder);
-        services.AddKeyRingSteps();
-        services.AddKeyRingContracts();
-    }
+    internal static IServiceCollection AddKeyRingParts(this IServiceCollection services, MintedKeysBuilder builder)
+        => services
+            .AddKeyRingSetup(builder)
+            .AddKeyRingSteps()
+            .AddKeyRingContracts();
 }

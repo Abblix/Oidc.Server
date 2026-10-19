@@ -19,7 +19,7 @@ internal static class KeyRingContractsServiceCollectionExtensions
     /// Registers <see cref="IKeyRings"/> and <see cref="IKeyRing"/> over the one registry of rings.
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
-    public static void AddKeyRingContracts(this IServiceCollection services)
+    internal static IServiceCollection AddKeyRingContracts(this IServiceCollection services)
     {
         // Every contract reads the one registry of rings. A ring built anywhere else would be a SECOND ring: the
         // refresh service would keep one current while every consumer read the other, which fails as a server
@@ -27,5 +27,6 @@ internal static class KeyRingContractsServiceCollectionExtensions
         services.TryAddSingleton<IKeyRings, KeyRings>();
         services.TryAddSingleton<IKeyRing>(serviceProvider =>
             serviceProvider.GetRequiredService<KeyRingRegistry>().Ring(KeyRingOptions.DefaultPartition));
+        return services;
     }
 }

@@ -20,12 +20,13 @@ internal static class KeyRingStepsServiceCollectionExtensions
     /// Registers the steps the key ring takes over its partitions.
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
-    public static void AddKeyRingSteps(this IServiceCollection services)
+    internal static IServiceCollection AddKeyRingSteps(this IServiceCollection services)
     {
         services.TryAddSingleton<KeyRingPartitionOpening>();
         services.TryAddSingleton<KeyRingPartitionsOpening>();
         services.TryAddSingleton<KeyRingEntriesRemoval>();
         services.TryAddSingleton<KeyRingStartupCheck>();
         services.TryAddSingleton<KeyRingRounds>();
+        return services;
     }
 }

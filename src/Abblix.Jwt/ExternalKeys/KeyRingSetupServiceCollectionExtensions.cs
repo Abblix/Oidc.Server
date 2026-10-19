@@ -22,7 +22,7 @@ internal static class KeyRingSetupServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="builder">The builder holding the ring's policy.</param>
-    public static void AddKeyRingSetup(this IServiceCollection services, MintedKeysBuilder builder)
+    internal static IServiceCollection AddKeyRingSetup(this IServiceCollection services, MintedKeysBuilder builder)
     {
         // A factory, unlike the plain registrations around it, because the policy is a per-call value the container
         // knows nothing about: every part of the ring takes it from here and everything else is resolved normally.
@@ -46,5 +46,6 @@ internal static class KeyRingSetupServiceCollectionExtensions
             });
 
         services.TryAddSingleton<KeyRingRegistry>();
+        return services;
     }
 }
