@@ -68,6 +68,25 @@ public interface IEntityStorage
         string key, T value, StorageOptions options, CancellationToken? token = null);
 
     /// <summary>
+    /// Gives the entry under <paramref name="key"/> a new expiration policy, keeping its value, when there is
+    /// one, and reports whether there was.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must never write an entry the key does not hold when the call is decided: an entry that
+    /// has expired or been removed stays gone, and an entry written by another caller keeps its value. This is
+    /// what lets a record that others also write be kept longer without bringing back one that has already
+    /// ended, or writing an old value over a newer one. A store that moves an expiry by itself, such as Redis
+    /// with <c>EXPIRE</c>, gives this in one command; one that does not reads the value and writes it straight
+    /// back, deciding between its own callers the way <see cref="TrySetIfAbsentAsync{T}"/> does.
+    /// </remarks>
+    /// <param name="key">The key whose entry is kept longer.</param>
+    /// <param name="options">The new expiration policy.</param>
+    /// <param name="token">An optional cancellation token.</param>
+    /// <returns>True when the key held an entry and it now carries the new policy; false when it held none.
+    /// </returns>
+    Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null);
+
+    /// <summary>
     /// Removes the entity stored under <paramref name="key"/>; succeeds silently when no entry
     /// is present.
     /// </summary>

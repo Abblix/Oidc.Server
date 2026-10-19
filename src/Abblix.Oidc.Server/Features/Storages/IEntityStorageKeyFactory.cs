@@ -196,6 +196,15 @@ public interface IEntityStorageKeyFactory
     string SessionClientMarkerKey(string sessionId, string generation, string clientId);
 
     /// <summary>
+    /// Generates a storage key noting that one generation of a session's list was renewed recently enough to
+    /// need no renewal yet.
+    /// </summary>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="generation">The generation that was renewed.</param>
+    /// <returns>A formatted storage key for that generation's last renewal.</returns>
+    string SessionClientsRenewalKey(string sessionId, string generation);
+
+    /// <summary>
     /// Generates a storage key for reuse detection of an authorization request value (a PKCE
     /// <c>code_challenge</c> or an OpenID Connect <c>nonce</c>), scoped to a client and the value's kind.
     /// </summary>

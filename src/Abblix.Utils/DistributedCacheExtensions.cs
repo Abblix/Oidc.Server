@@ -217,6 +217,49 @@ public static class DistributedCacheExtensions
 	}
 
 	/// <summary>
+	/// Gives the value at a key a new expiration policy, keeping the value, when the key holds one.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A distributed cache moves an expiry only by writing the value again, so this reads the value and
+	/// writes it straight back under one hold of the per-key gate <see cref="TrySetIfAbsentAsync"/> takes.
+	/// Within this process, a key that is empty when the gate is taken stays empty, and a value another
+	/// gated caller writes is never overwritten with an older one. A second process sees neither the gate
+	/// nor the hold, and neither does a plain <c>SetAsync</c>, so either can land between the read and the
+	/// write and have its value replaced by the one read.
+	/// </para>
+	/// <para>
+	/// A store that can move an expiry by itself, as Redis does with <c>EXPIRE</c>, needs no read at all,
+	/// and a deployment spread over several nodes supplies its own <c>IEntityStorage</c> that uses it.
+	/// </para>
+	/// </remarks>
+	/// <param name="cache">The distributed cache instance.</param>
+	/// <param name="key">The key whose value is kept longer.</param>
+	/// <param name="options">The new expiration policy.</param>
+	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+	/// <returns>True when the key held a value and it now carries the new policy; false when it held none,
+	/// in which case nothing is written.</returns>
+	public static Task<bool> TryExtendAsync(
+		this IDistributedCache cache,
+		string key,
+		DistributedCacheEntryOptions options,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cache);
+		ArgumentNullException.ThrowIfNull(key);
+
+		return UnderGateAsync(key, cancellationToken, async () =>
+		{
+			var value = await cache.GetAsync(key, cancellationToken);
+			if (value == null)
+				return false;
+
+			await cache.SetAsync(key, value, options, cancellationToken);
+			return true;
+		});
+	}
+
+	/// <summary>
 	/// Atomically attempts to remove a value from the distributed cache.
 	/// Uses a lock-based protocol to ensure atomic removal semantics, preventing race conditions
 	/// where multiple threads attempt to remove the same key concurrently.

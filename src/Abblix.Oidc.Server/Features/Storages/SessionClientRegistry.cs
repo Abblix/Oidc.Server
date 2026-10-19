@@ -15,21 +15,32 @@ namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
 /// Keeps the clients of a session as a numbered list in entity storage, one key per client, under a generation
-/// that bounds how long the list lives: a retention after the session's last authorization.
+/// that bounds how long the list lives: at least a retention after the session's last authorization, and at most
+/// two.
 /// </summary>
 /// <remarks>
 /// A client is added by claiming the first free position of the current generation, so two authorizations
 /// arriving together claim two positions instead of writing one list twice. The list is read from the first
 /// position up to the first free one, so no record of a generation is written to expire before the generation
 /// itself, and a session whose generation is gone starts a new one instead of writing into positions of the old
-/// one that may already have emptied.
+/// one that may already have emptied. That holds while the clocks of the server's instances agree: a record
+/// written by an instance whose clock is behind the one that last renewed the generation ends earlier by the
+/// difference, and a logout in that moment does not reach the clients listed after it.
+/// <para>
+/// A session goes on under its id when its end user signs in again, so the list is renewed rather than left to
+/// expire on the schedule of the first client: the generation and its records are written to last two
+/// retentions, and once a retention has passed since the last renewal, the next authorization keeps every one of
+/// them two retentions from then. A renewal moves only the expiry of what is still stored, so it never brings
+/// back a generation that has ended or writes an old one over the one that replaced it.
+/// </para>
 /// <para>
 /// A second key per client says the client is already recorded, so recording a client the session already knows
-/// costs three reads, the generation, the marker and the generation again, rather than a search of the list.
+/// costs four reads, the generation, the marker, the generation again and the note of the last renewal, rather
+/// than a search of the list. A renewal costs a read and two extensions per client on top, once a retention.
 /// </para>
 /// </remarks>
 /// <param name="storage">Where the records are claimed and read.</param>
-/// <param name="keyFactory">Names the generation, each position and each client.</param>
+/// <param name="keyFactory">Names the generation, each position, each client and the last renewal.</param>
 /// <param name="options">Supplies how long a generation lasts after the session's last authorization.</param>
 /// <param name="clock">Supplies the moment a generation's end is measured from.</param>
 /// <param name="logger">Reports a session whose list is full.</param>
@@ -56,7 +67,7 @@ public partial class SessionClientRegistry(
     /// </summary>
     /// <remarks>
     /// A write lands in a generation that ended while it was being made only when the generation ends inside
-    /// that write, and the generation started to replace it lasts a whole retention. A second loss needs a
+    /// that write, and the generation started to replace it lasts two retentions. A second loss needs a
     /// retention shorter than one write.
     /// </remarks>
     private const int MaxGenerationAttempts = 2;
@@ -77,7 +88,7 @@ public partial class SessionClientRegistry(
 
             if (current?.Id == generation.Id)
             {
-                await ExtendAsync(sessionId, current, cancellationToken);
+                await RenewWhenDueAsync(sessionId, current, cancellationToken);
                 return;
             }
         }
@@ -113,6 +124,12 @@ public partial class SessionClientRegistry(
     }
 
     /// <summary>
+    /// When a generation or a record written or renewed now ends: two retentions from now, so that renewing once
+    /// a retention keeps the list a whole retention past any authorization.
+    /// </summary>
+    private DateTimeOffset KeptUntil() => clock.GetUtcNow() + 2 * options.Value.SessionClientsRetention;
+
+    /// <summary>
     /// The session's current generation, started when there is none.
     /// </summary>
     private async Task<Proto.SessionClientsGeneration> CurrentOrNewGenerationAsync(
@@ -123,7 +140,7 @@ public partial class SessionClientRegistry(
         if (current != null)
             return current;
 
-        var expiresAt = clock.GetUtcNow() + options.Value.SessionClientsRetention;
+        var expiresAt = KeptUntil();
         var started = new Proto.SessionClientsGeneration
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -154,20 +171,16 @@ public partial class SessionClientRegistry(
         if (await storage.GetAsync<Proto.SessionClient>(markerKey, false, cancellationToken) != null)
             return;
 
-        // The later of the generation's end and a whole retention from now, so no record expires before its
-        // generation and leaves a gap the reader stops at. The generation's end alone is not enough: the search
-        // below takes several round trips, and a generation ending during them would hand the writes an expiry
-        // already past, which some stores refuse outright. A retention from now alone is not enough either: the
-        // generation's end was measured on the clock of whichever instance started it, which may be ahead of
-        // this one. A record outliving its generation is never read again, because a generation's id is never
-        // reused.
-        var generationEnd = generation.ExpiresAt.ToDateTimeOffset();
-        var retentionFromNow = clock.GetUtcNow() + options.Value.SessionClientsRetention;
+        // The later of the end the generation started with and as long as it can last from now, so no record
+        // expires before its generation and leaves a gap the reader stops at. The start's end counts because it
+        // was measured on the clock of whichever instance started the generation, which may be ahead of this
+        // one. A record outliving its generation is never read again, because a generation's id is never reused.
+        var keptUntil = KeptUntil();
+        var startedEnd = generation.ExpiresAt.ToDateTimeOffset();
         var storageOptions = new StorageOptions
         {
-            AbsoluteExpiration = generationEnd > retentionFromNow ? generationEnd : retentionFromNow,
+            AbsoluteExpiration = startedEnd > keptUntil ? startedEnd : keptUntil,
         };
-
         var record = new Proto.SessionClient { ClientId = clientId };
         var highestTaken = await FindHighestTakenPositionAsync(sessionId, generation.Id, cancellationToken);
 
@@ -193,45 +206,47 @@ public partial class SessionClientRegistry(
     }
 
     /// <summary>
-    /// Moves the end of a generation, and of every record in it, to a whole retention from now.
+    /// Keeps a generation and every record in it two retentions from now, when a retention has passed since it
+    /// was last renewed.
     /// </summary>
     /// <remarks>
-    /// A session goes on under its id when its end user signs in again, so the list lasts a retention after the
-    /// session's last authorization rather than its first, a bound the host can choose. The records are moved
-    /// before the generation, so none expires before the generation that lists them.
+    /// The records are kept longer before the generation, so none expires before the generation that lists
+    /// them. The renewal is noted only once the generation is kept longer too, so one that stopped half way is
+    /// made again by the next authorization rather than waiting a retention.
     /// </remarks>
-    private async Task ExtendAsync(
+    private async Task RenewWhenDueAsync(
         string sessionId, Proto.SessionClientsGeneration generation, CancellationToken cancellationToken)
     {
-        var expiresAt = clock.GetUtcNow() + options.Value.SessionClientsRetention;
-
-        // A generation started by this authorization already ends there
-        if (expiresAt <= generation.ExpiresAt.ToDateTimeOffset())
+        var renewalKey = keyFactory.SessionClientsRenewalKey(sessionId, generation.Id);
+        if (await storage.GetAsync<Proto.SessionClientsGeneration>(renewalKey, false, cancellationToken) != null)
             return;
 
-        var storageOptions = new StorageOptions { AbsoluteExpiration = expiresAt };
+        var storageOptions = new StorageOptions { AbsoluteExpiration = KeptUntil() };
         for (var position = 1; position <= MaxClientsPerSession; position++)
         {
             var positionKey = keyFactory.SessionClientKey(sessionId, generation.Id, position);
             var recorded = await storage.GetAsync<Proto.SessionClient>(positionKey, false, cancellationToken);
-            if (recorded == null)
+            if (recorded == null || !await storage.TryExtendAsync(positionKey, storageOptions, cancellationToken))
                 break;
 
-            await storage.SetAsync(positionKey, recorded, storageOptions, cancellationToken);
-            await storage.SetAsync(
+            await storage.TryExtendAsync(
                 keyFactory.SessionClientMarkerKey(sessionId, generation.Id, recorded.ClientId),
-                recorded,
                 storageOptions,
                 cancellationToken);
         }
 
-        var extended = new Proto.SessionClientsGeneration
+        // A generation that ended meanwhile stays ended, and is not noted as renewed
+        if (!await storage.TryExtendAsync(
+                keyFactory.SessionClientsGenerationKey(sessionId), storageOptions, cancellationToken))
         {
-            Id = generation.Id,
-            ExpiresAt = Timestamp.FromDateTimeOffset(expiresAt),
-        };
+            return;
+        }
+
         await storage.SetAsync(
-            keyFactory.SessionClientsGenerationKey(sessionId), extended, storageOptions, cancellationToken);
+            renewalKey,
+            generation,
+            new StorageOptions { AbsoluteExpiration = clock.GetUtcNow() + options.Value.SessionClientsRetention },
+            cancellationToken);
     }
 
     /// <summary>

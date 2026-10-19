@@ -91,6 +91,10 @@ public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : 
     }
 
     /// <inheritdoc />
+    public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        => inner.TryExtendAsync(key, options, token);
+
+    /// <inheritdoc />
     public async Task RemoveAsync(string key, CancellationToken? token = null)
     {
         if (key == watched && Interlocked.Exchange(ref _onRemoval, null) is { } other)

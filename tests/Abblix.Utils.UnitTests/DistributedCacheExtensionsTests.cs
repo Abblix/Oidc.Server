@@ -349,6 +349,69 @@ public class DistributedCacheExtensionsTests
 	}
 
 	[Fact]
+	public async Task TryExtendAsync_EmptyKey_WritesNothingAndSaysSo()
+	{
+		var cache = CreateCache();
+		var key = "kept-" + Guid.NewGuid().ToString("N");
+
+		var extended = await cache.TryExtendAsync(key, new (), TestContext.Current.CancellationToken);
+
+		Assert.False(extended);
+		Assert.Null(await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryExtendAsync_HeldKey_WritesTheSameValueUnderTheNewPolicy()
+	{
+		var cache = new RecordsWrites();
+		var value = Encoding.UTF8.GetBytes("kept");
+		await cache.SetAsync("kept", value, new (), TestContext.Current.CancellationToken);
+		var longer = new DistributedCacheEntryOptions { AbsoluteExpiration = DateTimeOffset.UnixEpoch.AddYears(60) };
+
+		var extended = await cache.TryExtendAsync("kept", longer, TestContext.Current.CancellationToken);
+
+		Assert.True(extended);
+		Assert.Equal(value, cache.Value);
+		Assert.Same(longer, cache.Options);
+	}
+
+	[Fact]
+	public async Task TryExtendAsync_NullCache_ThrowsArgumentNullException()
+	{
+		IDistributedCache? cache = null;
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache!.TryExtendAsync("key", new (), TestContext.Current.CancellationToken));
+	}
+
+	/// <summary>
+	/// Holds one value and the policy it was last written with.
+	/// </summary>
+	private sealed class RecordsWrites : IDistributedCache
+	{
+		public byte[]? Value { get; private set; }
+		public DistributedCacheEntryOptions? Options { get; private set; }
+
+		public byte[]? Get(string key) => Value;
+		public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => Task.FromResult(Value);
+
+		public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+			=> (Value, Options) = (value, options);
+
+		public Task SetAsync(
+			string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+		{
+			Set(key, value, options);
+			return Task.CompletedTask;
+		}
+
+		public void Refresh(string key) => throw new NotSupportedException();
+		public Task RefreshAsync(string key, CancellationToken token = default) => throw new NotSupportedException();
+		public void Remove(string key) => throw new NotSupportedException();
+		public Task RemoveAsync(string key, CancellationToken token = default) => throw new NotSupportedException();
+	}
+
+	[Fact]
 	public async Task TrySetIfAbsentAsync_NullCache_ThrowsArgumentNullException()
 	{
 		IDistributedCache? cache = null;

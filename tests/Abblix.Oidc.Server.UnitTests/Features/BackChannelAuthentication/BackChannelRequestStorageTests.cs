@@ -78,6 +78,9 @@ public class BackChannelRequestStorageTests
             return Task.FromResult(true);
         }
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(_entries.ContainsKey(key));
+
         public Task RemoveAsync(string key, CancellationToken? token = null)
         {
             _entries.Remove(key);

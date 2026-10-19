@@ -141,6 +141,10 @@ public class EntityStorageKeyFactoryTests
             Factory.AuthorizedGrantKey(identifier),
             Factory.JsonWebTokenStatusKey(identifier),
             Factory.AuthorizationValueReuseKey(identifier, "code_challenge", "a-hash"),
+            Factory.SessionClientsGenerationKey(identifier),
+            Factory.SessionClientKey(identifier, identifier, 1),
+            Factory.SessionClientMarkerKey(identifier, identifier, identifier),
+            Factory.SessionClientsRenewalKey(identifier, identifier),
         };
 
         Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());

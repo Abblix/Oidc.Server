@@ -22,6 +22,8 @@ message SessionClientsGeneration {
   // Names the generation in the keys of its records. Never reused.
   string id = 1;
 
-  // When the generation ends. No record of the generation is written to expire before it.
+  // When the generation was set to end when it started. A renewal moves the expiry of the entry holding
+  // it without rewriting it, so the generation may end later. No record of the generation is written to
+  // expire before this.
   google.protobuf.Timestamp expires_at = 2;
 }

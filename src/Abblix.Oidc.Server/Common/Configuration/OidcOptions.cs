@@ -535,8 +535,8 @@ public record OidcOptions
 	public TimeSpan RevocationCutoffRetention { get; set; } = TimeSpan.FromDays(31);
 
 	/// <summary>
-	/// How long the record of which clients signed in to a session is kept, counted from the session's last
-	/// authorization of any client.
+	/// How long the record of which clients signed in to a session is kept at least, counted from the session's
+	/// last authorization of any client. It is kept at most twice as long.
 	/// </summary>
 	/// <remarks>
 	/// Logout notifies the clients this record names, so a session that ends after its record has expired does not

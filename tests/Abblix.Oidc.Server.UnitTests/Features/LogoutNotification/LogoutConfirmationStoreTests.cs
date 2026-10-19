@@ -230,6 +230,9 @@ public class LogoutConfirmationStoreTests
 
         public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => throw new NotSupportedException();
+
         public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => throw new NotSupportedException();
 

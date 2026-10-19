@@ -26,8 +26,15 @@ namespace Abblix.Oidc.Server.Features.Storages;
 public interface ISessionClientRegistry
 {
     /// <summary>
-    /// Records that a client signed in to a session. Recording a client already recorded changes nothing.
+    /// Records that a client signed in to a session, and keeps the clients recorded for the session readable for
+    /// at least <see cref="Common.Configuration.OidcOptions.SessionClientsRetention"/> from now. Recording a
+    /// client already recorded lists it no second time.
     /// </summary>
+    /// <remarks>
+    /// A session goes on under its id when its end user signs in again, so an implementation that let the list
+    /// expire a fixed time after its first client would end a long session without telling the clients that
+    /// signed in to it early.
+    /// </remarks>
     /// <param name="sessionId">The session the client signed in to.</param>
     /// <param name="clientId">The client.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
