@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Text.Json;
-using Abblix.Utils;
 
 namespace Abblix.Jwt;
 
@@ -29,16 +28,7 @@ internal static class JsonWebKeyDocument
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
 
-        // RFC 7517 section 4 lets a parser either refuse a member named twice or take its last value, and refusing
-        // leaves no two parties reading one key differently. Checked here rather than left to the serializer,
-        // because kty, which picks the subtype, is read from this document and not by the serializer
-        var repeated = root.EnumerateObject()
-            .Select(member => member.Name)
-            .FindDuplicates(StringComparer.Ordinal)
-            .FirstOrDefault();
-
-        if (repeated is not null)
-            throw new JsonException($"The key names its member '{repeated}' more than once");
+        JsonMemberNames.RefuseRepeated(root, "key");
 
         if (!root.TryGetProperty(JsonWebKeyPropertyNames.KeyType, out var ktyElement))
         {

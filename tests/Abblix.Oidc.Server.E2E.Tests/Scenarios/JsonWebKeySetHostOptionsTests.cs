@@ -40,14 +40,14 @@ public sealed class JsonWebKeySetHostOptionsTests : IAsyncLifetime
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddControllers()
-            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new UpperCasingStringConverter()));
+            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new MarkingStringConverter()));
         builder.Services.ConfigureHttpJsonOptions(
-            options => options.SerializerOptions.Converters.Add(new UpperCasingStringConverter()));
+            options => options.SerializerOptions.Converters.Add(new MarkingStringConverter()));
         builder.Services.AddCors();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
 
-        var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         signingKey.KeyId = KeyId;
         builder.Services.AddOidcServices(options =>
         {
@@ -81,17 +81,19 @@ public sealed class JsonWebKeySetHostOptionsTests : IAsyncLifetime
         Assert.Equal(JsonWebKeyTypes.Rsa, key.GetProperty("kty").GetString());
         Assert.Equal(KeyId, key.GetProperty("kid").GetString());
         Assert.Equal(PublicKeyUsages.Signature, key.GetProperty("use").GetString());
+        Assert.Equal(SigningAlgorithms.RS256, key.GetProperty("alg").GetString());
     }
 
     /// <summary>
-    /// A host that upper-cases every string it serializes, as a global sanitizing converter might.
+    /// A host that rewrites every string it serializes, as a global sanitizing converter might: it appends a mark,
+    /// so any member it reaches reads differently, whatever its case.
     /// </summary>
-    private sealed class UpperCasingStringConverter : JsonConverter<string>
+    private sealed class MarkingStringConverter : JsonConverter<string>
     {
         public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-            => reader.GetString()?.ToUpperInvariant();
+            => reader.GetString() + "~host";
 
         public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-            => writer.WriteStringValue(value.ToUpperInvariant());
+            => writer.WriteStringValue(value + "~host");
     }
 }

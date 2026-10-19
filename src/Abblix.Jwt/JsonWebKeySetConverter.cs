@@ -17,10 +17,18 @@ namespace Abblix.Jwt;
 public sealed class JsonWebKeySetConverter : JsonConverter<JsonWebKeySet>
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// A set without a <c>keys</c> member holds no keys, as its type says, rather than a null array a caller would
+    /// enumerate.
+    /// </remarks>
     public override JsonWebKeySet? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => JsonSerializer.Deserialize<KeySetDocument>(ref reader, JsonWebKeySerializerOptions.Instance) is { } document
-            ? new JsonWebKeySet(document.Keys!)
-            : null;
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        JsonMemberNames.RefuseRepeated(document.RootElement, "key set");
+
+        var keySet = document.RootElement.Deserialize<KeySetDocument>(JsonWebKeySerializerOptions.Instance);
+        return keySet is null ? null : new JsonWebKeySet(keySet.Keys ?? []);
+    }
 
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, JsonWebKeySet value, JsonSerializerOptions options)

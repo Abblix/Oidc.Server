@@ -18,8 +18,9 @@ namespace Abblix.Jwt;
 public record JsonWebKeySet(JsonWebKey[] Keys)
 {
     /// <summary>
-    /// The keys belonging to this JWK Set. Serialized to the JSON "keys" member.
+    /// The keys belonging to this JWK Set. Serialized to the JSON "keys" member by
+    /// <see cref="JsonWebKeySetConverter"/>.
     /// Each entry is a polymorphic <see cref="JsonWebKey"/> resolved by its "kty" parameter.
     /// </summary>
-    [JsonPropertyName("keys")] public JsonWebKey[] Keys { get; init; } = Keys;
+    public JsonWebKey[] Keys { get; init; } = Keys;
 }

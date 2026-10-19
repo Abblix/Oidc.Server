@@ -560,6 +560,6 @@ public class SecureHttpFetcherTests
         var result = await fetcher.FetchAsync<Abblix.Jwt.JsonWebKeySet>(new Uri("https://client.example.com/jwks"));
 
         Assert.True(result.TryGetSuccess(out var keySet));
-        Assert.Null(keySet.Keys);
+        Assert.Empty(keySet.Keys);
     }
 }

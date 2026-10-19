@@ -23,11 +23,11 @@ public class JsonWebKeyHostOptionsTests
     private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    /// A host that upper-cases every string it serializes, as a global sanitizing converter might.
+    /// A host that rewrites every string it serializes.
     /// </summary>
-    private static readonly JsonSerializerOptions UpperCasingOptions = new()
+    private static readonly JsonSerializerOptions MarkingOptions = new()
     {
-        Converters = { new UpperCasingStringConverter() },
+        Converters = { new MarkingStringConverter() },
     };
 
     [Fact]
@@ -43,7 +43,7 @@ public class JsonWebKeyHostOptionsTests
             Y = [3, 4],
         };
 
-        var written = JsonDocument.Parse(JsonSerializer.Serialize<JsonWebKey>(key, UpperCasingOptions)).RootElement;
+        var written = JsonDocument.Parse(JsonSerializer.Serialize<JsonWebKey>(key, MarkingOptions)).RootElement;
 
         Assert.Equal(JsonWebKeyTypes.EllipticCurve, written.GetProperty("kty").GetString());
         Assert.Equal("kid-1", written.GetProperty("kid").GetString());
@@ -55,13 +55,14 @@ public class JsonWebKeyHostOptionsTests
     [Fact]
     public void AHostStringConverter_DoesNotRewriteTheMembersOfAKeyItReads()
     {
-        const string json = """{"kty":"oct","kid":"kid-1","use":"sig","alg":"HS256","k":"AQID"}""";
+        const string json = """{"kty":"EC","kid":"kid-1","use":"sig","alg":"ES256","crv":"P-256","x":"AQ","y":"Ag"}""";
 
-        var key = Assert.IsType<OctetJsonWebKey>(JsonSerializer.Deserialize<JsonWebKey>(json, UpperCasingOptions));
+        var key = Assert.IsType<EllipticCurveJsonWebKey>(JsonSerializer.Deserialize<JsonWebKey>(json, MarkingOptions));
 
+        Assert.Equal(EllipticCurveTypes.P256, key.Curve);
         Assert.Equal("kid-1", key.KeyId);
         Assert.Equal(PublicKeyUsages.Signature, key.Usage);
-        Assert.Equal(SigningAlgorithms.HS256, key.Algorithm);
+        Assert.Equal(SigningAlgorithms.ES256, key.Algorithm);
     }
 
     [Fact]
@@ -98,48 +99,64 @@ public class JsonWebKeyHostOptionsTests
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<JsonWebKey>(json, WebOptions));
     }
 
-    [Fact]
-    public void AKeySetNamedInAnotherCase_HoldsNoKeys()
+    /// <summary>
+    /// A set naming its keys in another case has no keys member, and holds no keys, as its type says, rather than a
+    /// null array a caller would enumerate.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"KEYS":[{"kty":"oct","kid":"a","k":"AQID"}]}""")]
+    [InlineData("""{}""")]
+    public void AKeySetWithoutItsKeysMember_HoldsNoKeys(string json)
     {
-        const string json = """{"KEYS":[{"kty":"oct","kid":"a","k":"AQID"}]}""";
-
         var set = JsonSerializer.Deserialize<JsonWebKeySet>(json, WebOptions);
 
         Assert.NotNull(set);
-        Assert.Null(set.Keys);
+        Assert.Empty(set.Keys);
     }
 
     /// <summary>
-    /// RFC 7517 section 5 holds a JWK Set to the same rule as a key.
+    /// RFC 7517 section 5 holds a JWK Set to the same rule as a key, for its keys member and for one it does not
+    /// know alike.
     /// </summary>
-    [Fact]
-    public void AKeySetNamingItsKeysTwice_IsRefused()
+    [Theory]
+    [InlineData("""{"keys":[],"keys":[{"kty":"oct","kid":"a","k":"AQID"}]}""")]
+    [InlineData("""{"keys":[],"x":1,"x":2}""")]
+    public void AKeySetNamingAMemberTwice_IsRefused(string json)
     {
-        const string json = """{"keys":[],"keys":[{"kty":"oct","kid":"a","k":"AQID"}]}""";
-
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<JsonWebKeySet>(json, WebOptions));
     }
 
     [Fact]
-    public void AKeySet_IsWrittenWithItsOwnMemberName_WhateverTheHostsNamingPolicy()
+    public void AKeySet_IsWrittenAsKeys_WhateverTheHostsNamingPolicy()
     {
         var set = new JsonWebKeySet([new OctetJsonWebKey { KeyId = "a", KeyValue = [1, 2, 3] }]);
-        var options = new JsonSerializerOptions(UpperCasingOptions)
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseUpper,
-        };
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseUpper };
 
         var written = JsonDocument.Parse(JsonSerializer.Serialize(set, options)).RootElement;
 
         Assert.Equal("a", Assert.Single(written.GetProperty("keys").EnumerateArray()).GetProperty("kid").GetString());
     }
 
-    private sealed class UpperCasingStringConverter : JsonConverter<string>
+    /// <summary>
+    /// A host that registers the set converter among its own converters still reads and writes a set.
+    /// </summary>
+    [Fact]
+    public void AKeySet_RoundTrips_WhenTheHostRegistersTheConverterItself()
+    {
+        var hostOptions = new JsonSerializerOptions { Converters = { new JsonWebKeySetConverter() } };
+        var set = new JsonWebKeySet([new OctetJsonWebKey { KeyId = "a", KeyValue = [1, 2, 3] }]);
+
+        var read = JsonSerializer.Deserialize<JsonWebKeySet>(JsonSerializer.Serialize(set, hostOptions), hostOptions);
+
+        Assert.Equal("a", Assert.Single(read!.Keys).KeyId);
+    }
+
+    private sealed class MarkingStringConverter : JsonConverter<string>
     {
         public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-            => reader.GetString()?.ToUpperInvariant();
+            => reader.GetString() + "~host";
 
         public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-            => writer.WriteStringValue(value.ToUpperInvariant());
+            => writer.WriteStringValue(value + "~host");
     }
 }

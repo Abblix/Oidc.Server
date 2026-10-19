@@ -22,8 +22,8 @@ namespace Abblix.Jwt;
 internal static class JsonWebKeySerializerOptions
 {
     /// <summary>
-    /// Member names matched exactly, unknown members ignored, absent members omitted and a member named twice
-    /// refused.
+    /// Member names matched exactly, unknown members ignored and absent members omitted. A member named twice is
+    /// refused before these options are reached (<see cref="JsonMemberNames"/>).
     /// </summary>
     public static JsonSerializerOptions Instance { get; } = Create();
 
@@ -34,10 +34,6 @@ internal static class JsonWebKeySerializerOptions
             // A JWK omits an absent member rather than serializing it as null (RFC 7517): a public-only key
             // carries no private-key parameters, so the JWKS must not emit "d": null etc.
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-
-            // RFC 7517 sections 4 and 5 let a parser either refuse a member named twice or take its last value.
-            // Refusing leaves no two parties reading one key differently
-            AllowDuplicateProperties = false,
         };
 
         options.MakeReadOnly(populateMissingResolver: true);
