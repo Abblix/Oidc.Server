@@ -27,10 +27,34 @@ internal static class SessionCookie
     /// <param name="signingIn">The session being signed in.</param>
     /// <param name="current">The end user's current session, or null when this is not a repeat sign-in of the same
     /// end user.</param>
-    public static AuthSession Resolve(AuthSession signingIn, AuthSession? current)
-        => signingIn.Persistence is SessionPersistence.UnstatedPersistence
-            ? signingIn with { Persistence = current?.Persistence ?? SessionPersistence.BrowserSession }
-            : signingIn;
+    /// <param name="now">The moment of the sign-in.</param>
+    public static AuthSession Resolve(AuthSession signingIn, AuthSession? current, DateTimeOffset now)
+        => signingIn.Persistence switch
+        {
+            SessionPersistence.UnstatedPersistence =>
+                signingIn with { Persistence = Continued(current?.Persistence, now) },
+            SessionPersistence.BrowserSessionPersistence or SessionPersistence.Persistent => signingIn,
+            var persistence => throw new UnexpectedTypeException(nameof(persistence), persistence.GetType()),
+        };
+
+    /// <summary>
+    /// How the current session goes on after a repeat sign-in that states nothing.
+    /// </summary>
+    /// <remarks>
+    /// A persistent session keeps its length rather than its end: written with the old expiry and a new issue time,
+    /// a handler renewing it with activity would renew it only by what was left, so the end user would be signed out
+    /// soon after re-authenticating.
+    /// </remarks>
+    private static SessionPersistence Continued(SessionPersistence? current, DateTimeOffset now) => current switch
+    {
+        null => SessionPersistence.BrowserSession,
+        SessionPersistence.Persistent { IssuedAt: { } issuedAt, ExpiresAt: var expiresAt } =>
+            SessionPersistence.Until(now + (expiresAt - issuedAt)),
+        SessionPersistence.Persistent or
+            SessionPersistence.BrowserSessionPersistence or
+            SessionPersistence.UnstatedPersistence => current,
+        _ => throw new UnexpectedTypeException(nameof(current), current.GetType()),
+    };
 
     /// <summary>
     /// How the cookie a session was read from is kept, as its handler reports it.
@@ -46,7 +70,8 @@ internal static class SessionCookie
         {
             Persistence = result.Properties switch
             {
-                { IsPersistent: true, ExpiresUtc: { } expiresAt } => SessionPersistence.Until(expiresAt),
+                { IsPersistent: true, ExpiresUtc: { } expiresAt } =>
+                    new SessionPersistence.Persistent(expiresAt) { IssuedAt = result.Properties.IssuedUtc },
                 { IsPersistent: true } => SessionPersistence.Unstated,
                 _ => SessionPersistence.BrowserSession,
             },

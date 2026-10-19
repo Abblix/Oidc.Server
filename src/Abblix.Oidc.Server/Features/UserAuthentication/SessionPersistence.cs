@@ -43,5 +43,12 @@ public abstract record SessionPersistence
 
     /// <summary>A session that survives a browser restart until <see cref="ExpiresAt"/>.</summary>
     /// <param name="ExpiresAt">The moment the user agent drops the session.</param>
-    public sealed record Persistent(DateTimeOffset ExpiresAt) : SessionPersistence;
+    public sealed record Persistent(DateTimeOffset ExpiresAt) : SessionPersistence
+    {
+        /// <summary>
+        /// When the cookie read back was issued, or null on a session being signed in. With <see cref="ExpiresAt"/> it
+        /// gives the length of the session, which a repeat sign-in stating nothing starts again from its own moment.
+        /// </summary>
+        public DateTimeOffset? IssuedAt { get; init; }
+    }
 }

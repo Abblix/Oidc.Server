@@ -62,7 +62,7 @@ public record SuccessfullyAuthenticated(
 	/// How the user agent keeps the session the response was issued under, so the session management cookie written
 	/// beside it lasts as long as the session does.
 	/// </summary>
-	public SessionPersistence SessionPersistence { get; init; } = SessionPersistence.BrowserSession;
+	public required SessionPersistence SessionPersistence { get; init; }
 
 	/// <summary>
 	/// The granted <c>scope</c> as a space-delimited string, populated by the response encoder for

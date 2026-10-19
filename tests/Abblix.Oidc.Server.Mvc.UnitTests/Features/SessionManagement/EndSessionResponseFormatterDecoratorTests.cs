@@ -36,7 +36,7 @@ public class EndSessionResponseFormatterDecoratorTests
         var sessionManagement = new Mock<ISessionManagementService>(MockBehavior.Strict);
         sessionManagement.Setup(s => s.Enabled).Returns(true);
         sessionManagement
-            .Setup(s => s.GetSessionCookie(It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence?>()))
+            .Setup(s => s.GetSessionCookie(It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence>()))
             .Returns(new Cookie("Abblix.SessionId", new Abblix.Oidc.Server.Common.CookieOptions()));
 
         _inner

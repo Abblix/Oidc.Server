@@ -31,6 +31,7 @@ public class SessionPersistenceTests
     private static readonly DateTimeOffset ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(1_900_000_000);
 
     private readonly DefaultHttpContext _httpContext = new();
+    private readonly FakeTimeProvider _clock = new(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000));
     private readonly AuthenticationSchemeAdapter _adapter;
     private ClaimsPrincipal? _cookie;
     private AuthenticationProperties? _cookieProperties;
@@ -50,6 +51,8 @@ public class SessionPersistenceTests
             .Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
             .Callback<HttpContext, string, ClaimsPrincipal, AuthenticationProperties>((_, _, principal, properties) =>
             {
+                // The cookie handler stamps the moment it writes the cookie
+                properties.IssuedUtc ??= _clock.GetUtcNow();
                 _cookie = principal;
                 _cookieProperties = properties;
             })
@@ -65,7 +68,7 @@ public class SessionPersistenceTests
         _adapter = new AuthenticationSchemeAdapter(
             accessor.Object,
             terminator.Object,
-            new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddYears(56)),
+            _clock,
             Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == string.Empty),
             Scheme);
     }
@@ -108,24 +111,47 @@ public class SessionPersistenceTests
 
         var read = await _adapter.AuthenticateAsync();
 
-        Assert.Equal(SessionPersistence.Until(ExpiresAt), read!.Persistence);
+        Assert.Equal(ExpiresAt, Assert.IsType<SessionPersistence.Persistent>(read!.Persistence).ExpiresAt);
         Assert.Equal(Session().AuthenticationTime, read.AuthenticationTime);
     }
 
     /// <summary>
     /// A re-authentication or a step-up page never shows the choice, so a sign-in of the same end user stating nothing
-    /// keeps the cookie as it was.
+    /// keeps the session persistent and as long as it was, counted from the repeat sign-in: kept with its old end and a
+    /// new issue time instead, a handler renewing it with activity would renew it only by what was left.
     /// </summary>
     [Fact]
-    public async Task ARepeatSignInStatingNothing_KeepsTheSessionsPersistence()
+    public async Task ARepeatSignInStatingNothing_KeepsTheSessionsLength()
     {
-        await _adapter.SignInAsync(Session() with { Persistence = SessionPersistence.Until(ExpiresAt) });
+        var length = TimeSpan.FromDays(14);
+        await _adapter.SignInAsync(Session() with { Persistence = SessionPersistence.Until(_clock.GetUtcNow() + length) });
         NextRequest();
+        _clock.Advance(TimeSpan.FromDays(13));
 
         var result = await _adapter.SignInAsync(Session());
 
-        Assert.Equal((true, ExpiresAt), (_cookieProperties!.IsPersistent, _cookieProperties.ExpiresUtc));
-        Assert.Equal(SessionPersistence.Until(ExpiresAt), result.Session.Persistence);
+        var renewedUntil = _clock.GetUtcNow() + length;
+        Assert.Equal((true, renewedUntil), (_cookieProperties!.IsPersistent, _cookieProperties.ExpiresUtc));
+        Assert.Equal(renewedUntil, Assert.IsType<SessionPersistence.Persistent>(result.Session.Persistence).ExpiresAt);
+    }
+
+    /// <summary>
+    /// A handler that reports a persistent cookie with no expiry, as one keeping its tickets elsewhere may, is read as
+    /// nothing stated, and a repeat sign-in leaves the expiry to that handler again.
+    /// </summary>
+    [Fact]
+    public async Task APersistentCookieWithNoExpiry_IsWrittenAgainWithNone()
+    {
+        await _adapter.SignInAsync(Session() with { Persistence = SessionPersistence.Until(ExpiresAt) });
+        _cookieProperties!.ExpiresUtc = null;
+        NextRequest();
+
+        Assert.Equal(SessionPersistence.Unstated, (await _adapter.AuthenticateAsync())!.Persistence);
+
+        NextRequest();
+        await _adapter.SignInAsync(Session());
+
+        Assert.Equal((true, (DateTimeOffset?)null), (_cookieProperties!.IsPersistent, _cookieProperties.ExpiresUtc));
     }
 
     [Fact]

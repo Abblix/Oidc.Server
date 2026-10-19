@@ -291,7 +291,7 @@ public class AuthenticationSchemeAdapter(
 			endedSessions = [replaced];
 
 		// A re-authentication or a step-up that states nothing keeps the cookie as the end user had it
-		authSession = SessionCookie.Resolve(authSession, sameEndUser ? replaced : null);
+		authSession = SessionCookie.Resolve(authSession, sameEndUser ? replaced : null, clock.GetUtcNow());
 
 		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, tenant);
 

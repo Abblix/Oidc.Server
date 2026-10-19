@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -57,7 +58,7 @@ public class SessionManagementService(
     ///     <item><c>Secure</c> - Set based on the current request's HTTPS status (required when SameSite=None)</item>
     /// </list>
     /// </remarks>
-    public Cookie GetSessionCookie(SessionPersistence? persistence = null)
+    public Cookie GetSessionCookie(SessionPersistence persistence)
     {
         var cookieOptions = options.Value.CheckSessionCookie;
         var path = cookieOptions.Path;
@@ -72,7 +73,12 @@ public class SessionManagementService(
                 Path = !string.IsNullOrEmpty(path) ? path : requestInfoProvider.PathBase,
                 Domain = cookieOptions.Domain,
                 SameSite = cookieOptions.SameSite,
-                Expires = persistence is SessionPersistence.Persistent { ExpiresAt: var expiresAt } ? expiresAt : null,
+                Expires = persistence switch
+                {
+                    SessionPersistence.Persistent { ExpiresAt: var expiresAt } => expiresAt,
+                    SessionPersistence.BrowserSessionPersistence or SessionPersistence.UnstatedPersistence => null,
+                    _ => throw new UnexpectedTypeException(nameof(persistence), persistence.GetType()),
+                },
             });
     }
 

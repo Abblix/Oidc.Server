@@ -31,10 +31,16 @@ public interface ISessionManagementService
     /// information across browser requests and to facilitate session management operations.
     /// </summary>
     /// <param name="persistence">How the user agent keeps the session the cookie tracks, so a session that survives a
-    /// browser restart is not reported as changed after one. Null for a cookie written only to be removed.</param>
+    /// browser restart is not reported as changed after one; a browser session for a cookie written to be removed.
+    /// </param>
+    /// <remarks>
+    /// The expiry is the one the session had when the cookie is written. A host whose authentication cookie is renewed
+    /// with activity renews it past that, and the check-session page then reports the session as changed until the
+    /// next authorization response writes the cookie again.
+    /// </remarks>
     /// <returns>A <see cref="Cookie"/> object configured for session management, containing details such as the cookie name,
     /// value, path, and security settings.</returns>
-    Cookie GetSessionCookie(SessionPersistence? persistence = null);
+    Cookie GetSessionCookie(SessionPersistence persistence);
 
     /// <summary>
     /// Generates a session state string that represents the current state of the user's session. This string can be used

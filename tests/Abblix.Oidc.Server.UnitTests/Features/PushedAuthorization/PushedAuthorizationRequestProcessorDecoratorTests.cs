@@ -75,7 +75,10 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     }
 
     private static SuccessfullyAuthenticated Success(ValidAuthorizationRequest request)
-        => new(request.Model, ResponseModes.Query, "session_1", Array.Empty<string>());
+        => new(request.Model, ResponseModes.Query, "session_1", Array.Empty<string>())
+        {
+            SessionPersistence = Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence.BrowserSession,
+        };
 
     /// <summary>
     /// On a terminal success originating from a pushed request, the request_uri is consumed exactly once.

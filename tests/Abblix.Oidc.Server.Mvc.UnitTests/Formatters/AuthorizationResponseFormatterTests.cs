@@ -188,7 +188,7 @@ public class AuthorizationResponseFormatterTests
 
         public bool Enabled => true;
 
-        public Cookie GetSessionCookie(SessionPersistence? persistence = null)
+        public Cookie GetSessionCookie(SessionPersistence persistence)
         {
             AskedFor = persistence;
             return new Cookie("session", new Abblix.Oidc.Server.Common.CookieOptions());
@@ -202,7 +202,7 @@ public class AuthorizationResponseFormatterTests
     private sealed class NoSessionManagement : ISessionManagementService
     {
         public bool Enabled => false;
-        public Cookie GetSessionCookie(SessionPersistence? persistence = null) => throw new NotSupportedException();
+        public Cookie GetSessionCookie(SessionPersistence persistence) => throw new NotSupportedException();
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
         public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
