@@ -21,9 +21,11 @@ internal sealed record JsonWebKeySetDocument([property: JsonPropertyName(JsonWeb
     /// Reads the set an object holds. A set without a <c>keys</c> member holds no keys, as its type says, rather than
     /// a null array a caller would enumerate.
     /// </summary>
+    /// <param name="value">An object: the converter is its only caller, and a JSON null never reaches a converter.
+    /// </param>
     public static JsonWebKeySet Read(JsonElement value)
     {
-        // An object never deserializes to null
+        // An object never deserializes to null, and a JSON null never reaches the converter that calls this
         var document = value.Deserialize<JsonWebKeySetDocument>(JsonWebKeySerializerOptions.Instance)!;
         return new JsonWebKeySet(document.Keys ?? []);
     }
