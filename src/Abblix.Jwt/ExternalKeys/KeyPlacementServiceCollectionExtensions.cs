@@ -29,17 +29,12 @@ internal static class KeyPlacementServiceCollectionExtensions
             .Validate(choice => choice.ChosenPlacement is not null, KeyPlacementChoice.PlacementNotChosenMessage)
             .ValidateOnStart();
 
-        return new KeyCustodianBuilder(services);
-    }
-
-    /// <summary>
-    /// Arms the startup check that the custodian serves the algorithm its encryption key is published with.
-    /// </summary>
-    internal static IServiceCollection AddCustodianEncryptionAlgorithmCheck(this IServiceCollection services)
-    {
+        // Armed with the custodian rather than with the call naming its keys, because a host may register the keys
+        // itself and then choose the placement without naming any; with no encryption key held the check passes
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<KeyPlacementChoice>, CustodianEncryptionAlgorithmCheck>());
-        return services;
+
+        return new KeyCustodianBuilder(services);
     }
 
     /// <summary>

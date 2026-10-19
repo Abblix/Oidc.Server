@@ -86,8 +86,10 @@ public interface IKeyCustodian
     /// <summary>
     /// Whether the custodian can recover a Content Encryption Key under the JWE key management algorithm
     /// <paramref name="algorithm"/>, by unwrapping or by key agreement. Asked when the host starts, about the
-    /// algorithm a key held here is published with and the one a key ring is sealed under, so a configuration
-    /// whose every encrypted token would fail to open stops the host instead.
+    /// algorithm a key held here is published with and the one a key ring is sealed under, and again whenever a
+    /// tenant is added or read again, so a configuration whose every encrypted token would fail to open is refused
+    /// instead. The answer must match what <see cref="UnwrapKeyAsync"/> and <see cref="AgreeKeyAsync"/> open: a
+    /// custodian holding signing keys only answers false for every algorithm.
     /// </summary>
     /// <param name="algorithm">A JWE <c>alg</c> value, such as <c>RSA-OAEP-256</c> or <c>ECDH-ES</c>.</param>
     /// <returns>True when <see cref="UnwrapKeyAsync"/> or <see cref="AgreeKeyAsync"/> serves the algorithm.</returns>

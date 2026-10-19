@@ -17,17 +17,18 @@ namespace Abblix.Jwt.ExternalKeys;
 /// The ring seals in process, with the public half of the custodian's key, so sealing succeeds and only opening a
 /// key fails: without this check the ring would mint and share keys no instance can open.
 /// </remarks>
-/// <param name="serviceProvider">The container the custodian is resolved from.</param>
-/// <param name="builder">The builder holding the ring's policy as it stands after every registration call.</param>
-internal sealed class KeyWrapAlgorithmCheck(IServiceProvider serviceProvider, MintedKeysBuilder builder)
-    : IValidateOptions<KeyRingOptions>
+/// <param name="serviceProvider">The container the custodian and the ring's policy are resolved from.</param>
+internal sealed class KeyWrapAlgorithmCheck(IServiceProvider serviceProvider) : IValidateOptions<KeyRingOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, KeyRingOptions options)
     {
-        // A ring with no custodian is refused by the placement and seals nothing that could be checked here
-        if (serviceProvider.GetService<IKeyCustodian>() is not { } custodian)
+        // With no custodian, or no ring minting keys, there is nothing to compare the algorithm with
+        if (serviceProvider.GetService<IKeyCustodian>() is not { } custodian ||
+            serviceProvider.GetService<MintedKeysBuilder>() is not { } builder)
+        {
             return ValidateOptionsResult.Skip;
+        }
 
         var algorithm = builder.Policy.KeyWrapAlgorithm;
         return custodian.ServesKeyManagement(algorithm)

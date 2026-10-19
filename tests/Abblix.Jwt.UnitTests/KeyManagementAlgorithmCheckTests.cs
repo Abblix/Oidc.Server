@@ -39,6 +39,56 @@ public class KeyManagementAlgorithmCheckTests
         Assert.Contains(NotServed, Assert.Single(error.Failures), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A host may register the keys itself and choose the placement without naming any, and it is held to the same
+    /// check.
+    /// </summary>
+    [Fact]
+    public async Task KeysTheHostRegisteredItself_AreCheckedToo()
+    {
+        var services = HostWithCustodian();
+        services.AddSingleton(KeysEncryptingUnder(NotServed));
+        services.RequireKeyPlacement().UseKeysInCustodian();
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(services));
+
+        Assert.Contains(NotServed, Assert.Single(error.Failures), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The refusal names the custodian as well as the algorithm, so an operator with more than one knows which.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_NamesTheCustodian()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IKeyCustodian, SigningOnlyCustodian>();
+        services.AddJsonWebTokens();
+        services.RequireKeyPlacement().UseKeysInCustodian(KeysEncryptingUnder(Served));
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(services));
+
+        Assert.Contains(nameof(SigningOnlyCustodian), Assert.Single(error.Failures), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A second ring registration takes no effect, as the ring keeps the policy of the first, so its algorithm is not
+    /// what the host is held to.
+    /// </summary>
+    [Fact]
+    public async Task ASecondRingRegistration_IsNotTheOneChecked()
+    {
+        var services = HostWithCustodian();
+        services
+            .RequireKeyPlacement()
+            .UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek", KeyWrapAlgorithm = Served })
+            .Services.AddSingleton(Mock.Of<IKeyRingStore>());
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek", KeyWrapAlgorithm = NotServed });
+
+        await StartAsync(services);
+    }
+
     [Fact]
     public async Task AnEncryptionKeyUnderAnAlgorithmTheCustodianServes_Starts()
     {
@@ -100,6 +150,33 @@ public class KeyManagementAlgorithmCheckTests
         services.AddSingleton(custodian.Object);
         services.AddJsonWebTokens();
         return services;
+    }
+
+    /// <summary>A custodian holding signing keys alone, which opens nothing.</summary>
+    private sealed class SigningOnlyCustodian : IKeyCustodian
+    {
+        public bool ServesKeyManagement(string algorithm) => false;
+
+        public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<byte[]?> UnwrapKeyAsync(
+            string keyId,
+            string algorithm,
+            JsonWebTokenHeader header,
+            byte[] encryptedKey,
+            CancellationToken cancellationToken)
+            => Task.FromResult<byte[]?>(null);
+
+        public Task<byte[]?> AgreeKeyAsync(
+            string keyId,
+            string algorithm,
+            JsonWebKey ephemeralPublicKey,
+            CancellationToken cancellationToken)
+            => Task.FromResult<byte[]?>(null);
+
+        public IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(string keyName, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
     }
 
     private static async Task StartAsync(IServiceCollection services)
