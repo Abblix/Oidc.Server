@@ -18,7 +18,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Unit tests for symmetric key encryption algorithms in JWE (JSON Web Encryption).
-/// Tests AES-GCM Key Wrap (A128GCMKW, A192GCMKW, A256GCMKW) and Direct Key Agreement (dir).
+/// Tests AES-GCM Key Wrap (A128GCMKW, A192GCMKW, A256GCMKW) and Direct Encryption (dir).
 /// Verifies RFC 7518 Section 4.5 (Direct Encryption) and Section 4.7 (AES-GCM Key Wrap).
 /// </summary>
 public class SymmetricKeyEncryptionTests
@@ -116,7 +116,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests "dir" (Direct Key Agreement) with all content encryption algorithms.
+	/// Tests "dir" (Direct Encryption) with all content encryption algorithms.
 	/// Verifies RFC 7518 Section 4.5 - the shared symmetric key is used directly as the CEK.
 	/// </summary>
 	[Theory]
@@ -126,7 +126,7 @@ public class SymmetricKeyEncryptionTests
 	[InlineData(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, 16)]           // 128 bits
 	[InlineData(EncryptionAlgorithms.ContentEncryption.Aes192Gcm, 24)]           // 192 bits
 	[InlineData(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, 32)]           // 256 bits
-	public async Task DirectKeyAgreement_EncryptDecrypt_AllContentEncryptionAlgorithms_Success(
+	public async Task DirectEncryption_EncryptDecrypt_AllContentEncryptionAlgorithms_Success(
 		string contentEncryption,
 		int keySize)
 	{
@@ -192,13 +192,13 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests that Direct Key Agreement requires the shared key to match the CEK size.
+	/// Tests that Direct Encryption requires the shared key to match the CEK size.
 	/// Per RFC 7518 Section 4.5: "the symmetric key value MUST be the same as the CEK".
 	/// The mismatch is rejected by the "dir" key encryptor itself with a message naming the
 	/// key-configuration cause, before the content encryptor is ever invoked.
 	/// </summary>
 	[Fact]
-	public async Task DirectKeyAgreement_WrongKeySize_ThrowsException()
+	public async Task DirectEncryption_WrongKeySize_ThrowsException()
 	{
 		// Arrange: Create key with wrong size for A256GCM (needs 32 bytes, providing 16)
 		var wrongSizeKey = new OctetJsonWebKey
@@ -268,11 +268,11 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests that Direct Key Agreement produces empty encrypted_key field.
+	/// Tests that Direct Encryption produces empty encrypted_key field.
 	/// Per RFC 7518 Section 4.5: "The JWE Encrypted Key value is the empty octet sequence."
 	/// </summary>
 	[Fact]
-	public async Task DirectKeyAgreement_EncryptedKeyField_IsEmpty()
+	public async Task DirectEncryption_EncryptedKeyField_IsEmpty()
 	{
 		// Arrange
 		var sharedKey = new OctetJsonWebKey

@@ -10,7 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// Direct Key Agreement implementation for JWE (JSON Web Encryption).
+/// Direct Encryption with a Shared Symmetric Key for JWE (JSON Web Encryption).
 /// Uses a shared symmetric key directly as the Content Encryption Key without any key encryption.
 /// Implements RFC 7518 Section 4.5 (Direct Encryption with a Shared Symmetric Key).
 /// </summary>
@@ -22,19 +22,19 @@ namespace Abblix.Jwt.Encryption;
 /// Per RFC 7518 Section 4.5, the "encrypted_key" value is the empty octet sequence.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebKey>
+internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey>
 {
 	/// <summary>
-	/// Initializes DirectKeyAgreement with algorithm validation.
+	/// Initializes DirectEncryption with algorithm validation.
 	/// </summary>
 	/// <param name="algorithm">Must be "dir" per RFC 7518 Section 4.5.</param>
 	/// <exception cref="ArgumentException">Thrown when algorithm is not "dir".</exception>
-	public DirectKeyAgreement(string algorithm)
+	public DirectEncryption(string algorithm)
 	{
 		if (!EncryptionAlgorithms.KeyManagement.Dir.Equals(algorithm, StringComparison.Ordinal))
 		{
 			throw new ArgumentException(
-				$"DirectKeyAgreement only supports '{EncryptionAlgorithms.KeyManagement.Dir}' algorithm, but '{algorithm}' was provided",
+				$"{nameof(DirectEncryption)} only supports '{EncryptionAlgorithms.KeyManagement.Dir}' algorithm, but '{algorithm}' was provided",
 				nameof(algorithm));
 		}
 	}
@@ -56,12 +56,12 @@ internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebK
 	{
 		var contentEncryptionKey = sharedKey.KeyValue
 		          ?? throw new InvalidOperationException(
-			          "Direct key agreement (dir) requires an OctetJsonWebKey with KeyValue");
+			          "Direct encryption (dir) requires an OctetJsonWebKey with KeyValue");
 
 		if (contentEncryptionKey.Length != keySizeInBytes)
 		{
 			throw new InvalidOperationException(
-				$"Direct key agreement (dir) requires the shared symmetric key to match the content " +
+				$"Direct encryption (dir) requires the shared symmetric key to match the content " +
 				$"encryption key size. Expected {keySizeInBytes} bytes, actual: {contentEncryptionKey.Length} bytes.");
 		}
 
@@ -70,7 +70,7 @@ internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebK
 
 	/// <inheritdoc />
 	/// <remarks>
-	/// For direct key agreement, the symmetric key IS the Content Encryption Key.
+	/// For direct encryption, the symmetric key IS the Content Encryption Key.
 	/// Per RFC 7518 Section 4.5: "The JWE Encrypted Key value is the empty octet sequence."
 	/// This method validates the key and returns an empty array.
 	/// </remarks>
@@ -85,7 +85,7 @@ internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebK
 		if (!keyToEncrypt.SequenceEqual(sharedKey.KeyValue))
 		{
 			throw new InvalidOperationException(
-				"For direct key agreement (dir), the Content Encryption Key must be the same as the shared symmetric key");
+				"For direct encryption (dir), the Content Encryption Key must be the same as the shared symmetric key");
 		}
 
 		// Return empty octet sequence per RFC 7518 Section 4.5
@@ -94,7 +94,7 @@ internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebK
 
 	/// <inheritdoc />
 	/// <remarks>
-	/// For direct key agreement, the encrypted key is always empty.
+	/// For direct encryption, the encrypted key is always empty.
 	/// The shared symmetric key is used directly as the Content Encryption Key.
 	/// </remarks>
 	public bool TryDecryptKey(
