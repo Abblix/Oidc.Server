@@ -116,23 +116,20 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when redirect URI provided but no client info available.
-    /// Client info is required to validate redirect URIs.
+    /// A redirect address with no client named has nothing confirming it, so OpenID Connect RP-Initiated Logout 1.0
+    /// section 3 rules the redirect out; the logout goes on, without the address and the state that goes back to it.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithRedirectUriButNoClientInfo_ShouldReturnError()
+    public async Task ARedirectWithNoClientNamed_IsDroppedAndTheLogoutGoesOn()
     {
-        // Arrange
-        var redirectUri = new Uri("https://client.example.com/logout");
-        var context = CreateContext(redirectUri, clientInfo: null);
+        var context = CreateContext(new Uri("https://client.example.com/logout"), clientInfo: null);
+        context.Request = context.Request with { State = "af0ifjsldkj" };
 
-        // Act
         var error = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
-        Assert.Contains("Unable to determine a client", error.ErrorDescription);
+        Assert.Null(error);
+        Assert.Null(context.Request.PostLogoutRedirectUri);
+        Assert.Null(context.Request.State);
     }
 
     /// <summary>

@@ -315,6 +315,28 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A logout naming a return address but no client, as a client library sends when its caller passes no ID token,
+    /// still ends the session once the end user confirms it, and sends nobody to the address: nothing confirms it,
+    /// and OpenID Connect RP-Initiated Logout 1.0 section 3 says the OP "MUST NOT perform post-logout redirection"
+    /// then.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_ends_the_session_and_redirects_nowhere()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
+            [EndSessionParameters.State] = "af0ifjsldkj",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
     /// An ID token is the one type this server issues that names a client in its audience - OpenID Connect
     /// Core 1.0 Section 2: the aud claim "MUST contain the OAuth 2.0 client_id of the Relying Party as an
     /// audience value". The shared token validator accepts only the issuer, so this endpoint checks the ID

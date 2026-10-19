@@ -18,4 +18,11 @@ partial class PostLogoutRedirectUrisValidator
         Level = LogLevel.Warning,
         Message = "The post-logout redirect URI {RedirectUri} is invalid for client with id {ClientId}")]
     private partial void LogInvalidPostLogoutRedirectUri(Sanitized RedirectUri, string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.Endpoints.PostLogoutRedirectUrisValidator.RedirectWithoutClientIgnored,
+        Level = LogLevel.Warning,
+        Message = "The post-logout redirect URI {RedirectUri} is ignored: the logout request names no client by " +
+                  "id_token_hint or client_id, so nothing confirms the address")]
+    private partial void LogRedirectWithoutClientIgnored(Sanitized RedirectUri);
 }
