@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 
