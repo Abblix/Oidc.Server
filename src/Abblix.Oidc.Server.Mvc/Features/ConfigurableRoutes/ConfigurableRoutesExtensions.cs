@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
@@ -42,6 +43,10 @@ public static class ConfigurableRoutesExtensions
     /// changes no template without a token. A host whose controllers carry tokens calls this method, with an empty
     /// section if it sets no value, since nothing else resolves their fallbacks. A later call replaces an earlier one.
     /// </para>
+    /// <para>
+    /// A path that is not a controller route is resolved from the same section through
+    /// <see cref="IRouteTemplateResolver"/>, which this method registers unless the host registered its own.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection the server is registered in.</param>
     /// <param name="configSection">The configuration section holding the token values.</param>
@@ -60,6 +65,7 @@ public static class ConfigurableRoutesExtensions
         services.AddOptions();
         services.AddSingleton<IConfigureOptions<OidcRouteOptions>>(routes);
         services.AddSingleton<IConfigureOptions<MvcOptions>>(routes);
+        services.TryAddSingleton<IRouteTemplateResolver>(routes);
         return services;
     }
 }

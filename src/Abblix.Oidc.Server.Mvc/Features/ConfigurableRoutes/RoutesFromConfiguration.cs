@@ -14,16 +14,17 @@ namespace Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 
 /// <summary>
 /// What one call of <see cref="ConfigurableRoutesExtensions.ConfigureRoutes"/> sets: the library's endpoint paths
-/// in <see cref="OidcRouteOptions"/>, and the convention resolving the tokens in the host's own route templates.
+/// in <see cref="OidcRouteOptions"/>, the convention resolving the tokens in the host's own route templates, and the
+/// resolver a host asks for a path that is not a route.
 /// </summary>
 /// <param name="resolver">Resolves a template's tokens from the configuration section.</param>
 internal sealed class RoutesFromConfiguration(RouteTemplateResolver resolver)
-    : IConfigureOptions<OidcRouteOptions>, IConfigureOptions<MvcOptions>
+    : IConfigureOptions<OidcRouteOptions>, IConfigureOptions<MvcOptions>, IRouteTemplateResolver
 {
     private const string ConnectBase = "base";
     private const string WellKnownBase = "well_known";
     private const string ApplicationRoot = "~";
-    private const string FromApplicationRoot = "~/";
+    private const string FromApplicationRootPrefix = "~/";
 
     /// <inheritdoc />
     public void Configure(MvcOptions options) => options.Conventions.Add(new ConfigurableRouteConvention(resolver));
@@ -57,6 +58,10 @@ internal sealed class RoutesFromConfiguration(RouteTemplateResolver resolver)
         Set("jwks", wellKnown + "/jwks", path => routes.Keys = path);
     }
 
+    /// <inheritdoc />
+    public string Resolve(string template)
+        => FromApplicationRoot($"The template '{template}'", resolver.Resolve(template).Template);
+
     private void Set(string token, string fallback, Action<string> assign)
     {
         var (template, configured) = resolver.Resolve(resolver.Token(token, fallback));
@@ -76,7 +81,18 @@ internal sealed class RoutesFromConfiguration(RouteTemplateResolver resolver)
                 $"The path of the route token '{token}' keeps an unresolved token: '{template}'.");
         }
 
-        if (template.StartsWith(FromApplicationRoot, StringComparison.Ordinal))
+        return FromApplicationRoot($"The path of the route token '{token}'", template);
+    }
+
+    /// <summary>
+    /// A path written from the application root as "~/...", as version 2.4 wrote it, spelled as a route pattern
+    /// spells it, "/...".
+    /// </summary>
+    /// <param name="subject">What the path is, for the refusal.</param>
+    /// <param name="template">The resolved template.</param>
+    private static string FromApplicationRoot(string subject, string template)
+    {
+        if (template.StartsWith(FromApplicationRootPrefix, StringComparison.Ordinal))
             return template[1..];
 
         if (string.Equals(template, ApplicationRoot, StringComparison.Ordinal))
@@ -85,7 +101,7 @@ internal sealed class RoutesFromConfiguration(RouteTemplateResolver resolver)
         if (template.StartsWith(ApplicationRoot, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"The path of the route token '{token}' starts with '~' not followed by '/': '{template}'.");
+                $"{subject} starts with '~' not followed by '/': '{template}'.");
         }
 
         return template;
