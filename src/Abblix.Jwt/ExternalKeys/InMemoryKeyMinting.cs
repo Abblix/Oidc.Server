@@ -10,9 +10,39 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <summary>
 /// Decides which keys the in-memory ring mints, and mints them.
 /// </summary>
-/// <param name="policy">What to mint and how often.</param>
-internal sealed class InMemoryKeyMinting(LocalKeys policy)
+internal sealed class InMemoryKeyMinting
 {
+    private readonly LocalKeys _policy;
+
+    /// <summary>
+    /// Takes the policy the ring rotates on.
+    /// </summary>
+    /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The policy rotates every instant or sooner, or retires a key
+    /// before it stops producing.</exception>
+    public InMemoryKeyMinting(LocalKeys policy)
+    {
+        // Each rotation mints before it retires, at one moment, so a role's newest key is younger than one rotation
+        // period when retirement looks at it. Both bounds keep it there, and so keep every role with a key.
+        if (policy.RotateEvery <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(policy),
+                policy.RotateEvery,
+                $"{nameof(LocalKeys.RotateEvery)} must be longer than zero.");
+        }
+
+        if (policy.KeepRetiredFor < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(policy),
+                policy.KeepRetiredFor,
+                $"{nameof(LocalKeys.KeepRetiredFor)} must not be negative.");
+        }
+
+        _policy = policy;
+    }
+
     /// <summary>
     /// A new key for every role whose newest key among <paramref name="keys"/> has served longer than the rotation
     /// period at <paramref name="now"/>, or that has none.
@@ -25,19 +55,21 @@ internal sealed class InMemoryKeyMinting(LocalKeys policy)
                 .Where(minted => minted.Key.Usage == usage)
                 .Max(minted => (DateTimeOffset?)minted.CreatedAt);
 
-            if (newest is { } mintedAt && now - mintedAt < policy.RotateEvery)
+            if (newest is { } mintedAt && now - mintedAt < _policy.RotateEvery)
                 continue;
 
-            yield return new InMemoryMintedKey(JsonWebKeyFactory.CreateRsa(usage, algorithm, policy.RsaKeySize), now);
+            yield return new InMemoryMintedKey(
+                JsonWebKeyFactory.CreateRsa(usage, algorithm, _policy.RsaKeySize),
+                now);
         }
     }
 
     /// <summary>The roles this ring mints for, and the algorithm each uses.</summary>
     private IEnumerable<(string Usage, string Algorithm)> Roles()
     {
-        yield return (PublicKeyUsages.Signature, policy.SigningAlgorithm);
+        yield return (PublicKeyUsages.Signature, _policy.SigningAlgorithm);
 
-        if (policy.EncryptionAlgorithm is { } encryptionAlgorithm)
+        if (_policy.EncryptionAlgorithm is { } encryptionAlgorithm)
             yield return (PublicKeyUsages.Encryption, encryptionAlgorithm);
     }
 }

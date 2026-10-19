@@ -11,8 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// A key ring whose keys are minted in this process and never leave it: an Adapter presenting the set of keys
-/// it rotates as a ring, on the host's clock and settings.
+/// A key ring whose keys are minted in this process and never leave it.
 /// </summary>
 /// <remarks>
 /// The default for a host that has no HSM or KMS, which is most of them. It gives what a ring is for -
@@ -24,10 +23,10 @@ namespace Abblix.Jwt.ExternalKeys;
 /// reach and every replica can; this one puts it somewhere only this process can reach. Which is right
 /// depends on how the host is deployed, so the host chooses rather than inheriting a default.
 /// </remarks>
+// An Adapter: presents the set of keys it rotates as a ring, on the host's settings
 public sealed class InMemoryKeyRing : IKeyRing
 {
     private readonly KeyRingOptions _options;
-    private readonly TimeProvider _timeProvider;
     private readonly InMemoryKeySet _keys;
 
     /// <summary>
@@ -36,23 +35,15 @@ public sealed class InMemoryKeyRing : IKeyRing
     public InMemoryKeyRing(LocalKeys policy, IOptions<KeyRingOptions> options, TimeProvider timeProvider)
     {
         _options = options.Value;
-        _timeProvider = timeProvider;
-        _keys = new InMemoryKeySet(policy);
+        _keys = new InMemoryKeySet(policy, timeProvider);
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// Minting here rather than only in RefreshAsync so a ring that is asked before its first refresh answers with
-    /// a key instead of an empty set. A host without the refresh service running at all still gets a working ring,
-    /// it simply never rotates.
-    /// </remarks>
     public IEnumerable<JsonWebKey> Get(string usage, bool includePrivateKeys)
-        => _keys.RotateAndServe(
-            usage,
-            includePrivateKeys,
-            _timeProvider.GetUtcNow(),
-            _timeProvider.GetUtcNow(),
-            _options.KeyRolloverPropagation);
+        // Minting here rather than only in RefreshAsync so a ring that is asked before its first refresh answers
+        // with a key instead of an empty set. A host without the refresh service running at all still gets a
+        // working ring, it simply never rotates.
+        => _keys.RotateAndServe(usage, includePrivateKeys, _options.KeyRolloverPropagation);
 
     /// <inheritdoc />
     /// <remarks>
@@ -64,7 +55,7 @@ public sealed class InMemoryKeyRing : IKeyRing
     /// <inheritdoc />
     public Task RefreshAsync(CancellationToken cancellationToken)
     {
-        _keys.Rotate(_timeProvider.GetUtcNow());
+        _keys.Rotate();
         return Task.CompletedTask;
     }
 }
