@@ -30,6 +30,11 @@ internal static class LocalKeyRingServiceCollectionExtensions
                 + $"{nameof(ExternalKeysServiceCollectionExtensions.AddKeyRing)} with a custodian to share keys, or "
                 + "drop the store if a single instance is intended.");
 
+        // Refused here as well as when the ring is made, so a period the ring cannot rotate on stops the host while
+        // it registers. Whether retirement outlasts the announcement of a new key is known only when the ring is
+        // made, from the settings
+        KeyRingPolicyChecks.EnsureRotatable(policy);
+
         // The ring reads the clock, and this package is consumable without the registrations that would otherwise
         // have supplied one.
         services.TryAddSingleton(TimeProvider.System);

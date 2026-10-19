@@ -26,16 +26,16 @@ namespace Abblix.Jwt.ExternalKeys;
 // An Adapter: presents the set of keys it rotates as a ring, on the host's settings
 public sealed class InMemoryKeyRing : IKeyRing
 {
-    private readonly KeyRingOptions _options;
     private readonly InMemoryKeySet _keys;
 
     /// <summary>
     /// Creates the ring.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The policy's rotation period is not positive, or its retention
+    /// of a retired key is negative or shorter than the announcement of a new key.</exception>
     public InMemoryKeyRing(LocalKeys policy, IOptions<KeyRingOptions> options, TimeProvider timeProvider)
     {
-        _options = options.Value;
-        _keys = new InMemoryKeySet(policy, timeProvider);
+        _keys = new InMemoryKeySet(policy, options.Value.KeyRolloverPropagation, timeProvider);
     }
 
     /// <inheritdoc />
@@ -43,7 +43,7 @@ public sealed class InMemoryKeyRing : IKeyRing
         // Minting here rather than only in RefreshAsync so a ring that is asked before its first refresh answers
         // with a key instead of an empty set. A host without the refresh service running at all still gets a
         // working ring, it simply never rotates.
-        => _keys.RotateAndServe(usage, includePrivateKeys, _options.KeyRolloverPropagation);
+        => _keys.RotateAndServe(usage, includePrivateKeys);
 
     /// <inheritdoc />
     /// <remarks>
