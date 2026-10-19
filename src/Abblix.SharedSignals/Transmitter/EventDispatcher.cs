@@ -59,7 +59,7 @@ public sealed partial class EventDispatcher(
     /// Dispatches one event to every stream it matches.
     /// </summary>
     /// <param name="descriptor">The event as the application states it.</param>
-    /// <param name="cancellationToken">Cancels store reads, policy calls and signing.</param>
+    /// <param name="cancellationToken">Cancels store reads, policy calls and the enqueue.</param>
     /// <returns>How many streams the event was enqueued for, and the streams it failed on.</returns>
     /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
     /// <exception cref="OperationCanceledException">
@@ -82,11 +82,11 @@ public sealed partial class EventDispatcher(
 
     /// <summary>
     /// Dispatches one event again to the given streams alone - the ones an earlier dispatch reported as not
-    /// reached - so the streams that already hold it do not get it a second time under a new identifier.
+    /// reached - so the streams left out of the list do not get it a second time under a new identifier.
     /// </summary>
     /// <param name="descriptor">The event, as it was dispatched the first time.</param>
     /// <param name="streamsToReach">The streams to try. Any other stream is left alone.</param>
-    /// <param name="cancellationToken">Cancels store reads, policy calls and signing.</param>
+    /// <param name="cancellationToken">Cancels store reads, policy calls and the enqueue.</param>
     /// <returns>How many of the streams the event was enqueued for, and the ones it failed on again.</returns>
     /// <remarks>
     /// Each stream is read again and held to every check a full dispatch makes, so the event does not reach a
