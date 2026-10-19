@@ -107,39 +107,8 @@ public partial class UserCodeVerificationService(
     /// <inheritdoc />
     public async Task<bool> ApproveAsync([Credential] string userCode, AuthorizedGrant authorizedGrant)
     {
-        userCode = normalizer.Normalize(userCode);
-
-        // The same limits as verification, because this takes the same thing - a user code as a string -
-        // and answers whether it names a live authorization, which is the question a guesser is asking.
-        // Without this it is the same oracle with no counting at all, and the one that grants.
-        var clientIp = requestInfoProvider.SourceName();
-        if (await rateLimiter.CheckAsync(userCode, clientIp) is not null)
+        if (await FindDecidableAsync(userCode) is not var (reference, request, remaining))
             return false;
-
-        var result = await storage.TryGetByUserCodeAsync(userCode);
-        if (result == null)
-        {
-            await rateLimiter.RecordUnknownCodeAsync(clientIp);
-            return false;
-        }
-
-        var (reference, request) = result.Value;
-
-        if (request.Status != DeviceAuthorizationStatus.Pending)
-        {
-            // Charged to the code, as verification charges it: the value names a real authorization and the
-            // attempt is against it, whether it arrived here or at the verification step.
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
-            return false;
-        }
-
-        // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so nothing
-        // is decided rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
-        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
-        {
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
-            return false;
-        }
 
         // Narrowing is the host's to decide; widening is not. A grant carrying a type the device
         // authorization request never asked for gives the device authority nobody requested, and this is
@@ -184,38 +153,57 @@ public partial class UserCodeVerificationService(
     /// <inheritdoc />
     public async Task<bool> DenyAsync([Credential] string userCode)
     {
+        if (await FindDecidableAsync(userCode) is not var (reference, _, remaining))
+            return false;
+
+        return await TryDecideAsync(
+            reference, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+    }
+
+    /// <summary>
+    /// Finds the pending authorization a user code names, for a decision on it, or null when there is nothing to
+    /// decide: the attempt is refused by the rate limiter, no authorization carries the code, it is no longer
+    /// pending, or its lifetime has run out.
+    /// </summary>
+    private async Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request, TimeSpan Remaining)?>
+        FindDecidableAsync([Credential] string userCode)
+    {
         userCode = normalizer.Normalize(userCode);
 
-        // Counted like verification and approval: this answers the same question about the same input.
+        // The same limits as verification, because a decision takes the same thing - a user code as a string -
+        // and answers whether it names a live authorization, which is the question a guesser is asking.
+        // Without this it is the same oracle with no counting at all, and the one that grants.
         var clientIp = requestInfoProvider.SourceName();
         if (await rateLimiter.CheckAsync(userCode, clientIp) is not null)
-            return false;
+            return null;
 
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
         {
             await rateLimiter.RecordUnknownCodeAsync(clientIp);
-            return false;
+            return null;
         }
 
         var (reference, request) = result.Value;
 
         if (request.Status != DeviceAuthorizationStatus.Pending)
         {
+            // Charged to the code, as verification charges it: the value names a real authorization and the
+            // attempt is against it, whether it arrived here or at the verification step.
             await rateLimiter.RecordFailureAsync(userCode, clientIp);
-            return false;
+            return null;
         }
 
-        // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
-        // nothing is decided rather than writing a record with a non-positive cache TTL.
+        // A decision landing after the code's fixed lifetime (RFC 8628 section 3.2) is moot: an approval could not
+        // be redeemed and a denial changes nothing, so nothing is decided rather than reviving an expired code or
+        // writing a record with a non-positive cache TTL.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
         {
             await rateLimiter.RecordFailureAsync(userCode, clientIp);
-            return false;
+            return null;
         }
 
-        return await TryDecideAsync(
-            reference, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+        return (reference, request, remaining);
     }
 
     /// <summary>
