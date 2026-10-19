@@ -403,7 +403,9 @@ public sealed class CaepInteropProfileDispatchTests
         {
             // No stream is subscribed here, so zero is the honest answer - and the point is that it
             // ANSWERED rather than refused.
-            Assert.Equal(0, (await dispatcher.DispatchAsync(descriptor, Cancellation)).Reached);
+            var result = await dispatcher.DispatchAsync(descriptor, Cancellation);
+            Assert.Equal(0, result.Reached);
+            Assert.Empty(result.NotReached);
         }
     }
 

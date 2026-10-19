@@ -74,5 +74,8 @@ public static class LogEvents
 
         /// <summary>A stream identifier a URL path cannot carry unchanged, so no poll address is published for it.</summary>
         public const int NoPollAddress = Base + 17;
+
+        /// <summary>A stream named for a repeated dispatch could not be read, so the event was not queued for it.</summary>
+        public const int StreamNotRead = Base + 18;
     }
 }

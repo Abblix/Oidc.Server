@@ -206,10 +206,10 @@ public class EventDispatcherTests
             policy: null,
             CreateStream("s-1", mode: mode));
 
-        var reached = (await dispatcher.DispatchAsync(
-            Descriptor(subject), TestContext.Current.CancellationToken)).Reached;
+        var result = await dispatcher.DispatchAsync(Descriptor(subject), TestContext.Current.CancellationToken);
 
-        Assert.Equal(expected, reached);
+        Assert.Equal(expected, result.Reached);
+        Assert.Empty(result.NotReached);
         Assert.Equal(
             expected,
             (await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken)).Count);
@@ -249,8 +249,9 @@ public class EventDispatcherTests
 
         Assert.Equal(1, (await dispatcher.DispatchAsync(
             Descriptor(new EmailSubject("anyone@example.com")), TestContext.Current.CancellationToken)).Reached);
-        Assert.Equal(0, (await dispatcher.DispatchAsync(
-            Descriptor(removed), TestContext.Current.CancellationToken)).Reached);
+        var toTheRemoved = await dispatcher.DispatchAsync(Descriptor(removed), TestContext.Current.CancellationToken);
+        Assert.Equal(0, toTheRemoved.Reached);
+        Assert.Empty(toTheRemoved.NotReached);
 
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-all", null, TestContext.Current.CancellationToken));
     }
@@ -265,8 +266,9 @@ public class EventDispatcherTests
             new DenyAllPolicy(),
             CreateStream("s-1", added: [new StreamSubject(subject, Verified: true)]));
 
-        Assert.Equal(0, (await dispatcher.DispatchAsync(
-            Descriptor(subject), TestContext.Current.CancellationToken)).Reached);
+        var vetoed = await dispatcher.DispatchAsync(Descriptor(subject), TestContext.Current.CancellationToken);
+        Assert.Equal(0, vetoed.Reached);
+        Assert.Empty(vetoed.NotReached);
         Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
     }
 

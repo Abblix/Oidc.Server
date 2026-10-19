@@ -308,13 +308,17 @@ public sealed class SharedSignalsTenantIsolationTests
     {
         var tenant = await app.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync(tenantId, ct);
         using var scope = TenantScope.Enter(tenant!);
-        return (await app.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
+        var result = await app.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
             new SecurityEventDescriptor
             {
                 EventType = MembershipChanged,
                 Subject = new EmailSubject("jdoe@example.com"),
             },
-            ct)).Reached;
+            ct);
+
+        // A stream the event failed on would read as one it was never meant for
+        Assert.Empty(result.NotReached);
+        return result.Reached;
     }
 
     private static async Task<JsonNode> KeySetOfAsync(HttpClient http, string tenant, CancellationToken ct)

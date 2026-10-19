@@ -75,10 +75,17 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 ```
 
 The call returns how many streams took the event and which streams it failed on, for example because the
-outbox store did not answer. An event that no stream takes is a normal outcome, not a failure. If you send events
-from a queue of your own, keep the entry until `NotReached` is empty, and retry with the overload that takes those
-streams. That overload reads each stream again and runs every check, and it does not send the event a second time
-to the streams that already have it.
+outbox store did not answer. An event that no stream takes is a normal outcome, not a failure.
+
+If you send events from a queue of your own, store `NotReached` with the entry and retry with the overload that
+takes those streams. It reads each stream again and runs every check, and the streams left out of the list do not
+get the event again. Some things to plan for:
+
+- Cap the retries. A failure that does not go away, such as a token that cannot be built, fails on every attempt.
+- A stream in the list can end up with two copies. If the outbox stored the event and then reported an error, a
+  timeout for example, the retry queues it again under a new `jti`, and the receiver cannot tell it is a duplicate.
+- A retried event is queued behind whatever that stream received in the meantime.
+- If the dispatch is cancelled, it throws, and the streams it had already reached keep the event.
 
 ## A receiver
 

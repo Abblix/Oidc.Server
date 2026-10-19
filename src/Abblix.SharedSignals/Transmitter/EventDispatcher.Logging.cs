@@ -15,7 +15,15 @@ partial class EventDispatcher
     [LoggerMessage(
         EventId = LogEvents.Transmitter.StreamNotReached,
         Level = LogLevel.Error,
-        Message = "The event {EventType} could not be queued for stream {StreamId}; "
+        Message = "The event {EventType} could not be queued for stream {StreamId} of receiver {ReceiverId}; "
             + "the fan-out continued with the remaining streams")]
-    private partial void LogStreamNotReached(Exception exception, string StreamId, string EventType);
+    private partial void LogStreamNotReached(
+        Exception exception, string StreamId, string ReceiverId, string EventType);
+
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.StreamNotRead,
+        Level = LogLevel.Error,
+        Message = "Stream {StreamId} of receiver {ReceiverId} could not be read to dispatch the event {EventType} "
+            + "again; the dispatch continued with the remaining streams")]
+    private partial void LogStreamNotRead(Exception exception, string StreamId, string ReceiverId, string EventType);
 }

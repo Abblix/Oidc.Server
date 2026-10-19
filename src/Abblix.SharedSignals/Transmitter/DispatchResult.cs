@@ -17,8 +17,8 @@ namespace Abblix.SharedSignals.Transmitter;
 /// stream takes, which is a normal outcome.
 /// </param>
 /// <param name="NotReached">
-/// The streams the dispatch failed on - the outbox refused the event, the token could not be built, the sharing
-/// policy or the stream store failed. Pass them to
+/// The streams the dispatch failed on: the outbox refused the event, the token could not be built, or the sharing
+/// policy failed, and on a repeated dispatch also a stream that could not be read again. Pass them to
 /// <see cref="EventDispatcher.DispatchAsync(SecurityEventDescriptor,IEnumerable{StreamReference},CancellationToken)"/>
 /// to try them again without sending the event a second time to the streams that already hold it.
 /// </param>

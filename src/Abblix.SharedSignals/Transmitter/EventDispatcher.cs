@@ -59,12 +59,16 @@ public sealed partial class EventDispatcher(
     /// Dispatches one event to every stream it matches.
     /// </summary>
     /// <param name="descriptor">The event as the application states it.</param>
-    /// <param name="cancellationToken">
-    /// Cancels store reads, policy calls and signing. A cancelled dispatch throws, and the streams it had already
-    /// reached keep the event.
-    /// </param>
+    /// <param name="cancellationToken">Cancels store reads, policy calls and signing.</param>
     /// <returns>How many streams the event was enqueued for, and the streams it failed on.</returns>
     /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// The dispatch was cancelled. The streams it had already reached keep the event.
+    /// </exception>
+    /// <remarks>
+    /// When the list of streams cannot be read, the exception leaves this method and no stream has the event, so
+    /// the whole dispatch can be made again.
+    /// </remarks>
     public async Task<DispatchResult> DispatchAsync(
         SecurityEventDescriptor descriptor,
         CancellationToken cancellationToken = default)
@@ -82,18 +86,18 @@ public sealed partial class EventDispatcher(
     /// </summary>
     /// <param name="descriptor">The event, as it was dispatched the first time.</param>
     /// <param name="streamsToReach">The streams to try. Any other stream is left alone.</param>
-    /// <param name="cancellationToken">
-    /// Cancels store reads, policy calls and signing. A cancelled dispatch throws, and the streams it had already
-    /// reached keep the event.
-    /// </param>
+    /// <param name="cancellationToken">Cancels store reads, policy calls and signing.</param>
     /// <returns>How many of the streams the event was enqueued for, and the ones it failed on again.</returns>
     /// <remarks>
     /// Each stream is read again and held to every check a full dispatch makes, so the event does not reach a
     /// stream disabled since the first attempt, one that no longer takes the event or its subject, one the sharing
-    /// policy now refuses, or one that no longer exists - each of those is simply not reached, as it would not be
-    /// by a full dispatch made now.
+    /// policy now refuses, or one that no longer exists. Such a stream is counted neither as reached nor as not
+    /// reached, as a full dispatch made now would not count it. A stream that cannot be read is not reached.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// The dispatch was cancelled. The streams it had already reached keep the event.
+    /// </exception>
     public async Task<DispatchResult> DispatchAsync(
         SecurityEventDescriptor descriptor,
         IEnumerable<StreamReference> streamsToReach,
@@ -116,7 +120,7 @@ public sealed partial class EventDispatcher(
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                LogStreamNotReached(exception, reference.StreamId, descriptor.EventType);
+                LogStreamNotRead(exception, reference.StreamId, reference.ReceiverId, descriptor.EventType);
                 notReached.Add(reference);
             }
         }
@@ -149,7 +153,7 @@ public sealed partial class EventDispatcher(
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                LogStreamNotReached(exception, stream.StreamId, descriptor.EventType);
+                LogStreamNotReached(exception, stream.StreamId, stream.ReceiverId, descriptor.EventType);
                 notReached.Add(new StreamReference(stream.ReceiverId, stream.StreamId));
             }
         }

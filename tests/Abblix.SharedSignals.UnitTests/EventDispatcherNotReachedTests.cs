@@ -149,6 +149,24 @@ public class EventDispatcherNotReachedTests
     }
 
     /// <summary>
+    /// A dispatch cancelled while it reads the streams again is cancelled, not a list of streams it failed on.
+    /// </summary>
+    [Fact]
+    public async Task ARepeatedDispatchCancelledWhileReadingTheStreams_Throws()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var store = new FailingStreamStore(await StoreWithAsync(Stream("s-1"), Stream("s-2")), "s-1", () =>
+        {
+            cancellation.Cancel();
+            return new OperationCanceledException(cancellation.Token);
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => Dispatcher(store, new FailingOutbox()).DispatchAsync(
+                Descriptor(), [new(Receiver, "s-1"), new(Receiver, "s-2")], cancellation.Token));
+    }
+
+    /// <summary>
     /// The payload policy judges the event itself, so it refuses a limited dispatch exactly as it refuses a full
     /// one: before any stream is read.
     /// </summary>
@@ -252,7 +270,10 @@ public class EventDispatcherNotReachedTests
             => _inner.ClearAsync(receiverId, streamId, cancellationToken);
     }
 
-    private sealed class FailingStreamStore(IStreamStore inner, string failingStreamId) : IStreamStore
+    private sealed class FailingStreamStore(
+        IStreamStore inner,
+        string failingStreamId,
+        Func<Exception>? failure = null) : IStreamStore
     {
         public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
             => inner.TryCreateAsync(stream, cancellationToken);
@@ -260,7 +281,7 @@ public class EventDispatcherNotReachedTests
         public Task<StreamState?> FindAsync(
             string receiverId, string streamId, CancellationToken cancellationToken = default)
             => streamId == failingStreamId
-                ? throw new HttpRequestException("The stream store did not answer.")
+                ? throw failure?.Invoke() ?? new HttpRequestException("The stream store did not answer.")
                 : inner.FindAsync(receiverId, streamId, cancellationToken);
 
         public Task<IReadOnlyList<StreamState>> ListAsync(

@@ -331,9 +331,11 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         // Removal's CONSEQUENCE, not its status code: the same event now matches no stream.
         Assert.True(await client.RemoveSubjectAsync(
             new RemoveSubjectRequest { StreamId = streamId, Subject = Jdoe() }, cancellationToken));
-        Assert.Equal(0, (await dispatcher.DispatchAsync(
+        var afterRemoval = await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken)).Reached);
+            cancellationToken);
+        Assert.Equal(0, afterRemoval.Reached);
+        Assert.Empty(afterRemoval.NotReached);
     }
 
     [Fact]
