@@ -39,6 +39,7 @@ internal static class KeyRingOptionsServiceCollectionExtensions
                 $"{nameof(ExternalKeysServiceCollectionExtensions.AddKeyRing)} with a PersistRingTo... call from the " +
                 $"store's package, or register an {nameof(IKeyRingStore)} of your own.")
             .ValidateOnStart();
+
         return services;
     }
 }

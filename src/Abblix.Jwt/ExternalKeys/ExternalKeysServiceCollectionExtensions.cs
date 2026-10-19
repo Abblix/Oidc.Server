@@ -168,9 +168,7 @@ public static class ExternalKeysServiceCollectionExtensions
     /// either consumer.
     /// </remarks>
     public static IMintedKeysBuilder AddKeyRing(this IServiceCollection services, MintedKeys policy)
-    {
-        return services.AddMintedKeyRing(policy);
-    }
+        => services.AddMintedKeyRing(policy);
 
     /// <summary>
     /// Registers a key ring that mints its keys in this process and keeps them there: no custodian, no shared
@@ -194,7 +192,5 @@ public static class ExternalKeysServiceCollectionExtensions
     /// silently ignored it would be the worst of both. Use <see cref="AddKeyRing"/> with a custodian instead.
     /// </remarks>
     public static IServiceCollection AddInMemoryKeyRing(this IServiceCollection services, LocalKeys policy)
-    {
-        return services.AddLocalKeyRing(policy);
-    }
+        => services.AddLocalKeyRing(policy);
 }
