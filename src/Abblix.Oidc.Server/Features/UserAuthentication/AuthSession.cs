@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -109,4 +110,16 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// </code>
     /// </example>
     public JsonObject? AdditionalClaims { get; init; }
+
+    /// <summary>
+    /// How long the user agent keeps the session. On a sign-in, what the host chose, with
+    /// <see cref="SessionPersistence.Unstated"/> keeping what the end user's current session has; on a session read
+    /// back, what it was written with.
+    /// </summary>
+    /// <remarks>
+    /// A session service with no notion of persistence may ignore it. It belongs to the user agent's copy of the
+    /// session, so a grant stored with the session does not keep it, and reads it back as unstated.
+    /// </remarks>
+    [JsonIgnore]
+    public SessionPersistence Persistence { get; init; } = SessionPersistence.Unstated;
 }

@@ -319,6 +319,7 @@ public sealed class EndpointMetricsTests : IDisposable
             .Setup(h => h.HandleAsync(request))
             .ReturnsAsync(new SuccessfullyAuthenticated(request, ResponseModes.Fragment, null, [])
             {
+                SessionPersistence = Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence.BrowserSession,
                 AccessToken = AToken,
                 IdToken = AToken,
             });

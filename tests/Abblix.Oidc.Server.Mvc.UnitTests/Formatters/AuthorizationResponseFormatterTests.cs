@@ -87,6 +87,32 @@ public class AuthorizationResponseFormatterTests
         Assert.StartsWith(IssuerPages + "login?", sent.Headers.Location.ToString(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The cookie the check-session page compares is written as the session is kept, so a session surviving a browser
+    /// restart is not reported as changed after one.
+    /// </summary>
+    [Fact]
+    public async Task TheSessionManagementCookie_IsWrittenAsTheSessionIsKept()
+    {
+        var expiresAt = DateTimeOffset.FromUnixTimeSeconds(1_900_000_000);
+        var sessionManagement = new RecordsTheSessionCookie();
+        var formatter = Formatter(new PagesOf(IssuerPages), sessionManagement);
+        var request = new AuthorizationRequest
+        {
+            RedirectUri = new Uri("https://client.example.com/callback"),
+            Scope = [Scopes.OpenId],
+        };
+
+        await RunAsync(await formatter.FormatResponseAsync(
+            request,
+            new SuccessfullyAuthenticated(request, ResponseModes.Query, "session-1", [])
+            {
+                SessionPersistence = SessionPersistence.Until(expiresAt),
+            }));
+
+        Assert.Equal(SessionPersistence.Until(expiresAt), sessionManagement.AskedFor);
+    }
+
     private static async Task<HttpResponse> RunAsync(ActionResult result)
     {
         var context = new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor());
@@ -97,7 +123,9 @@ public class AuthorizationResponseFormatterTests
     /// <summary>
     /// A formatter whose server-wide options name other pages, so a page read from them shows in the address.
     /// </summary>
-    private static AuthorizationResponseFormatter Formatter(IIssuerSettings issuerSettings)
+    private static AuthorizationResponseFormatter Formatter(
+        IIssuerSettings issuerSettings,
+        ISessionManagementService? sessionManagement = null)
     {
         const string serverWide = "https://server-wide.example.com/";
         var options = new OidcOptions
@@ -113,7 +141,7 @@ public class AuthorizationResponseFormatterTests
             Options.Create(options),
             issuerSettings,
             new StoresEveryRequest(),
-            new NoSessionManagement(),
+            sessionManagement ?? new NoSessionManagement(),
             new ResolvesNothing(),
             new NoParameters());
     }
@@ -154,10 +182,27 @@ public class AuthorizationResponseFormatterTests
             => throw new NotSupportedException();
     }
 
+    private sealed class RecordsTheSessionCookie : ISessionManagementService
+    {
+        public SessionPersistence? AskedFor { get; private set; }
+
+        public bool Enabled => true;
+
+        public Cookie GetSessionCookie(SessionPersistence persistence)
+        {
+            AskedFor = persistence;
+            return new Cookie("session", new Abblix.Oidc.Server.Common.CookieOptions());
+        }
+
+        public string GetSessionState(AuthorizationRequest request, string sessionId) => "state";
+
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
+    }
+
     private sealed class NoSessionManagement : ISessionManagementService
     {
         public bool Enabled => false;
-        public Cookie GetSessionCookie() => throw new NotSupportedException();
+        public Cookie GetSessionCookie(SessionPersistence persistence) => throw new NotSupportedException();
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
         public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();

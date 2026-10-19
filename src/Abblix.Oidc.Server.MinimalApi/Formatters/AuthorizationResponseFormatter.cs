@@ -118,7 +118,7 @@ public class AuthorizationResponseFormatter(
             authenticated.SessionId.HasValue() &&
             authenticated.Model.Scope.Contains(Scopes.OpenId))
         {
-            var cookie = sessionManagementService.GetSessionCookie();
+            var cookie = sessionManagementService.GetSessionCookie(authenticated.SessionPersistence);
 
             result = result.WithAppendCookie(
                 cookie.Name,

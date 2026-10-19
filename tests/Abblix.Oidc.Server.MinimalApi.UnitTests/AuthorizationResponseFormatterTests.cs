@@ -83,9 +83,35 @@ public class AuthorizationResponseFormatterTests
     }
 
     /// <summary>
+    /// The session management cookie is asked for as the session the response was issued under is kept.
+    /// </summary>
+    [Fact]
+    public async Task TheSessionManagementCookie_IsAskedForAsTheSessionIsKept()
+    {
+        var persistence = SessionPersistence.Until(DateTimeOffset.FromUnixTimeSeconds(1_900_000_000));
+        var cookies = new AsksForTheSessionCookie();
+        var request = new AuthorizationRequest
+        {
+            RedirectUri = new Uri("https://client.example.com/callback"),
+            Scope = [Scopes.OpenId],
+        };
+        var success = new SuccessfullyAuthenticated(request, ResponseModes.Query, "session-1", [])
+        {
+            SessionPersistence = persistence,
+        };
+
+        await HttpResultRunner.RunAsync(
+            await Formatter(new PagesOf(IssuerPages), cookies).FormatResponseAsync(request, success));
+
+        Assert.Equal([persistence], cookies.Asked);
+    }
+
+    /// <summary>
     /// A formatter whose server-wide options name other pages, so a page read from them shows in the address.
     /// </summary>
-    private static AuthorizationResponseFormatter Formatter(IIssuerSettings issuerSettings)
+    private static AuthorizationResponseFormatter Formatter(
+        IIssuerSettings issuerSettings,
+        ISessionManagementService? sessionManagement = null)
     {
         const string serverWide = "https://server-wide.example.com/";
         var options = new OidcOptions
@@ -101,7 +127,7 @@ public class AuthorizationResponseFormatterTests
             Options.Create(options),
             issuerSettings,
             new StoresEveryRequest(),
-            new NoSessionManagement(),
+            sessionManagement ?? new NoSessionManagement(),
             new NoParameters(),
             new HttpContextAccessor());
     }
@@ -142,10 +168,28 @@ public class AuthorizationResponseFormatterTests
             => throw new NotSupportedException();
     }
 
+    /// <summary>Session management that is on, and notes how each session cookie it hands out is kept.</summary>
+    private sealed class AsksForTheSessionCookie : ISessionManagementService
+    {
+        public List<SessionPersistence> Asked { get; } = [];
+
+        public bool Enabled => true;
+
+        public Cookie GetSessionCookie(SessionPersistence persistence)
+        {
+            Asked.Add(persistence);
+            return new Cookie("session", new Abblix.Oidc.Server.Common.CookieOptions());
+        }
+
+        public string GetSessionState(AuthorizationRequest request, string sessionId) => sessionId;
+
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
+    }
+
     private sealed class NoSessionManagement : ISessionManagementService
     {
         public bool Enabled => false;
-        public Cookie GetSessionCookie() => throw new NotSupportedException();
+        public Cookie GetSessionCookie(Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence persistence) => throw new NotSupportedException();
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
 

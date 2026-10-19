@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.SessionManagement;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -47,7 +48,8 @@ public class EndSessionResponseFormatterDecorator(
         // leave them signed in with nothing saying so.
         if (sessionManagementService.Enabled && response.TryGetSuccess(out var succeeded) && succeeded is EndSessionSuccess)
         {
-            var cookie = sessionManagementService.GetSessionCookie();
+            // Written only to be removed, so it is given no expiry
+            var cookie = sessionManagementService.GetSessionCookie(SessionPersistence.BrowserSession);
             result = result.WithDeleteCookie(cookie.Name, cookie.Options.ConvertOptions());
         }
 

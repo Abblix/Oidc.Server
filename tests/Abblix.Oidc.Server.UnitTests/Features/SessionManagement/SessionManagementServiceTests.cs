@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -76,7 +77,7 @@ public class SessionManagementServiceTests
         var issuerSettings = new Mock<IIssuerSettings>();
         issuerSettings.Setup(s => s.CheckSessionCookieName).Returns("Abblix.SessionId.acme");
 
-        var cookie = Service(_optionsSnapshot.Object, issuerSettings.Object).GetSessionCookie();
+        var cookie = Service(_optionsSnapshot.Object, issuerSettings.Object).GetSessionCookie(SessionPersistence.BrowserSession);
 
         Assert.Equal("Abblix.SessionId.acme", cookie.Name);
     }
@@ -166,10 +167,26 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.Equal(CookieName, cookie.Name);
+    }
+
+    /// <summary>
+    /// The cookie the check-session page compares lives as long as the session: one surviving a browser restart is
+    /// not reported as changed to relying parties after one, and a browser session ends with the browser.
+    /// </summary>
+    [Fact]
+    public void GetSessionCookie_LastsAsLongAsTheSession()
+    {
+        _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
+        _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
+        var service = Service(_optionsSnapshot.Object);
+        var expiresAt = DateTimeOffset.FromUnixTimeSeconds(1_900_000_000);
+
+        Assert.Equal(expiresAt, service.GetSessionCookie(SessionPersistence.Until(expiresAt)).Options.Expires);
+        Assert.Null(service.GetSessionCookie(SessionPersistence.BrowserSession).Options.Expires);
     }
 
     /// <summary>
@@ -185,7 +202,7 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.False(cookie.Options.HttpOnly);
@@ -204,7 +221,7 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.True(cookie.Options.IsEssential);
@@ -223,7 +240,7 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.True(cookie.Options.Secure);
@@ -243,7 +260,7 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.False(cookie.Options.Secure);
@@ -276,7 +293,7 @@ public class SessionManagementServiceTests
         var service = Service(optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.Equal(PathBase, cookie.Options.Path);
@@ -296,7 +313,7 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.Equal(CookieDomain, cookie.Options.Domain);
@@ -315,7 +332,7 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie = service.GetSessionCookie();
+        var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.Equal("None", cookie.Options.SameSite);
@@ -334,8 +351,8 @@ public class SessionManagementServiceTests
         var service = Service(_optionsSnapshot.Object);
 
         // Act
-        var cookie1 = service.GetSessionCookie();
-        var cookie2 = service.GetSessionCookie();
+        var cookie1 = service.GetSessionCookie(SessionPersistence.BrowserSession);
+        var cookie2 = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
         Assert.NotSame(cookie1, cookie2);

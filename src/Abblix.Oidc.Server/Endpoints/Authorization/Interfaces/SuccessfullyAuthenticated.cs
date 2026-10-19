@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -56,6 +57,12 @@ public record SuccessfullyAuthenticated(
 	/// session at the authorization server and may be used for managing session continuity and logout.
 	/// </summary>
 	public string? SessionState { get; set; }
+
+	/// <summary>
+	/// How the user agent keeps the session the response was issued under, so the session management cookie written
+	/// beside it lasts as long as the session does.
+	/// </summary>
+	public required SessionPersistence SessionPersistence { get; init; }
 
 	/// <summary>
 	/// The granted <c>scope</c> as a space-delimited string, populated by the response encoder for

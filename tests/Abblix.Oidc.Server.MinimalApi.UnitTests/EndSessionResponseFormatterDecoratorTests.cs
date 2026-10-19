@@ -44,7 +44,7 @@ public class EndSessionResponseFormatterDecoratorTests
     {
         public bool Enabled => true;
 
-        public Cookie GetSessionCookie() => new(CookieName, new Abblix.Oidc.Server.Common.CookieOptions());
+        public Cookie GetSessionCookie(Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence persistence) => new(CookieName, new Abblix.Oidc.Server.Common.CookieOptions());
 
         // The rest of the seam belongs to the check-session endpoint, which this decorator never reaches.
         public string GetSessionState(AuthorizationRequest request, string sessionId)
