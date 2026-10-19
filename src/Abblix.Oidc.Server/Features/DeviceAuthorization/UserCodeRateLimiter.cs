@@ -92,7 +92,7 @@ public partial class UserCodeRateLimiter(
     private static string SourceOf(string? clientIdentifier) => clientIdentifier ?? SourceNotSeen;
 
     /// <inheritdoc />
-    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync([Credential] string userCode, string? clientIdentifier)
+    public async Task<UserCodeRateLimited?> CheckAsync([Credential] string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -151,7 +151,7 @@ public partial class UserCodeRateLimiter(
             return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
-        return true;
+        return null;
     }
 
     /// <inheritdoc />
