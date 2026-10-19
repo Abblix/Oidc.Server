@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Text.Json;
+using Abblix.Utils;
 
 namespace Abblix.Jwt;
 
@@ -16,7 +17,8 @@ namespace Abblix.Jwt;
 internal static class JsonWebKeyDocument
 {
     /// <summary>The key's <c>kty</c> and the raw JSON of the whole object.</summary>
-    /// <exception cref="JsonException">The value is not an object, or its <c>kty</c> is missing or empty.</exception>
+    /// <exception cref="JsonException">The value is not an object, names a member twice, or its <c>kty</c> is missing
+    /// or empty.</exception>
     public static (string KeyType, string Json) Read(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -26,6 +28,17 @@ internal static class JsonWebKeyDocument
 
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
+
+        // RFC 7517 section 4 lets a parser either refuse a member named twice or take its last value, and refusing
+        // leaves no two parties reading one key differently. Checked here rather than left to the serializer,
+        // because kty, which picks the subtype, is read from this document and not by the serializer
+        var repeated = root.EnumerateObject()
+            .Select(member => member.Name)
+            .FindDuplicates(StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        if (repeated is not null)
+            throw new JsonException($"The key names its member '{repeated}' more than once");
 
         if (!root.TryGetProperty(JsonWebKeyPropertyNames.KeyType, out var ktyElement))
         {

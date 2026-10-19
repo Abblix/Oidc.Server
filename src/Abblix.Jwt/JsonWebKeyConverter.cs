@@ -56,7 +56,7 @@ public sealed class JsonWebKeyConverter : JsonConverter<JsonWebKey>
     public override JsonWebKey? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var (keyType, json) = JsonWebKeyDocument.Read(ref reader);
-        return JsonWebKeySubtypes.Deserialize(keyType, json, JsonWebKeySerializerOptions.For(options));
+        return JsonWebKeySubtypes.Deserialize(keyType, json, JsonWebKeySerializerOptions.Instance);
     }
 
     /// <summary>
@@ -65,5 +65,5 @@ public sealed class JsonWebKeyConverter : JsonConverter<JsonWebKey>
     /// member.
     /// </summary>
     public override void Write(Utf8JsonWriter writer, JsonWebKey value, JsonSerializerOptions options)
-        => JsonWebKeySubtypes.Serialize(writer, value, JsonWebKeySerializerOptions.For(options));
+        => JsonWebKeySubtypes.Serialize(writer, value, JsonWebKeySerializerOptions.Instance);
 }

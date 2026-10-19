@@ -14,6 +14,7 @@ namespace Abblix.Jwt;
 /// of JSON Web Keys. Authorization servers publish their JWK Set at the <c>jwks_uri</c>
 /// endpoint so that relying parties can discover the keys used to validate or encrypt tokens.
 /// </summary>
+[JsonConverter(typeof(JsonWebKeySetConverter))]
 public record JsonWebKeySet(JsonWebKey[] Keys)
 {
     /// <summary>

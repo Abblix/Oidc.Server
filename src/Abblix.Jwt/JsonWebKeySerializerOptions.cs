@@ -11,30 +11,36 @@ using System.Text.Json.Serialization;
 namespace Abblix.Jwt;
 
 /// <summary>
-/// The options a key's concrete subtype is serialized with: the host's naming and formatting, with absent members
-/// always omitted.
+/// The options a key and a key set are read and written with, whatever options the caller serializes them under.
 /// </summary>
+/// <remarks>
+/// A key is a protocol object other parties read member by member, so nothing the host chose for its own payloads
+/// reaches it: no converter of the host's, which would rewrite <c>kty</c> or <c>kid</c>, and no case-insensitive
+/// matching, which would read <c>KID</c> as <c>kid</c> here and not at a peer. Each member carries its own name, so
+/// no naming policy applies either, and indentation is the writer's.
+/// </remarks>
 internal static class JsonWebKeySerializerOptions
 {
     /// <summary>
-    /// A copy of the host's options that omits absent members whatever the host chose.
+    /// Member names matched exactly, unknown members ignored, absent members omitted and a member named twice
+    /// refused.
     /// </summary>
-    public static JsonSerializerOptions For(JsonSerializerOptions options)
+    public static JsonSerializerOptions Instance { get; } = Create();
+
+    private static JsonSerializerOptions Create()
     {
-        var result = new JsonSerializerOptions
+        var options = new JsonSerializerOptions
         {
             // A JWK omits an absent member rather than serializing it as null (RFC 7517): a public-only key
-            // carries no private-key parameters, so the JWKS must not emit "d": null etc. This is forced here,
-            // independent of the host's options, because it is a property of JWK serialization itself.
+            // carries no private-key parameters, so the JWKS must not emit "d": null etc.
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            PropertyNamingPolicy = options.PropertyNamingPolicy,
-            WriteIndented = options.WriteIndented,
-            PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive,
+
+            // RFC 7517 sections 4 and 5 let a parser either refuse a member named twice or take its last value.
+            // Refusing leaves no two parties reading one key differently
+            AllowDuplicateProperties = false,
         };
 
-        foreach (var converter in options.Converters)
-            result.Converters.Add(converter);
-
-        return result;
+        options.MakeReadOnly(populateMissingResolver: true);
+        return options;
     }
 }
