@@ -124,6 +124,8 @@ public class CompositeSignerKeyFloorTests
 
     private sealed class RecordingCustodian : ExternalKeys.IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public bool WasAsked { get; private set; }
 
         public Task<byte[]> SignAsync(

@@ -116,6 +116,8 @@ public class ExternalSignerTests
     /// </summary>
     private sealed class FakeCustodian(RsaJsonWebKey privateKey) : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int CallCount { get; private set; }
         public string? LastKid { get; private set; }
         public string? LastAlgorithm { get; private set; }

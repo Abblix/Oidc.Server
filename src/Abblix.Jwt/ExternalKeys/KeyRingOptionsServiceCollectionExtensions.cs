@@ -6,6 +6,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -40,6 +42,20 @@ internal static class KeyRingOptionsServiceCollectionExtensions
                 $"store's package, or register an {nameof(IKeyRingStore)} of your own.")
             .ValidateOnStart();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Arms the startup check that the custodian serves the algorithm the ring seals its keys under.
+    /// </summary>
+    /// <param name="services">The service collection the ring is registered in.</param>
+    /// <remarks>
+    /// The check reads the builder the ring's setup registers, so it judges the policy the ring runs on rather than
+    /// that of a later call no ring follows.
+    /// </remarks>
+    internal static IServiceCollection AddKeyWrapAlgorithmCheck(this IServiceCollection services)
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<KeyRingOptions>, KeyWrapAlgorithmCheck>());
         return services;
     }
 }

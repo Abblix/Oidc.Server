@@ -50,6 +50,20 @@ public sealed class KeyVaultClientTests : IDisposable
     }
 
     /// <summary>
+    /// Key Vault decrypts under the RSA algorithms and has no key agreement, which is what a host is held to at
+    /// startup.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes256KW, false)]
+    public void KeyVaultServes_TheRsaAlgorithms(string algorithm, bool served)
+        => Assert.Equal(served, ClientOver(new StubHttpMessageHandler(_ => throw new InvalidOperationException()))
+            .ServesKeyManagement(algorithm));
+
+    /// <summary>
     /// The client for a key version is kept while it is used, so signing again asks the vault for the key no second
     /// time, and let go once it has gone unused for the idle lifetime, so the clients of rotated versions and of
     /// tenants no longer served do not pile up: the next signature builds a new one, which asks for the key again.

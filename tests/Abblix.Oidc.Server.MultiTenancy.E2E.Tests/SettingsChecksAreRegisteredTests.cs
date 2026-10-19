@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.SharedSignals;
 using Abblix.SecurityEvents.Infrastructure;
 using SecurityEventsRegistration = Abblix.SecurityEvents.Infrastructure.ServiceCollectionExtensions;
@@ -34,9 +35,8 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// <remarks>
 /// The checks are found in the compiled packages, whatever settings type they judge, so a check added later is held
 /// here without anybody extending a list. The wiring is the full server with each feature a host turns on by a call of
-/// its own: backchannel authentication, device authorization, pairwise subject identifiers, a Shared Signals
-/// transmitter, and multi-tenancy with
-/// Shared Signals on top of it.
+/// its own: backchannel authentication, device authorization, pairwise subject identifiers, a key custodian and a key
+/// ring sealed to it, a Shared Signals transmitter, and multi-tenancy with Shared Signals on top of it.
 /// </remarks>
 public class SettingsChecksAreRegisteredTests
 {
@@ -64,6 +64,8 @@ public class SettingsChecksAreRegisteredTests
         services.AddDeviceAuthorization();
         services.AddPairwiseSubjectIdentifiers();
         services.AddOidcCore((_, _) => { });
+        services.RequireKeyPlacement();
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek" });
         services.AddSecurityEvents();
         services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {

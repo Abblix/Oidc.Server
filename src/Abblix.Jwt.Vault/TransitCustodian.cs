@@ -85,7 +85,7 @@ internal sealed partial class TransitCustodian(
         CancellationToken cancellationToken)
     {
         // The algorithm is the token sender's choice, so one Transit does not serve is a token that does not open.
-        if (algorithm != EncryptionAlgorithms.KeyManagement.RsaOaep256)
+        if (!ServesKeyManagement(algorithm))
         {
             LogAlgorithmNotServed(algorithm, keyId);
             return null;
@@ -106,6 +106,13 @@ internal sealed partial class TransitCustodian(
         var plaintext = response.Body(path).RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;
         return Convert.FromBase64String(plaintext);
     }
+
+    /// <summary>
+    /// Serves RSA-OAEP-256 alone: Transit's RSA decrypt provisions that padding only, and Transit has no key
+    /// agreement, so neither ECDH-ES nor any other algorithm opens.
+    /// </summary>
+    public bool ServesKeyManagement(string algorithm)
+        => algorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
     /// <summary>
     /// Refuses the ECDH-ES agreement with null. Vault Transit exposes no key-agreement primitive, so this store does

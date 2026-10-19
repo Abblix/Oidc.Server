@@ -138,6 +138,8 @@ builder.Services
 
 Implement only the operations your keys need, and the placement narrows that further: `UseKeysInProcess` calls only `UnwrapKeyAsync` (or `AgreeKeyAsync` for an EC key encryption key) and the version enumeration, because the signing runs in the process, while `UseKeysInCustodian` also needs `SignAsync`. A signing-only custodian leaves unwrap and agree unreachable. Address every private operation by the `kid` you published for that key version. Direct encryption (`dir`) and password-based key management (PBES2) have no external form, since the CEK is the secret itself or is derived from it, so they never route to a custodian and fail closed. The key management algorithm of an inbound token is the sender's choice, so answer one your custodian does not serve with null from `UnwrapKeyAsync` or `AgreeKeyAsync`, as you answer a ciphertext that does not open, and log it for the operator: an exception there turns any sender's token into a server fault.
 
+`ServesKeyManagement` says which key management algorithms your custodian opens, and its answer must match what `UnwrapKeyAsync` and `AgreeKeyAsync` actually open; a signing-only custodian answers false for every algorithm. The host is held to it at startup: a custodian-held encryption key published under an algorithm the custodian does not serve, or a key ring sealed under one, stops the host, and a tenant naming such an encryption key is refused when it is added.
+
 `AgreeKeyAsync` is the seam's answer to ECDH-ES. Neither Vault Transit nor Azure Key Vault exposes a key-agreement primitive, so their packages answer it with null; a backend that does offer one (AWS KMS `DeriveSharedSecret`, or a PKCS#11 HSM) can implement it against the same seam.
 
 ## Related

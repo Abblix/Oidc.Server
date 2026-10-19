@@ -7,6 +7,8 @@
 
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -26,6 +28,11 @@ internal static class KeyPlacementServiceCollectionExtensions
         services.AddOptions<KeyPlacementChoice>()
             .Validate(choice => choice.ChosenPlacement is not null, KeyPlacementChoice.PlacementNotChosenMessage)
             .ValidateOnStart();
+
+        // Armed with the custodian rather than with the call naming its keys, because a host may register the keys
+        // itself and then choose the placement without naming any; with no encryption key held the check passes
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<KeyPlacementChoice>, CustodianEncryptionAlgorithmCheck>());
 
         return new KeyCustodianBuilder(services);
     }

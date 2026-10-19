@@ -204,6 +204,8 @@ public class ExternalKeyDecryptorTests
     /// </summary>
     private sealed class FakeKeyCustodian(JsonWebKey fullKey) : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int UnwrapCalls { get; private set; }
         public int AgreeCalls { get; private set; }
 

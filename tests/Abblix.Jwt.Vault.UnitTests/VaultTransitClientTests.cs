@@ -48,6 +48,21 @@ public sealed class VaultTransitClientTests : IDisposable
     }
 
 
+    /// <summary>
+    /// Transit decrypts under RSA-OAEP-256 alone and has no key agreement, which is what a host is held to at startup.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes256KW, false)]
+    public void TransitServes_RsaOaep256Alone(string algorithm, bool served)
+        => Assert.Equal(
+            served,
+            ClientOver(new StubHttpMessageHandler((_, _) => throw new InvalidOperationException()), NullLogger<TransitCustodian>.Instance)
+                .ServesKeyManagement(algorithm));
+
     [Fact]
     public async Task AFailureIsLoggedWhereTheVaultsAnswerIsStillVisible()
     {

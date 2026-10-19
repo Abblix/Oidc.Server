@@ -125,6 +125,8 @@ public class JsonWebTokenSignerTests
     /// <summary>Signs under whatever algorithm it is asked for, checking nothing, and counts the requests.</summary>
     private sealed class CountingCustodian : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int SignCalls { get; private set; }
 
         public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
