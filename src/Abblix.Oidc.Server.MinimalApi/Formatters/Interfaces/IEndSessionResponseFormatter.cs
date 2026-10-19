@@ -21,5 +21,9 @@ public interface IEndSessionResponseFormatter
     /// Formats the end-session result: a front-channel-logout HTML page, a post-logout redirect, an empty 204, or an
     /// OAuth error.
     /// </summary>
+    /// <param name="request">The end-session request as it arrived, its <c>post_logout_redirect_uri</c> unchecked:
+    /// the address a successful logout may send the end user to is the one the response carries, and an address the
+    /// request names but no client confirms is dropped there.</param>
+    /// <param name="response">The end-session response to be formatted.</param>
     Task<IResult> FormatResponseAsync(EndSessionRequest request, Result<IEndSessionResponse, OidcError> response);
 }

@@ -14,8 +14,12 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Net.Http.Headers;
 using Xunit;
 using EndSessionParameters = Abblix.Oidc.Server.Model.EndSessionRequest.Parameters;
@@ -334,6 +338,73 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// With nobody signed in there is no session to end and nobody to ask, and the address no client confirms is still
+    /// not where the end user is sent: the answer is 204 with no Location.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_with_no_session_answers_no_content()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Replace(
+                ServiceDescriptor.Singleton<IAuthSessionService>(new MutableAuthSessionService(TimeProvider.System)))));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
+            [EndSessionParameters.State] = "af0ifjsldkj",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A client signed in to the session is still told of the logout through the framed page, and the page sends the
+    /// end user nowhere afterwards, since the request named no client to confirm the address it gave.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_notifies_through_a_page_that_navigates_nowhere()
+    {
+        await using var host = Factory.WithWebHostBuilder(_ => { });
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
+
+        var (_, challenge) = GeneratePkcePair();
+        await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        });
+
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+        });
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, $"/end_session failed: {(int)response.StatusCode} {body}");
+        Assert.Contains(FrontChannelLogoutUri.OriginalString, body);
+        Assert.DoesNotContain(RegisteredPostLogoutUri, body);
     }
 
     /// <summary>

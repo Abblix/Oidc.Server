@@ -22,7 +22,9 @@ public interface IEndSessionResponseFormatter
     /// <summary>
     /// Formats a response asynchronously for an end-session request and response.
     /// </summary>
-    /// <param name="request">The end-session request.</param>
+    /// <param name="request">The end-session request as it arrived, its <c>post_logout_redirect_uri</c> unchecked:
+    /// the address a successful logout may send the end user to is the one the response carries, and an address the
+    /// request names but no client confirms is dropped there.</param>
     /// <param name="response">The end-session response to be formatted.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation,
     /// with the formatted response as an <see cref="ActionResult"/>.</returns>
