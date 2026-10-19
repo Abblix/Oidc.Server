@@ -257,25 +257,7 @@ public static class ExternalKeysServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
 
         var builder = new MintedKeysBuilder(services, policy);
-
-        // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
-        // container knows nothing about: everything else the ring needs is resolved normally. It is read off the
-        // builder rather than captured, so a call chained after this one - AdoptExistingKeys - still reaches the
-        // ring: this factory runs when the container builds, by which time the whole chain has run. The partitions
-        // are the host's when it registered any, whichever side of this call it did, and the settings' otherwise.
-        services.TryAddSingleton(
-            serviceProvider => serviceProvider.CreateService<KeyRings>(
-                Dependency.Override(builder.Policy),
-                Dependency.Override(
-                    serviceProvider.GetService<IKeyRingPartitions>() ??
-                    serviceProvider.CreateService<OptionsKeyRingPartitions>())));
-
-        // Every contract is an alias to the one set of rings. Registering one with its own factory instead would
-        // build a SECOND ring: the refresh service would keep one current while every consumer read the other,
-        // which fails as a server publishing keys it never rotates.
-        services.TryAddSingleton<IKeyRings>(serviceProvider => serviceProvider.GetRequiredService<KeyRings>());
-        services.TryAddSingleton<IKeyRing>(serviceProvider =>
-            serviceProvider.GetRequiredService<KeyRings>().Ring(KeyRingOptions.DefaultPartition));
+        services.AddKeyRingParts(builder);
 
         // A partition names its entries in the store, so it must be a name every store accepts, and one the default
         // partition can tell from its own entries
