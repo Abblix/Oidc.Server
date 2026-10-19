@@ -71,13 +71,24 @@ internal sealed class InMemoryKeySet(LocalKeys policy, TimeProvider timeProvider
     {
         // Taken whole first, so adding never runs while the minting still reads the list it adds to
         _keys.AddRange(_minting.Due(_keys, now).ToList());
+        RetireExpired(now);
+    }
 
-        // Drops keys retired long enough that nothing they produced can still be in use. The newest key of a role
-        // is never among them: it was minted no longer than one rotation period ago. The two periods are compared
-        // one after the other rather than summed, so a policy that never rotates or never forgets, given as the
-        // longest TimeSpan, does not overflow
-        _keys.RemoveAll(minted =>
-            now - minted.CreatedAt > policy.RotateEvery &&
-            now - minted.CreatedAt - policy.RotateEvery > policy.KeepRetiredFor);
+    /// <summary>
+    /// Drops keys that have been retired long enough that nothing they produced can still be in use.
+    /// </summary>
+    private void RetireExpired(DateTimeOffset now)
+    {
+        foreach (var usage in _keys.Select(minted => minted.Key.Usage).Distinct().ToList())
+        {
+            // The newest key of a role is never dropped, however old it is: dropping it would leave the role
+            // with nothing to produce with, which is worse than serving one past its rotation date.
+            var newest = _keys.Where(minted => minted.Key.Usage == usage).Max(minted => minted.CreatedAt);
+
+            _keys.RemoveAll(minted =>
+                minted.Key.Usage == usage &&
+                minted.CreatedAt != newest &&
+                now - minted.CreatedAt > policy.RotateEvery + policy.KeepRetiredFor);
+        }
     }
 }

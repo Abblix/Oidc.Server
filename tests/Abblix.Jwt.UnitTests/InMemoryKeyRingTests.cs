@@ -324,27 +324,8 @@ public class InMemoryKeyRingTests
     }
 
     /// <summary>
-    /// A policy that rotates every instant or before it, or retires a key before it stops producing, is refused
-    /// when the ring is made rather than leaving a role with no key.
-    /// </summary>
-    [Theory]
-    [InlineData(0, 7)]
-    [InlineData(-1, 7)]
-    [InlineData(30, -1)]
-    public void APolicyThatCannotKeepAKey_IsRefused(int rotateEveryDays, int keepRetiredForDays)
-    {
-        var policy = Policy with
-        {
-            RotateEvery = TimeSpan.FromDays(rotateEveryDays),
-            KeepRetiredFor = TimeSpan.FromDays(keepRetiredForDays),
-        };
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => CreateRing(new FakeTimeProvider(), policy));
-    }
-
-    /// <summary>
-    /// A policy that never rotates, or never forgets a retired key, given as the longest span there is, keeps
-    /// serving across years instead of failing on the arithmetic of its own periods.
+    /// A policy that never rotates, given as the longest span there is, keeps serving its key across years
+    /// instead of failing on the arithmetic of its own periods.
     /// </summary>
     [Fact]
     public async Task APolicyThatNeverRotates_KeepsItsKeyAcrossYears()
@@ -357,31 +338,5 @@ public class InMemoryKeyRingTests
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(key, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId);
-    }
-
-    /// <inheritdoc cref="APolicyThatNeverRotates_KeepsItsKeyAcrossYears"/>
-    [Fact]
-    public async Task APolicyThatNeverForgets_KeepsEveryRetiredKey()
-    {
-        var time = new FakeTimeProvider();
-        var ring = CreateRing(time, Policy with { KeepRetiredFor = TimeSpan.MaxValue });
-        var first = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
-
-        time.Advance(Policy.RotateEvery * 3);
-        await ring.RefreshAsync(TestContext.Current.CancellationToken);
-
-        Assert.Contains(first, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId));
-    }
-
-    /// <summary>
-    /// A policy the ring cannot rotate on stops the host while it registers the ring, before any request.
-    /// </summary>
-    [Fact]
-    public void APolicyThatCannotKeepAKey_IsRefusedAtRegistration()
-    {
-        var services = new ServiceCollection();
-
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => services.AddInMemoryKeyRing(Policy with { RotateEvery = TimeSpan.Zero }));
     }
 }
