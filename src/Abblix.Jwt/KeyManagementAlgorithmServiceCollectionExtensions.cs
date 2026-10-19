@@ -20,8 +20,8 @@ internal static class KeyManagementAlgorithmServiceCollectionExtensions
     /// <summary>
     /// Registers dir, which uses the shared symmetric key as the content encryption key itself.
     /// </summary>
-    internal static IServiceCollection AddDirectKeyAgreement(this IServiceCollection services)
-        => services.AddKeyManagementAlgorithm<OctetJsonWebKey, DirectKeyAgreement>(
+    internal static IServiceCollection AddDirectEncryption(this IServiceCollection services)
+        => services.AddKeyManagementAlgorithm<OctetJsonWebKey, DirectEncryption>(
             EncryptionAlgorithms.KeyManagement.Dir);
 
     /// <summary>

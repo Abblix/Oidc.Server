@@ -12,7 +12,8 @@ using KeyManagement = Abblix.Jwt.EncryptionAlgorithms.KeyManagement;
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Registers the JWE algorithms: the key-management ones keyed by 'alg' and the content encryptors keyed by 'enc'.
+/// Enables the JWE key-management algorithms <see cref="ServiceCollectionExtensions.AddJsonWebTokens"/> deliberately
+/// leaves out: RSA1_5 and PBES2.
 /// </summary>
 public static class EncryptionServiceCollectionExtensions
 {

@@ -10,7 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// Direct Key Agreement implementation for JWE (JSON Web Encryption).
+/// Direct Encryption with a Shared Symmetric Key for JWE (JSON Web Encryption).
 /// Uses a shared symmetric key directly as the Content Encryption Key without any key encryption.
 /// Implements RFC 7518 Section 4.5 (Direct Encryption with a Shared Symmetric Key).
 /// </summary>
@@ -22,19 +22,19 @@ namespace Abblix.Jwt.Encryption;
 /// Per RFC 7518 Section 4.5, the "encrypted_key" value is the empty octet sequence.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
-internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebKey>
+internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey>
 {
 	/// <summary>
-	/// Initializes DirectKeyAgreement with algorithm validation.
+	/// Initializes DirectEncryption with algorithm validation.
 	/// </summary>
 	/// <param name="algorithm">Must be "dir" per RFC 7518 Section 4.5.</param>
 	/// <exception cref="ArgumentException">Thrown when algorithm is not "dir".</exception>
-	public DirectKeyAgreement(string algorithm)
+	public DirectEncryption(string algorithm)
 	{
 		if (!EncryptionAlgorithms.KeyManagement.Dir.Equals(algorithm, StringComparison.Ordinal))
 		{
 			throw new ArgumentException(
-				$"DirectKeyAgreement only supports '{EncryptionAlgorithms.KeyManagement.Dir}' algorithm, but '{algorithm}' was provided",
+				$"{nameof(DirectEncryption)} only supports '{EncryptionAlgorithms.KeyManagement.Dir}' algorithm, but '{algorithm}' was provided",
 				nameof(algorithm));
 		}
 	}

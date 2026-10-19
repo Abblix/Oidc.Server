@@ -33,7 +33,7 @@ internal static class KeyManagementServiceCollectionExtensions
             .AddKeyManagementAlgorithm<OctetJsonWebKey, AesKeyWrapEncryptor>(KeyManagement.Aes192KW)
             .AddKeyManagementAlgorithm<OctetJsonWebKey, AesKeyWrapEncryptor>(KeyManagement.Aes256KW)
 
-            .AddDirectKeyAgreement()
+            .AddDirectEncryption()
 
             .AddKeyManagementAlgorithm<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(KeyManagement.EcdhEs)
             .AddKeyManagementAlgorithm<EllipticCurveJsonWebKey, EcdhEsKeyEncryptor>(KeyManagement.EcdhEsAes128KW)
