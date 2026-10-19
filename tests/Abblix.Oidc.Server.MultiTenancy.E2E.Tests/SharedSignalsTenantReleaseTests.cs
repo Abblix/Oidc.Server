@@ -171,13 +171,13 @@ public sealed class SharedSignalsTenantReleaseTests
     private static async Task<int> DispatchAsync(WebApplication app, TenantDefinition tenant, CancellationToken ct)
     {
         using var scope = TenantScope.Enter(tenant);
-        return await app.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
+        return (await app.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
             new SecurityEventDescriptor
             {
                 EventType = MembershipChanged,
                 Subject = new EmailSubject("jdoe@example.com"),
             },
-            ct);
+            ct)).Reached;
     }
 
     private static HttpClient ClientOf(WebApplication app, string tenantId, string receiverId = ReceiverId)

@@ -270,7 +270,7 @@ public sealed class TransmitterTelemetryTests : IDisposable
         Assert.True(await store.TryCreateAsync(stream, ct));
         var dispatcher = Dispatcher(store, new InMemoryEventOutbox());
 
-        Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));
+        Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), ct)).Reached);
         await dispatcher.DispatchToStreamAsync(stream, Descriptor(), cancellationToken: ct);
 
         var transmitted = _measurements.Where(m => m.Name == SharedSignalsMetrics.EventsTransmitted).ToArray();
@@ -291,7 +291,7 @@ public sealed class TransmitterTelemetryTests : IDisposable
         var store = new InMemoryStreamStore();
         Assert.True(await store.TryCreateAsync(DispatchedStream(StreamId), ct));
         var outbox = new InMemoryEventOutbox();
-        Assert.Equal(1, await Dispatcher(store, outbox).DispatchAsync(Descriptor(), ct));
+        Assert.Equal(1, (await Dispatcher(store, outbox).DispatchAsync(Descriptor(), ct)).Reached);
 
         var receiver = new StubHttpHandler();
         await SendPendingAsync(receiver, outbox, signer: new QueuedEventSigner(new FailingSigner()));

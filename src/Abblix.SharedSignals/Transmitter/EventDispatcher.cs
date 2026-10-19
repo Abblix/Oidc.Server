@@ -59,60 +59,140 @@ public sealed partial class EventDispatcher(
     /// Dispatches one event to every stream it matches.
     /// </summary>
     /// <param name="descriptor">The event as the application states it.</param>
-    /// <param name="cancellationToken">Cancels store reads, policy calls and signing.</param>
-    /// <returns>How many streams the event was enqueued for - zero is a legitimate answer for
-    /// an event nobody subscribed to.</returns>
-    public async Task<int> DispatchAsync(
+    /// <param name="cancellationToken">
+    /// Cancels store reads, policy calls and signing. A cancelled dispatch throws, and the streams it had already
+    /// reached keep the event.
+    /// </param>
+    /// <returns>How many streams the event was enqueued for, and the streams it failed on.</returns>
+    /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
+    public async Task<DispatchResult> DispatchAsync(
         SecurityEventDescriptor descriptor,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         RefuseIfOutsidePolicy(descriptor);
 
-        var reached = 0;
-        foreach (var stream in await streams.ListAllAsync(cancellationToken))
+        return await DispatchToAsync(
+            descriptor, await streams.ListAllAsync(cancellationToken), [], cancellationToken);
+    }
+
+    /// <summary>
+    /// Dispatches one event again to the given streams alone - the ones an earlier dispatch reported as not
+    /// reached - so the streams that already hold it do not get it a second time under a new identifier.
+    /// </summary>
+    /// <param name="descriptor">The event, as it was dispatched the first time.</param>
+    /// <param name="streamsToReach">The streams to try. Any other stream is left alone.</param>
+    /// <param name="cancellationToken">
+    /// Cancels store reads, policy calls and signing. A cancelled dispatch throws, and the streams it had already
+    /// reached keep the event.
+    /// </param>
+    /// <returns>How many of the streams the event was enqueued for, and the ones it failed on again.</returns>
+    /// <remarks>
+    /// Each stream is read again and held to every check a full dispatch makes, so the event does not reach a
+    /// stream disabled since the first attempt, one that no longer takes the event or its subject, one the sharing
+    /// policy now refuses, or one that no longer exists - each of those is simply not reached, as it would not be
+    /// by a full dispatch made now.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
+    public async Task<DispatchResult> DispatchAsync(
+        SecurityEventDescriptor descriptor,
+        IEnumerable<StreamReference> streamsToReach,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(streamsToReach);
+        RefuseIfOutsidePolicy(descriptor);
+
+        var found = new List<StreamState>();
+        var notReached = new List<StreamReference>();
+        foreach (var reference in streamsToReach.Distinct())
         {
-            // A disabled stream holds nothing (Section 8.1.2.1); a paused one is enqueued for -
-            // holding events IS the outbox waiting, and same-principal order is enqueue order.
-            if (stream.Status == StreamStatuses.Disabled)
-            {
-                continue;
-            }
-
-            if (stream.Configuration.EventsDelivered is not { } delivered
-                || !delivered.Contains(descriptor.EventType, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            if (!CoversSubject(stream, descriptor.Subject))
-            {
-                continue;
-            }
-
-            // The sharing policy runs last, so it is consulted only about deliveries that would
-            // otherwise happen - its cost and its logs both scale with reality.
-            if (sharingPolicy is not null
-                && !await sharingPolicy.IsSharingPermittedAsync(stream, descriptor, cancellationToken))
-            {
-                continue;
-            }
-
-            // One stream's failure is one stream's. Letting it out of the loop would drop the
-            // fan-out to every stream after it AND lose the count with the exception, so a caller
-            // would learn neither who received the event nor that anybody had.
             try
             {
-                await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
-                reached++;
+                if (await streams.FindAsync(reference.ReceiverId, reference.StreamId, cancellationToken) is { } stream)
+                {
+                    found.Add(stream);
+                }
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                LogStreamNotReached(exception, reference.StreamId, descriptor.EventType);
+                notReached.Add(reference);
+            }
+        }
+
+        return await DispatchToAsync(descriptor, found, notReached, cancellationToken);
+    }
+
+    /// <summary>
+    /// Puts the event into every one of <paramref name="candidates"/> it matches, adding the ones it fails on to
+    /// <paramref name="notReached"/>.
+    /// </summary>
+    private async Task<DispatchResult> DispatchToAsync(
+        SecurityEventDescriptor descriptor,
+        IEnumerable<StreamState> candidates,
+        List<StreamReference> notReached,
+        CancellationToken cancellationToken)
+    {
+        var reached = 0;
+        foreach (var stream in candidates)
+        {
+            // One stream's failure is one stream's, the host's sharing policy included. Letting it out of the loop
+            // would drop the fan-out to every stream after it AND lose the count with the exception, so a caller
+            // would learn neither who received the event nor who did not.
+            try
+            {
+                if (await DispatchIfMatchingAsync(stream, descriptor, cancellationToken))
+                {
+                    reached++;
+                }
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 LogStreamNotReached(exception, stream.StreamId, descriptor.EventType);
+                notReached.Add(new StreamReference(stream.ReceiverId, stream.StreamId));
             }
         }
 
-        return reached;
+        return new DispatchResult(reached, notReached);
+    }
+
+    /// <summary>
+    /// Puts the event into the stream's outbox if the stream takes it, and says whether it did.
+    /// </summary>
+    private async Task<bool> DispatchIfMatchingAsync(
+        StreamState stream,
+        SecurityEventDescriptor descriptor,
+        CancellationToken cancellationToken)
+    {
+        // A disabled stream holds nothing (Section 8.1.2.1); a paused one is enqueued for -
+        // holding events IS the outbox waiting, and same-principal order is enqueue order.
+        if (stream.Status == StreamStatuses.Disabled)
+        {
+            return false;
+        }
+
+        if (stream.Configuration.EventsDelivered is not { } delivered
+            || !delivered.Contains(descriptor.EventType, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        if (!CoversSubject(stream, descriptor.Subject))
+        {
+            return false;
+        }
+
+        // The sharing policy runs last, so it is consulted only about deliveries that would
+        // otherwise happen - its cost and its logs both scale with reality.
+        if (sharingPolicy is not null
+            && !await sharingPolicy.IsSharingPermittedAsync(stream, descriptor, cancellationToken))
+        {
+            return false;
+        }
+
+        await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
+        return true;
     }
 
     /// <summary>

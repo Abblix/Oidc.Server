@@ -133,7 +133,7 @@ public class EventDispatcherTests
             NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
 
         identity.Issuer = "https://second.example.com";
-        Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), ct));
+        Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), ct)).Reached);
 
         Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1")).Issuer);
     }
@@ -154,7 +154,7 @@ public class EventDispatcherTests
         var (dispatcher, outbox) = await CreateDispatcherAsync(
             policy: null,
             CreateStream("s-1", mode: StreamSubjectsMode.All));
-        Assert.Equal(1, await dispatcher.DispatchAsync(Descriptor(), TestContext.Current.CancellationToken));
+        Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), TestContext.Current.CancellationToken)).Reached);
         var item = Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
 
         var asReadBefore = JsonSerializer.Deserialize<PreviousOutboxItem>(JsonSerializer.Serialize(item));
@@ -172,8 +172,8 @@ public class EventDispatcherTests
             policy: null,
             CreateStream("s-1", added: [new StreamSubject(subject, Verified: true)]));
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(subject), TestContext.Current.CancellationToken);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(subject), TestContext.Current.CancellationToken)).Reached;
 
         Assert.Equal(1, reached);
         var minted = Assert.Single(await MintedAsync(outbox, "s-1"));
@@ -206,8 +206,8 @@ public class EventDispatcherTests
             policy: null,
             CreateStream("s-1", mode: mode));
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(subject), TestContext.Current.CancellationToken);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(subject), TestContext.Current.CancellationToken)).Reached;
 
         Assert.Equal(expected, reached);
         Assert.Equal(
@@ -227,8 +227,8 @@ public class EventDispatcherTests
             CreateStream("disabled", status: StreamStatuses.Disabled, added: [covering]),
             CreateStream("paused", status: StreamStatuses.Paused, added: [covering]));
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(subject), TestContext.Current.CancellationToken);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(subject), TestContext.Current.CancellationToken)).Reached;
 
         // Of the four, only the paused stream takes the event: pausing HOLDS events for later
         // (SSF 1.0 Section 8.1.2.1), and the hold is the outbox nobody drains.
@@ -247,10 +247,10 @@ public class EventDispatcherTests
             policy: null,
             CreateStream("s-all", mode: StreamSubjectsMode.All, removed: [removed]));
 
-        Assert.Equal(1, await dispatcher.DispatchAsync(
-            Descriptor(new EmailSubject("anyone@example.com")), TestContext.Current.CancellationToken));
-        Assert.Equal(0, await dispatcher.DispatchAsync(
-            Descriptor(removed), TestContext.Current.CancellationToken));
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
+            Descriptor(new EmailSubject("anyone@example.com")), TestContext.Current.CancellationToken)).Reached);
+        Assert.Equal(0, (await dispatcher.DispatchAsync(
+            Descriptor(removed), TestContext.Current.CancellationToken)).Reached);
 
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-all", null, TestContext.Current.CancellationToken));
     }
@@ -265,8 +265,8 @@ public class EventDispatcherTests
             new DenyAllPolicy(),
             CreateStream("s-1", added: [new StreamSubject(subject, Verified: true)]));
 
-        Assert.Equal(0, await dispatcher.DispatchAsync(
-            Descriptor(subject), TestContext.Current.CancellationToken));
+        Assert.Equal(0, (await dispatcher.DispatchAsync(
+            Descriptor(subject), TestContext.Current.CancellationToken)).Reached);
         Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
     }
 

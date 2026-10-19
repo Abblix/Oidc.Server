@@ -74,6 +74,12 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+The call returns how many streams took the event and which streams it failed on, for example because the
+outbox store did not answer. An event that no stream takes is a normal outcome, not a failure. If you send events
+from a queue of your own, keep the entry until `NotReached` is empty, and retry with the overload that takes those
+streams. That overload reads each stream again and runs every check, and it does not send the event a second time
+to the streams that already have it.
+
 ## A receiver
 
 ```csharp

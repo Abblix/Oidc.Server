@@ -308,13 +308,13 @@ public sealed class SharedSignalsTenantIsolationTests
     {
         var tenant = await app.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync(tenantId, ct);
         using var scope = TenantScope.Enter(tenant!);
-        return await app.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
+        return (await app.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
             new SecurityEventDescriptor
             {
                 EventType = MembershipChanged,
                 Subject = new EmailSubject("jdoe@example.com"),
             },
-            ct);
+            ct)).Reached;
     }
 
     private static async Task<JsonNode> KeySetOfAsync(HttpClient http, string tenant, CancellationToken ct)
