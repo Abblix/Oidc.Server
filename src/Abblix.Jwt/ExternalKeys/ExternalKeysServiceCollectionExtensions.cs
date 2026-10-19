@@ -279,6 +279,9 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="services">The service collection to add to.</param>
     /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
     /// <returns>The same collection, so calls chain.</returns>
+    /// <exception cref="InvalidOperationException">An <see cref="IKeyRingStore"/> is registered.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="LocalKeys.RotateEvery"/> is not positive, or
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is negative.</exception>
     /// <remarks>
     /// The answer for a host with no HSM or KMS, which is most of them. It rotates, and it keeps retired keys
     /// long enough that what they produced stays readable - the two things a ring is for.
@@ -301,6 +304,10 @@ public static class ExternalKeysServiceCollectionExtensions
                 + $"{nameof(IKeyRingStore)} is registered, which is how keys are shared between processes. "
                 + $"The store would be ignored. Use {nameof(AddKeyRing)} with a custodian to share keys, or "
                 + "drop the store if a single instance is intended.");
+
+        // Refused here as well as when the ring is made, so a policy the ring cannot rotate on stops the host while
+        // it registers rather than at the first request for a key
+        InMemoryKeyMinting.EnsureRotatable(policy);
 
         // The ring reads the clock, and this package is consumable without the registrations that would otherwise
         // have supplied one.

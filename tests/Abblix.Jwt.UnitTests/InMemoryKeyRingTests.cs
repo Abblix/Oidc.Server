@@ -277,12 +277,20 @@ public class InMemoryKeyRingTests
 
         var due = DateTimeOffset.UnixEpoch + Policy.RotateEvery + TimeSpan.FromDays(1);
         string? first = null;
+        Exception? failure = null;
         var firstThread = new Thread(() =>
         {
             moment.Value = due;
             holdNextRead.Value = true;
-            first = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId;
-        });
+            try
+            {
+                first = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId;
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }) { IsBackground = true };
         firstThread.Start();
         Assert.True(held.Wait(TimeSpan.FromSeconds(5), ct));
 
@@ -290,16 +298,27 @@ public class InMemoryKeyRingTests
         var secondThread = new Thread(() =>
         {
             moment.Value = due + TimeSpan.FromSeconds(1);
-            second = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId;
-        });
+            try
+            {
+                second = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).First().KeyId;
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }) { IsBackground = true };
         secondThread.Start();
 
-        // The second request gets as far as it can while the first is held in its clock read
-        secondThread.Join(TimeSpan.FromMilliseconds(500));
+        // The second request gets as far as it can while the first is held in its clock read: waiting, or done
+        Assert.True(SpinWait.SpinUntil(
+            () => secondThread.ThreadState.HasFlag(ThreadState.WaitSleepJoin) ||
+                  secondThread.ThreadState.HasFlag(ThreadState.Stopped),
+            TimeSpan.FromSeconds(5)));
         release.Set();
         Assert.True(firstThread.Join(TimeSpan.FromSeconds(5)));
         Assert.True(secondThread.Join(TimeSpan.FromSeconds(5)));
 
+        Assert.Null(failure);
         Assert.NotEqual(retired, first);
         Assert.Equal(first, second);
     }
@@ -321,5 +340,48 @@ public class InMemoryKeyRingTests
         };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => CreateRing(new FakeTimeProvider(), policy));
+    }
+
+    /// <summary>
+    /// A policy that never rotates, or never forgets a retired key, given as the longest span there is, keeps
+    /// serving across years instead of failing on the arithmetic of its own periods.
+    /// </summary>
+    [Fact]
+    public async Task APolicyThatNeverRotates_KeepsItsKeyAcrossYears()
+    {
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time, Policy with { RotateEvery = TimeSpan.MaxValue });
+        var key = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
+
+        time.Advance(TimeSpan.FromDays(3650));
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(key, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId);
+    }
+
+    /// <inheritdoc cref="APolicyThatNeverRotates_KeepsItsKeyAcrossYears"/>
+    [Fact]
+    public async Task APolicyThatNeverForgets_KeepsEveryRetiredKey()
+    {
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time, Policy with { KeepRetiredFor = TimeSpan.MaxValue });
+        var first = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single().KeyId;
+
+        time.Advance(Policy.RotateEvery * 3);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(first, ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId));
+    }
+
+    /// <summary>
+    /// A policy the ring cannot rotate on stops the host while it registers the ring, before any request.
+    /// </summary>
+    [Fact]
+    public void APolicyThatCannotKeepAKey_IsRefusedAtRegistration()
+    {
+        var services = new ServiceCollection();
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => services.AddInMemoryKeyRing(Policy with { RotateEvery = TimeSpan.Zero }));
     }
 }

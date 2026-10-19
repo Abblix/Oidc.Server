@@ -22,6 +22,18 @@ internal sealed class InMemoryKeyMinting
     /// before it stops producing.</exception>
     public InMemoryKeyMinting(LocalKeys policy)
     {
+        EnsureRotatable(policy);
+        _policy = policy;
+    }
+
+    /// <summary>
+    /// Refuses a policy the ring cannot rotate on without leaving a role with no key.
+    /// </summary>
+    /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The policy rotates every instant or sooner, or retires a key
+    /// before it stops producing.</exception>
+    public static void EnsureRotatable(LocalKeys policy)
+    {
         // Each rotation mints before it retires, at one moment, so a role's newest key is younger than one rotation
         // period when retirement looks at it. Both bounds keep it there, and so keep every role with a key.
         if (policy.RotateEvery <= TimeSpan.Zero)
@@ -29,7 +41,7 @@ internal sealed class InMemoryKeyMinting
             throw new ArgumentOutOfRangeException(
                 nameof(policy),
                 policy.RotateEvery,
-                $"{nameof(LocalKeys.RotateEvery)} must be longer than zero.");
+                $"{nameof(LocalKeys.RotateEvery)} must be positive.");
         }
 
         if (policy.KeepRetiredFor < TimeSpan.Zero)
@@ -39,8 +51,6 @@ internal sealed class InMemoryKeyMinting
                 policy.KeepRetiredFor,
                 $"{nameof(LocalKeys.KeepRetiredFor)} must not be negative.");
         }
-
-        _policy = policy;
     }
 
     /// <summary>

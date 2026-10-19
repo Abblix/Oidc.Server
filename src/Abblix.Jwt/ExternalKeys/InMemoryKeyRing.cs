@@ -32,6 +32,8 @@ public sealed class InMemoryKeyRing : IKeyRing
     /// <summary>
     /// Creates the ring.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="LocalKeys.RotateEvery"/> is not positive, or
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is negative.</exception>
     public InMemoryKeyRing(LocalKeys policy, IOptions<KeyRingOptions> options, TimeProvider timeProvider)
     {
         _options = options.Value;

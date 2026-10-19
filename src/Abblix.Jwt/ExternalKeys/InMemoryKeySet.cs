@@ -73,7 +73,11 @@ internal sealed class InMemoryKeySet(LocalKeys policy, TimeProvider timeProvider
         _keys.AddRange(_minting.Due(_keys, now).ToList());
 
         // Drops keys retired long enough that nothing they produced can still be in use. The newest key of a role
-        // is never among them: it was minted no longer than one rotation period ago
-        _keys.RemoveAll(minted => now - minted.CreatedAt > policy.RotateEvery + policy.KeepRetiredFor);
+        // is never among them: it was minted no longer than one rotation period ago. The two periods are compared
+        // one after the other rather than summed, so a policy that never rotates or never forgets, given as the
+        // longest TimeSpan, does not overflow
+        _keys.RemoveAll(minted =>
+            now - minted.CreatedAt > policy.RotateEvery &&
+            now - minted.CreatedAt - policy.RotateEvery > policy.KeepRetiredFor);
     }
 }
