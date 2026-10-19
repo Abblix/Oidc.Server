@@ -12,8 +12,8 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// Named EventId constants for every <c>[LoggerMessage]</c> in this assembly.
 /// </summary>
 /// <remarks>
-/// This assembly logs into the same process as Abblix.Oidc.Server, whose ranges end at 10499; this one takes
-/// 10500-10599, and the core's allocation notes it.
+/// This assembly logs into the same process as Abblix.Oidc.Server and takes 10500-10599, a window inside the
+/// core's numbers; the allocation of Abblix.Oidc.Server lists the window of every package.
 /// </remarks>
 internal static class LogEvents
 {

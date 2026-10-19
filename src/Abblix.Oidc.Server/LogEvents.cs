@@ -26,7 +26,9 @@ namespace Abblix.Oidc.Server;
 /// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11099, less the two windows below;
 /// Abblix.Oidc.Server.AspNetCore 10500-10599; Abblix.Oidc.Server.SharedSignals 10800-10899;
 /// Abblix.Jwt.Vault 12000-12299; Abblix.Jwt.Azure 13000-13199; Abblix.SecurityEvents 14000-14199;
-/// Abblix.SharedSignals 15000-15099. A new package takes the next free thousand.
+/// Abblix.SharedSignals 15000-15099. A new package takes the next free thousand. A package's window moves only in a
+/// major version and only when it overlaps another package's, and the release notes give the old and the new
+/// numbers, since every alert keyed on the old ones stops firing.
 /// </remarks>
 internal static class LogEvents
 {

@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using Xunit;
@@ -28,6 +29,19 @@ internal static class BuiltAssemblies
     private static readonly Lazy<IReadOnlyList<Assembly>> Loaded = new(Load);
 
     public static IReadOnlyList<Assembly> All => Loaded.Value;
+
+    /// <summary>
+    /// The assemblies built from <c>src</c>, which are the packages a deployment runs, the tests and their hosts left
+    /// out by where they are built rather than by what they are called.
+    /// </summary>
+    /// <remarks>
+    /// Told apart by the names of the files found under <c>src</c> rather than by where each assembly was loaded
+    /// from: a package this test assembly references is loaded from beside it, before this walk runs.
+    /// </remarks>
+    public static IEnumerable<Assembly> Library
+        => All.Where(assembly => SourceNames.Contains(assembly.GetName().Name!));
+
+    private static readonly HashSet<string> SourceNames = new(StringComparer.OrdinalIgnoreCase);
 
     private static IReadOnlyList<Assembly> Load()
     {
@@ -59,9 +73,13 @@ internal static class BuiltAssemblies
                 // beside only its own consumer is otherwise missing at exactly that moment.
                 neighbours.TryAdd(file, path);
 
+                if (!file.StartsWith("Abblix.", StringComparison.Ordinal))
+                    continue;
+
                 // The first copy wins, and every copy is built from this same tree in the same run.
-                if (file.StartsWith("Abblix.", StringComparison.Ordinal))
-                    byName.TryAdd(file, path);
+                byName.TryAdd(file, path);
+                if (area == "src")
+                    SourceNames.Add(Path.GetFileNameWithoutExtension(file));
             }
         }
 

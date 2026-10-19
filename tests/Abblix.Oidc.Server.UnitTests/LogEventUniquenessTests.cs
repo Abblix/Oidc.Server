@@ -8,9 +8,9 @@
 
 using System;
 using System.Collections.Generic;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System.Linq;
 using System.Reflection;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests;
@@ -91,7 +91,7 @@ public class LogEventUniquenessTests
     private static IReadOnlyList<(int Id, string Name, string Package)> EventIds()
     {
         var found = new List<(int, string, string)>();
-        foreach (var assembly in LibraryAssemblies())
+        foreach (var assembly in BuiltAssemblies.Library)
         {
             var package = assembly.GetName().Name!;
             foreach (var type in assembly.GetTypes().Where(type => type is { Name: "LogEvents", DeclaringType: null }))
@@ -100,18 +100,6 @@ public class LogEventUniquenessTests
 
         return found;
     }
-
-    /// <summary>
-    /// The library's assemblies, the test assemblies and the hosts they start excluded: a test may declare
-    /// event ids of its own, and nothing a test logs reaches a deployment.
-    /// </summary>
-    private static IEnumerable<Assembly> LibraryAssemblies()
-        =>
-            from assembly in BuiltAssemblies.All
-            let name = assembly.GetName().Name!
-            where !name.Contains("Test", StringComparison.Ordinal) &&
-                  !name.Contains("DocSamples", StringComparison.Ordinal)
-            select assembly;
 
     private static void Collect(Type type, string package, string prefix, List<(int, string, string)> found)
     {
