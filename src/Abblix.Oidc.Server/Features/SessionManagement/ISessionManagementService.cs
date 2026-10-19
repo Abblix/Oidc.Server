@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.SessionManagement;
@@ -29,9 +30,11 @@ public interface ISessionManagementService
     /// Retrieves the session cookie that is used for managing the user's session. This cookie can be used to persist session
     /// information across browser requests and to facilitate session management operations.
     /// </summary>
+    /// <param name="persistence">How the user agent keeps the session the cookie tracks, so a session that survives a
+    /// browser restart is not reported as changed after one. Null for a cookie written only to be removed.</param>
     /// <returns>A <see cref="Cookie"/> object configured for session management, containing details such as the cookie name,
     /// value, path, and security settings.</returns>
-    Cookie GetSessionCookie();
+    Cookie GetSessionCookie(SessionPersistence? persistence = null);
 
     /// <summary>
     /// Generates a session state string that represents the current state of the user's session. This string can be used

@@ -197,6 +197,7 @@ public class AuthorizationRequestProcessor(
 			[..await sessionClients.GetClientsAsync(authSession.SessionId)])
 		{
 			GrantedScopes = authContext.Scope,
+			SessionPersistence = authSession.Persistence,
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);

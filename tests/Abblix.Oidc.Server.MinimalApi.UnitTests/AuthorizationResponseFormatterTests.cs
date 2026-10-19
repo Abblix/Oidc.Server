@@ -145,7 +145,7 @@ public class AuthorizationResponseFormatterTests
     private sealed class NoSessionManagement : ISessionManagementService
     {
         public bool Enabled => false;
-        public Cookie GetSessionCookie() => throw new NotSupportedException();
+        public Cookie GetSessionCookie(Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence? persistence = null) => throw new NotSupportedException();
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
 

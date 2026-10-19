@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -56,7 +57,7 @@ public class SessionManagementService(
     ///     <item><c>Secure</c> - Set based on the current request's HTTPS status (required when SameSite=None)</item>
     /// </list>
     /// </remarks>
-    public Cookie GetSessionCookie()
+    public Cookie GetSessionCookie(SessionPersistence? persistence = null)
     {
         var cookieOptions = options.Value.CheckSessionCookie;
         var path = cookieOptions.Path;
@@ -71,6 +72,7 @@ public class SessionManagementService(
                 Path = !string.IsNullOrEmpty(path) ? path : requestInfoProvider.PathBase,
                 Domain = cookieOptions.Domain,
                 SameSite = cookieOptions.SameSite,
+                Expires = persistence is SessionPersistence.Persistent { ExpiresAt: var expiresAt } ? expiresAt : null,
             });
     }
 

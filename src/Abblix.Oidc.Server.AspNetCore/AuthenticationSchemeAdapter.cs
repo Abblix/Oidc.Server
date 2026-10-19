@@ -50,30 +50,10 @@ public class AuthenticationSchemeAdapter(
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
 	/// <summary>
-	/// Claim names this adapter manages itself (the standard OIDC session claims). They are emitted from the typed
-	/// <see cref="AuthSession"/> fields, so they must never be re-emitted from <see cref="AuthSession.AdditionalClaims"/>
-	/// (a host- or browser-supplied additional claim keyed on one of these must not shadow the managed value), and they
-	/// are excluded when reconstructing additional claims on read. A single set keeps the write-skip and the read-exclude
-	/// from drifting apart.
-	/// </summary>
-	private static readonly HashSet<string> ReservedClaimTypes =
-	[
-		SignedInAtClaimType,
-		TenantClaimType,
-		JwtClaimTypes.Subject,
-		IanaClaimTypes.Sid,
-		IanaClaimTypes.AuthTime,
-		IanaClaimTypes.Acr,
-		IanaClaimTypes.Email,
-		IanaClaimTypes.EmailVerified,
-		IanaClaimTypes.Amr,
-	];
-
-	/// <summary>
 	/// The claim the cookie keeps the moment a session was signed in under. It is the adapter's own, so it is reserved
 	/// and never read back as an additional claim a token would carry.
 	/// </summary>
-	private const string SignedInAtClaimType = "abblix_signed_in_at";
+	internal const string SignedInAtClaimType = "abblix_signed_in_at";
 
 	/// <summary>
 	/// The claim the cookie keeps the tenant a session was signed in at under, its id and creation, as the partition
@@ -84,7 +64,7 @@ public class AuthenticationSchemeAdapter(
 	/// or a path it widened. Read there without this, the session would stand for that tenant's user of the same
 	/// subject, who need not be the same person.
 	/// </remarks>
-	private const string TenantClaimType = "abblix_tenant";
+	internal const string TenantClaimType = "abblix_tenant";
 
 	/// <summary>
 	/// The request item holding the session this scheme last wrote for the current tenant, or null once it signed out,
@@ -163,9 +143,11 @@ public class AuthenticationSchemeAdapter(
 		if (CurrentTenant is not { } tenant)
 			return null;
 
-		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
-		return authenticationResult.Succeeded && IsOf(tenant, authenticationResult.Principal)
-			? ReadSession(authenticationResult.Principal)
+		var authenticationResult = await SessionCookie.AuthenticateAsync(HttpContext, authenticationScheme);
+		return authenticationResult.Succeeded &&
+		       IsOf(tenant, authenticationResult.Principal) &&
+		       ReadSession(authenticationResult.Principal) is { } authSession
+			? SessionCookie.Read(authSession, authenticationResult)
 			: null;
 	}
 
@@ -272,7 +254,7 @@ public class AuthenticationSchemeAdapter(
 			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
 
 		// Extract additional claims (exclude standard claims)
-		var additionalClaims = ExtractAdditionalClaims(principal);
+		var additionalClaims = AdditionalSessionClaims.Read(principal);
 		if (additionalClaims.Count > 0)
 			authSession = authSession with { AdditionalClaims = additionalClaims };
 
@@ -300,19 +282,24 @@ public class AuthenticationSchemeAdapter(
 			"Sign the end user in under the path of the tenant they sign in to.");
 
 		var replaced = await AuthenticateAsync();
+		var sameEndUser = replaced != null &&
+		                  string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal);
 		AuthSession[] endedSessions = [];
-		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
-			authSession = authSession with { SessionId = replaced.SessionId };
+		if (sameEndUser)
+			authSession = authSession with { SessionId = replaced!.SessionId };
 		else if (replaced != null)
 			endedSessions = [replaced];
 
+		// A re-authentication or a step-up that states nothing keeps the cookie as the end user had it
+		authSession = SessionCookie.Resolve(authSession, sameEndUser ? replaced : null);
+
 		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, tenant);
 
-		await HttpContext.SignInAsync(authenticationScheme, principal);
+		await SessionCookie.SignInAsync(HttpContext, authenticationScheme, principal, authSession);
 
 		// What the next request will read from this cookie, rather than the session passed in, so a read in this
 		// request and the result get the same filtering and precision the cookie applies.
-		var written = ReadSession(principal).NotNull(nameof(principal));
+		var written = SessionCookie.KeptAs(ReadSession(principal).NotNull(nameof(principal)), authSession);
 		HttpContext.Items[WrittenInThisRequest] = written;
 
 		foreach (var endedSession in endedSessions)
@@ -384,24 +371,9 @@ public class AuthenticationSchemeAdapter(
 			claims.Add(new (TenantClaimType, tenant));
 
 		if (authSession.AdditionalClaims != null)
-			AddAdditionalClaims(claims, authSession.AdditionalClaims);
+			AdditionalSessionClaims.Write(claims, authSession.AdditionalClaims);
 
 		return new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
-	}
-
-	/// <summary>
-	/// Serializes each additional claim. A claim keyed on a reserved name is skipped so it cannot shadow or duplicate
-	/// a managed claim already emitted from the typed <see cref="AuthSession"/> fields.
-	/// </summary>
-	private static void AddAdditionalClaims(List<Claim> claims, JsonObject additionalClaims)
-	{
-		foreach (var (claimType, jsonNode) in additionalClaims)
-		{
-			if (jsonNode == null || ReservedClaimTypes.Contains(claimType))
-				continue;
-
-			claims.Add(JsonClaimValue.ToClaim(claimType, jsonNode));
-		}
 	}
 
 	/// <summary>
@@ -410,26 +382,7 @@ public class AuthenticationSchemeAdapter(
 	/// <returns>A task that represents the asynchronous sign-out operation.</returns>
 	public async Task SignOutAsync()
 	{
-		await HttpContext.SignOutAsync(authenticationScheme);
+		await SessionCookie.SignOutAsync(HttpContext, authenticationScheme);
 		HttpContext.Items[WrittenInThisRequest] = null;
-	}
-
-	/// <summary>
-	/// Extracts additional claims from the principal, excluding standard OIDC claims.
-	/// Uses claim ValueType to preserve exact type information during round-trip serialization.
-	/// </summary>
-	private static JsonObject ExtractAdditionalClaims(ClaimsPrincipal principal)
-	{
-		var additionalClaims = new JsonObject();
-
-		foreach (var claim in principal.Claims)
-		{
-			if (ReservedClaimTypes.Contains(claim.Type))
-				continue;
-
-			additionalClaims[claim.Type] = JsonClaimValue.FromClaim(claim);
-		}
-
-		return additionalClaims;
 	}
 }

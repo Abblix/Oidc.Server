@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -170,6 +171,22 @@ public class SessionManagementServiceTests
 
         // Assert
         Assert.Equal(CookieName, cookie.Name);
+    }
+
+    /// <summary>
+    /// The cookie the check-session page compares lives as long as the session: one surviving a browser restart is
+    /// not reported as changed to relying parties after one, and a browser session ends with the browser.
+    /// </summary>
+    [Fact]
+    public void GetSessionCookie_LastsAsLongAsTheSession()
+    {
+        _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
+        _requestInfoProvider.Setup(r => r.PathBase).Returns(PathBase);
+        var service = Service(_optionsSnapshot.Object);
+        var expiresAt = DateTimeOffset.FromUnixTimeSeconds(1_900_000_000);
+
+        Assert.Equal(expiresAt, service.GetSessionCookie(SessionPersistence.Until(expiresAt)).Options.Expires);
+        Assert.Null(service.GetSessionCookie(SessionPersistence.BrowserSession).Options.Expires);
     }
 
     /// <summary>
