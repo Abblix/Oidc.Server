@@ -26,8 +26,9 @@ public sealed class JsonWebKeySetConverter : JsonConverter<JsonWebKeySet>
         using var document = JsonDocument.ParseValue(ref reader);
         JsonMemberNames.RefuseRepeated(document.RootElement, "key set");
 
-        var keySet = document.RootElement.Deserialize<KeySetDocument>(JsonWebKeySerializerOptions.Instance);
-        return keySet is null ? null : new JsonWebKeySet(keySet.Keys ?? []);
+        // An object never deserializes to null, and a JSON null never reaches a converter
+        var keySet = document.RootElement.Deserialize<KeySetDocument>(JsonWebKeySerializerOptions.Instance)!;
+        return new JsonWebKeySet(keySet.Keys ?? []);
     }
 
     /// <inheritdoc />
@@ -37,5 +38,5 @@ public sealed class JsonWebKeySetConverter : JsonConverter<JsonWebKeySet>
     /// <summary>
     /// The set's members as JSON carries them: a type without this converter, so reading it does not call back in.
     /// </summary>
-    private sealed record KeySetDocument([property: JsonPropertyName("keys")] JsonWebKey[]? Keys);
+    private sealed record KeySetDocument([property: JsonPropertyName(JsonWebKeySet.KeysMember)] JsonWebKey[]? Keys);
 }
