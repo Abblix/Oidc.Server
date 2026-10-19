@@ -123,8 +123,9 @@ public static class ServiceCollectionExtensions
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
     /// Keyed-name DI mirrors the signer/encryptor registrations in this assembly
-    /// (<see cref="SigningServiceCollectionExtensions.AddSignatureAlgorithm{TKey,TSigner}"/> by 'alg'): one keyed
-    /// registration serves O(1) request-time dispatch (<c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c>).
+    /// (<see cref="SignatureAlgorithmServiceCollectionExtensions.AddSignatureAlgorithm{TKey,TSigner}"/> by 'alg'):
+    /// one keyed registration serves O(1) request-time dispatch
+    /// (<c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c>).
     /// <see cref="ServiceCollectionDescriptorExtensions.TryAddKeyedSingleton{TService,TImplementation}(IServiceCollection,object)"/>
     /// dedups by (service, key) first-wins, so a host pre-registration for a name wins over a
     /// later default.
