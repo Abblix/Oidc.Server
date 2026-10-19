@@ -158,6 +158,13 @@ public sealed partial class KeyVaultClient : IKeyCustodian, IDisposable
     }
 
     /// <summary>
+    /// Serves the RSA algorithms Key Vault decrypts with (RSA-OAEP-256, RSA-OAEP, RSA1_5). Key Vault has no key
+    /// agreement, so no ECDH-ES algorithm opens.
+    /// </summary>
+    public bool ServesKeyManagement(string algorithm)
+        => KeyVaultAlgorithms.ForUnwrapping(algorithm) is not null;
+
+    /// <summary>
     /// Refuses the ECDH-ES agreement with null. Azure Key Vault exposes no key-agreement primitive, so this store
     /// does not support ECDH-ES; a store built on AWS KMS (DeriveSharedSecret) or a PKCS#11 HSM (CKM_ECDH1_DERIVE)
     /// can.

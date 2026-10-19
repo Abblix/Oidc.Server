@@ -33,6 +33,7 @@ internal static class MintedKeyRingServiceCollectionExtensions
         services.AddKeyRingParts(builder);
 
         services.AddKeyRingOptionsChecks();
+        services.AddKeyWrapAlgorithmCheck(builder);
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
 

@@ -65,6 +65,8 @@ public class DiProbeTests
 
     private sealed class HostCustodian : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<byte[]?> UnwrapKeyAsync(string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<byte[]?> AgreeKeyAsync(string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken) => throw new NotSupportedException();

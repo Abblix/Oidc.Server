@@ -120,6 +120,8 @@ public class CustodianHeldSigningTests
     /// </summary>
     private sealed class RsaCustodian(RSA rsa, string signingKeyName) : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int SignatureCount { get; private set; }
 
         public Task<byte[]> SignAsync(

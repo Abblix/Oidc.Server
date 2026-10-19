@@ -381,6 +381,7 @@ public sealed partial class KeyRingTests : IDisposable
     public async Task AKeyEncryptionKeyTheCustodianDoesNotHold_RefusesTheStart()
     {
         var custodian = new Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
         custodian
             .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
             .Returns(AsyncEnumerable.Empty<KeyVersion>());
@@ -470,6 +471,7 @@ public sealed partial class KeyRingTests : IDisposable
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var listings = 0;
         var custodian = new Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
         custodian
             .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
             .Returns(() =>
@@ -593,6 +595,7 @@ public sealed partial class KeyRingTests : IDisposable
     private static IKeyCustodian StubCustodian(JsonWebKey keyEncryptionKey)
     {
         var custodian = new Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
 
         custodian
             .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))

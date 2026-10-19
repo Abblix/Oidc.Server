@@ -7,6 +7,8 @@
 
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -28,6 +30,16 @@ internal static class KeyPlacementServiceCollectionExtensions
             .ValidateOnStart();
 
         return new KeyCustodianBuilder(services);
+    }
+
+    /// <summary>
+    /// Arms the startup check that the custodian serves the algorithm its encryption key is published with.
+    /// </summary>
+    internal static IServiceCollection AddCustodianEncryptionAlgorithmCheck(this IServiceCollection services)
+    {
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<KeyPlacementChoice>, CustodianEncryptionAlgorithmCheck>());
+        return services;
     }
 
     /// <summary>

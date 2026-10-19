@@ -37,7 +37,8 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
             ExternalKeysProvider => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
-                .Concat(CustodianKeysOf(tenants)),
+                .Concat(CustodianKeysOf(tenants))
+                .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>())),
 
             MintedKeysProvider => Unread(tenants, "the server mints the keys")
                 .Concat(PartitionsOf(tenants)),
@@ -98,6 +99,26 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
         return unnamed.Concat(shared);
     }
+
+    /// <summary>
+    /// A tenant whose encryption key the custodian holds publishes it with a key management algorithm the custodian
+    /// serves: a client encrypts exactly as the published key says, so under any other every token sent to the
+    /// tenant would fail to open.
+    /// </summary>
+    private static IEnumerable<TenantRefusal> UnservedEncryptionOf(
+        IReadOnlyCollection<TenantDefinition> tenants,
+        IKeyCustodian custodian)
+        =>
+            from tenant in tenants
+            where tenant.CustodianKeys is { EncryptionKeyName: not null } keys &&
+                  !custodian.ServesKeyManagement(keys.EncryptionAlgorithm)
+            select TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': the key custodian {custodian.GetType().Name} does not serve the key " +
+                $"management algorithm '{tenant.CustodianKeys!.EncryptionAlgorithm}' that " +
+                $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}." +
+                $"{nameof(CustodianHeldKeys.EncryptionAlgorithm)} names, so no token encrypted to the tenant could be " +
+                "opened.");
 
     /// <summary>
     /// The server keeps each tenant's minted keys in the store under its id and generation, joined by a separator

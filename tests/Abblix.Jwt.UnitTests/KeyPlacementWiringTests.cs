@@ -36,7 +36,9 @@ public class KeyPlacementWiringTests
     private static IServiceCollection WithCustodian()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        var custodian = new Mock<IKeyCustodian>(MockBehavior.Loose);
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
+        services.AddSingleton(custodian.Object);
         return services;
     }
 
@@ -230,7 +232,9 @@ public class KeyPlacementWiringTests
     public void ALocalBackendJoinsAFamilyTheHostComposedItself()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        var custodian = new Mock<IKeyCustodian>(MockBehavior.Loose);
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
+        services.AddSingleton(custodian.Object);
 
         // A host may bring its own IDataSigner and compose the family under its own composite. The local backend
         // must still end up INSIDE that family: added beside it, it would win the singular resolve; skipped
@@ -391,6 +395,8 @@ public class KeyPlacementWiringTests
 
     private class StubCustodian : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public Task<byte[]> SignAsync(
             string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
             => throw new NotSupportedException();

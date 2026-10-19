@@ -40,7 +40,7 @@ public class ExternalKeysWiringTests
     private static IServiceCollection AnOidcHost()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddLogging();
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
@@ -95,7 +95,7 @@ public class ExternalKeysWiringTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
@@ -117,7 +117,7 @@ public class ExternalKeysWiringTests
         var chosen = Mock.Of<IAuthServiceKeysProvider>();
 
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddSingleton(chosen);
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);

@@ -83,6 +83,7 @@ public partial class MultiTenancyRegistrationTests
     {
         var keyEncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "kek-1" };
         var custodian = new Moq.Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(Moq.It.IsAny<string>())).Returns(true);
         custodian
             .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, Moq.It.IsAny<CancellationToken>()))
             .Returns(new[] { new KeyVersion(keyEncryptionKey.Sanitize(false), DateTimeOffset.UnixEpoch) }

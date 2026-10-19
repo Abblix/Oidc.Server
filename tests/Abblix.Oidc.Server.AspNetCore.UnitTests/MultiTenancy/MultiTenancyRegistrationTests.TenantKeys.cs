@@ -311,7 +311,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddOptions<OidcOptions>();
         services.AddIssuer();
         services.AddAuthServiceJwt();
-        services.AddSingleton(Moq.Mock.Of<IKeyCustodian>());
+        services.AddSingleton(Moq.Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(Moq.It.IsAny<string>())));
         services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
@@ -326,13 +326,17 @@ public partial class MultiTenancyRegistrationTests
     };
 
     /// <summary>
-    /// A container keeping its keys in a custodian that publishes, under each key name, a key whose id is the name.
+    /// A container keeping its keys in a custodian that publishes, under each key name, a key whose id is the name,
+    /// and serves one key management algorithm, as Vault Transit does.
     /// </summary>
     private static ServiceProvider KeysInACustodian(
         IEnumerable<TenantDefinition> tenants,
         CustodianHeldKeys? serverWideKeys = null)
     {
         var custodian = new Moq.Mock<IKeyCustodian>();
+        custodian
+            .Setup(c => c.ServesKeyManagement(Moq.It.IsAny<string>()))
+            .Returns<string>(algorithm => algorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256);
         custodian
             .Setup(c => c.GetKeyVersionsAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<CancellationToken>()))
             .Returns((string keyName, CancellationToken _) =>
@@ -434,6 +438,33 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A tenant whose encryption key the custodian holds, published under an algorithm the custodian does not serve,
+    /// would have every token sent to it fail to open, so startup refuses it, naming the algorithm.
+    /// </summary>
+    [Fact]
+    public void ATenantEncryptingUnderAnAlgorithmTheCustodianDoesNotServe_IsRefusedAtStartup()
+    {
+        using var provider = KeysInACustodian(
+        [
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = new Uri(AcmeIssuer),
+                CustodianKeys = new CustodianHeldKeys
+                {
+                    SigningKeyName = "acme-sign",
+                    EncryptionKeyName = "acme-encrypt",
+                    EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep,
+                },
+            },
+        ]);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.RsaOaep + "'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Keys a tenant declares for a placement its server does not use are never read, so startup refuses them,
     /// naming the tenant and the setting, rather than let them read as the keys the tenant produces with.
     /// </summary>
@@ -521,7 +552,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddLogging();
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton(Moq.Mock.Of<IKeyCustodian>());
+        services.AddSingleton(Moq.Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(Moq.It.IsAny<string>())));
         services.AddSingleton(Moq.Mock.Of<IKeyRingStore>());
         services.AddSingleton(rings.Object);
         services.AddJsonWebTokens();

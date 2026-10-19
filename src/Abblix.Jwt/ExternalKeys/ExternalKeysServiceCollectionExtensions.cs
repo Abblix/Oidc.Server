@@ -84,7 +84,7 @@ public static class ExternalKeysServiceCollectionExtensions
         // Replace rather than Add: this argument IS the host's key selection, so exactly one selection lives in
         // the collection, ahead of anything the host registered earlier.
         services.Replace(ServiceDescriptor.Singleton(keys));
-        return services;
+        return services.AddCustodianEncryptionAlgorithmCheck();
     }
 
     /// <summary>
@@ -123,7 +123,7 @@ public static class ExternalKeysServiceCollectionExtensions
         // registered service type is CustodianHeldKeys, not the delegate - overload resolution prefers the factory
         // overload here, so both overloads leave the collection in the same shape.
         services.Replace(ServiceDescriptor.Singleton(keys));
-        return services;
+        return services.AddCustodianEncryptionAlgorithmCheck();
     }
 
     /// <summary>
