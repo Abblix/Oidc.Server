@@ -190,14 +190,14 @@ public sealed class CaepInteropProfileDispatchTests
     {
         var (dispatcher, outbox, _) = await CreateAsync(CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
 
-        var reached = await dispatcher.DispatchAsync(
+        var reached = (await dispatcher.DispatchAsync(
             Descriptor(
                 CaepEventTypes.SessionRevoked,
                 new SessionRevokedPayload
                 {
                     ReasonAdmin = new Dictionary<string, string> { ["en"] = "Landspeed policy violation" },
                 }),
-            Cancellation);
+            Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -216,8 +216,8 @@ public sealed class CaepInteropProfileDispatchTests
     {
         var (dispatcher, outbox, _) = await CreateAsync(CaepEventTypes.SessionRevoked, payloadPolicy: null);
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -233,8 +233,8 @@ public sealed class CaepInteropProfileDispatchTests
         var (dispatcher, outbox, _) = await CreateAsync(
             CaepEventTypes.SessionEstablished, new CaepInteropProfilePolicy());
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(CaepEventTypes.SessionEstablished, new SessionEstablishedPayload()), Cancellation);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionEstablished, new SessionEstablishedPayload()), Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -303,7 +303,7 @@ public sealed class CaepInteropProfileDispatchTests
 
         if (populated)
         {
-            Assert.Equal(1, await dispatcher.DispatchAsync(descriptor, Cancellation));
+            Assert.Equal(1, (await dispatcher.DispatchAsync(descriptor, Cancellation)).Reached);
             Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
         }
         else
@@ -351,8 +351,8 @@ public sealed class CaepInteropProfileDispatchTests
             CaepEventTypes.SessionRevoked,
             new CaepInteropProfilePolicy(CaepEventTypes.CredentialChange));
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -403,7 +403,9 @@ public sealed class CaepInteropProfileDispatchTests
         {
             // No stream is subscribed here, so zero is the honest answer - and the point is that it
             // ANSWERED rather than refused.
-            Assert.Equal(0, await dispatcher.DispatchAsync(descriptor, Cancellation));
+            var result = await dispatcher.DispatchAsync(descriptor, Cancellation);
+            Assert.Equal(0, result.Reached);
+            Assert.Empty(result.NotReached);
         }
     }
 

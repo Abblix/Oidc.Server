@@ -58,6 +58,8 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+The call reports which streams the event could not be queued for; the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) README says how to retry them.
+
 ## Claiming the interoperability profile
 
 `reason_admin` is optional in CAEP 1.0 and required of a transmitter by the CAEP Interoperability Profile

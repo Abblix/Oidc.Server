@@ -68,6 +68,8 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+The call reports which streams the event could not be queued for; the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) README says how to retry them.
+
 ## Part of the Abblix product family
 
 The events themselves travel over the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter and receiver; the sibling dictionary for session and access lifecycle is [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP), and both compose on one registry.

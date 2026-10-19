@@ -128,9 +128,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 
         // A business event reaches the stream through the matching fan-out.
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
 
         // Captured before draining, so the exact same SET can be redelivered afterwards.
         var outbox = _transmitter.Services.GetRequiredService<IEventOutbox>();
@@ -192,9 +192,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         Assert.True(await management.Client.AddSubjectAsync(
             new AddSubjectRequest { StreamId = management.Created.StreamId, Subject = Jdoe() },
             cancellationToken));
-        Assert.Equal(1, await _transmitter.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
+        Assert.Equal(1, (await _transmitter.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
         Assert.Equal(1, (await DrainPushAsync(management.Created.StreamId, cancellationToken)).Delivered);
 
         Assert.Equal(
@@ -261,9 +261,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
         var pollClient = new PollClient(_transmitter.GetTestClient());
 
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
 
         var page = await pollClient.PollAsync(poll, new PollRequest(), cancellationToken);
         var jwtId = Assert.Single(page.Sets).Key;
@@ -277,9 +277,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         await client.UpdateStatusAsync(
             new StreamStatus { StreamId = streamId, Status = StreamStatuses.Paused },
             cancellationToken);
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
         Assert.Empty((await pollClient.PollAsync(poll, new PollRequest(), cancellationToken)).Sets);
 
         await client.UpdateStatusAsync(
@@ -324,16 +324,18 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 
         // The subject survived the replacement: the event still fans out to this stream.
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
 
         // Removal's CONSEQUENCE, not its status code: the same event now matches no stream.
         Assert.True(await client.RemoveSubjectAsync(
             new RemoveSubjectRequest { StreamId = streamId, Subject = Jdoe() }, cancellationToken));
-        Assert.Equal(0, await dispatcher.DispatchAsync(
+        var afterRemoval = await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken);
+        Assert.Equal(0, afterRemoval.Reached);
+        Assert.Empty(afterRemoval.NotReached);
     }
 
     [Fact]
