@@ -337,6 +337,41 @@ public class KeyPlacementWiringTests
     }
 
     /// <summary>
+    /// A key ring registered by itself, with no placement call in front of it, is refused at startup without a
+    /// store just as the minting placement is, and starts with one.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task AKeyRingRegisteredByItself_IsRefusedAtStartup_OnlyWithoutAStore(
+        bool validateOnBuild,
+        bool withStore)
+    {
+        var services = WithCustodian();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        if (withStore)
+            services.AddSingleton(new Mock<IKeyRingStore>().Object);
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek" });
+
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
+        var validation = provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
+
+        if (withStore)
+        {
+            await validation;
+            return;
+        }
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(() => validation);
+        Assert.Equal(typeof(KeyRingOptions), error.OptionsType);
+    }
+
+    /// <summary>
     /// A custodian that answers nothing and takes one dependency: these tests are about the wiring, and no key
     /// operation is reached. The dependency is what makes DI construction observable.
     /// </summary>

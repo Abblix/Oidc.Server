@@ -29,8 +29,8 @@ internal static class KeyRingServiceCollectionExtensions
         // It is read off the builder rather than captured, so a call chained after AddKeyRing - AdoptExistingKeys -
         // still reaches the ring: this factory runs when the ring is first asked for, by which time the whole chain
         // has run. The partitions are the host's when it registered any, whichever side of AddKeyRing it did, and
-        // the settings' otherwise. The store is resolved here too, and only here: a container validating itself as
-        // it is built then leaves a missing store to the startup validation, which names the call that supplies one.
+        // the settings' otherwise. The store is resolved here too, and only here, so a container validating itself
+        // as it is built leaves a missing store to the startup validation AddKeyRing registers.
         services.TryAddSingleton(
             serviceProvider => new KeyRingSetup(
                 builder.Policy,

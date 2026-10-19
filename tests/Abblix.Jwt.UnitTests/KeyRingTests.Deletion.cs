@@ -59,6 +59,9 @@ public sealed partial class KeyRingTests
         var rings = provider.GetRequiredService<IKeyRings>();
         var refresh = provider.GetServices<IHostedService>().OfType<KeyRingRefreshService>().Single();
         await refresh.StartAsync(ct);
+
+        // A host refreshing the ring itself writes through the store its rings were built over
+        await provider.GetRequiredService<IKeyRing>().RefreshAsync(ct);
         Assert.NotEmpty(stores.SelectMany(store => store.Entries));
 
         Assert.Empty(await rings.DeleteAsync([KeyRingOptions.DefaultPartition], ct));
