@@ -26,9 +26,9 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 /// </remarks>
 internal static class BuiltAssemblies
 {
-    private static readonly Lazy<IReadOnlyList<Assembly>> Loaded = new(Load);
+    private static readonly Lazy<(IReadOnlyList<Assembly> All, IReadOnlySet<string> SourceNames)> Loaded = new(Load);
 
-    public static IReadOnlyList<Assembly> All => Loaded.Value;
+    public static IReadOnlyList<Assembly> All => Loaded.Value.All;
 
     /// <summary>
     /// The assemblies built from <c>src</c>, which are the packages a deployment runs, the tests and their hosts left
@@ -39,13 +39,12 @@ internal static class BuiltAssemblies
     /// from: a package this test assembly references is loaded from beside it, before this walk runs.
     /// </remarks>
     public static IEnumerable<Assembly> Library
-        => All.Where(assembly => SourceNames.Contains(assembly.GetName().Name!));
+        => Loaded.Value.All.Where(assembly => Loaded.Value.SourceNames.Contains(assembly.GetName().Name!));
 
-    private static readonly HashSet<string> SourceNames = new(StringComparer.OrdinalIgnoreCase);
-
-    private static IReadOnlyList<Assembly> Load()
+    private static (IReadOnlyList<Assembly> All, IReadOnlySet<string> SourceNames) Load()
     {
         var root = RepositoryRoot();
+        var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var neighbours = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -79,7 +78,7 @@ internal static class BuiltAssemblies
                 // The first copy wins, and every copy is built from this same tree in the same run.
                 byName.TryAdd(file, path);
                 if (area == "src")
-                    SourceNames.Add(Path.GetFileNameWithoutExtension(file));
+                    sourceNames.Add(Path.GetFileNameWithoutExtension(file));
             }
         }
 
@@ -104,7 +103,7 @@ internal static class BuiltAssemblies
             }
         }
 
-        return loaded;
+        return (loaded, sourceNames);
     }
 
     private static string RepositoryRoot()
