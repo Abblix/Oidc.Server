@@ -34,6 +34,23 @@ public sealed partial class KeyRingTests
     }
 
     /// <summary>
+    /// A ring that never rotates, given as the longest span there is, still adopts existing keys and serves them,
+    /// though its rotation grid has no period before the current one to date them in.
+    /// </summary>
+    [Fact]
+    public async Task ARingThatNeverRotates_AdoptsExistingKeys()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+
+        var (ring, _) = CreateRing(rotateEvery: TimeSpan.MaxValue, adoptedKeys: [adopted]);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            adopted.KeyId,
+            ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId));
+    }
+
+    /// <summary>
     /// A policy the ring cannot rotate on stops the host while it registers the ring: a rotation period that is not
     /// positive divides the rotation grid by nothing, and a negative retention drops a key while it still signs.
     /// </summary>

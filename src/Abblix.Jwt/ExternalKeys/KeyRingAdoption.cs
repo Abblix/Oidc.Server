@@ -49,7 +49,7 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
         // the key minted in this same refresh is younger than the propagation window, so it is published and
         // verifiable while this one keeps producing, and it takes over once the window has passed. The date is
         // read off the rotation grid rather than the clock, so every pod adopting in one period dates the set alike.
-        var dates = AdoptedEntries.DatesFor(entries, ids, schedule.CurrentPeriodStart - schedule.RotateEvery);
+        var dates = AdoptedEntries.DatesFor(entries, ids, schedule.PreviousPeriodStart);
 
         var sealedKeys = await sealing.SealAllAsync(policy.AdoptedKeys, cancellationToken);
         for (var index = 0; index < sealedKeys.Count; index++)

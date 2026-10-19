@@ -37,6 +37,19 @@ internal sealed class KeyRingSchedule(MintedKeys policy, IOptions<KeyRingOptions
         }
     }
 
+    /// <summary>
+    /// The start of the rotation period before the current one, or the earliest instant there is when the grid
+    /// has no period before it, as for a policy that never rotates.
+    /// </summary>
+    public DateTimeOffset PreviousPeriodStart
+    {
+        get
+        {
+            var current = CurrentPeriodStart;
+            return current - DateTimeOffset.MinValue < RotateEvery ? DateTimeOffset.MinValue : current - RotateEvery;
+        }
+    }
+
     /// <summary>How long a new key takes to reach every consumer before it produces.</summary>
     public TimeSpan Propagation => options.Value.KeyRolloverPropagation;
 

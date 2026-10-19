@@ -31,9 +31,17 @@ internal static class LocalKeyRingServiceCollectionExtensions
                 + "drop the store if a single instance is intended.");
 
         // Refused here as well as when the ring is made, so a period the ring cannot rotate on stops the host while
-        // it registers. Whether retirement outlasts the announcement of a new key is known only when the ring is
-        // made, from the settings
+        // it registers
         KeyRingPolicyChecks.EnsureRotatable(policy);
+
+        // The announcement of a new key is a setting, final only once every configuration has run, so the
+        // retention is checked against it when the host starts: the ring itself is made on its first use, which
+        // would let the host start and then fail every request for a key
+        services.AddOptions<KeyRingOptions>()
+            .Validate(
+                ring => KeyRingPolicyChecks.IsRetainedThroughAnnouncement(policy, ring.KeyRolloverPropagation),
+                KeyRingPolicyChecks.RetainedThroughAnnouncement)
+            .ValidateOnStart();
 
         // The ring reads the clock, and this package is consumable without the registrations that would otherwise
         // have supplied one.

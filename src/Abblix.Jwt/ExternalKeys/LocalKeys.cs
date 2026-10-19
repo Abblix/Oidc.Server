@@ -29,14 +29,18 @@ public sealed record LocalKeys
     /// <summary>The modulus size of a minted RSA key.</summary>
     public int RsaKeySize { get; init; } = 2048;
 
-    /// <summary>How often a fresh key is minted and the previous one steps back from producing.</summary>
+    /// <summary>
+    /// How often a fresh key is minted and the previous one steps back from producing. Must be positive;
+    /// <see cref="TimeSpan.MaxValue"/> never rotates.
+    /// </summary>
     public TimeSpan RotateEvery { get; init; } = TimeSpan.FromDays(30);
 
     /// <summary>
     /// How long a key that has stopped producing is still offered, so what it produced stays verifiable.
     /// </summary>
     /// <remarks>
-    /// Must outlast the longest thing the key signed or encrypted. Retire a key sooner than the tokens it
+    /// Must be at least <see cref="KeyRingOptions.KeyRolloverPropagation"/>, and should outlast the longest thing the
+    /// key signed or encrypted. Retire a key sooner than the tokens it
     /// signed, and those tokens fail verification while their holders still believe them valid.
     /// </remarks>
     public TimeSpan KeepRetiredFor { get; init; } = TimeSpan.FromDays(7);

@@ -22,8 +22,8 @@ internal static class KeyRingPolicyChecks
     /// <exception cref="ArgumentOutOfRangeException">A period is out of range.</exception>
     public static void EnsureRotatable(LocalKeys policy)
     {
-        EnsurePositive(policy.RotateEvery, nameof(LocalKeys.RotateEvery));
-        EnsureNotNegative(policy.KeepRetiredFor, nameof(LocalKeys.KeepRetiredFor));
+        EnsurePositive(policy.RotateEvery, nameof(LocalKeys.RotateEvery), nameof(policy));
+        EnsureNotNegative(policy.KeepRetiredFor, nameof(LocalKeys.KeepRetiredFor), nameof(policy));
     }
 
     /// <summary>
@@ -36,9 +36,9 @@ internal static class KeyRingPolicyChecks
     /// <exception cref="ArgumentOutOfRangeException">A period is out of range.</exception>
     public static void EnsureRotatable(MintedKeys policy)
     {
-        EnsurePositive(policy.RotateEvery, nameof(MintedKeys.RotateEvery));
+        EnsurePositive(policy.RotateEvery, nameof(MintedKeys.RotateEvery), nameof(policy));
         if (policy.KeepRetiredFor is { } keepRetiredFor)
-            EnsureNotNegative(keepRetiredFor, nameof(MintedKeys.KeepRetiredFor));
+            EnsureNotNegative(keepRetiredFor, nameof(MintedKeys.KeepRetiredFor), nameof(policy));
     }
 
     /// <summary>
@@ -55,26 +55,32 @@ internal static class KeyRingPolicyChecks
     /// <exception cref="ArgumentOutOfRangeException">The retention is shorter than the announcement.</exception>
     public static void EnsureRetainedThroughAnnouncement(LocalKeys policy, TimeSpan propagation)
     {
-        if (policy.KeepRetiredFor < propagation)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(policy),
-                policy.KeepRetiredFor,
-                $"{nameof(LocalKeys.KeepRetiredFor)} must be at least " +
-                $"{nameof(KeyRingOptions.KeyRolloverPropagation)}, {propagation}, or the key still signing leaves " +
-                "before its successor may sign.");
-        }
+        if (!IsRetainedThroughAnnouncement(policy, propagation))
+            throw new ArgumentOutOfRangeException(nameof(policy), policy.KeepRetiredFor, RetainedThroughAnnouncement);
     }
 
-    private static void EnsurePositive(TimeSpan value, string name)
+    /// <summary>
+    /// Whether a ring kept in memory keeps a retired key at least as long as a new key is announced.
+    /// </summary>
+    public static bool IsRetainedThroughAnnouncement(LocalKeys policy, TimeSpan propagation)
+        => policy.KeepRetiredFor >= propagation;
+
+    /// <summary>
+    /// Why a ring kept in memory refuses a retention shorter than the announcement of a new key.
+    /// </summary>
+    public const string RetainedThroughAnnouncement =
+        $"{nameof(LocalKeys.KeepRetiredFor)} must be at least {nameof(KeyRingOptions.KeyRolloverPropagation)}, or " +
+        "the key still signing leaves before its successor may sign.";
+
+    private static void EnsurePositive(TimeSpan value, string name, string parameter)
     {
         if (value <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(name, value, $"{name} must be positive.");
+            throw new ArgumentOutOfRangeException(parameter, value, $"{name} must be positive.");
     }
 
-    private static void EnsureNotNegative(TimeSpan value, string name)
+    private static void EnsureNotNegative(TimeSpan value, string name, string parameter)
     {
         if (value < TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(name, value, $"{name} must not be negative.");
+            throw new ArgumentOutOfRangeException(parameter, value, $"{name} must not be negative.");
     }
 }

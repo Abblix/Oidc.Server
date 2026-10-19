@@ -399,6 +399,23 @@ public class InMemoryKeyRingTests
     }
 
     /// <summary>
+    /// A host whose settings announce a new key for longer than its policy keeps a retired one does not start, rather
+    /// than starting and failing every request for a key once the ring is first made.
+    /// </summary>
+    [Fact]
+    public async Task ARetentionShorterThanTheAnnouncementOfANewKey_StopsTheHostAtStartup()
+    {
+        var services = new ServiceCollection();
+        services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromDays(30));
+        services.AddInMemoryKeyRing(Policy);
+        await using var provider = services.BuildServiceProvider();
+
+        await Assert.ThrowsAsync<OptionsValidationException>(() => provider
+            .GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// A ring keeping a retired key for less than the time a new key is announced before it signs would drop the
     /// key still signing, so the new one would sign before clients could have fetched it. The ring refuses such a
     /// policy when it is made, the moment it learns how long that announcement is.
