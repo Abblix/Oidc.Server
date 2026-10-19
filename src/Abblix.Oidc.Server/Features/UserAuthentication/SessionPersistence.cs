@@ -48,6 +48,8 @@ public abstract record SessionPersistence
         /// <summary>
         /// When the cookie read back was issued, or null on a session being signed in. With <see cref="ExpiresAt"/> it
         /// gives the length of the session, which a repeat sign-in stating nothing starts again from its own moment.
+        /// A host signing in leaves it unset. It takes part in equality, so a session read back does not equal
+        /// <see cref="Until"/> of the same moment: compare <see cref="ExpiresAt"/> instead.
         /// </summary>
         public DateTimeOffset? IssuedAt { get; init; }
     }

@@ -36,7 +36,9 @@ public interface ISessionManagementService
     /// <remarks>
     /// The expiry is the one the session had when the cookie is written. A host whose authentication cookie is renewed
     /// with activity renews it past that, and the check-session page then reports the session as changed until the
-    /// next authorization response writes the cookie again.
+    /// next authorization response writes the cookie again. An authentication cookie kept past a browser restart with no
+    /// expiry of its own gives a cookie with none, so after a restart the check-session page reports the session as
+    /// changed.
     /// </remarks>
     /// <returns>A <see cref="Cookie"/> object configured for session management, containing details such as the cookie name,
     /// value, path, and security settings.</returns>
