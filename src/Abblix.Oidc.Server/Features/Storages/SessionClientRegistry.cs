@@ -150,6 +150,8 @@ public partial class SessionClientRegistry(
         if (await storage.TrySetIfAbsentAsync(
                 key, started, new StorageOptions { AbsoluteExpiration = expiresAt }, cancellationToken))
         {
+            // A generation just started lasts as long as a renewal would make it
+            await NoteRenewedAsync(sessionId, started, cancellationToken);
             return started;
         }
 
@@ -226,28 +228,32 @@ public partial class SessionClientRegistry(
         {
             var positionKey = keyFactory.SessionClientKey(sessionId, generation.Id, position);
             var recorded = await storage.GetAsync<Proto.SessionClient>(positionKey, false, cancellationToken);
-            if (recorded == null || !await storage.TryExtendAsync(positionKey, storageOptions, cancellationToken))
+            if (recorded == null)
                 break;
 
+            await storage.TryExtendAsync(positionKey, storageOptions, cancellationToken);
             await storage.TryExtendAsync(
                 keyFactory.SessionClientMarkerKey(sessionId, generation.Id, recorded.ClientId),
                 storageOptions,
                 cancellationToken);
         }
 
-        // A generation that ended meanwhile stays ended, and is not noted as renewed
-        if (!await storage.TryExtendAsync(
-                keyFactory.SessionClientsGenerationKey(sessionId), storageOptions, cancellationToken))
-        {
-            return;
-        }
+        await storage.TryExtendAsync(
+            keyFactory.SessionClientsGenerationKey(sessionId), storageOptions, cancellationToken);
 
-        await storage.SetAsync(
-            renewalKey,
+        await NoteRenewedAsync(sessionId, generation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Notes that a generation lasts two retentions from now, so no authorization renews it for a retention.
+    /// </summary>
+    private Task NoteRenewedAsync(
+        string sessionId, Proto.SessionClientsGeneration generation, CancellationToken cancellationToken)
+        => storage.SetAsync(
+            keyFactory.SessionClientsRenewalKey(sessionId, generation.Id),
             generation,
             new StorageOptions { AbsoluteExpiration = clock.GetUtcNow() + options.Value.SessionClientsRetention },
             cancellationToken);
-    }
 
     /// <summary>
     /// The highest position of a generation's list that is taken, found by halving rather than walked, or zero

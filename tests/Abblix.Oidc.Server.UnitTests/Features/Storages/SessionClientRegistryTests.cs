@@ -223,6 +223,65 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
+    /// A list just started already lasts as long as a renewal would make it, so the authorization starting it
+    /// renews nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_authorization_starting_a_list_renews_nothing()
+    {
+        var counting = new CountsOperations(_storage);
+
+        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+
+        Assert.Equal(0, counting.Extensions);
+    }
+
+    /// <summary>
+    /// A renewal that stops half way is made again by the next authorization rather than a retention later, so
+    /// the list still lasts a retention past that authorization.
+    /// </summary>
+    [Fact]
+    public async Task A_renewal_stopping_half_way_is_made_again_by_the_next_authorization()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention + TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Registry(new FailsTheThirdExtension(_storage)).AddClientAsync(SessionId, "first", Ct));
+
+        _time.Advance(Retention / 2);
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention - TimeSpan.FromSeconds(1));
+
+        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Fails the third extension made through it, part way through a renewal of a list of two clients.
+    /// </summary>
+    private sealed class FailsTheThirdExtension(IEntityStorage inner) : IEntityStorage
+    {
+        private int _extensions;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => Interlocked.Increment(ref _extensions) == 3
+                ? throw new InvalidOperationException("The store refused the write.")
+                : inner.TryExtendAsync(key, options, token);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
     /// A generation that ends while it is being renewed stays ended, so the next authorization starts a list
     /// that its logout reads, rather than finding the old one brought back with its first positions gone.
     /// </summary>
@@ -447,7 +506,7 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_holding_two_positions_is_listed_once()
     {
-        var failing = new FailsTheFirstWrite(_storage);
+        var failing = new FailsTheFirstClientWrite(_storage);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => Registry(failing).AddClientAsync(SessionId, "first", Ct));
 
@@ -514,13 +573,16 @@ public class SessionClientRegistryTests
     {
         private int _reads;
         private int _writes;
+        private int _extensions;
 
         public int Reads => _reads;
         public int Writes => _writes;
+        public int Extensions => _extensions;
 
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         {
             Interlocked.Increment(ref _writes);
+            Interlocked.Increment(ref _extensions);
             return inner.TryExtendAsync(key, options, token);
         }
 
@@ -544,15 +606,15 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
-    /// Fails the first plain write through it, which is the one that records a client already holding a
-    /// position.
+    /// Fails the first plain write of a client through it, which is the one that records a client already
+    /// holding a position.
     /// </summary>
-    private sealed class FailsTheFirstWrite(IEntityStorage inner) : IEntityStorage
+    private sealed class FailsTheFirstClientWrite(IEntityStorage inner) : IEntityStorage
     {
         private int _writes;
 
         public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => Interlocked.Increment(ref _writes) == 1
+            => value is StoredSessionClient && Interlocked.Increment(ref _writes) == 1
                 ? throw new InvalidOperationException("The store refused the write.")
                 : inner.SetAsync(key, value, options, token);
 

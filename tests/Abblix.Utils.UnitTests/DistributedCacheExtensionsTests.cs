@@ -375,6 +375,61 @@ public class DistributedCacheExtensionsTests
 		Assert.Same(longer, cache.Options);
 	}
 
+	/// <summary>
+	/// A claim of the key made while an extension is between its read and its write waits for the extension, so
+	/// a caller told it wrote finds its own value there afterwards rather than the one the extension read.
+	/// </summary>
+	[Fact]
+	public async Task TryExtendAsync_AClaimDuringTheExtension_IsNotWrittenOver()
+	{
+		var cache = new StartsAClaimAtTheFirstRead(CreateCache());
+		await cache.SetAsync("kept", Encoding.UTF8.GetBytes("first"), new (), TestContext.Current.CancellationToken);
+
+		await cache.TryExtendAsync("kept", new (), TestContext.Current.CancellationToken);
+		var wrote = await cache.Claim.NotNull(nameof(cache.Claim));
+
+		var expected = wrote ? "second" : "first";
+		Assert.Equal(expected, Encoding.UTF8.GetString(
+			(await cache.GetAsync("kept", TestContext.Current.CancellationToken)).NotNull("kept")));
+	}
+
+	/// <summary>
+	/// At the first read through it, empties the key as an expiry would and starts a claim of it, then gives the
+	/// claim time to finish before the read returns.
+	/// </summary>
+	private sealed class StartsAClaimAtTheFirstRead(IDistributedCache inner) : IDistributedCache
+	{
+		private int _reads;
+
+		public Task<bool>? Claim { get; private set; }
+
+		public async Task<byte[]?> GetAsync(string key, CancellationToken token = default)
+		{
+			var read = await inner.GetAsync(key, token);
+			if (Interlocked.Increment(ref _reads) == 1)
+			{
+				await inner.RemoveAsync(key, token);
+				Claim = Task.Run(
+					() => this.TrySetIfAbsentAsync(key, Encoding.UTF8.GetBytes("second"), new (), token), token);
+				await Task.WhenAny(Claim, Task.Delay(TimeSpan.FromMilliseconds(500), token));
+			}
+
+			return read;
+		}
+
+		public byte[]? Get(string key) => inner.Get(key);
+		public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => inner.Set(key, value, options);
+
+		public Task SetAsync(
+			string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+			=> inner.SetAsync(key, value, options, token);
+
+		public void Refresh(string key) => inner.Refresh(key);
+		public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
+		public void Remove(string key) => inner.Remove(key);
+		public Task RemoveAsync(string key, CancellationToken token = default) => inner.RemoveAsync(key, token);
+	}
+
 	[Fact]
 	public async Task TryExtendAsync_NullCache_ThrowsArgumentNullException()
 	{
