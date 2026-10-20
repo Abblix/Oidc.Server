@@ -91,6 +91,15 @@ public class RefreshTokenGrantHandler(
 				"The specified grant belongs to another client");
 		}
 
+		// A refresh token exists only for offline access, so withdrawing the permission ends the ones already issued;
+		// renewing without a new refresh token would leave the presented one unspent and reusable until it expires
+		if (clientInfo.OfflineAccessAllowed != true)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				"This client is not allowed offline access");
+		}
+
 		// If everything is valid, return the authorized result.
 		return grant;
 	}

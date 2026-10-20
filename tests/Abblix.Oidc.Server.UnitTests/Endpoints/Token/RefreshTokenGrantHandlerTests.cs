@@ -71,7 +71,7 @@ public class RefreshTokenGrantHandlerTests
     public async Task ValidRefreshToken_ShouldReturnNewGrant()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccessAllowed = true };
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
 
@@ -94,6 +94,33 @@ public class RefreshTokenGrantHandlerTests
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
         Assert.Equal(ClientId, grant.Context.ClientId);
+    }
+
+    /// <summary>
+    /// A refresh token exists only for offline access, so a client not allowed it, as when the host withdrew the
+    /// permission after the token was issued, is refused rather than renewed.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    public async Task RefreshToken_FromClientNotAllowedOfflineAccess_IsRefused(bool? offlineAccessAllowed)
+    {
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccessAllowed = offlineAccessAllowed };
+        var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
+        var refreshToken = CreateValidRefreshToken(ClientId);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .ReturnsAsync(refreshToken);
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
+                Context: new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null)));
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>

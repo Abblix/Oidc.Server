@@ -470,9 +470,9 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// A client not allowed offline access has offline_access ignored whichever grant brought it, as a password or
-    /// jwt-bearer grant takes it from the token request and a refresh grant from a permission since withdrawn: the
-    /// access token is issued without it and no refresh token is.
+    /// A client not allowed offline access has offline_access ignored however its grant came to carry it, as a
+    /// password or jwt-bearer grant takes it from the token request: the access token is issued without it and no
+    /// refresh token is.
     /// </summary>
     [Theory]
     [InlineData(null)]

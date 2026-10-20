@@ -121,7 +121,7 @@ public class TokenRequestProcessor(
 	/// <summary>
 	/// The context without <c>offline_access</c> for a client not allowed offline access, whichever grant brought it,
 	/// so no refresh token is issued to it: a grant taking its scope from the token request has no authorization
-	/// request in front of it, and a client whose permission was withdrawn still holds the refresh token it presents.
+	/// request in front of it to ignore the scope there.
 	/// </summary>
 	private static AuthorizationContext OfflineAccessIgnoredUnlessAllowed(
 		ClientInfo clientInfo,
