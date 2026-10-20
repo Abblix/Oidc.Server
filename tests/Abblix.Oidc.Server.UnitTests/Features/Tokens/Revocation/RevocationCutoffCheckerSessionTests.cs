@@ -42,6 +42,7 @@ public class RevocationCutoffCheckerSessionTests
 {
     private const string Subject = "user_42";
     private const string SessionId = "session_7";
+    private const string ClientId = "client_9";
 
     private static readonly DateTimeOffset AuthenticatedAt = new(2024, 1, 15, 11, 0, 0, TimeSpan.Zero);
 
@@ -118,6 +119,21 @@ public class RevocationCutoffCheckerSessionTests
         var refused = await Checker().IsSessionRefusedAsync(Session());
 
         Assert.True(refused);
+    }
+
+    /// <summary>
+    /// Withdrawing consent from one client leaves the session usable: it serves the end user's other clients too,
+    /// and that client reaches the end user again only through a new authorization, which asks for consent anew.
+    /// </summary>
+    [Fact]
+    public async Task WhenTheSubjectWasRevokedAtOneClient_TheSessionIsUsable()
+    {
+        SetupCutoff(
+            RevocationScope.ClientSubject, PrincipalOf(RevocationScope.ClientSubject), AuthenticatedAt.AddMinutes(1));
+
+        var refused = await Checker().IsSessionRefusedAsync(Session());
+
+        Assert.False(refused);
     }
 
     /// <summary>
@@ -320,6 +336,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         RevocationScope.Subject => Subject,
         RevocationScope.Session => SessionId,
+        RevocationScope.ClientSubject => RevocationPrincipal.ClientSubject(ClientId, Subject),
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "A revocation scope without a principal."),
     };
 }

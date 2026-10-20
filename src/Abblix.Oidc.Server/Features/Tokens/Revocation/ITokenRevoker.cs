@@ -63,4 +63,26 @@ public interface ITokenRevoker
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSessionAsync(
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cuts one end user off at one client at <paramref name="before"/>, leaving their sessions and their other
+    /// clients alone.
+    /// </summary>
+    /// <remarks>
+    /// What withdrawing consent from a client acts on: every token that client holds for them, its refresh tokens
+    /// included, is refused on its next use, so the client stops reaching their data at once rather than when its
+    /// tokens run out. Their browser sessions stay usable, since they serve the other clients too; the client gets
+    /// new tokens only through a new authorization, which asks for consent again once the host has deleted the
+    /// stored one. Deleting it stays with the host, whose consent provider keeps it.
+    /// </remarks>
+    /// <param name="subject">The subject identifier the host knows the end user by, not a pairwise pseudonym.</param>
+    /// <param name="clientId">The client whose tokens stop.</param>
+    /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes once the revocation is recorded.</returns>
+    Task RevokeSubjectAtClientAsync(
+        string subject,
+        string clientId,
+        DateTimeOffset? before = null,
+        CancellationToken cancellationToken = default);
 }

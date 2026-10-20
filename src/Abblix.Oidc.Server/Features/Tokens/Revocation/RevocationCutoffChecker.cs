@@ -98,10 +98,20 @@ public partial class RevocationCutoffChecker(
                 + "cannot be ruled out");
         }
 
-        if (!await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt, Skew))
+        if (await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt, Skew))
+        {
+            LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
+            return RevokedByCutoff;
+        }
+
+        if (subject is not { Length: > 0 } || payload.ClientId is not { Length: > 0 } clientId)
             return null;
 
-        LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
+        if (!await IsBeforeCutoffAsync(
+                RevocationScope.ClientSubject, RevocationPrincipal.ClientSubject(clientId, subject), issuedAt, Skew))
+            return null;
+
+        LogTokenRefusedByCutoff(RevocationScope.ClientSubject, issuedAt);
         return RevokedByCutoff;
     }
 
@@ -111,6 +121,8 @@ public partial class RevocationCutoffChecker(
         // The subject here is the one a host would revoke, with no pseudonym to open: pairwise conversion
         // happens later, in the token services, against the client the token is being minted for. So this
         // side needs neither the client lookup nor ConvertBack, and has none of their failure modes.
+        // A cutoff at one client is not asked here: the session serves the end user's other clients too, and
+        // the client itself is reached again only through a new authorization, which asks for consent anew.
         // Session first, then subject, matching the order the token side asks in. The boolean is the same
         // either way, but the scope is what the log line names, so a principal caught by both would
         // otherwise be reported differently depending on which door it came through.

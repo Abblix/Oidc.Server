@@ -119,6 +119,60 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// Withdrawing consent from one client stops the refresh tokens that client already holds for the end user.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_subject_at_a_client_stops_that_clients_refresh_tokens()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+        var beforeRevocation = await RefreshAsync(client, discovery, refreshToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the refresh token should work before the revocation, got {(int)beforeRevocation.StatusCode}");
+        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenRequest.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            SubjectOf(tokens),
+            TestConstants.ConfidentialClientId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await RefreshAsync(client, discovery, rotated);
+        await AssertInvalidGrantAsync(afterRevocation);
+    }
+
+    /// <summary>
+    /// The same end user revoked at another client keeps this client's tokens: the cutoff names the pair, and one
+    /// that reached past its client would sign the end user out of clients they never withdrew from.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_subject_at_another_client_leaves_this_clients_tokens_alone()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            SubjectOf(tokens),
+            $"another-client-{Guid.NewGuid():N}",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var response = await RefreshAsync(client, discovery, refreshToken);
+        Assert.True(
+            response.IsSuccessStatusCode,
+            $"a revocation at another client should not refuse this token, got {(int)response.StatusCode}");
+    }
+
+    /// <summary>
     /// Ending a session revokes the tokens issued in it, once a deployment turns that on.
     /// </summary>
     /// <remarks>

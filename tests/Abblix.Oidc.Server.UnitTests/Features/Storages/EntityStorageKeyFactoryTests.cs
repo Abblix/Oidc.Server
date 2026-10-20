@@ -29,6 +29,7 @@ public class EntityStorageKeyFactoryTests
     [Theory]
     [InlineData(RevocationScope.Subject, "Abblix.Oidc.Server:Revoked:subject:user_42")]
     [InlineData(RevocationScope.Session, "Abblix.Oidc.Server:Revoked:session:user_42")]
+    [InlineData(RevocationScope.ClientSubject, "Abblix.Oidc.Server:Revoked:client-subject:user_42")]
     public void RevocationCutoffKey_HasTheNameLiveRecordsAreHeldUnder(RevocationScope scope, string expected)
     {
         Assert.Equal(expected, Factory.RevocationCutoffKey(scope, "user_42"));
