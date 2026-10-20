@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -121,5 +122,6 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// session, so a grant stored with the session does not keep it, and reads it back as unstated.
     /// </remarks>
     [JsonIgnore]
+    [NotStored("Kept by the authentication cookie, which is where the session lives")]
     public SessionPersistence Persistence { get; init; } = SessionPersistence.Unstated;
 }

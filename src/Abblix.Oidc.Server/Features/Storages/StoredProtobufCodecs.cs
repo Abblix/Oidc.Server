@@ -9,23 +9,25 @@
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
-/// The codecs of the Protocol Buffers messages stored as they are, with no domain type mapped onto them.
+/// The codecs of the values stored as they are, with no domain type mapped onto them: Protocol Buffers messages,
+/// and text.
 /// </summary>
 internal static class StoredProtobufCodecs
 {
     /// <summary>
-    /// One codec per message stored as itself.
+    /// One codec per value stored as itself.
     /// </summary>
-    public static readonly ProtobufCodec[] All =
+    public static readonly IProtobufCodec[] All =
     [
-        ProtobufCodec.Stored(Proto.RevocationCutoff.Parser),
-        ProtobufCodec.Stored(Proto.PollSchedule.Parser),
-        ProtobufCodec.Stored(Proto.RateLimitAttempt.Parser),
-        ProtobufCodec.Stored(Proto.RateLimitGeneration.Parser),
-        ProtobufCodec.Stored(Proto.SessionClient.Parser),
-        ProtobufCodec.Stored(Proto.SessionClientsGeneration.Parser),
-        ProtobufCodec.Stored(Proto.LogoutConfirmation.Parser),
-        ProtobufCodec.Stored(Proto.NonceSecret.Parser),
-        ProtobufCodec.Stored(Proto.ConsumedRequestUri.Parser),
+        ProtobufCodecs.Stored(Proto.RevocationCutoff.Parser),
+        ProtobufCodecs.Stored(Proto.PollSchedule.Parser),
+        ProtobufCodecs.Stored(Proto.RateLimitAttempt.Parser),
+        ProtobufCodecs.Stored(Proto.RateLimitGeneration.Parser),
+        ProtobufCodecs.Stored(Proto.SessionClient.Parser),
+        ProtobufCodecs.Stored(Proto.SessionClientsGeneration.Parser),
+        ProtobufCodecs.Stored(Proto.LogoutConfirmation.Parser),
+        ProtobufCodecs.Stored(Proto.NonceSecret.Parser),
+        ProtobufCodecs.Stored(Proto.ConsumedRequestUri.Parser),
+        ProtobufCodecs.Text(),
     ];
 }

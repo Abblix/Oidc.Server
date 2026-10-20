@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.Storages;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -44,5 +45,6 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     /// the exchanged token expires no later than the token it came from and a revocation of the family, which lasts
     /// as long as the family's own tokens, outlasts it too.
     /// </summary>
+    [NotStored("Set only by a token exchange, whose grant is never stored")]
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }
 }

@@ -22,41 +22,41 @@ internal static class MappedProtobufCodecs
     /// <summary>
     /// One codec per mapped domain type.
     /// </summary>
-    public static readonly ProtobufCodec[] All =
+    public static readonly IProtobufCodec[] All =
     [
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.JsonWebTokenStatus.Parser,
             (Tokens.Revocation.JsonWebTokenStatus status) => status.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.TokenInfo.Parser,
             (Endpoints.Token.Interfaces.TokenInfo tokenInfo) => tokenInfo.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.RequestedClaims.Parser,
             (Model.RequestedClaims requestedClaims) => requestedClaims.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.AuthSession.Parser,
             (UserAuthentication.AuthSession authSession) => authSession.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.AuthorizationContext.Parser,
             (AuthorizationContext authContext) => authContext.ToProto(),
             AuthorizationContextMapper.FromProto),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.AuthorizedGrant.Parser,
             (Endpoints.Token.Interfaces.AuthorizedGrant authorizedGrant) => authorizedGrant.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.AuthorizationRequest.Parser,
             (Model.AuthorizationRequest authRequest) => authRequest.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.BackChannelAuthenticationRequest.Parser,
             (BackChannelAuthenticationRequest bcRequest) => bcRequest.ToProto(),
             proto => proto.FromProto()),
-        ProtobufCodec.Mapped(
+        ProtobufCodecs.Mapped(
             Proto.DeviceAuthorizationRequest.Parser,
             (DeviceAuthorizationRequest deviceRequest) => deviceRequest.ToProto(),
             proto => proto.FromProto()),

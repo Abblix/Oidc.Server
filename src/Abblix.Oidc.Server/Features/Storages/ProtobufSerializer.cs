@@ -7,9 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Frozen;
-using System.Text;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Google.Protobuf;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
@@ -26,7 +24,8 @@ public class ProtobufSerializer : IBinarySerializer
     /// <summary>
     /// The codec of each stored type, keyed by that type.
     /// </summary>
-    private static readonly FrozenDictionary<Type, ProtobufCodec> Codecs = MappedProtobufCodecs.All
+    [CodecRegistry]
+    private static readonly FrozenDictionary<Type, IProtobufCodec> Codecs = MappedProtobufCodecs.All
         .Concat(StoredProtobufCodecs.All)
         .ToFrozenDictionary(codec => codec.ValueType);
 
@@ -39,10 +38,6 @@ public class ProtobufSerializer : IBinarySerializer
     /// <exception cref="InvalidOperationException">Thrown when the type is not supported for protobuf serialization.</exception>
     public byte[] Serialize<T>(T obj)
     {
-        // Handle primitive string type directly
-        if (obj is string str)
-            return Encoding.UTF8.GetBytes(str);
-
         if (obj is null || CodecOf(obj.GetType()) is not { } codec)
         {
             throw new InvalidOperationException(
@@ -50,14 +45,14 @@ public class ProtobufSerializer : IBinarySerializer
                 "Only OIDC storage types with protobuf definitions are supported.");
         }
 
-        return codec.ToMessage(obj).ToByteArray();
+        return codec.ToBytes(obj);
     }
 
     /// <summary>
     /// The codec serving a value of <paramref name="runtimeType"/>: its own, or else the one of the nearest base
     /// type that has one, as a type pattern would match a derived value.
     /// </summary>
-    private static ProtobufCodec? CodecOf(Type runtimeType)
+    private static IProtobufCodec? CodecOf(Type runtimeType)
     {
         for (var type = runtimeType; type != null; type = type.BaseType)
         {
@@ -81,11 +76,6 @@ public class ProtobufSerializer : IBinarySerializer
             return default;
 
         var targetType = typeof(T);
-
-        // Handle primitive string type directly
-        if (targetType == typeof(string))
-            return (T)(object)Encoding.UTF8.GetString(bytes);
-
         if (!Codecs.TryGetValue(targetType, out var codec))
         {
             throw new InvalidOperationException(
