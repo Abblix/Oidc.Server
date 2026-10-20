@@ -24,13 +24,18 @@ public sealed class ClientOfflineAccessOptionsValidator : IValidateOptions<OidcO
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        var failures = (options.Clients ?? [])
+        var failures = Refusals(options.Clients).ToList();
+        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// A refusal for each client whose offline access the enumeration does not name, shared with the check of the
+    /// clients a tenant declares.
+    /// </summary>
+    public static IEnumerable<string> Refusals(IEnumerable<ClientInfo>? clients)
+        => (clients ?? [])
             .Where(client => !Enum.IsDefined(client.OfflineAccess))
             .Select(client =>
                 $"The client '{client.ClientId}' is configured with {nameof(ClientInfo.OfflineAccess)} " +
-                $"'{client.OfflineAccess}', which is none of {string.Join(", ", Enum.GetNames<OfflineAccess>())}.")
-            .ToList();
-
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
-    }
+                $"'{client.OfflineAccess}', which is none of {string.Join(", ", Enum.GetNames<OfflineAccess>())}.");
 }

@@ -45,7 +45,7 @@ public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IC
                 return ErrorFactory.InvalidClientMetadata(
                     $"The {Parameters.OfflineAccess} a client asks for at registration requires prompt=consent");
 
-            // A number or a list of names in the request reads into a value the enumeration does not name
+            // A number, or a list of names, that reads into none of the named values
             default:
                 return ErrorFactory.InvalidClientMetadata($"The {Parameters.OfflineAccess} value is not recognized");
         }

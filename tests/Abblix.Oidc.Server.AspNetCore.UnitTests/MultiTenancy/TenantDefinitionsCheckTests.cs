@@ -8,6 +8,7 @@
 
 using System;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -271,4 +272,30 @@ public class TenantDefinitionsCheckTests
         => Assert.Null(FailureOf(
             Tenant("acme", "https://auth.example.com/tenants/acme"),
             Tenant("globex", "https://auth.example.com/Tenants/acme")));
+
+    /// <summary>
+    /// A tenant's client whose offline access the enumeration does not name is refused at startup by its tenant, as a
+    /// configured client is, rather than failing every request of that client.
+    /// </summary>
+    [Fact]
+    public void ATenantClientWithAnUnnamedOfflineAccess_IsRefused_AndTheOthersAreNot()
+    {
+        var acme = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri("https://acme.example.com"),
+            Clients = [new ClientInfo("mistyped") { OfflineAccess = (OfflineAccess)7 }],
+        };
+        var globex = new TenantDefinition
+        {
+            Id = "globex",
+            Issuer = new Uri("https://globex.example.com"),
+            Clients = [new ClientInfo("named") { OfflineAccess = OfflineAccess.Allowed }],
+        };
+
+        var refusals = new TenantDefinitionsCheck().Check([acme, globex]).ToArray();
+
+        Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme"]));
+        Assert.DoesNotContain(refusals, refusal => refusal.TenantIds.Contains("globex"));
+    }
 }
