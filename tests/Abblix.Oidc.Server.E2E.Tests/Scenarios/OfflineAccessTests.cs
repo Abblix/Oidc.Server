@@ -98,7 +98,7 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
         parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}";
         parameters[AuthorizationRequest.Parameters.Prompt] = Prompts.Consent;
         var page = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters));
-        Assert.Equal(ConsentPath, PathOf(page));
+        Assert.Equal(ConsentPath, page.AbsolutePath);
 
         consents.Give();
         var back = await RedirectOf(client, QueryHelpers.BuildUri(
@@ -141,23 +141,18 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.ClientId] = clientId,
         });
 
+    /// <summary>
+    /// Where the endpoint at <paramref name="uri"/> redirects the browser, resolved against the test server, so a
+    /// page on the server and the client's redirect URI read the same way.
+    /// </summary>
     private static async Task<Uri> RedirectOf(HttpClient client, Uri uri)
     {
         var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
-        Assert.True(
-            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
-            $"{(int)response.StatusCode}: " +
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-
-        return response.Headers.Location
-            ?? throw new InvalidOperationException("The endpoint redirected without a Location header");
+        Assert.True(response.StatusCode is HttpStatusCode.Found or HttpStatusCode.SeeOther, $"{response.StatusCode}");
+        Assert.NotNull(response.Headers.Location);
+        return new Uri(TestServerAddress.BaseAddress, response.Headers.Location);
     }
 
-    private static string PathOf(Uri location)
-        => location.IsAbsoluteUri ? location.AbsolutePath : location.OriginalString.Split('?')[0];
-
     private static string? QueryValue(Uri location, string name)
-        => System.Web.HttpUtility.ParseQueryString(
-            location.IsAbsoluteUri ? location.Query : location.OriginalString.Split('?').ElementAtOrDefault(1) ?? "")
-            [name];
+        => System.Web.HttpUtility.ParseQueryString(location.Query)[name];
 }
