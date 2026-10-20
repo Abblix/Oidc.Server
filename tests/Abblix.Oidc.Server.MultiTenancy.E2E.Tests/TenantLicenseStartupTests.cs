@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Consents;
 
 #pragma warning disable ABXMT001
 
@@ -121,6 +122,7 @@ public sealed class TenantLicenseStartupTests
 
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options =>
         {

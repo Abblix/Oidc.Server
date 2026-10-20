@@ -28,6 +28,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Features.Consents;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
 #pragma warning disable ABXMT001
@@ -118,6 +119,7 @@ public sealed class SharedSignalsReceiverTenantTests
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
 
         builder.Services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(_transmitterKey));

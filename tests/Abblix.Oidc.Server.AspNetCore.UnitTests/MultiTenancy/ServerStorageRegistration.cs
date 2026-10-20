@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Features.Consents;
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -26,6 +27,7 @@ internal static class ServerStorageRegistration
             .AddLogging()
             .AddDistributedMemoryCache()
             .AddCommonServices()
+            .AddConsentGrantedForEveryClient()
             .AddStorages()
             .AddNonces()
             .AddReplayPrevention()

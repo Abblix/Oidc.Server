@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.Consents;
 
 namespace Abblix.Oidc.Server.E2E.Tests;
 
@@ -57,6 +58,7 @@ public sealed class HttpIssuerTests(HttpIssuerTests.HttpLetThroughFactory httpsF
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(options =>
         {
             options.Issuer = HttpAddress;

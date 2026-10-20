@@ -22,6 +22,7 @@ using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.Consents;
 
 #pragma warning disable ABXMT001
 
@@ -63,6 +64,7 @@ public class SettingsChecksAreRegisteredTests
         services.AddBackChannelAuthentication();
         services.AddDeviceAuthorization();
         services.AddPairwiseSubjectIdentifiers();
+        services.AddConsentGrantedForEveryClient();
         services.AddOidcCore((_, _) => { });
         services.RequireKeyPlacement();
         services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek" });

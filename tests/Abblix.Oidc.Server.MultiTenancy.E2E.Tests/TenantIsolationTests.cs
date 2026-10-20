@@ -35,6 +35,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Features.Consents;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
 #pragma warning disable ABXMT001
@@ -94,6 +95,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         builder.Services.AddCheckSession();
         builder.Services.AddIntrospection();
         builder.Services.AddRevocation();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(options =>
         {
             options.DeviceAuthorization = new DeviceAuthorizationOptions

@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Features.Consents;
 
 #pragma warning disable ABXMT001
 
@@ -50,6 +51,7 @@ public sealed class HostRequestOutsideTenantsTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
         {
