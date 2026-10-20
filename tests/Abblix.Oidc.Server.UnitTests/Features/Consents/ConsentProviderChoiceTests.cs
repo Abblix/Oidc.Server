@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Consents;
@@ -29,7 +30,9 @@ public class ConsentProviderChoiceTests
 	private const string HostProvider = "host provider";
 	private const string GrantEverything = "grant everything";
 
-	private static ServiceCollection Register(IUserConsentsProvider hostProvider, params string[] steps)
+	private static ServiceCollection Register(params string[] steps) => Register(hostProvider: null, steps);
+
+	private static ServiceCollection Register(IUserConsentsProvider? hostProvider, params string[] steps)
 	{
 		var services = new ServiceCollection();
 		services.AddLogging();
@@ -47,7 +50,7 @@ public class ConsentProviderChoiceTests
 					break;
 
 				case HostProvider:
-					services.AddSingleton(hostProvider);
+					services.AddSingleton(hostProvider ?? throw new ArgumentNullException(nameof(hostProvider)));
 					break;
 
 				case GrantEverything:
@@ -68,7 +71,7 @@ public class ConsentProviderChoiceTests
 	[Fact]
 	public async Task AHostChoosingNothing_DoesNotStart_AndIsToldBothChoices()
 	{
-		using var provider = Register(Mock.Of<IUserConsentsProvider>(), Server).BuildServiceProvider();
+		using var provider = Register(Server).BuildServiceProvider();
 
 		var error = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(provider));
 
@@ -78,12 +81,30 @@ public class ConsentProviderChoiceTests
 		Assert.Contains(nameof(ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient), failure);
 	}
 
+	/// <summary>
+	/// A container that cannot say whether a provider is registered is not refused on a question it cannot be asked.
+	/// </summary>
+	[Fact]
+	public void AContainerThatCannotAnswer_IsNotRefused()
+	{
+		var services = new ServiceCollection();
+		services.AddConsentProviderChoice();
+		var container = new Mock<IServiceProvider>();
+		container.Setup(provider => provider.GetService(typeof(IServiceProvider))).Returns(() => container.Object);
+		var configure = services.Single(descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsentProviderChoice>));
+		var choice = new ConsentProviderChoice();
+
+		((IConfigureOptions<ConsentProviderChoice>)configure.ImplementationFactory!(container.Object)).Configure(choice);
+
+		Assert.True(choice.ProviderRegistered);
+	}
+
 	[Theory]
 	[InlineData(Server, GrantEverything)]
 	[InlineData(GrantEverything, Server)]
 	public async Task AHostGrantingEveryClientEverything_Starts_OnTheProviderGrantingIt(params string[] steps)
 	{
-		using var provider = Register(Mock.Of<IUserConsentsProvider>(), steps).BuildServiceProvider();
+		using var provider = Register(steps).BuildServiceProvider();
 
 		await StartAsync(provider);
 
