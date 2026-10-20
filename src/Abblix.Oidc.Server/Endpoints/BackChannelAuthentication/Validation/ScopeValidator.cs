@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -52,7 +53,7 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	private OidcError? Validate(BackChannelAuthenticationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
-		    context.ClientInfo.OfflineAccessAllowed != true)
+		    !context.ClientInfo.OfflineAccess.IsAllowed())
 		{
 			return new OidcError(
 				ErrorCodes.InvalidScope,

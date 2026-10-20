@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
 using Abblix.Utils.Json;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -462,11 +463,18 @@ public record ClientRegistrationRequest
     public bool? PkceRequired { get; init; }
 
     /// <summary>
-    /// When <c>true</c>, the client is permitted to request the <c>offline_access</c> scope and receive
-    /// refresh tokens. Server extension to RFC 7591 metadata; defaults to <c>true</c>.
+    /// The offline access the client asks for, a server extension to RFC 7591 metadata:
+    /// <see cref="OfflineAccess.Disabled"/>, or <see cref="OfflineAccess.ConsentRequired"/> when the
+    /// request does not state it.
     /// </summary>
-    [JsonPropertyName(Parameters.OfflineAccessAllowed)]
-    public bool? OfflineAccessAllowed { get; init; } = true;
+    /// <remarks>
+    /// <see cref="OfflineAccess.Allowed"/> is refused by
+    /// <see cref="Endpoints.DynamicClientManagement.Validation.OfflineAccessValidator"/>: it waives
+    /// <c>prompt=consent</c> for the client, which OpenID Connect Core 1.0, section 11, leaves to the conditions the
+    /// host states, never to the client itself.
+    /// </remarks>
+    [JsonPropertyName(Parameters.OfflineAccess)]
+    public OfflineAccess OfflineAccess { get; init; } = OfflineAccess.ConsentRequired;
 
     /// <summary>
     /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 section 5.2: when <c>true</c>,
@@ -862,10 +870,10 @@ public record ClientRegistrationRequest
         /// as PKCE-only at the authorization endpoint.</summary>
         public const string PkceRequired = "pkce_required";
 
-        /// <summary>The <c>offline_access_allowed</c> registration parameter (server extension) controlling
-        /// whether the client may request the <c>offline_access</c> scope and obtain refresh tokens.
+        /// <summary>The <c>offline_access</c> registration parameter (server extension) stating whether the client
+        /// receives offline access, and whether it has to ask for consent with <c>prompt=consent</c> to receive it.
         /// </summary>
-        public const string OfflineAccessAllowed = "offline_access_allowed";
+        public const string OfflineAccess = "offline_access";
 
         /// <summary>The <c>dpop_bound_access_tokens</c> registration parameter (RFC 9449 section 5.2) requiring
         /// DPoP-bound access tokens for this client.</summary>

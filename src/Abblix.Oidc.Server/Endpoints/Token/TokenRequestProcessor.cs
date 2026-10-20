@@ -127,7 +127,7 @@ public class TokenRequestProcessor(
 		ClientInfo clientInfo,
 		AuthorizationContext authContext)
 	{
-		if (clientInfo.OfflineAccessAllowed == true || !authContext.Scope.HasFlag(Scopes.OfflineAccess))
+		if (clientInfo.OfflineAccess.IsAllowed() || !authContext.Scope.HasFlag(Scopes.OfflineAccess))
 			return authContext;
 
 		return authContext with { Scope = [.. authContext.Scope.Where(scope => scope != Scopes.OfflineAccess)] };

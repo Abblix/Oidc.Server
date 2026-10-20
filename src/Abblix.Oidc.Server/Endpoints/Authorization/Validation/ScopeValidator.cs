@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -45,7 +46,7 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 					Scope = [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)],
 				};
 			}
-			else if (context.ClientInfo.OfflineAccessAllowed != true)
+			else if (!context.ClientInfo.OfflineAccess.IsAllowed())
 			{
 				return context.InvalidScope("This client is not allowed to request for offline access");
 			}
@@ -76,5 +77,5 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
 		   && !context.Request.ResponseType.HasFlag(ResponseTypes.Token)
 		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
-		       || context.ClientInfo.OfflineAccessWithoutConsentPrompt);
+		       || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt());
 }

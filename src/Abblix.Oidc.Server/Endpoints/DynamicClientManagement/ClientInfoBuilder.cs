@@ -84,7 +84,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         // RFC 7592 update is a full replacement: the scope must be re-applied, or an update omitting it
         // would revert the client to "any scope" (null = unrestricted) and defeat per-client scope enforcement.
         clientInfo.AllowedScopes = model.Scope;
-        clientInfo.OfflineAccessAllowed = model.OfflineAccessAllowed;
+        clientInfo.OfflineAccess = model.OfflineAccess;
         clientInfo.ApplicationType = model.ApplicationType;
         clientInfo.SubjectType = model.SubjectType;
         clientInfo.DefaultMaxAge = model.DefaultMaxAge;

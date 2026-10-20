@@ -36,7 +36,7 @@ public class ScopeValidatorTests
 
     private BackChannelAuthenticationValidationContext CreateContext(
         string[]? scopes = null,
-        bool offlineAccessAllowed = false,
+        OfflineAccess offlineAccess = OfflineAccess.Disabled,
         ResourceDefinition[]? resources = null)
     {
         var request = new BackChannelAuthenticationRequest
@@ -50,7 +50,7 @@ public class ScopeValidatorTests
         {
             ClientInfo = new ClientInfo("test-client")
             {
-                OfflineAccessAllowed = offlineAccessAllowed
+                OfflineAccess = offlineAccess
             },
             Resources = resources!
         };
@@ -97,7 +97,7 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             scopes: [TestConstants.DefaultScope, "offline_access"],
-            offlineAccessAllowed: false);
+            offlineAccess: OfflineAccess.Disabled);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -110,7 +110,7 @@ public class ScopeValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds when offline_access is requested and allowed.
-    /// Client must have OfflineAccessAllowed = true to request refresh tokens.
+    /// A client whose offline access is not Disabled may request refresh tokens.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithOfflineAccessAllowed_ShouldReturnNull()
@@ -137,7 +137,7 @@ public class ScopeValidatorTests
 
         var context = CreateContext(
             scopes: [TestConstants.DefaultScope, "offline_access"],
-            offlineAccessAllowed: true);
+            offlineAccess: OfflineAccess.ConsentRequired);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -341,7 +341,7 @@ public class ScopeValidatorTests
         // Arrange - No scope manager setup, should fail on offline_access check first
         var context = CreateContext(
             scopes: [TestConstants.DefaultScope, "offline_access"],
-            offlineAccessAllowed: false);
+            offlineAccess: OfflineAccess.Disabled);
 
         // Act
         var result = await _validator.ValidateAsync(context);

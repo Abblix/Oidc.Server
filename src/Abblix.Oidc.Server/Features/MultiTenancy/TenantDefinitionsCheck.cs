@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
@@ -130,6 +131,11 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
             from tenant in tenants
             let refusal = PairwiseClientsOptionsValidator.Refusal(tenant.Clients, tenant.PairwiseSubject)
             where refusal is not null
+            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
+
+        failures.AddRange(
+            from tenant in tenants
+            from refusal in ClientOfflineAccessOptionsValidator.Refusals(tenant.Clients)
             select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
 
         return failures;

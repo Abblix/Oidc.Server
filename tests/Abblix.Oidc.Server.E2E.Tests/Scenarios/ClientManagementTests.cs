@@ -33,6 +33,7 @@ using Microsoft.Extensions.Options;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 using Xunit;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -830,7 +831,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             [RequestMembers.RequirePushedAuthorizationRequests] = true,
             [RequestMembers.RequireSignedRequestObject] = true,
             [RequestMembers.PkceRequired] = false,
-            [RequestMembers.OfflineAccessAllowed] = false,
+            [RequestMembers.OfflineAccess] = JsonSerializer.SerializeToNode(OfflineAccess.Disabled),
             [RequestMembers.AuthorizationDetailsTypes] = new JsonArray(TestConstants.PaymentInitiationType),
             [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenExchangeTokenTypes.AccessToken),
             [RequestMembers.TokenExchangeAudiences] = new JsonArray("https://api.example.com"),

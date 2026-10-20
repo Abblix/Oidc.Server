@@ -190,7 +190,7 @@ public class RegisteredClientMetadataTests
         InitiateLoginUri = new Uri("https://client.example.com/login"),
         RequestUris = [new Uri("https://client.example.com/request")],
         PkceRequired = false,
-        OfflineAccessAllowed = false,
+        OfflineAccess = OfflineAccess.Disabled,
         DpopBoundAccessTokens = true,
         RequirePushedAuthorizationRequests = true,
         RequireSignedRequestObject = true,

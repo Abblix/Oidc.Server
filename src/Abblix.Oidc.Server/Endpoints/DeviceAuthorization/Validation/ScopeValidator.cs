@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
@@ -27,7 +28,7 @@ public class ScopeValidator(IScopeManager scopeManager) : IDeviceAuthorizationCo
         var scopes = context.Request.Scope ?? [];
 
         if (scopes.Contains(Scopes.OfflineAccess) &&
-            context.ClientInfo.OfflineAccessAllowed != true)
+            !context.ClientInfo.OfflineAccess.IsAllowed())
         {
             return new OidcError(
                 ErrorCodes.InvalidScope,

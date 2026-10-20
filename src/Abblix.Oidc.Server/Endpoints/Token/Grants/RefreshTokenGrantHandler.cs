@@ -93,7 +93,7 @@ public class RefreshTokenGrantHandler(
 
 		// A refresh token exists only for offline access, so withdrawing the permission ends the ones already issued;
 		// renewing without a new refresh token would leave the presented one unspent and reusable until it expires
-		if (clientInfo.OfflineAccessAllowed != true)
+		if (!clientInfo.OfflineAccess.IsAllowed())
 		{
 			return new OidcError(
 				ErrorCodes.InvalidGrant,
