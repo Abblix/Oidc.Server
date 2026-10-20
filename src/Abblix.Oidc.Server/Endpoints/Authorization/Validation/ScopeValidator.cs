@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
@@ -23,8 +24,9 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 {
 	/// <summary>
 	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
-	/// with the client's allowed scopes and the OAuth flow type. For instance, it validates if offline access is
-	/// requested appropriately and if the client is authorized for such access.
+	/// with the client's allowed scopes and the OAuth flow type. Offline access is ignored where OpenID Connect
+	/// Core 1.0 has the server do so, and refused only when it would otherwise be received by a client not
+	/// allowed it.
 	/// </summary>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
@@ -34,13 +36,20 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
-	    {
-		    if (context.FlowType == FlowTypes.Implicit)
-				    return context.InvalidScope("It is not allowed to request for offline access in implicit flow");
-
-		    if (context.ClientInfo.OfflineAccessAllowed != true)
-				    return context.InvalidScope("This client is not allowed to request for offline access");
-	    }
+		{
+			// Ignored as if never asked for, so the host's consent provider, reading the request, is not shown it
+			if (!OfflineAccessReceived(context))
+			{
+				context.Request = context.Request with
+				{
+					Scope = [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)],
+				};
+			}
+			else if (context.ClientInfo.OfflineAccessAllowed != true)
+			{
+				return context.InvalidScope("This client is not allowed to request for offline access");
+			}
+		}
 
 		if (!scopeManager.Validate(
 			    context.Request.Scope,
@@ -55,4 +64,17 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	    context.Scope = scopeDefinitions;
         return null;
     }
+
+	/// <summary>
+	/// Whether the request is processed with the <c>offline_access</c> it asks for, rather than with that scope
+	/// ignored. OpenID Connect Core 1.0 has the server ignore it unless the response returns an authorization code
+	/// (section 11), when the response carries an access token through the user agent (section 17.4), and unless
+	/// the request asks for consent with <c>prompt=consent</c> or the client is configured to receive offline
+	/// access without it (section 11).
+	/// </summary>
+	private static bool OfflineAccessReceived(AuthorizationValidationContext context)
+		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
+		   && !context.Request.ResponseType.HasFlag(ResponseTypes.Token)
+		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
+		       || context.ClientInfo.OfflineAccessWithoutConsentPrompt);
 }

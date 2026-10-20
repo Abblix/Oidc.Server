@@ -69,6 +69,15 @@ public sealed class RefreshTokenSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's client is not known.");
         }
 
+        // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
+        // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
+        if (originalClient is not { OfflineAccessAllowed: true })
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The subject_token's client is not allowed offline access.");
+        }
+
         var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(jwt, originalClient);
         if (!grantLookup.TryGetSuccess(out var grant))
         {

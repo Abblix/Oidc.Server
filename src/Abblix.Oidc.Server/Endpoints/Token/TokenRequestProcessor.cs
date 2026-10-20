@@ -68,6 +68,8 @@ public class TokenRequestProcessor(
 		if (RefuseWidening(request, authContext) is { } refusal)
 			return refusal;
 
+		authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, authContext);
+
 		// Read before the token service is handed the context: the response advertises what was granted,
 		// and a service that narrowed the context in place would have this answer say what it decided
 		// rather than what the end user did.
@@ -114,6 +116,21 @@ public class TokenRequestProcessor(
 			return new OidcError(ErrorCodes.InvalidGrant, "Token was already used");
 
 		return response;
+	}
+
+	/// <summary>
+	/// The context without <c>offline_access</c> for a client not allowed offline access, whichever grant brought it,
+	/// so no refresh token is issued to it: a grant taking its scope from the token request has no authorization
+	/// request in front of it to ignore the scope there.
+	/// </summary>
+	private static AuthorizationContext OfflineAccessIgnoredUnlessAllowed(
+		ClientInfo clientInfo,
+		AuthorizationContext authContext)
+	{
+		if (clientInfo.OfflineAccessAllowed == true || !authContext.Scope.HasFlag(Scopes.OfflineAccess))
+			return authContext;
+
+		return authContext with { Scope = [.. authContext.Scope.Where(scope => scope != Scopes.OfflineAccess)] };
 	}
 
 	/// <summary>

@@ -80,7 +80,7 @@ public class TokenRequestProcessorTests
         return new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
     }
@@ -470,6 +470,47 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// A client not allowed offline access has offline_access ignored however its grant came to carry it, as a
+    /// password or jwt-bearer grant takes it from the token request: the access token is issued without it and no
+    /// refresh token is.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    public async Task ProcessAsync_OfflineAccessFromClientNotAllowedIt_IsIgnored(bool? offlineAccessAllowed)
+    {
+        const string ApiScope = "api.read";
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            CreateAuthorizedGrant([ApiScope, Scopes.OfflineAccess]),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = offlineAccessAllowed },
+            [],
+            []);
+        var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [ApiScope, Scopes.OfflineAccess], null);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(evaluated);
+
+        AuthorizationContext? issuedUnder = null;
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Callback((AuthSession _, AuthorizationContext context, ClientInfo _, string? _, DateTimeOffset? _) =>
+                issuedUnder = context)
+            .ReturnsAsync(CreateAccessToken());
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Null(tokenIssued.RefreshToken);
+        Assert.NotNull(issuedUnder);
+        Assert.Equal([ApiScope], issuedUnder.Scope);
+        _refreshTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
     /// Verifies no refresh token created without offline_access scope.
     /// Per OAuth 2.0, refresh token is optional and depends on authorization.
     /// </summary>
@@ -516,7 +557,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             new TokenRequest { GrantType = GrantTypes.TokenExchange },
             new AuthorizedGrant(authSession, authContext) { GrantId = ExistingGrantId, ExpiresNoLaterThan = subjectExpiresAt },
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -550,7 +591,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             new TokenRequest { GrantType = GrantTypes.RefreshToken },
             new RefreshTokenAuthorizedGrant(authSession, authContext, legacyRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
         var newRefreshToken = CreateRefreshToken();
@@ -593,7 +634,7 @@ public class TokenRequestProcessorTests
                 authSession,
                 new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
                 existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -827,7 +868,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             refreshTokenGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
 
@@ -886,7 +927,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
 
@@ -924,7 +965,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -964,7 +1005,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
 
@@ -1102,6 +1143,7 @@ public class TokenRequestProcessorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = tokenEndpointAuthMethod,
+            OfflineAccessAllowed = true,
         };
         var request = new ValidTokenRequest(tokenRequest, authorizedGrant, clientInfo, [], []);
 
@@ -1151,7 +1193,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -1189,7 +1231,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [new ScopeDefinition(TestConstants.EmailScope)],
             []);
         var emptyScopeContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
@@ -1228,7 +1270,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccessAllowed = true },
             [],
             [new ResourceDefinition(new Uri("https://api.example/b"))]);
         // Empty scope so the pre-fix path issues a clean success (audience falls back to client_id),
