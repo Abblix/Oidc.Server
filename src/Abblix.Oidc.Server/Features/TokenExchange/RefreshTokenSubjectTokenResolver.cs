@@ -71,7 +71,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
 
         // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
         // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
-        if (originalClient.OfflineAccessAllowed != true)
+        if (originalClient is not { OfflineAccessAllowed: true })
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
