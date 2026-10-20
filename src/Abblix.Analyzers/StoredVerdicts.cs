@@ -68,6 +68,8 @@ internal sealed class StoredVerdicts(
             {
                 foreach (var property in _members.PropertiesBelow(type, baseType))
                     ReportUnmapped(context, reported, property, StoredTypeAnalyzer.ToMessage, location);
+                foreach (var field in _members.FieldsBelow(type, baseType))
+                    ReportUnmapped(context, reported, field, StoredTypeAnalyzer.ToMessage, location);
                 continue;
             }
 
@@ -111,7 +113,7 @@ internal sealed class StoredVerdicts(
     private void ReportUnmapped(
         CompilationAnalysisContext context,
         HashSet<(ISymbol, string)> reported,
-        IPropertySymbol member,
+        ISymbol member,
         string direction,
         Location fallback)
     {
@@ -129,14 +131,14 @@ internal sealed class StoredVerdicts(
     /// Each member of a message the way out builds, or of a type the way back builds, that one of the two directions
     /// does not name, with the direction it is missing from.
     /// </summary>
-    private IEnumerable<(IPropertySymbol Member, string Direction)> Unmapped(StoredCodec codec)
+    private IEnumerable<(ISymbol Member, string Direction)> Unmapped(StoredCodec codec)
     {
         var outward = Closure(codec.Out);
         var back = Closure(codec.Back);
 
         var messages = outward.Created.Where(type => types.IsMessage(type) && StoredMembers.IsInSource(type));
-        var fields = messages.SelectMany(StoredMembers.FieldsOf)
-            .Select(field => (field, outward.Properties.Contains(field), back.Properties.Contains(field)));
+        var fields = messages.SelectMany(StoredMembers.MessageFieldsOf)
+            .Select(field => ((ISymbol)field, outward.Properties.Contains(field), back.Properties.Contains(field)));
 
         var rebuilt = back.Created
             .Where(type => !types.IsMessage(type) && StoredMembers.IsInSource(type))
@@ -145,11 +147,19 @@ internal sealed class StoredVerdicts(
             .OfType<ITypeSymbol>();
         var properties = rebuilt.SelectMany(_members.PropertiesOf)
             .Select(property => (
-                property,
+                (ISymbol)property,
                 outward.Properties.Contains(property),
                 back.Properties.Contains(property) || SetByConstructor(property, back)));
 
-        foreach (var (member, isOut, isBack) in fields.Concat(properties))
+        // A field a stored property's getter reads is mapped through that property; any other field is mapped itself
+        var data = rebuilt.SelectMany(_members.FieldsOf)
+            .Where(field => !ReadByStoredProperty(field))
+            .Select(field => (
+                (ISymbol)field,
+                outward.Fields.Contains(field),
+                back.Fields.Contains(field) || SetFieldByConstructor(field, back)));
+
+        foreach (var (member, isOut, isBack) in fields.Concat(properties).Concat(data))
         {
             if (!isOut)
                 yield return (member, StoredTypeAnalyzer.ToMessage);
@@ -199,6 +209,26 @@ internal sealed class StoredVerdicts(
             || source.Fields.Any(field =>
                 sources.TryGetValue(field, out var initializer) && OwnsAny(constructor, initializer.Parameters)));
     }
+
+    /// <summary>
+    /// Whether the getter of a property of the field's type that is not kept out of the message reads
+    /// <paramref name="field"/>.
+    /// </summary>
+    private bool ReadByStoredProperty(IFieldSymbol field)
+        => sources.Any(source =>
+            source.Key is IPropertySymbol property
+            && SymbolEqualityComparer.Default.Equals(property.ContainingType, field.ContainingType)
+            && !types.IsNotStored(property)
+            && source.Value.Fields.Contains(field));
+
+    /// <summary>
+    /// Whether a constructor <paramref name="facts"/> call sets <paramref name="field"/>, in its body or through a
+    /// parameter the field's initializer reads.
+    /// </summary>
+    private bool SetFieldByConstructor(IFieldSymbol field, BodyFacts facts)
+        => facts.Calls.Where(call => call.MethodKind == MethodKind.Constructor).Any(constructor =>
+            (bodies.TryGetValue(constructor, out var body) && body.Fields.Contains(field))
+            || (sources.TryGetValue(field, out var initializer) && OwnsAny(constructor, initializer.Parameters)));
 
     private static bool OwnsAny(IMethodSymbol constructor, IEnumerable<IParameterSymbol> parameters)
         => parameters.Any(parameter =>

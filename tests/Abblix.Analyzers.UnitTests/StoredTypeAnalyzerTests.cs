@@ -715,6 +715,93 @@ public class StoredTypeAnalyzerTests
     }
 
     /// <summary>
+    /// Every instance field holds data whatever reads it, so one no stored property reads is owed a mapping of its
+    /// own: a public field, a field read through a method, and a field no property exposes at all.
+    /// </summary>
+    [Theory]
+    [InlineData("public readonly string Extra = extra ?? \"\";", "Sample.Note.Extra")]
+    [InlineData("private readonly string _extra = extra ?? \"\"; public string Extra => Read(); private string Read() => _extra;", "Sample.Note._extra")]
+    [InlineData("private readonly string _extra = extra ?? \"\"; public string Describe() => _extra;", "Sample.Note._extra")]
+    public async Task AFieldNoStoredPropertyReadsIsOwed(string extra, string reported)
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), $$"""
+            namespace Sample
+            {
+                public sealed class Note(string text, string? extra)
+                {
+                    public string Text { get; } = text;
+                    {{extra}}
+                }
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+                }
+
+                public static class NoteCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage { Text = note.Text },
+                            message => new Note(message.Text, "")),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Equal([(reported, StoredTypeAnalyzer.ToMessage)], Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
+    /// <summary>
+    /// A field mapped itself both ways, or marked as kept out of the message, is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(
+        "public readonly string Extra = extra ?? \"\";",
+        "public const int ExtraFieldNumber = 2; public string Extra { get; set; } = \"\";",
+        "Text = note.Text, Extra = note.Extra",
+        "message.Extra")]
+    [InlineData(
+        "[Abblix.Oidc.Server.Features.Storages.NotStored(\"a cache\")] private readonly string _extra = extra ?? \"\";",
+        "",
+        "Text = note.Text",
+        "\"\"")]
+    public async Task AFieldMappedOrMarkedIsAccepted(string extra, string messageExtra, string written, string readBack)
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), $$"""
+            namespace Sample
+            {
+                public sealed class Note(string text, string? extra)
+                {
+                    public string Text { get; } = text;
+                    {{extra}}
+                }
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+                    {{messageExtra}}
+                }
+
+                public static class NoteCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage { {{written}} },
+                            message => new Note(message.Text, {{readBack}})),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    /// <summary>
     /// A field a constructor body sets, read by a property with no field of its own, holds data as well.
     /// </summary>
     [Fact]

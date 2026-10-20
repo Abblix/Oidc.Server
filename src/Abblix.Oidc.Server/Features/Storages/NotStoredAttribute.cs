@@ -9,18 +9,18 @@
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
-/// Marks a property of a stored type that its Protocol Buffers message leaves out on purpose.
+/// Marks a property or a field of a stored type that its Protocol Buffers message leaves out on purpose.
 /// </summary>
 /// <remarks>
-/// ABX1010 refuses every other property a mapper does not carry both ways, since such a property is lost on every
+/// ABX1010 refuses every other property or field a mapper does not carry both ways, since its value is lost on every
 /// write with nothing to report it, so the exception stands in the code with its reason.
 /// </remarks>
-/// <param name="reason">Why the property is not stored.</param>
-[AttributeUsage(AttributeTargets.Property, Inherited = false)]
+/// <param name="reason">Why the member is not stored.</param>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, Inherited = false)]
 internal sealed class NotStoredAttribute(string reason) : Attribute
 {
     /// <summary>
-    /// Why the property is not stored.
+    /// Why the member is not stored.
     /// </summary>
     public string Reason => reason;
 }

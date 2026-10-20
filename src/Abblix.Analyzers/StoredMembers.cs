@@ -27,7 +27,7 @@ internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, boo
     /// The fields of <paramref name="message"/>: the properties protoc writes a <c>FieldNumber</c> constant for, so
     /// that the presence and clearing members it adds beside a field are not taken for fields.
     /// </summary>
-    public static IEnumerable<IPropertySymbol> FieldsOf(ITypeSymbol message)
+    public static IEnumerable<IPropertySymbol> MessageFieldsOf(ITypeSymbol message)
         => message.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(property => message.GetMembers(property.Name + "FieldNumber")
@@ -48,14 +48,33 @@ internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, boo
     public IEnumerable<IPropertySymbol> PropertiesBelow(ITypeSymbol derived, ITypeSymbol served)
         => PropertiesUpTo(derived, served);
 
+    /// <summary>
+    /// The instance fields of <paramref name="stored"/> and its base types declared here, other than the hidden field
+    /// of an auto-property, a constant, and one marked as kept out of the message: each holds data whatever reads it.
+    /// </summary>
+    public IEnumerable<IFieldSymbol> FieldsOf(ITypeSymbol stored) => FieldsUpTo(stored, null);
+
+    /// <summary>
+    /// The fields holding data that <paramref name="derived"/> and its base types below <paramref name="served"/>
+    /// declare, which a codec of <paramref name="served"/> knows nothing of.
+    /// </summary>
+    public IEnumerable<IFieldSymbol> FieldsBelow(ITypeSymbol derived, ITypeSymbol served) => FieldsUpTo(derived, served);
+
     private IEnumerable<IPropertySymbol> PropertiesUpTo(ITypeSymbol stored, ITypeSymbol? end)
+        => DeclaringTypes(stored, end).SelectMany(HoldingData);
+
+    private IEnumerable<IFieldSymbol> FieldsUpTo(ITypeSymbol stored, ITypeSymbol? end)
+        => DeclaringTypes(stored, end).SelectMany(type => type.GetMembers().OfType<IFieldSymbol>().Where(field =>
+            field is { IsStatic: false, IsConst: false, IsImplicitlyDeclared: false, AssociatedSymbol: null }
+            && !types.IsNotStored(field)));
+
+    private static IEnumerable<ITypeSymbol> DeclaringTypes(ITypeSymbol stored, ITypeSymbol? end)
     {
         for (var type = stored;
              type != null && IsInSource(type) && !SymbolEqualityComparer.Default.Equals(type, end);
              type = type.BaseType)
         {
-            foreach (var property in HoldingData(type))
-                yield return property;
+            yield return type;
         }
     }
 

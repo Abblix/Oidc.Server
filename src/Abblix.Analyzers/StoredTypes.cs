@@ -17,7 +17,7 @@ namespace Abblix.Analyzers;
 /// <param name="registry">The mark of the field the serializer takes its codecs from.</param>
 /// <param name="message">The interface every Protocol Buffers message implements, when the compilation sees it.</param>
 /// <param name="storedAsJson">The mark of a type stored as JSON on purpose, when declared.</param>
-/// <param name="notStored">The mark of a property kept out of the message on purpose, when declared.</param>
+/// <param name="notStored">The mark of a property or a field kept out of the message on purpose, when declared.</param>
 internal sealed class StoredTypes(
     INamedTypeSymbol storage,
     INamedTypeSymbol codec,
@@ -87,9 +87,9 @@ internal sealed class StoredTypes(
     public bool IsStoredAsJson(ITypeSymbol type) => HasMark(type, storedAsJson);
 
     /// <summary>
-    /// Whether <paramref name="property"/> is kept out of the message on purpose.
+    /// Whether <paramref name="member"/>, a property or a field, is kept out of the message on purpose.
     /// </summary>
-    public bool IsNotStored(IPropertySymbol property) => HasMark(property, notStored);
+    public bool IsNotStored(ISymbol member) => HasMark(member, notStored);
 
     private static bool HasMark(ISymbol symbol, INamedTypeSymbol? mark)
         => mark != null && symbol.GetAttributes().Any(attribute =>

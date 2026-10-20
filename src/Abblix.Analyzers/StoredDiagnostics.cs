@@ -33,7 +33,7 @@ internal static class StoredDiagnostics
     /// <summary>
     /// A member the mapper of a codec leaves out of one direction.
     /// </summary>
-    public static Diagnostic Unmapped(Location location, IPropertySymbol member, string direction)
+    public static Diagnostic Unmapped(Location location, ISymbol member, string direction)
     {
         var subject = $"{member.ContainingType.ToDisplayString()}.{member.Name}";
         return Diagnostic.Create(
