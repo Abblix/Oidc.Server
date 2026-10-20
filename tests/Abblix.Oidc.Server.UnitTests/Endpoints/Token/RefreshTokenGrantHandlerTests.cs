@@ -71,7 +71,7 @@ public class RefreshTokenGrantHandlerTests
     public async Task ValidRefreshToken_ShouldReturnNewGrant()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId) { OfflineAccess = OfflineAccess.Allowed };
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccess = OfflineAccess.ConsentRequired };
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
 

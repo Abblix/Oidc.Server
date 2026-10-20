@@ -62,6 +62,7 @@ public class TenantOwnedSettingsAreReadPerIssuerTests
         // Startup judging the configured values
         typeof(BackChannelClientAuthenticationValidator).FullName!,
         typeof(ClientIdsOptionsValidator).FullName!,
+        typeof(ClientOfflineAccessOptionsValidator).FullName!,
         typeof(ClientSecretsOptionsValidator).FullName!,
         typeof(ClockSkewCeilingValidator).FullName!,
         typeof(IssuerOptionsValidator).FullName!,

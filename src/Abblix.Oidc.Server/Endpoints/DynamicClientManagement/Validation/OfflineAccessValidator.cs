@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -20,21 +21,54 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <remarks>
 /// OpenID Connect Core 1.0, section 11, waives <c>prompt=consent</c> only where "other conditions for processing the
 /// request permitting offline access" are in place, and stating those conditions for a client is the host's call,
-/// never the client's own.
+/// never the client's own. An update (RFC 7592 section 2.2) sends back the metadata the server returned, so a client
+/// the host already allowed keeps <c>allowed</c> there, while one it did not cannot raise itself to it.
 /// </remarks>
-public class OfflineAccessValidator : SyncClientRegistrationContextValidator
+/// <param name="clientInfoProvider">Store consulted for the offline access of the client being updated.</param>
+public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error when the client asks for offline access without
-    /// <c>prompt=consent</c>; <c>null</c> otherwise.
+    /// <c>prompt=consent</c> it does not already have, or names no offline access at all; <c>null</c> otherwise.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
-        => context.Request.OfflineAccess switch
+    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    {
+        switch (context.Request.OfflineAccess)
         {
-            OfflineAccess.Disabled or OfflineAccess.ConsentRequired => null,
-            OfflineAccess.Allowed => ErrorFactory.InvalidClientMetadata(
-                $"The {Parameters.OfflineAccess} a client asks for at registration requires prompt=consent"),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(context), context.Request.OfflineAccess, $"Unknown {nameof(OfflineAccess)} value"),
-        };
+            case OfflineAccess.Disabled or OfflineAccess.ConsentRequired:
+                return null;
+
+            case OfflineAccess.Allowed:
+                if (await AlreadyAllowedAsync(context))
+                    return null;
+
+                return ErrorFactory.InvalidClientMetadata(
+                    $"The {Parameters.OfflineAccess} a client asks for at registration requires prompt=consent");
+
+            // A number or a list of names in the request reads into a value the enumeration does not name
+            default:
+                return ErrorFactory.InvalidClientMetadata($"The {Parameters.OfflineAccess} value is not recognized");
+        }
+    }
+
+    /// <summary>
+    /// Whether the request updates a client the host has already allowed offline access without
+    /// <c>prompt=consent</c>.
+    /// </summary>
+    private async Task<bool> AlreadyAllowedAsync(ClientRegistrationValidationContext context)
+    {
+        switch (context.Operation)
+        {
+            case DynamicClientOperation.Register:
+                return false;
+
+            case DynamicClientOperation.Update:
+                var clientId = context.Request.ClientId;
+                return clientId.HasValue() &&
+                       await clientInfoProvider.TryFindClientAsync(clientId) is { OfflineAccess: OfflineAccess.Allowed };
+
+            default:
+                throw new InvalidOperationException($"Unsupported dynamic client operation: {context.Operation}");
+        }
+    }
 }

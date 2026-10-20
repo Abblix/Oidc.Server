@@ -47,7 +47,7 @@ public class RefreshTokenSubjectTokenResolverTests
         // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(OriginalClientId))
-            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Allowed });
+            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.ConsentRequired });
 
         _resolver = new RefreshTokenSubjectTokenResolver(
             _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);

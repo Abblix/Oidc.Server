@@ -143,12 +143,26 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
     /// refused with invalid_client_metadata.
     /// </summary>
     [Fact]
-    public async Task AClientRegisteringItself_AskingForOfflineAccessWithoutConsentPrompt_IsRefused()
+    public Task AClientRegisteringItself_AskingForOfflineAccessWithoutConsentPrompt_IsRefused()
+        => AssertRegistrationRefusedAsync(JsonSerializer.SerializeToNode(OfflineAccess.Allowed));
+
+    /// <summary>
+    /// A number, or a list of names, reads into a value the enumeration does not name, and the registration is
+    /// refused with invalid_client_metadata rather than failing on the server.
+    /// </summary>
+    [Theory]
+    [InlineData("7")]
+    [InlineData("\"7\"")]
+    [InlineData("\"consent_required,allowed\"")]
+    public Task AClientRegisteringItself_WithAnUnnamedOfflineAccess_IsRefused(string value)
+        => AssertRegistrationRefusedAsync(JsonNode.Parse(value));
+
+    private async Task AssertRegistrationRefusedAsync(JsonNode? offlineAccess)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var body = PublicClient();
-        body[RequestMembers.OfflineAccess] = JsonSerializer.SerializeToNode(OfflineAccess.Allowed);
+        body[RequestMembers.OfflineAccess] = offlineAccess;
 
         var response = await client.PostAsJsonAsync(
             discovery.RegistrationEndpoint, body, TestContext.Current.CancellationToken);
