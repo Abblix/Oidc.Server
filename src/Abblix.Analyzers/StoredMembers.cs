@@ -14,8 +14,8 @@ namespace Abblix.Analyzers;
 /// mapped from.
 /// </summary>
 /// <param name="types">The symbols the rules are asked of.</param>
-/// <param name="setInConstructor">Whether a constructor of its type sets a property with no setter, in its body or
-/// through a primary constructor parameter the property's initializer is.</param>
+/// <param name="setInConstructor">Whether a constructor of its type sets a property with no setter: in its body, or
+/// through a constructor parameter or an instance field the property reads its value from.</param>
 internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, bool> setInConstructor)
 {
     /// <summary>
@@ -35,8 +35,9 @@ internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, boo
 
     /// <summary>
     /// The properties of <paramref name="stored"/> and its base types declared here that hold data: those that can be
-    /// written, and auto-properties a constructor sets, but not a computed one or one holding the same value for every
-    /// instance, and not one marked as kept out of the message.
+    /// written, and those with no setter a constructor sets, in its body or through a parameter or an instance field
+    /// the property reads its value from, but not one holding the same value for every instance or one computed from
+    /// other properties, and not one marked as kept out of the message.
     /// </summary>
     public IEnumerable<IPropertySymbol> PropertiesOf(ITypeSymbol stored) => PropertiesUpTo(stored, null);
 
@@ -59,16 +60,10 @@ internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, boo
     }
 
     private IEnumerable<IPropertySymbol> HoldingData(ITypeSymbol type)
-    {
-        var autoProperties = new HashSet<IPropertySymbol>(
-            type.GetMembers().OfType<IFieldSymbol>().Select(field => field.AssociatedSymbol).OfType<IPropertySymbol>(),
-            SymbolEqualityComparer.Default);
-
-        return type.GetMembers().OfType<IPropertySymbol>().Where(property =>
+        => type.GetMembers().OfType<IPropertySymbol>().Where(property =>
             property is { IsStatic: false, IsIndexer: false, IsImplicitlyDeclared: false }
-            && (property.SetMethod != null || (autoProperties.Contains(property) && setInConstructor(property)))
+            && (property.SetMethod != null || setInConstructor(property))
             && !types.IsNotStored(property));
-    }
 
     /// <summary>
     /// Whether <paramref name="property"/> of a record is set by a constructor <paramref name="facts"/> call, through

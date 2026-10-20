@@ -11,8 +11,8 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Abblix.Analyzers;
 
 /// <summary>
-/// What one body of code touches: the properties it names, the methods and constructors it calls or hands on as a
-/// delegate, and the types it builds.
+/// What one body of code touches: the properties and instance fields it names, the parameters it reads, the methods
+/// and constructors it calls or hands on as a delegate, and the types it builds.
 /// </summary>
 internal sealed class BodyFacts
 {
@@ -24,6 +24,12 @@ internal sealed class BodyFacts
 
     /// <summary>The types built with <c>new</c>.</summary>
     public HashSet<ITypeSymbol> Created { get; } = new(SymbolEqualityComparer.Default);
+
+    /// <summary>The instance fields named, whether read or written.</summary>
+    public HashSet<IFieldSymbol> Fields { get; } = new(SymbolEqualityComparer.Default);
+
+    /// <summary>The parameters read.</summary>
+    public HashSet<IParameterSymbol> Parameters { get; } = new(SymbolEqualityComparer.Default);
 
     /// <summary>
     /// The facts of the operations under <paramref name="roots"/>, lambdas and local functions inside them included.
@@ -54,6 +60,14 @@ internal sealed class BodyFacts
                 case IMethodReferenceOperation reference:
                     facts.Calls.Add(reference.Method.OriginalDefinition);
                     break;
+
+                case IFieldReferenceOperation { Field.IsStatic: false } field:
+                    facts.Fields.Add(field.Field.OriginalDefinition);
+                    break;
+
+                case IParameterReferenceOperation parameter:
+                    facts.Parameters.Add(parameter.Parameter);
+                    break;
             }
         }
 
@@ -78,5 +92,7 @@ internal sealed class BodyFacts
         Properties.UnionWith(other.Properties);
         Calls.UnionWith(other.Calls);
         Created.UnionWith(other.Created);
+        Fields.UnionWith(other.Fields);
+        Parameters.UnionWith(other.Parameters);
     }
 }

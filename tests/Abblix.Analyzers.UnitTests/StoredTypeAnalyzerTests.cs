@@ -356,18 +356,21 @@ public class StoredTypeAnalyzerTests
     }
 
     /// <summary>
-    /// A value computed from a constructor parameter is computed again by the type itself, so it is not owed a
-    /// mapping, while the parameter handed on as it is still is.
+    /// A value computed from a constructor parameter is owed a mapping like any other, since a rule telling it apart
+    /// from data would let data through unchecked; the type says it is recomputed with a mark and its reason.
     /// </summary>
-    [Fact]
-    public async Task APropertyComputedFromAParameterIsNotOwed()
+    [Theory]
+    [InlineData("", "Sample.Note.Length")]
+    [InlineData("[Abblix.Oidc.Server.Features.Storages.NotStored(\"recomputed from the text\")]", null)]
+    public async Task APropertyComputedFromAParameterIsOwedUnlessMarked(string mark, string? reported)
     {
-        var diagnostics = await DiagnosticsOf(RegistryReading("NoteCodecs.All"), CompleteMapper, """
+        var diagnostics = await DiagnosticsOf(RegistryReading("NoteCodecs.All"), CompleteMapper, $$"""
             namespace Sample
             {
                 public sealed class Note(string text)
                 {
                     public string Text { get; } = text;
+                    {{mark}}
                     public int Length { get; } = text.Length;
                 }
 
@@ -382,7 +385,7 @@ public class StoredTypeAnalyzerTests
                     public static readonly object[] All =
                     [
                         Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
-                            (Note note) => new NoteMessage(),
+                            (Note note) => new NoteMessage { Text = note.Text },
                             message => new Note(message.Text)),
                     ];
                 }
@@ -390,14 +393,10 @@ public class StoredTypeAnalyzerTests
             """);
 
         Assert.Equal(
-            [("Sample.Note.Text", StoredTypeAnalyzer.ToMessage), ("Sample.NoteMessage.Text", StoredTypeAnalyzer.ToMessage)],
+            reported == null ? [] : [(reported, StoredTypeAnalyzer.ToMessage)],
             Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
     }
 
-    /// <summary>
-    /// A generic helper of a storage implementation hides the type it stores as well as any other helper, since only
-    /// a member of the storage passes its caller's type on.
-    /// </summary>
     [Fact]
     public async Task AGenericHelperOfAStorageImplementationIsReported()
     {
@@ -672,19 +671,24 @@ public class StoredTypeAnalyzerTests
     }
 
     /// <summary>
-    /// A property a primary constructor sets through its initializer holds data, so a mapper leaving it out is
-    /// reported.
+    /// A property that takes its value from a constructor parameter holds data however it does so, through its
+    /// initializer as it is or adjusted, through a getter reading the parameter, or through a field a constructor sets,
+    /// so a mapper leaving it out is reported.
     /// </summary>
-    [Fact]
-    public async Task APropertyAPrimaryConstructorSetsIsOwed()
+    [Theory]
+    [InlineData("public string Extra { get; } = extra ?? \"\";")]
+    [InlineData("public string Extra { get; } = extra?.Trim() ?? \"\";")]
+    [InlineData("public string Extra => extra ?? \"\";")]
+    [InlineData("private readonly string _extra = extra ?? \"\"; public string Extra => _extra;")]
+    public async Task APropertyAConstructorSetsIsOwed(string extra)
     {
-        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), """
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), $$"""
             namespace Sample
             {
-                public sealed class Note(string text, string extra)
+                public sealed class Note(string text, string? extra)
                 {
                     public string Text { get; } = text;
-                    public string Extra { get; } = extra;
+                    {{extra}}
                 }
 
                 public sealed class NoteMessage : Google.Protobuf.IMessage
@@ -711,9 +715,88 @@ public class StoredTypeAnalyzerTests
     }
 
     /// <summary>
-    /// A field of a message is shown on the codec writing that message, even when another codec reaching the same
-    /// message comes first in source order.
+    /// A field a constructor body sets, read by a property with no field of its own, holds data as well.
     /// </summary>
+    [Fact]
+    public async Task APropertyReadingAFieldAConstructorSetsIsOwed()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), """
+            namespace Sample
+            {
+                public sealed class Note
+                {
+                    private readonly string _extra;
+
+                    public Note(string text, string extra)
+                    {
+                        Text = text;
+                        _extra = extra;
+                    }
+
+                    public string Text { get; }
+                    public string Extra => _extra;
+                }
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+                }
+
+                public static class NoteCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage { Text = note.Text },
+                            message => new Note(message.Text, "")),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Equal(
+            [("Sample.Note.Extra", StoredTypeAnalyzer.ToMessage)],
+            Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
+    /// <summary>
+    /// A record that declares a positional property again, adjusting its parameter, still holds it as data.
+    /// </summary>
+    [Fact]
+    public async Task ARecordPropertyDeclaredAgainFromItsParameterIsOwed()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("CardCodecs.All"), """
+            namespace Sample
+            {
+                public sealed record Card(string Text, string Code)
+                {
+                    public string Code { get; } = Code.Trim();
+                }
+
+                public sealed class CardMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+                }
+
+                public static class CardCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Card card) => new CardMessage { Text = card.Text },
+                            message => new Card(message.Text, "")),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Equal(
+            [("Sample.Card.Code", StoredTypeAnalyzer.ToMessage)],
+            Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
     [Fact]
     public async Task AFieldIsShownOnTheCodecOfItsMessageRatherThanTheFirstReachingIt()
     {

@@ -27,8 +27,7 @@ internal sealed class StoredMapping(StoredTypes types)
     private readonly ConcurrentBag<(ITypeSymbol Type, IMethodSymbol Method, Location Location)> _calls = [];
     private readonly CodecRegistry _registry = new();
     private readonly ConcurrentDictionary<IMethodSymbol, BodyFacts> _bodies = new(SymbolEqualityComparer.Default);
-    private readonly ConcurrentDictionary<IPropertySymbol, IParameterSymbol[]> _fromParameters =
-        new(SymbolEqualityComparer.Default);
+    private readonly ConcurrentDictionary<ISymbol, BodyFacts> _sources = new(SymbolEqualityComparer.Default);
 
     /// <summary>
     /// Notes the codecs a field initializer builds and the members it reads, and whether it is the serializer's.
@@ -39,11 +38,19 @@ internal sealed class StoredMapping(StoredTypes types)
         var facts = InitializerFacts.Of(initializer, types);
         foreach (var field in initializer.InitializedFields)
             _registry.Add(field, facts, types.IsRegistry(field));
+
+        // A field a primary constructor sets through its initializer passes the parameter on to a property reading it
+        var read = BodyFacts.Of([initializer.Value]);
+        if (!read.Parameters.Any(IsConstructorParameter))
+            return;
+
+        foreach (var field in initializer.InitializedFields)
+            _sources.TryAdd(field.OriginalDefinition, read);
     }
 
     /// <summary>
-    /// Notes the codecs an auto-property initializer builds and the members it reads, and whether it hands on a
-    /// constructor parameter as it is, which a primary constructor sets the property through.
+    /// Notes the codecs an auto-property initializer builds and the members it reads, and the constructor parameters
+    /// it reads, which a primary constructor sets the property through.
     /// </summary>
     public void CollectProperty(OperationAnalysisContext context)
     {
@@ -52,16 +59,14 @@ internal sealed class StoredMapping(StoredTypes types)
         foreach (var property in initializer.InitializedProperties)
             _registry.Add(property, facts, marked: false);
 
-        // A value computed from a parameter is computed again by the constructor, so only the parameter itself is data
-        var value = initializer.Value;
-        while (value is IConversionOperation conversion)
-            value = conversion.Operand;
-
-        if (value is not IParameterReferenceOperation reference)
+        // A value computed from a parameter counts too: wrongly reported, it asks for a reasoned mark, while a value
+        // let through unchecked would be lost with nothing said
+        var read = BodyFacts.Of([initializer.Value]);
+        if (!read.Parameters.Any(IsConstructorParameter))
             return;
 
         foreach (var property in initializer.InitializedProperties)
-            _fromParameters.TryAdd(property.OriginalDefinition, [reference.Parameter]);
+            _sources.TryAdd(property.OriginalDefinition, read);
     }
 
     /// <summary>
@@ -86,12 +91,27 @@ internal sealed class StoredMapping(StoredTypes types)
     /// </summary>
     public void CollectBody(OperationBlockAnalysisContext context)
     {
-        if (context.OwningSymbol is IMethodSymbol method
-            && (method.IsStatic || method.MethodKind == MethodKind.Constructor))
+        if (context.OwningSymbol is not IMethodSymbol method)
+            return;
+
+        if (method.IsStatic || method.MethodKind == MethodKind.Constructor)
         {
             _bodies[method.OriginalDefinition] = BodyFacts.Of(context.OperationBlocks);
+            return;
+        }
+
+        // A property with no field of its own holds data when its getter reads an instance field or a primary
+        // constructor parameter
+        if (method is { MethodKind: MethodKind.PropertyGet, AssociatedSymbol: IPropertySymbol property })
+        {
+            var read = BodyFacts.Of(context.OperationBlocks);
+            if (read.Fields.Count > 0 || read.Parameters.Any(IsConstructorParameter))
+                _sources.TryAdd(property.OriginalDefinition, read);
         }
     }
+
+    private static bool IsConstructorParameter(IParameterSymbol parameter)
+        => parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor };
 
     /// <summary>
     /// Reports every stored type with no codec and every member a mapper leaves out of a direction.
@@ -100,6 +120,6 @@ internal sealed class StoredMapping(StoredTypes types)
     {
         _registry.ReportMarks(context);
         var (served, codecs) = _registry.TakenIn();
-        new StoredVerdicts(types, served, _bodies, _fromParameters).Report(context, _calls, codecs);
+        new StoredVerdicts(types, served, _bodies, _sources).Report(context, _calls, codecs);
     }
 }

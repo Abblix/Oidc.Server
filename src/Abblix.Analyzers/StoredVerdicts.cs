@@ -24,8 +24,8 @@ namespace Abblix.Analyzers;
 /// The messages the way out builds are checked field by field, a field being a property protoc writes a
 /// <c>FieldNumber</c> constant for. The stored types the way back builds, and the type the codec serves, are checked
 /// property by property. A member takes part in a direction when that direction names it, and a property also when
-/// that direction calls a constructor setting it through a parameter: a positional record parameter of its name, or a
-/// primary constructor parameter the property's initializer is. A value written by a codec of its base type has properties of its own that codec never
+/// that direction calls a constructor setting it: through a positional record parameter of its name, through a
+/// parameter the property's initializer or getter reads, or by writing a field its getter reads. A value written by a codec of its base type has properties of its own that codec never
 /// writes, so each of them is owed a mark of its own.
 /// </para>
 /// <para>
@@ -37,17 +37,18 @@ namespace Abblix.Analyzers;
 /// <param name="types">The symbols the rules are asked of.</param>
 /// <param name="served">The types the registry has a codec of.</param>
 /// <param name="bodies">What each static method and constructor touches.</param>
-/// <param name="fromParameters">The properties whose initializer is a constructor parameter, with that parameter.
-/// </param>
+/// <param name="sources">What each property with no setter reads its value from: the constructor parameters its
+/// initializer reads, or the instance fields and primary constructor parameters the getter of a property with no field
+/// of its own reads; and for each field, the constructor parameters its initializer reads.</param>
 internal sealed class StoredVerdicts(
     StoredTypes types,
     IReadOnlyDictionary<ITypeSymbol, bool> served,
     IReadOnlyDictionary<IMethodSymbol, BodyFacts> bodies,
-    IReadOnlyDictionary<IPropertySymbol, IParameterSymbol[]> fromParameters)
+    IReadOnlyDictionary<ISymbol, BodyFacts> sources)
 {
     private readonly StoredMembers _members = new(
         types,
-        property => fromParameters.ContainsKey(property) || SetInConstructor(property, bodies));
+        property => sources.ContainsKey(property) || SetInConstructor(property, bodies));
 
     /// <summary>
     /// Reports every call with no codec and every member left out of a direction.
@@ -179,15 +180,29 @@ internal sealed class StoredVerdicts(
     }
 
     /// <summary>
-    /// Whether a constructor <paramref name="facts"/> call sets <paramref name="property"/> through a parameter: a
-    /// positional record parameter of its name, or a primary constructor parameter its initializer is.
+    /// Whether a constructor <paramref name="facts"/> call sets <paramref name="property"/>: through a positional
+    /// record parameter of its name, through a parameter its initializer or getter reads, or by writing a field its
+    /// getter reads.
     /// </summary>
     private bool SetByConstructor(IPropertySymbol property, BodyFacts facts)
-        => StoredMembers.SetByRecordConstructor(property, facts)
-           || (fromParameters.TryGetValue(property, out var parameters)
-               && parameters.Any(parameter =>
-                   parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor
-                   && facts.Calls.Contains(constructor.OriginalDefinition)));
+    {
+        if (StoredMembers.SetByRecordConstructor(property, facts))
+            return true;
+
+        if (!sources.TryGetValue(property, out var source))
+            return false;
+
+        var constructors = facts.Calls.Where(call => call.MethodKind == MethodKind.Constructor).ToList();
+        return constructors.Any(constructor =>
+            OwnsAny(constructor, source.Parameters)
+            || (bodies.TryGetValue(constructor, out var body) && body.Fields.Overlaps(source.Fields))
+            || source.Fields.Any(field =>
+                sources.TryGetValue(field, out var initializer) && OwnsAny(constructor, initializer.Parameters)));
+    }
+
+    private static bool OwnsAny(IMethodSymbol constructor, IEnumerable<IParameterSymbol> parameters)
+        => parameters.Any(parameter =>
+            SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol.OriginalDefinition, constructor));
 
     private static bool SetInConstructor(IPropertySymbol property, IReadOnlyDictionary<IMethodSymbol, BodyFacts> bodies)
         => property.ContainingType.InstanceConstructors.Any(constructor =>
