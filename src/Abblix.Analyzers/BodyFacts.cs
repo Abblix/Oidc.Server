@@ -32,12 +32,20 @@ internal sealed class BodyFacts
     public HashSet<IParameterSymbol> Parameters { get; } = new(SymbolEqualityComparer.Default);
 
     /// <summary>
+    /// The instance field the body returns as it is, when its only return hands back a field and nothing computed
+    /// from it.
+    /// </summary>
+    public IFieldSymbol? Returned { get; private set; }
+
+    /// <summary>
     /// The facts of the operations under <paramref name="roots"/>, lambdas and local functions inside them included.
     /// </summary>
     public static BodyFacts Of(IEnumerable<IOperation> roots)
     {
         var facts = new BodyFacts();
-        foreach (var operation in roots.SelectMany(root => root.DescendantsAndSelf()))
+        var operations = roots.SelectMany(root => root.DescendantsAndSelf()).ToList();
+        facts.Returned = ReturnedField(operations);
+        foreach (var operation in operations)
         {
             switch (operation)
             {
@@ -72,6 +80,19 @@ internal sealed class BodyFacts
         }
 
         return facts;
+    }
+
+    private static IFieldSymbol? ReturnedField(List<IOperation> operations)
+    {
+        var returns = operations.OfType<IReturnOperation>().ToList();
+        if (returns.Count != 1)
+            return null;
+
+        var value = returns[0].ReturnedValue;
+        while (value is IConversionOperation conversion)
+            value = conversion.Operand;
+
+        return value is IFieldReferenceOperation { Field.IsStatic: false } field ? field.Field.OriginalDefinition : null;
     }
 
     /// <summary>

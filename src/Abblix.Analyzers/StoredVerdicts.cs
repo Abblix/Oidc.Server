@@ -140,7 +140,13 @@ internal sealed class StoredVerdicts(
         var fields = messages.SelectMany(StoredMembers.MessageFieldsOf)
             .Select(field => ((ISymbol)field, outward.Properties.Contains(field), back.Properties.Contains(field)));
 
+        // A type the way out reads is checked as well as one the way back builds, since the way back may build it
+        // where the mapper is not followed, in an instance method
+        var read = outward.Properties
+            .Where(property => !property.IsStatic)
+            .Select(property => (ITypeSymbol)property.ContainingType);
         var rebuilt = back.Created
+            .Concat(read)
             .Where(type => !types.IsMessage(type) && StoredMembers.IsInSource(type))
             .Append(codec.Value)
             .Distinct(SymbolEqualityComparer.Default)
@@ -151,7 +157,8 @@ internal sealed class StoredVerdicts(
                 outward.Properties.Contains(property),
                 back.Properties.Contains(property) || SetByConstructor(property, back)));
 
-        // A field a stored property's getter reads is mapped through that property; any other field is mapped itself
+        // A field a stored property's getter returns as it is is mapped through that property; any other field is
+        // mapped itself
         var data = rebuilt.SelectMany(_members.FieldsOf)
             .Where(field => !ReadByStoredProperty(field))
             .Select(field => (
@@ -211,15 +218,15 @@ internal sealed class StoredVerdicts(
     }
 
     /// <summary>
-    /// Whether the getter of a property of the field's type that is not kept out of the message reads
-    /// <paramref name="field"/>.
+    /// Whether the getter of a property of the field's type that is not kept out of the message returns
+    /// <paramref name="field"/> as it is, so mapping the property maps the whole value of the field.
     /// </summary>
     private bool ReadByStoredProperty(IFieldSymbol field)
         => sources.Any(source =>
             source.Key is IPropertySymbol property
             && SymbolEqualityComparer.Default.Equals(property.ContainingType, field.ContainingType)
             && !types.IsNotStored(property)
-            && source.Value.Fields.Contains(field));
+            && SymbolEqualityComparer.Default.Equals(source.Value.Returned, field));
 
     /// <summary>
     /// Whether a constructor <paramref name="facts"/> call sets <paramref name="field"/>, in its body or through a

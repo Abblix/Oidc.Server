@@ -755,6 +755,95 @@ public class StoredTypeAnalyzerTests
     }
 
     /// <summary>
+    /// A field a stored property only computes from, rather than returning it as it is, is not mapped through that
+    /// property, since the property carries a part of the field's value at most.
+    /// </summary>
+    [Fact]
+    public async Task AFieldAPropertyOnlyComputesFromIsOwed()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), """
+            namespace Sample
+            {
+                public sealed class Note(string text, string extra)
+                {
+                    private readonly string _extra = extra;
+                    public string Text { get; } = text;
+                    public bool Flag => _extra.Length > 0;
+                }
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+
+                    public const int FlagFieldNumber = 2;
+                    public bool Flag { get; set; }
+                }
+
+                public static class NoteCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage { Text = note.Text, Flag = note.Flag },
+                            message => new Note(message.Text, message.Flag ? "x" : "")),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Equal(
+            [("Sample.Note._extra", StoredTypeAnalyzer.ToMessage)],
+            Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
+    /// <summary>
+    /// A type the way out reads is checked even when the way back builds it in an instance method the mapper is not
+    /// followed into.
+    /// </summary>
+    [Fact]
+    public async Task ATypeTheWayOutReadsIsCheckedWhereverItIsBuiltBack()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), """
+            namespace Sample
+            {
+                public sealed record Inner(string X, string Y);
+
+                public sealed record Note(string Text, Inner Inner);
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+
+                    public const int XFieldNumber = 2;
+                    public string X { get; set; } = "";
+                }
+
+                public sealed class Factory
+                {
+                    public static readonly Factory Instance = new();
+                    public Note Make(string text, string x) => new(text, new Inner(x, ""));
+                }
+
+                public static class NoteCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage { Text = note.Text, X = note.Inner.X },
+                            message => Factory.Instance.Make(message.Text, message.X)),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Contains(
+            ("Sample.Inner.Y", StoredTypeAnalyzer.ToMessage),
+            Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
+    /// <summary>
     /// A field mapped itself both ways, or marked as kept out of the message, is accepted.
     /// </summary>
     [Theory]
