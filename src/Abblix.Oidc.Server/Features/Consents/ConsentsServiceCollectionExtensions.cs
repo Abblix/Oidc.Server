@@ -35,7 +35,11 @@ public static class ConsentsServiceCollectionExtensions
 	/// <c>consent_required</c> and <c>prompt=consent</c> never shows a consent page, so the end user cannot refuse
 	/// what a client asks for (OpenID Connect Core 1.0, section 3.1.2.4). A host serving clients it does not own
 	/// registers its own <see cref="IUserConsentsProvider"/> instead, which wins over this call whichever comes
-	/// first.
+	/// first when registered with an <c>Add*</c> method; a <c>TryAdd*</c> registration after this call is skipped.
+	/// <para>
+	/// A server that never authorizes an end user, such as one issuing tokens only to clients themselves or serving
+	/// Shared Signals alone, obtains no consent at all, and this call is the choice that says so.
+	/// </para>
 	/// </remarks>
 	public static IServiceCollection AddConsentGrantedForEveryClient(this IServiceCollection services)
 	{
@@ -50,8 +54,9 @@ public static class ConsentsServiceCollectionExtensions
 	internal static IServiceCollection AddConsentProviderChoice(this IServiceCollection services)
 	{
 		services.AddOptions<ConsentProviderChoice>()
-			.Configure<IServiceProviderIsService>(
-				(choice, registered) => choice.ProviderRegistered = registered.IsService(typeof(IUserConsentsProvider)))
+			.Configure<IServiceProvider>(
+				(choice, provider) => choice.ProviderRegistered =
+					provider.GetService<IServiceProviderIsService>()?.IsService(typeof(IUserConsentsProvider)) ?? true)
 			.Validate(choice => choice.ProviderRegistered, NotChosenMessage)
 			.ValidateOnStart();
 		return services;

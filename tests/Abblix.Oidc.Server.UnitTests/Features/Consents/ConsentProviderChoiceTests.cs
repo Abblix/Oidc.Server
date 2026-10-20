@@ -6,9 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.Features;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -18,15 +20,45 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Consents;
 
 /// <summary>
 /// The host chooses how end-user consent is obtained, and a host that chose nothing does not start: the server
-/// grants nothing it was not told to.
+/// grants nothing it was not told to. The server is registered whole, as a host registers it, so a default provider
+/// put back anywhere in its registration fails these tests.
 /// </summary>
 public class ConsentProviderChoiceTests
 {
-	private static ServiceCollection ServerServices()
+	private const string Server = "server";
+	private const string HostProvider = "host provider";
+	private const string GrantEverything = "grant everything";
+
+	private static ServiceCollection Register(IUserConsentsProvider hostProvider, params string[] steps)
 	{
 		var services = new ServiceCollection();
 		services.AddLogging();
-		services.AddCommonServices();
+		services.AddDistributedMemoryCache();
+		foreach (var step in steps)
+		{
+			switch (step)
+			{
+				case Server:
+					services.AddOidcCore(options =>
+					{
+						options.Issuer = TestConstants.DefaultIssuer;
+						options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+					});
+					break;
+
+				case HostProvider:
+					services.AddSingleton(hostProvider);
+					break;
+
+				case GrantEverything:
+					services.AddConsentGrantedForEveryClient();
+					break;
+
+				default:
+					throw new ArgumentOutOfRangeException(nameof(steps), step, null);
+			}
+		}
+
 		return services;
 	}
 
@@ -36,7 +68,7 @@ public class ConsentProviderChoiceTests
 	[Fact]
 	public async Task AHostChoosingNothing_DoesNotStart_AndIsToldBothChoices()
 	{
-		using var provider = ServerServices().BuildServiceProvider();
+		using var provider = Register(Mock.Of<IUserConsentsProvider>(), Server).BuildServiceProvider();
 
 		var error = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(provider));
 
@@ -46,12 +78,12 @@ public class ConsentProviderChoiceTests
 		Assert.Contains(nameof(ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient), failure);
 	}
 
-	[Fact]
-	public async Task AHostGrantingEveryClientEverything_Starts_OnTheProviderGrantingIt()
+	[Theory]
+	[InlineData(Server, GrantEverything)]
+	[InlineData(GrantEverything, Server)]
+	public async Task AHostGrantingEveryClientEverything_Starts_OnTheProviderGrantingIt(params string[] steps)
 	{
-		var services = ServerServices();
-		services.AddConsentGrantedForEveryClient();
-		using var provider = services.BuildServiceProvider();
+		using var provider = Register(Mock.Of<IUserConsentsProvider>(), steps).BuildServiceProvider();
 
 		await StartAsync(provider);
 
@@ -59,29 +91,19 @@ public class ConsentProviderChoiceTests
 	}
 
 	/// <summary>
-	/// A host's own provider is found whether it is registered before or after the server's registration, and wins
-	/// over granting everything whichever of the two comes first.
+	/// A host's own provider, registered with <c>Add*</c>, is found whether it is registered before or after the
+	/// server's registration, and wins over granting everything whichever of the two comes first.
 	/// </summary>
 	[Theory]
-	[InlineData(false, false)]
-	[InlineData(true, false)]
-	[InlineData(false, true)]
-	public async Task AHostRegisteringItsOwnProvider_Starts_OnThatProvider(bool beforeTheServer, bool alsoGrantingEverything)
+	[InlineData(Server, HostProvider)]
+	[InlineData(HostProvider, Server)]
+	[InlineData(Server, HostProvider, GrantEverything)]
+	[InlineData(Server, GrantEverything, HostProvider)]
+	[InlineData(GrantEverything, HostProvider, Server)]
+	public async Task AHostRegisteringItsOwnProvider_Starts_OnThatProvider(params string[] steps)
 	{
-		var hostProvider = new Mock<IUserConsentsProvider>().Object;
-		var services = new ServiceCollection();
-		services.AddLogging();
-		if (beforeTheServer)
-			services.AddSingleton(hostProvider);
-
-		services.AddCommonServices();
-		if (!beforeTheServer)
-			services.AddSingleton(hostProvider);
-
-		if (alsoGrantingEverything)
-			services.AddConsentGrantedForEveryClient();
-
-		using var provider = services.BuildServiceProvider();
+		var hostProvider = Mock.Of<IUserConsentsProvider>();
+		using var provider = Register(hostProvider, steps).BuildServiceProvider();
 
 		await StartAsync(provider);
 

@@ -26,7 +26,8 @@ public sealed class ConsentProviderChoice
 	/// <summary>
 	/// Whether the container holds an <see cref="IUserConsentsProvider"/>, read from the container rather than from
 	/// the registrations the server saw, because a host registers its provider after the server's own registration as
-	/// often as before it.
+	/// often as before it. A container that cannot answer counts as holding one, so it is not refused on a question it
+	/// cannot be asked, and a host without a provider then fails on its first authorization request instead.
 	/// </summary>
-	public bool ProviderRegistered { get; set; }
+	public bool ProviderRegistered { get; internal set; }
 }
