@@ -95,7 +95,9 @@ public class ScopeValidatorTests
         string[] scopes,
         FlowTypes flowType = FlowTypes.AuthorizationCode,
         bool? offlineAccessAllowed = null,
-        ResourceDefinition[]? resources = null)
+        ResourceDefinition[]? resources = null,
+        string[]? prompt = null,
+        bool offlineAccessWithoutConsentPrompt = false)
     {
         var request = new AuthorizationRequest
         {
@@ -103,11 +105,13 @@ public class ScopeValidatorTests
             ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = scopes,
+            Prompt = prompt,
         };
 
         var clientInfo = new ClientInfo(ClientId)
         {
             OfflineAccessAllowed = offlineAccessAllowed,
+            OfflineAccessWithoutConsentPrompt = offlineAccessWithoutConsentPrompt,
         };
 
         return new AuthorizationValidationContext(request)
@@ -143,68 +147,55 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts offline_access for authorization code flow.
-    /// Per OIDC Core 1.0 Section 11, offline_access is allowed for code flow.
-    /// Critical for refresh token issuance.
+    /// OpenID Connect Core 1.0, section 11: a request returning an authorization code receives offline_access when it
+    /// asks for consent with prompt=consent, or when the client is configured to receive it without, and has it
+    /// ignored otherwise, the rest of the request going on. Ignored, it leaves the request itself too, which the
+    /// host's consent provider reads.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OfflineAccessInAuthorizationCodeFlow_ShouldSucceed()
+    [Theory]
+    [InlineData(FlowTypes.AuthorizationCode, true, false, true)]
+    [InlineData(FlowTypes.AuthorizationCode, false, true, true)]
+    [InlineData(FlowTypes.AuthorizationCode, false, false, false)]
+    [InlineData(FlowTypes.Hybrid, true, false, true)]
+    [InlineData(FlowTypes.Hybrid, false, false, false)]
+    public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyWithConsentPromptOrClientConditions(
+        FlowTypes flowType, bool promptConsent, bool withoutConsentPrompt, bool received)
     {
-        // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: true);
+            flowType,
+            offlineAccessAllowed: true,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            offlineAccessWithoutConsentPrompt: withoutConsentPrompt);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
         Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+        Assert.Equal(received, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
+        Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects offline_access for implicit flow.
-    /// Per OIDC Core 1.0, offline_access MUST NOT be used with implicit flow.
-    /// Critical security requirement (implicit can't securely store refresh tokens).
+    /// OpenID Connect Core 1.0, section 11: a response returning no authorization code has offline_access ignored,
+    /// however the request asks, rather than refused.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_OfflineAccessInImplicitFlow_ShouldReturnError()
+    public async Task ValidateAsync_OfflineAccessInImplicitFlow_IsIgnored()
     {
-        // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
             FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccessAllowed: true,
+            prompt: [Prompts.Consent],
+            offlineAccessWithoutConsentPrompt: true);
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("offline", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Verifies that ValidateAsync accepts offline_access for hybrid flow.
-    /// Per OIDC Core 1.0, offline_access is allowed for hybrid flow.
-    /// Tests hybrid flow refresh token capability.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OfflineAccessInHybridFlow_ShouldSucceed()
-    {
-        // Arrange
-        var context = CreateContext(
-            [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Hybrid,
-            offlineAccessAllowed: true);
-
-        // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
         Assert.Null(result);
+        Assert.DoesNotContain(context.Scope, scope => scope.Scope == Scopes.OfflineAccess);
+        Assert.DoesNotContain(Scopes.OfflineAccess, context.Request.Scope);
+        Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
     }
 
     /// <summary>
@@ -379,8 +370,7 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccessAllowed: false);
         var originalScope = context.Scope;
 
         // Act
@@ -403,8 +393,7 @@ public class ScopeValidatorTests
         var redirectUri = new Uri("https://client.example.com/callback");
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccessAllowed: false);
         context.ValidRedirectUri = redirectUri;
 
         // Act
@@ -427,8 +416,7 @@ public class ScopeValidatorTests
         const string responseMode = ResponseModes.Fragment;
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccessAllowed: false);
         context.ResponseMode = responseMode;
 
         // Act
@@ -529,8 +517,7 @@ public class ScopeValidatorTests
 
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess, "unknown"],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccessAllowed: false);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -538,7 +525,7 @@ public class ScopeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("offline", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

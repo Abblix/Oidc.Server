@@ -24,7 +24,8 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	/// <summary>
 	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
 	/// with the client's allowed scopes and the OAuth flow type. For instance, it validates if offline access is
-	/// requested appropriately and if the client is authorized for such access.
+	/// requested appropriately and if the client is authorized for such access, and ignores it where OpenID Connect
+	/// Core 1.0, section 11, has the server do so.
 	/// </summary>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
@@ -35,11 +36,17 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
 	    {
-		    if (context.FlowType == FlowTypes.Implicit)
-				    return context.InvalidScope("It is not allowed to request for offline access in implicit flow");
-
 		    if (context.ClientInfo.OfflineAccessAllowed != true)
 				    return context.InvalidScope("This client is not allowed to request for offline access");
+
+		    // Ignored as if never asked for, so the host's consent provider, reading the request, is not shown it
+		    if (!OfflineAccessGranted(context))
+		    {
+			    context.Request = context.Request with
+			    {
+				    Scope = [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)],
+			    };
+		    }
 	    }
 
 		if (!scopeManager.Validate(
@@ -55,4 +62,15 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	    context.Scope = scopeDefinitions;
         return null;
     }
+
+	/// <summary>
+	/// Whether the request is processed with the <c>offline_access</c> it asks for, rather than with that scope
+	/// ignored, as OpenID Connect Core 1.0, section 11, has the server ignore it unless the response returns an
+	/// authorization code, and unless the request asks for consent with <c>prompt=consent</c> or the client is
+	/// configured to receive offline access without it.
+	/// </summary>
+	private static bool OfflineAccessGranted(AuthorizationValidationContext context)
+		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
+		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
+		       || context.ClientInfo.OfflineAccessWithoutConsentPrompt);
 }

@@ -177,6 +177,19 @@ public record ClientInfo(string ClientId)
     public bool? OfflineAccessAllowed { get; set; } = false;
 
     /// <summary>
+    /// Lets the client receive offline access from an authorization request that does not ask for consent with
+    /// <c>prompt=consent</c>; without it, such a request has its <c>offline_access</c> scope ignored.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0, section 11, requires <c>prompt=consent</c> for offline access "unless other conditions
+    /// for processing the request permitting offline access to the requested resources are in place", and this is
+    /// where the host states such conditions for a client. Consent to offline access is still the end user's, as the
+    /// host's consent provider reports it: whether a previously saved consent is sufficient is the host's call.
+    /// It is host-side configuration only: a client registering itself cannot set it.
+    /// </remarks>
+    public bool OfflineAccessWithoutConsentPrompt { get; set; }
+
+    /// <summary>
     /// The set of JSON Web Keys used by the client, typically for signing request objects and decrypting
     /// identity tokens or encrypted user information.
     /// </summary>

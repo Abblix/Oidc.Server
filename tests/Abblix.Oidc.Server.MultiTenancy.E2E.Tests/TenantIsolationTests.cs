@@ -189,6 +189,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
         AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken],
         OfflineAccessAllowed = true,
+        OfflineAccessWithoutConsentPrompt = true,
         RedirectUris = [new Uri(RedirectUri)],
         PkceRequired = true,
     };

@@ -250,6 +250,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             PkceRequired = true,
             RedirectUris = [new Uri(TestConstants.RedirectUri, UriKind.Absolute)],
             OfflineAccessAllowed = true,
+            OfflineAccessWithoutConsentPrompt = true,
             SubjectType = SubjectTypes.Pairwise,
 
             // Also acts as a protected resource in the introspection scenario below, so it receives tokens
