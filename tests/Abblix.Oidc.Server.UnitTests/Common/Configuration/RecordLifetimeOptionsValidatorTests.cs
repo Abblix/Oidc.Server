@@ -15,7 +15,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// A retention at which the record of a session's clients would expire as it is written is refused at startup.
+/// A retention too short to keep and renew the record of a session's clients is refused at startup.
 /// </summary>
 public class RecordLifetimeOptionsValidatorTests
 {
@@ -31,9 +31,19 @@ public class RecordLifetimeOptionsValidatorTests
     }
 
     [Fact]
-    public void The_shortest_positive_retention_is_accepted()
+    public void The_shortest_allowed_retention_is_accepted()
     {
-        Assert.False(Fails(TimeSpan.FromTicks(1)));
+        Assert.False(Fails(RecordLifetimeOptionsValidator.MinSessionClientsRetention));
+    }
+
+    /// <summary>
+    /// A positive retention shorter than a renewal of the record could take is refused too, rather than failing an
+    /// authorization when the storage refuses an expiry already past.
+    /// </summary>
+    [Fact]
+    public void A_retention_just_under_the_shortest_allowed_is_refused()
+    {
+        Assert.True(Fails(RecordLifetimeOptionsValidator.MinSessionClientsRetention - TimeSpan.FromTicks(1)));
     }
 
     [Fact]

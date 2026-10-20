@@ -546,7 +546,7 @@ public record OidcOptions
 	/// host's authentication cookie lifetime. With sliding expiration, a session kept alive only by visits to the
 	/// host's own pages records nothing here and can outlast any value, so choose the longest such stretch the
 	/// deployment expects. It cannot be derived here, because the cookie belongs to the host. Keeping it longer
-	/// costs a few small records per client per session until they expire. Only a non-positive value is refused at
+	/// costs a few small records per client per session until they expire. A value under an hour is refused at
 	/// startup.
 	/// </para>
 	/// </remarks>
