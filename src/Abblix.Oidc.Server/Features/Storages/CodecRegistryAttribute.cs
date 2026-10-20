@@ -12,9 +12,10 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// Marks the field <see cref="ProtobufSerializer"/> takes the codecs of stored types from.
 /// </summary>
 /// <remarks>
-/// ABX1009 counts a codec only when it is built in the initializer of the field carrying this mark, or of a field that
-/// initializer reads, so a codec built where the serializer does not look, a registry nobody wired to it included, is
-/// not taken for one it uses.
+/// ABX1009 counts a codec only when it is built in the initializer of the field carrying this mark, or of a field or
+/// auto-property that initializer reads, so a codec built where the serializer does not look, a registry nobody wired
+/// to it included, is not taken for one it uses. A member read counts whole, even where the initializer filters some
+/// of its codecs out. ABX1011 refuses the mark on more than one field.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Field, Inherited = false)]
 internal sealed class CodecRegistryAttribute : Attribute;

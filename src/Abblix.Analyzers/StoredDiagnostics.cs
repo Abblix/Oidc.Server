@@ -46,6 +46,19 @@ internal static class StoredDiagnostics
             WordsOf(direction));
     }
 
+    /// <summary>
+    /// One of several fields marked as the serializer's codecs.
+    /// </summary>
+    public static Diagnostic ManyRegistries(IFieldSymbol field)
+    {
+        var subject = $"{field.ContainingType.ToDisplayString()}.{field.Name}";
+        return Diagnostic.Create(
+            StoredTypeAnalyzer.RegistryRule,
+            field.Locations.FirstOrDefault(),
+            ImmutableDictionary<string, string?>.Empty.Add(StoredTypeAnalyzer.SubjectProperty, subject),
+            subject);
+    }
+
     private static string WordsOf(string direction) => direction switch
     {
         StoredTypeAnalyzer.ToMessage => "to the message",

@@ -97,7 +97,13 @@ public class StoredTypeAnalyzerTests
         }
         """;
 
-    private const string Registry = """
+    private static readonly string Registry = RegistryReading();
+
+    /// <summary>
+    /// The serializer's codecs: the codec of <c>Grant</c>, and the codecs of each registry field named, read the way
+    /// the server's serializer reads its registries.
+    /// </summary>
+    private static string RegistryReading(params string[] fields) => $$"""
         namespace Sample
         {
             using Abblix.Oidc.Server.Features.Storages;
@@ -108,6 +114,7 @@ public class StoredTypeAnalyzerTests
                 public static readonly object[] All =
                 [
                     ProtobufCodecs.Mapped((Grant grant) => grant.ToProto(), message => message.FromProto()),
+                    {{string.Concat(fields.Select(field => $".. {field}, "))}}
                 ];
             }
         }
@@ -292,6 +299,99 @@ public class StoredTypeAnalyzerTests
             """, Storing("public Task Save(Grant grant) => storage.SetAsync(\"key\", grant);"));
 
         Assert.Empty(diagnostics);
+    }
+
+    /// <summary>
+    /// Only one field is the serializer's, so a second one marked as if it were is refused, rather than a registry
+    /// nobody wired to the serializer being taken for one it reads.
+    /// </summary>
+    [Fact]
+    public async Task ASecondMarkedFieldIsReported()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, Registry, """
+            namespace Sample
+            {
+                public static class Elsewhere
+                {
+                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
+                    public static readonly object[] All = [];
+                }
+            }
+            """);
+
+        Assert.Equal(
+            [("Sample.Codecs.All", null), ("Sample.Elsewhere.All", null)],
+            Reported(diagnostics, StoredTypeAnalyzer.RegistryRule));
+    }
+
+    /// <summary>
+    /// A registry kept in an auto-property is read by the serializer as surely as one kept in a field.
+    /// </summary>
+    [Fact]
+    public async Task ARegistryKeptInAnAutoPropertyCounts()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, """
+            namespace Sample
+            {
+                using System.Linq;
+                using Abblix.Oidc.Server.Features.Storages;
+
+                public static class Mapped
+                {
+                    public static object[] All { get; } =
+                    [
+                        ProtobufCodecs.Mapped((Grant grant) => grant.ToProto(), message => message.FromProto()),
+                    ];
+                }
+
+                public static class Serializer
+                {
+                    [CodecRegistry]
+                    public static readonly object[] Codecs = Mapped.All.ToArray();
+                }
+            }
+            """, Storing("public Task Save(Grant grant) => storage.SetAsync(\"key\", grant);"));
+
+        Assert.Empty(diagnostics);
+    }
+
+    /// <summary>
+    /// A value computed from a constructor parameter is computed again by the type itself, so it is not owed a
+    /// mapping, while the parameter handed on as it is still is.
+    /// </summary>
+    [Fact]
+    public async Task APropertyComputedFromAParameterIsNotOwed()
+    {
+        var diagnostics = await DiagnosticsOf(RegistryReading("NoteCodecs.All"), CompleteMapper, """
+            namespace Sample
+            {
+                public sealed class Note(string text)
+                {
+                    public string Text { get; } = text;
+                    public int Length { get; } = text.Length;
+                }
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+                }
+
+                public static class NoteCodecs
+                {
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage(),
+                            message => new Note(message.Text)),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Equal(
+            [("Sample.Note.Text", StoredTypeAnalyzer.ToMessage), ("Sample.NoteMessage.Text", StoredTypeAnalyzer.ToMessage)],
+            Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
     }
 
     /// <summary>
@@ -493,7 +593,7 @@ public class StoredTypeAnalyzerTests
     [Fact]
     public async Task AnUnmappedPropertyMarkedNotStoredIsAccepted()
     {
-        var diagnostics = await DiagnosticsOf(Registry, """
+        var diagnostics = await DiagnosticsOf(RegistryReading("SessionCodecs.All"), """
             namespace Sample
             {
                 public sealed record Session(string Subject)
@@ -510,7 +610,6 @@ public class StoredTypeAnalyzerTests
 
                 public static class SessionCodecs
                 {
-                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
                     public static readonly object[] All =
                     [
                         Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
@@ -530,7 +629,7 @@ public class StoredTypeAnalyzerTests
     [Fact]
     public async Task OnlyAGetOnlyPropertyAConstructorSetsIsOwed()
     {
-        var diagnostics = await DiagnosticsOf(Registry, """
+        var diagnostics = await DiagnosticsOf(RegistryReading("VersionedCodecs.All"), """
             namespace Sample
             {
                 public static class GrantMapper
@@ -557,7 +656,6 @@ public class StoredTypeAnalyzerTests
 
                 public static class VersionedCodecs
                 {
-                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
                     public static readonly object[] All =
                     [
                         Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
@@ -580,7 +678,7 @@ public class StoredTypeAnalyzerTests
     [Fact]
     public async Task APropertyAPrimaryConstructorSetsIsOwed()
     {
-        var diagnostics = await DiagnosticsOf(CompleteMapper, Registry, """
+        var diagnostics = await DiagnosticsOf(CompleteMapper, RegistryReading("NoteCodecs.All"), """
             namespace Sample
             {
                 public sealed class Note(string text, string extra)
@@ -597,7 +695,6 @@ public class StoredTypeAnalyzerTests
 
                 public static class NoteCodecs
                 {
-                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
                     public static readonly object[] All =
                     [
                         Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
@@ -634,7 +731,6 @@ public class StoredTypeAnalyzerTests
 
                 public static class HolderCodecs
                 {
-                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
                     public static readonly object[] All =
                     [
                         Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
@@ -644,7 +740,7 @@ public class StoredTypeAnalyzerTests
                 }
             }
             """,
-            Registry,
+            RegistryReading("HolderCodecs.All"),
             """
             namespace Sample
             {

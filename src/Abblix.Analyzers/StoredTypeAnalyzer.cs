@@ -23,8 +23,8 @@ namespace Abblix.Analyzers;
 /// type is the call's type argument. A type parameter there is accepted only inside a method implementing a member of
 /// the storage, which passes its own caller's type on; anywhere else the type is not named where it is stored, and the
 /// call is reported. A type has a codec when a <c>ProtobufCodec&lt;T&gt;</c> of it is built in the initializer of the
-/// field marked <c>[CodecRegistry]</c>, the one the serializer takes its codecs from, or of a field that initializer
-/// reads, or, for a write, when a base type has one, as the serializer looks a written value's codec up by its base
+/// field marked <c>[CodecRegistry]</c>, the one the serializer takes its codecs from, or of a field or auto-property
+/// that initializer reads; a second marked field is refused, since only one is the serializer's. For a write, when a base type has one, as the serializer looks a written value's codec up by its base
 /// types too; the properties the derived type adds are then owed a mark. A type meant to stay JSON carries
 /// <c>[StoredAsJson]</c> with the reason.
 /// </para>
@@ -94,9 +94,20 @@ public sealed class StoredTypeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         customTags: WellKnownDiagnosticTags.CompilationEnd);
 
+    /// <summary>The diagnostic reported on each field marked as the serializer's codecs when more than one is.</summary>
+    public static readonly DiagnosticDescriptor RegistryRule = new(
+        id: "ABX1011",
+        title: "More than one field is marked as the serializer's codecs",
+        messageFormat: "'{0}' is one of several fields marked [CodecRegistry]: mark only the field the serializer " +
+                       "takes its codecs from",
+        category: "Abblix.Conventions",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        customTags: WellKnownDiagnosticTags.CompilationEnd);
+
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics
-        => ImmutableArray.Create(CodecRule, MappingRule);
+        => ImmutableArray.Create(CodecRule, MappingRule, RegistryRule);
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)

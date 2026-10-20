@@ -15,3 +15,4 @@ ABX1007 | Abblix.Conventions | Error | A value from outside reaches the log unsa
 ABX1008 | Abblix.Conventions | Error | A credential reaches the log other than as its fingerprint
 ABX1009 | Abblix.Conventions | Error | A stored type has no protobuf codec
 ABX1010 | Abblix.Conventions | Error | A stored member is mapped in one direction only, or in none
+ABX1011 | Abblix.Conventions | Error | More than one field is marked as the serializer's codecs

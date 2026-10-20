@@ -25,7 +25,7 @@ namespace Abblix.Analyzers;
 /// <c>FieldNumber</c> constant for. The stored types the way back builds, and the type the codec serves, are checked
 /// property by property. A member takes part in a direction when that direction names it, and a property also when
 /// that direction calls a constructor setting it through a parameter: a positional record parameter of its name, or a
-/// primary constructor parameter the property's initializer reads. A value written by a codec of its base type has properties of its own that codec never
+/// primary constructor parameter the property's initializer is. A value written by a codec of its base type has properties of its own that codec never
 /// writes, so each of them is owed a mark of its own.
 /// </para>
 /// <para>
@@ -37,8 +37,8 @@ namespace Abblix.Analyzers;
 /// <param name="types">The symbols the rules are asked of.</param>
 /// <param name="served">The types the registry has a codec of.</param>
 /// <param name="bodies">What each static method and constructor touches.</param>
-/// <param name="fromParameters">The properties whose initializer reads a constructor parameter, with the parameters
-/// it reads.</param>
+/// <param name="fromParameters">The properties whose initializer is a constructor parameter, with that parameter.
+/// </param>
 internal sealed class StoredVerdicts(
     StoredTypes types,
     IReadOnlyDictionary<ITypeSymbol, bool> served,
@@ -180,7 +180,7 @@ internal sealed class StoredVerdicts(
 
     /// <summary>
     /// Whether a constructor <paramref name="facts"/> call sets <paramref name="property"/> through a parameter: a
-    /// positional record parameter of its name, or a primary constructor parameter its initializer reads.
+    /// positional record parameter of its name, or a primary constructor parameter its initializer is.
     /// </summary>
     private bool SetByConstructor(IPropertySymbol property, BodyFacts facts)
         => StoredMembers.SetByRecordConstructor(property, facts)
