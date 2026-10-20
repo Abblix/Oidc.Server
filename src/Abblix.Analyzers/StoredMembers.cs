@@ -14,7 +14,8 @@ namespace Abblix.Analyzers;
 /// mapped from.
 /// </summary>
 /// <param name="types">The symbols the rules are asked of.</param>
-/// <param name="setInConstructor">Whether a constructor of its type sets a property with no setter.</param>
+/// <param name="setInConstructor">Whether a constructor of its type sets a property with no setter, in its body or
+/// through a primary constructor parameter the property's initializer reads.</param>
 internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, bool> setInConstructor)
 {
     /// <summary>

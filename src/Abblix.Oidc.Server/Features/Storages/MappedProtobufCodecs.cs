@@ -22,7 +22,6 @@ internal static class MappedProtobufCodecs
     /// <summary>
     /// One codec per mapped domain type.
     /// </summary>
-    [CodecRegistry]
     public static readonly IProtobufCodec[] All =
     [
         ProtobufCodecs.Mapped(

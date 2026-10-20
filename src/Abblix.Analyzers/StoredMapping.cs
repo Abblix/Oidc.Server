@@ -13,41 +13,70 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Abblix.Analyzers;
 
 /// <summary>
-/// Gathers, over one compilation, the calls to the storage, the codecs of the registry and the bodies their mappers
-/// run, and hands them to <see cref="StoredVerdicts"/> once all of it is seen.
+/// Gathers, over one compilation, the calls to the storage, the codecs the serializer takes in and the bodies their
+/// mappers run, and hands them to <see cref="StoredVerdicts"/> once all of it is seen.
 /// </summary>
 /// <remarks>
-/// A codec counts only when it is built in the initializer of a field marked as a codec registry, which is where the
-/// serializer takes its codecs from, so a codec built anywhere else serves nothing and is not taken for one that
-/// does. A call whose type is a type parameter is skipped only inside a type implementing the storage, which passes
-/// its caller's type on to the storage it wraps; anywhere else no codec can be shown for it, and it is reported.
+/// A codec counts only when the serializer takes it in: it is built in the initializer of the field marked as the
+/// serializer's codecs, or of a field that initializer reads, and on through the fields those read. A codec built
+/// anywhere else, a registry nobody wired to the serializer included, serves nothing and is not taken for one that
+/// does. A call whose type is a type parameter is skipped only inside a method implementing a member of the storage,
+/// which passes its caller's type on to the storage it wraps; anywhere else no codec can be shown for it, and it is
+/// reported.
 /// </remarks>
 /// <param name="types">The symbols the rules are asked of.</param>
 internal sealed class StoredMapping(StoredTypes types)
 {
     private readonly ConcurrentBag<(ITypeSymbol Type, IMethodSymbol Method, Location Location)> _calls = [];
-    private readonly ConcurrentDictionary<ITypeSymbol, bool> _served = new(SymbolEqualityComparer.Default);
-    private readonly ConcurrentBag<StoredCodec> _codecs = [];
+    private readonly ConcurrentDictionary<IFieldSymbol, FieldFacts> _fields = new(SymbolEqualityComparer.Default);
+    private readonly ConcurrentBag<IFieldSymbol> _registries = [];
     private readonly ConcurrentDictionary<IMethodSymbol, BodyFacts> _bodies = new(SymbolEqualityComparer.Default);
+    private readonly ConcurrentDictionary<IPropertySymbol, IParameterSymbol[]> _fromParameters =
+        new(SymbolEqualityComparer.Default);
 
     /// <summary>
-    /// Notes the codecs a registry field is initialized with.
+    /// Notes the codecs a field initializer builds and the fields it reads, and whether it is the serializer's.
     /// </summary>
-    public void CollectRegistry(OperationAnalysisContext context)
+    public void CollectField(OperationAnalysisContext context)
     {
         var initializer = (IFieldInitializerOperation)context.Operation;
-        if (!initializer.InitializedFields.Any(types.IsRegistry))
-            return;
-
+        var facts = new FieldFacts();
         foreach (var operation in initializer.Value.DescendantsAndSelf())
         {
+            if (operation is IFieldReferenceOperation reference)
+                facts.Fields.Add(reference.Field.OriginalDefinition);
+
             if (types.ServedBy(operation.Type) is not { } served || served is ITypeParameterSymbol)
                 continue;
 
-            _served.TryAdd(served, true);
+            facts.Served.Add(served);
             if (operation is IInvocationOperation invocation && StoredCodec.Of(invocation, served) is { } codec)
-                _codecs.Add(codec);
+                facts.Codecs.Add(codec);
         }
+
+        foreach (var field in initializer.InitializedFields)
+        {
+            _fields[field.OriginalDefinition] = facts;
+            if (types.IsRegistry(field))
+                _registries.Add(field.OriginalDefinition);
+        }
+    }
+
+    /// <summary>
+    /// Notes a property whose initializer reads a constructor parameter, which a primary constructor sets it through.
+    /// </summary>
+    public void CollectProperty(OperationAnalysisContext context)
+    {
+        var initializer = (IPropertyInitializerOperation)context.Operation;
+        var parameters = initializer.Value.DescendantsAndSelf()
+            .OfType<IParameterReferenceOperation>()
+            .Select(reference => reference.Parameter)
+            .ToArray();
+        if (parameters.Length == 0)
+            return;
+
+        foreach (var property in initializer.InitializedProperties)
+            _fromParameters.TryAdd(property.OriginalDefinition, parameters);
     }
 
     /// <summary>
@@ -61,7 +90,7 @@ internal sealed class StoredMapping(StoredTypes types)
             return;
 
         var stored = method.TypeArguments[0];
-        if (stored is ITypeParameterSymbol && context.ContainingSymbol.ContainingType is { } owner && types.IsStorage(owner))
+        if (stored is ITypeParameterSymbol && context.ContainingSymbol is IMethodSymbol caller && types.IsStorageMethod(caller))
             return;
 
         _calls.Add((stored, method, invocation.Syntax.GetLocation()));
@@ -83,5 +112,36 @@ internal sealed class StoredMapping(StoredTypes types)
     /// Reports every stored type with no codec and every member a mapper leaves out of a direction.
     /// </summary>
     public void Report(CompilationAnalysisContext context)
-        => new StoredVerdicts(types, _served, _bodies).Report(context, _calls, _codecs);
+    {
+        var served = new Dictionary<ITypeSymbol, bool>(SymbolEqualityComparer.Default);
+        var codecs = new List<StoredCodec>();
+        foreach (var facts in TakenIn())
+        {
+            foreach (var type in facts.Served)
+                served[type] = true;
+            codecs.AddRange(facts.Codecs);
+        }
+
+        new StoredVerdicts(types, served, _bodies, _fromParameters).Report(context, _calls, codecs);
+    }
+
+    /// <summary>
+    /// The facts of the fields the serializer takes its codecs from: the marked one and every field it reads, on
+    /// through the fields those read.
+    /// </summary>
+    private IEnumerable<FieldFacts> TakenIn()
+    {
+        var visited = new HashSet<IFieldSymbol>(SymbolEqualityComparer.Default);
+        var pending = new Queue<IFieldSymbol>(_registries);
+        while (pending.Count > 0)
+        {
+            var field = pending.Dequeue();
+            if (!visited.Add(field) || !_fields.TryGetValue(field, out var facts))
+                continue;
+
+            yield return facts;
+            foreach (var read in facts.Fields)
+                pending.Enqueue(read);
+        }
+    }
 }

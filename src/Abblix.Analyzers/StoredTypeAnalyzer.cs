@@ -20,12 +20,13 @@ namespace Abblix.Analyzers;
 /// The server's serializer writes a type with no codec as JSON and says so only in a warning. JSON carries no field
 /// numbers, so two versions of the server running side by side during a deploy can misread each other's records. A
 /// call to the storage is found by the method it calls, on the storage interface or a type implementing it, and its
-/// type is the call's type argument. A type parameter there is accepted only inside a type implementing the storage,
-/// which passes its own caller's type on; anywhere else the type is not named where it is stored, and the call is
-/// reported. A type has a codec when a <c>ProtobufCodec&lt;T&gt;</c> of it is built in the initializer of a field
-/// marked <c>[CodecRegistry]</c>, which is where the serializer takes its codecs from, or, for a write, when a base type
-/// has one, as the serializer looks a written value's codec up by its base types too; the properties the derived type
-/// adds are then owed a mark. A type meant to stay JSON carries <c>[StoredAsJson]</c> with the reason.
+/// type is the call's type argument. A type parameter there is accepted only inside a method implementing a member of
+/// the storage, which passes its own caller's type on; anywhere else the type is not named where it is stored, and the
+/// call is reported. A type has a codec when a <c>ProtobufCodec&lt;T&gt;</c> of it is built in the initializer of the
+/// field marked <c>[CodecRegistry]</c>, the one the serializer takes its codecs from, or of a field that initializer
+/// reads, or, for a write, when a base type has one, as the serializer looks a written value's codec up by its base
+/// types too; the properties the derived type adds are then owed a mark. A type meant to stay JSON carries
+/// <c>[StoredAsJson]</c> with the reason.
 /// </para>
 /// <para>
 /// A mapped codec is checked in both directions, because a property one mapper forgets is dropped on every write with
@@ -48,7 +49,7 @@ public sealed class StoredTypeAnalyzer : DiagnosticAnalyzer
     /// <summary>The codec a stored type is served by.</summary>
     internal const string CodecName = "Abblix.Oidc.Server.Features.Storages.ProtobufCodec`1";
 
-    /// <summary>The mark of a field holding the codecs the serializer uses.</summary>
+    /// <summary>The mark of the field the serializer takes its codecs from.</summary>
     internal const string CodecRegistryName = "Abblix.Oidc.Server.Features.Storages.CodecRegistryAttribute";
 
     /// <summary>The mark of a type stored as JSON on purpose.</summary>
@@ -111,7 +112,8 @@ public sealed class StoredTypeAnalyzer : DiagnosticAnalyzer
 
             var mapping = new StoredMapping(types);
             start.RegisterOperationAction(mapping.CollectStorageCall, OperationKind.Invocation);
-            start.RegisterOperationAction(mapping.CollectRegistry, OperationKind.FieldInitializer);
+            start.RegisterOperationAction(mapping.CollectField, OperationKind.FieldInitializer);
+            start.RegisterOperationAction(mapping.CollectProperty, OperationKind.PropertyInitializer);
             start.RegisterOperationBlockAction(mapping.CollectBody);
             start.RegisterCompilationEndAction(mapping.Report);
         });

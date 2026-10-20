@@ -17,7 +17,6 @@ internal static class StoredProtobufCodecs
     /// <summary>
     /// One codec per value stored as itself.
     /// </summary>
-    [CodecRegistry]
     public static readonly IProtobufCodec[] All =
     [
         ProtobufCodecs.Stored(Proto.RevocationCutoff.Parser),

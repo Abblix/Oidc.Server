@@ -264,6 +264,65 @@ public class StoredTypeAnalyzerTests
     }
 
     /// <summary>
+    /// A registry the serializer's own field reads counts, though it carries no mark itself.
+    /// </summary>
+    [Fact]
+    public async Task ARegistryTheSerializerReadsCounts()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, """
+            namespace Sample
+            {
+                using System.Linq;
+                using Abblix.Oidc.Server.Features.Storages;
+
+                public static class Mapped
+                {
+                    public static readonly object[] All =
+                    [
+                        ProtobufCodecs.Mapped((Grant grant) => grant.ToProto(), message => message.FromProto()),
+                    ];
+                }
+
+                public static class Serializer
+                {
+                    [CodecRegistry]
+                    public static readonly object[] Codecs = Mapped.All.ToArray();
+                }
+            }
+            """, Storing("public Task Save(Grant grant) => storage.SetAsync(\"key\", grant);"));
+
+        Assert.Empty(diagnostics);
+    }
+
+    /// <summary>
+    /// A generic helper of a storage implementation hides the type it stores as well as any other helper, since only
+    /// a member of the storage passes its caller's type on.
+    /// </summary>
+    [Fact]
+    public async Task AGenericHelperOfAStorageImplementationIsReported()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, Registry, """
+            namespace Sample
+            {
+                using System;
+                using System.Threading.Tasks;
+                using Abblix.Oidc.Server.Features.Storages;
+
+                public sealed class Wrapping(IEntityStorage inner) : IEntityStorage
+                {
+                    public Task SetAsync<T>(string key, T value) => inner.SetAsync(key, value);
+                    public Task<T?> GetAsync<T>(string key) => inner.GetAsync<T>(key);
+                    public Task<bool> TrySetIfAbsentAsync<T>(string key, T value) => inner.TrySetIfAbsentAsync(key, value);
+                    public Task<Uri?> Probe(string key) => Load<Uri>(key);
+                    private Task<TValue?> Load<TValue>(string key) => inner.GetAsync<TValue>(key);
+                }
+            }
+            """);
+
+        Assert.Equal([("TValue", null)], Reported(diagnostics, StoredTypeAnalyzer.CodecRule));
+    }
+
+    /// <summary>
     /// A codec of the registry counts however it is built there, with a factory or its constructor.
     /// </summary>
     [Fact]
@@ -512,6 +571,99 @@ public class StoredTypeAnalyzerTests
         Assert.Equal(
             [("Sample.Versioned.Owner", StoredTypeAnalyzer.ToMessage), ("Sample.VersionedMessage.Owner", StoredTypeAnalyzer.ToMessage)],
             Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
+    /// <summary>
+    /// A property a primary constructor sets through its initializer holds data, so a mapper leaving it out is
+    /// reported.
+    /// </summary>
+    [Fact]
+    public async Task APropertyAPrimaryConstructorSetsIsOwed()
+    {
+        var diagnostics = await DiagnosticsOf(CompleteMapper, Registry, """
+            namespace Sample
+            {
+                public sealed class Note(string text, string extra)
+                {
+                    public string Text { get; } = text;
+                    public string Extra { get; } = extra;
+                }
+
+                public sealed class NoteMessage : Google.Protobuf.IMessage
+                {
+                    public const int TextFieldNumber = 1;
+                    public string Text { get; set; } = "";
+                }
+
+                public static class NoteCodecs
+                {
+                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Note note) => new NoteMessage { Text = note.Text },
+                            message => new Note(message.Text, "")),
+                    ];
+                }
+            }
+            """);
+
+        Assert.Equal(
+            [("Sample.Note.Extra", StoredTypeAnalyzer.ToMessage)],
+            Reported(diagnostics, StoredTypeAnalyzer.MappingRule));
+    }
+
+    /// <summary>
+    /// A field of a message is shown on the codec writing that message, even when another codec reaching the same
+    /// message comes first in source order.
+    /// </summary>
+    [Fact]
+    public async Task AFieldIsShownOnTheCodecOfItsMessageRatherThanTheFirstReachingIt()
+    {
+        var diagnostics = await DiagnosticsOf(
+            """
+            namespace Sample
+            {
+                public sealed record Holder(Grant Grant);
+
+                public sealed class HolderMessage : Google.Protobuf.IMessage
+                {
+                    public const int GrantFieldNumber = 1;
+                    public GrantMessage Grant { get; set; } = new();
+                }
+
+                public static class HolderCodecs
+                {
+                    [Abblix.Oidc.Server.Features.Storages.CodecRegistry]
+                    public static readonly object[] All =
+                    [
+                        Abblix.Oidc.Server.Features.Storages.ProtobufCodecs.Mapped(
+                            (Holder holder) => new HolderMessage { Grant = holder.Grant.ToProto() },
+                            message => new Holder(message.Grant.FromProto())),
+                    ];
+                }
+            }
+            """,
+            Registry,
+            """
+            namespace Sample
+            {
+                public static class GrantMapper
+                {
+                    public static GrantMessage ToProto(this Grant grant) => new() { Subject = grant.Subject };
+
+                    public static Grant FromProto(this GrantMessage message)
+                        => new(message.Subject) { Scope = message.HasScope ? message.Scope : null };
+                }
+            }
+            """);
+
+        var field = Assert.Single(diagnostics, diagnostic =>
+            diagnostic.Properties.GetValueOrDefault(StoredTypeAnalyzer.SubjectProperty) == "Sample.GrantMessage.Scope");
+        Assert.Equal(
+            "ProtobufCodecs.Mapped((Grant grant) => grant.ToProto(), message => message.FromProto())",
+            (await field.Location.SourceTree!.GetTextAsync(TestContext.Current.CancellationToken))
+                .ToString(field.Location.SourceSpan));
     }
 
     /// <summary>

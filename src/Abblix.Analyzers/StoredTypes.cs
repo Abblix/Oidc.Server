@@ -14,7 +14,7 @@ namespace Abblix.Analyzers;
 /// </summary>
 /// <param name="storage">The entity storage interface.</param>
 /// <param name="codec">The generic codec type.</param>
-/// <param name="registry">The mark of a field holding the codecs the serializer uses.</param>
+/// <param name="registry">The mark of the field the serializer takes its codecs from.</param>
 /// <param name="message">The interface every Protocol Buffers message implements, when the compilation sees it.</param>
 /// <param name="storedAsJson">The mark of a type stored as JSON on purpose, when declared.</param>
 /// <param name="notStored">The mark of a property kept out of the message on purpose, when declared.</param>
@@ -62,11 +62,6 @@ internal sealed class StoredTypes(
     }
 
     /// <summary>
-    /// Whether <paramref name="type"/> implements the storage, as a decorator wrapping another one does.
-    /// </summary>
-    public bool IsStorage(INamedTypeSymbol type) => type.AllInterfaces.Contains(storage, SymbolEqualityComparer.Default);
-
-    /// <summary>
     /// The type a codec serves, when <paramref name="type"/> is a codec.
     /// </summary>
     public ITypeSymbol? ServedBy(ITypeSymbol? type)
@@ -76,7 +71,7 @@ internal sealed class StoredTypes(
             : null;
 
     /// <summary>
-    /// Whether <paramref name="field"/> holds codecs the serializer uses.
+    /// Whether <paramref name="field"/> is the one the serializer takes its codecs from.
     /// </summary>
     public bool IsRegistry(IFieldSymbol field) => HasMark(field, registry);
 

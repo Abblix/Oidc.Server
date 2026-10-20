@@ -24,6 +24,7 @@ public class ProtobufSerializer : IBinarySerializer
     /// <summary>
     /// The codec of each stored type, keyed by that type.
     /// </summary>
+    [CodecRegistry]
     private static readonly FrozenDictionary<Type, IProtobufCodec> Codecs = MappedProtobufCodecs.All
         .Concat(StoredProtobufCodecs.All)
         .ToFrozenDictionary(codec => codec.ValueType);
