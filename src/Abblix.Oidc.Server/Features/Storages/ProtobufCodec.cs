@@ -6,52 +6,27 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Google.Protobuf;
-
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
-/// How one stored type travels as a Protocol Buffers message: the message it becomes, and the value read back
-/// from the bytes of one.
+/// The codec of one stored type, named in its own type so the build can tell which types have one.
 /// </summary>
 /// <remarks>
-/// Strategy: <see cref="ProtobufSerializer"/> picks one of these by type and knows nothing of any message
-/// itself, so a stored type joins by adding one codec rather than an arm to each direction of a switch.
+/// ABX1009 refuses a call to the entity storage whose type no codec of this kind serves, which keeps every
+/// stored type on a schema of fixed field numbers rather than the JSON the serializer falls back to.
 /// </remarks>
-/// <param name="valueType">The stored type this codec serves.</param>
-/// <param name="toMessage">Builds the message a value is stored as.</param>
-/// <param name="fromBytes">Reads the value back from the bytes of its message.</param>
-internal sealed class ProtobufCodec(Type valueType, Func<object, IMessage> toMessage, Func<byte[], object?> fromBytes)
+/// <typeparam name="TValue">The stored type this codec serves.</typeparam>
+/// <param name="toBytes">Builds the bytes a value is stored as.</param>
+/// <param name="fromBytes">Reads the value back from its bytes.</param>
+internal sealed class ProtobufCodec<TValue>(Func<TValue, byte[]> toBytes, Func<byte[], TValue> fromBytes)
+    : IProtobufCodec
 {
-    /// <summary>
-    /// The stored type this codec serves.
-    /// </summary>
-    public Type ValueType => valueType;
+    /// <inheritdoc />
+    public Type ValueType => typeof(TValue);
 
-    /// <summary>
-    /// The message <paramref name="value"/> is stored as.
-    /// </summary>
-    public IMessage ToMessage(object value) => toMessage(value);
+    /// <inheritdoc />
+    public byte[] ToBytes(object value) => toBytes((TValue)value);
 
-    /// <summary>
-    /// The value the message in <paramref name="bytes"/> stands for.
-    /// </summary>
+    /// <inheritdoc />
     public object? FromBytes(byte[] bytes) => fromBytes(bytes);
-
-    /// <summary>
-    /// A domain type carried by a message its mapper translates to and from.
-    /// </summary>
-    public static ProtobufCodec Mapped<TValue, TMessage>(
-        MessageParser<TMessage> parser,
-        Func<TValue, TMessage> toProto,
-        Func<TMessage, TValue> fromProto)
-        where TMessage : IMessage<TMessage>
-        => new(typeof(TValue), value => toProto((TValue)value), bytes => fromProto(parser.ParseFrom(bytes)));
-
-    /// <summary>
-    /// A message stored as it is, with no domain type mapped onto it.
-    /// </summary>
-    public static ProtobufCodec Stored<TMessage>(MessageParser<TMessage> parser)
-        where TMessage : IMessage<TMessage>
-        => Mapped<TMessage, TMessage>(parser, message => message, message => message);
 }

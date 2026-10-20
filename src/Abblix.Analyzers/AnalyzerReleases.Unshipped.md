@@ -13,3 +13,5 @@ ABX1005 | Abblix.Conventions | Error | An expression joins too many conditions
 ABX1006 | Abblix.Conventions | Error | A declaration has more than one summary
 ABX1007 | Abblix.Conventions | Error | A value from outside reaches the log unsanitized
 ABX1008 | Abblix.Conventions | Error | A credential reaches the log other than as its fingerprint
+ABX1009 | Abblix.Conventions | Error | A stored type has no protobuf codec
+ABX1010 | Abblix.Conventions | Error | A stored member is mapped in one direction only, or in none

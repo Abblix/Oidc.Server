@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Common;
 
@@ -190,6 +191,7 @@ public record AuthorizationContext
     /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
     /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.
     /// </summary>
+    [NotStored("Set only by a token exchange, whose grant is never stored")]
     public string[]? Audiences { get; init; }
 
     /// <summary>

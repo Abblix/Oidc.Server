@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
 using Abblix.Utils.Json;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -238,6 +239,7 @@ public record AuthorizationRequest
 	/// once a code or token has been issued.
 	/// </summary>
 	[JsonIgnore]
+	[NotStored("Set by the fetcher once the stored request is read, so a stored request never has one")]
 	public Uri? PushedRequestUri { get; init; }
 
 	/// <summary>
