@@ -12,7 +12,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
 /// Fails at startup on a duration that would keep nothing: a record gone before anything could read it, or a write
-/// the storage refuses outright.
+/// the storage refuses outright. That includes a time to keep the record of a session's clients too short for the
+/// record to be renewed.
 /// </summary>
 /// <remarks>
 /// At zero or below a record would be gone before anything could read it. For the session's clients that means a
@@ -32,7 +33,7 @@ public sealed class RecordLifetimeOptionsValidator : IValidateOptions<OidcOption
     /// The shortest time the record of a session's clients may be kept: far longer than renewing the longest list
     /// of clients takes, and shorter than any session worth notifying the clients of.
     /// </summary>
-    public static readonly TimeSpan MinSessionClientsRetention = TimeSpan.FromHours(1);
+    internal static readonly TimeSpan MinSessionClientsRetention = TimeSpan.FromHours(1);
 
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
