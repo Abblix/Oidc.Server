@@ -35,7 +35,8 @@ public class ScopeValidatorTests
 
     private static TokenValidationContext CreateContext(
         string[] scope,
-        ResourceDefinition[]? resources = null)
+        ResourceDefinition[]? resources = null,
+        bool? offlineAccessAllowed = null)
     {
         var tokenRequest = new TokenRequest
         {
@@ -44,7 +45,7 @@ public class ScopeValidatorTests
         var clientRequest = new ClientRequest();
         var context = new TokenValidationContext(tokenRequest, clientRequest)
         {
-            ClientInfo = new ClientInfo("test-client"),
+            ClientInfo = new ClientInfo("test-client") { OfflineAccessAllowed = offlineAccessAllowed },
         };
         if (resources != null)
         {
@@ -264,5 +265,26 @@ public class ScopeValidatorTests
         _scopeManager.Verify(
             m => m.TryGet("read", out It.Ref<ScopeDefinition?>.IsAny),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A grant taking its scope from the token request, such as password or jwt-bearer, has no authorization request
+    /// in front of it, so offline_access from a client not allowed it is refused here, before any scope is resolved.
+    /// </summary>
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task ValidateAsync_OfflineAccess_IsRefusedForClientNotAllowedIt(bool? offlineAccessAllowed, bool refused)
+    {
+        var context = CreateContext([Scopes.OpenId, Scopes.OfflineAccess], offlineAccessAllowed: offlineAccessAllowed);
+        SetupScopeManagerForScopes(Scopes.OpenId, Scopes.OfflineAccess);
+
+        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(refused ? ErrorCodes.InvalidScope : null, error?.Error);
+        _scopeManager.Verify(
+            m => m.TryGet(Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny),
+            refused ? Times.Never() : Times.Once());
     }
 }

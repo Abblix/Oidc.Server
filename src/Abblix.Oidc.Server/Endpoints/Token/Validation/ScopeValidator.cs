@@ -33,6 +33,16 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// </returns>
     protected override OidcError? Validate(TokenValidationContext context)
     {
+        // A grant that takes its scope from this request, such as password or jwt-bearer, issues a refresh token
+        // for offline_access with no authorization request in front of it to refuse
+        if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
+            context.ClientInfo.OfflineAccessAllowed != true)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidScope,
+                "This client is not allowed to request for offline access");
+        }
+
         if (!scopeManager.Validate(
                 context.Request.Scope,
                 context.Resources,

@@ -97,12 +97,13 @@ public class ScopeValidatorTests
         bool? offlineAccessAllowed = null,
         ResourceDefinition[]? resources = null,
         string[]? prompt = null,
-        bool offlineAccessWithoutConsentPrompt = false)
+        bool offlineAccessWithoutConsentPrompt = false,
+        string[]? responseType = null)
     {
         var request = new AuthorizationRequest
         {
             ClientId = ClientId,
-            ResponseType = [ResponseTypes.Code],
+            ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = scopes,
             Prompt = prompt,
@@ -147,26 +148,30 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
-    /// OpenID Connect Core 1.0, section 11: a request returning an authorization code receives offline_access when it
-    /// asks for consent with prompt=consent, or when the client is configured to receive it without, and has it
-    /// ignored otherwise, the rest of the request going on. Ignored, it leaves the request itself too, which the
-    /// host's consent provider reads.
+    /// OpenID Connect Core 1.0, sections 11 and 17.4: a request returning an authorization code and no access token
+    /// through the user agent receives offline_access when it asks for consent with prompt=consent, or when the
+    /// client is configured to receive it without, and has it ignored otherwise, the rest of the request going on.
+    /// Ignored, it leaves the request itself too, which the host's consent provider reads.
     /// </summary>
     [Theory]
-    [InlineData(FlowTypes.AuthorizationCode, true, false, true)]
-    [InlineData(FlowTypes.AuthorizationCode, false, true, true)]
-    [InlineData(FlowTypes.AuthorizationCode, false, false, false)]
-    [InlineData(FlowTypes.Hybrid, true, false, true)]
-    [InlineData(FlowTypes.Hybrid, false, false, false)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", true, false, true)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", false, true, true)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", false, false, false)]
+    [InlineData(FlowTypes.Hybrid, "code id_token", true, false, true)]
+    [InlineData(FlowTypes.Hybrid, "code id_token", false, false, false)]
+    [InlineData(FlowTypes.Hybrid, "code token", true, true, false)]
+    [InlineData(FlowTypes.Hybrid, "code id_token token", true, true, false)]
+    [InlineData(FlowTypes.None, "none", true, true, false)]
     public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyWithConsentPromptOrClientConditions(
-        FlowTypes flowType, bool promptConsent, bool withoutConsentPrompt, bool received)
+        FlowTypes flowType, string responseType, bool promptConsent, bool withoutConsentPrompt, bool received)
     {
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
             flowType,
             offlineAccessAllowed: true,
             prompt: promptConsent ? [Prompts.Consent] : null,
-            offlineAccessWithoutConsentPrompt: withoutConsentPrompt);
+            offlineAccessWithoutConsentPrompt: withoutConsentPrompt,
+            responseType: responseType.Split(' '));
 
         var result = await _validator.ValidateAsync(context);
 
@@ -188,7 +193,8 @@ public class ScopeValidatorTests
             FlowTypes.Implicit,
             offlineAccessAllowed: true,
             prompt: [Prompts.Consent],
-            offlineAccessWithoutConsentPrompt: true);
+            offlineAccessWithoutConsentPrompt: true,
+            responseType: [ResponseTypes.IdToken, ResponseTypes.Token]);
 
         var result = await _validator.ValidateAsync(context);
 
@@ -199,26 +205,28 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects offline_access when client not authorized.
-    /// Per client configuration, offline_access must be explicitly allowed.
-    /// Critical security check preventing unauthorized refresh token issuance.
+    /// A client not allowed offline access is refused only for a request that would otherwise receive it: where
+    /// OpenID Connect Core 1.0 has the server ignore offline_access, it is ignored for this client too.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OfflineAccessWhenClientNotAuthorized_ShouldReturnError()
+    [Theory]
+    [InlineData(FlowTypes.AuthorizationCode, "code", true, true)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", false, false)]
+    [InlineData(FlowTypes.Implicit, "id_token token", true, false)]
+    [InlineData(FlowTypes.Hybrid, "code token", true, false)]
+    public async Task ValidateAsync_OfflineAccessWhenClientNotAuthorized_IsRefusedOnlyWhereReceived(
+        FlowTypes flowType, string responseType, bool promptConsent, bool refused)
     {
-        // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false);
+            flowType,
+            offlineAccessAllowed: false,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            responseType: responseType.Split(' '));
 
-        // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("not allowed", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("offline", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(refused ? ErrorCodes.InvalidScope : null, result?.Error);
+        Assert.Equal(refused, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
     }
 
     /// <summary>
@@ -231,7 +239,8 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            [Scopes.OpenId, Scopes.OfflineAccess]);
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            prompt: [Prompts.Consent]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -370,7 +379,8 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false);
+            offlineAccessAllowed: false,
+            prompt: [Prompts.Consent]);
         var originalScope = context.Scope;
 
         // Act
@@ -393,7 +403,8 @@ public class ScopeValidatorTests
         var redirectUri = new Uri("https://client.example.com/callback");
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false);
+            offlineAccessAllowed: false,
+            prompt: [Prompts.Consent]);
         context.ValidRedirectUri = redirectUri;
 
         // Act
@@ -416,7 +427,8 @@ public class ScopeValidatorTests
         const string responseMode = ResponseModes.Fragment;
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false);
+            offlineAccessAllowed: false,
+            prompt: [Prompts.Consent]);
         context.ResponseMode = responseMode;
 
         // Act
@@ -517,7 +529,8 @@ public class ScopeValidatorTests
 
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess, "unknown"],
-            offlineAccessAllowed: false);
+            offlineAccessAllowed: false,
+            prompt: [Prompts.Consent]);
 
         // Act
         var result = await _validator.ValidateAsync(context);
@@ -525,7 +538,7 @@ public class ScopeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("offline", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        _scopeManager.Verify(m => m.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny), Times.Never);
     }
 
     /// <summary>
