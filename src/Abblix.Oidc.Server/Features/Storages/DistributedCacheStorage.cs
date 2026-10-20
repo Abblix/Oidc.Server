@@ -101,6 +101,30 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	}
 
 	/// <summary>
+	/// Gives an entry a new expiration policy through
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryExtendAsync"/>, which reads the value and writes
+	/// it straight back under the per-key gate, so it is decided WITHIN THIS PROCESS and no further.
+	/// </summary>
+	/// <param name="key">The key whose entry is kept longer.</param>
+	/// <param name="options">The new expiration policy.</param>
+	/// <param name="token">An optional cancellation token to cancel the operation.</param>
+	/// <returns>True when the key held an entry and it now carries the new policy; false when it held none.
+	/// </returns>
+	public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+	{
+		ArgumentNullException.ThrowIfNull(key);
+		return cache.TryExtendAsync(
+			key,
+			new ()
+			{
+				AbsoluteExpiration = options.AbsoluteExpiration,
+				AbsoluteExpirationRelativeToNow = options.AbsoluteExpirationRelativeToNow,
+				SlidingExpiration = options.SlidingExpiration,
+			},
+			token ?? CancellationToken.None);
+	}
+
+	/// <summary>
 	/// Asynchronously removes an object from the distributed cache.
 	/// </summary>
 	/// <param name="key">The key of the object to remove.</param>

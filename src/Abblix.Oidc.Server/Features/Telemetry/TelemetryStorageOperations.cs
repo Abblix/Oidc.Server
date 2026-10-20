@@ -29,6 +29,11 @@ public static class TelemetryStorageOperations
     public const string SetIfAbsent = "set_if_absent";
 
     /// <summary>
+    /// Keeping an entry that is there for longer.
+    /// </summary>
+    public const string Extend = "extend";
+
+    /// <summary>
     /// Removing an entry.
     /// </summary>
     public const string Remove = "remove";

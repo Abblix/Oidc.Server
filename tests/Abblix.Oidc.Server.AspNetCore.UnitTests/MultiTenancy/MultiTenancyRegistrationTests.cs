@@ -159,6 +159,10 @@ public partial class MultiTenancyRegistrationTests
             string key, T value, StorageOptions options, System.Threading.CancellationToken? token = null)
             => inner.TrySetIfAbsentAsync(key, value, options, token);
 
+        public Task<bool> TryExtendAsync(
+            string key, StorageOptions options, System.Threading.CancellationToken? token = null)
+            => inner.TryExtendAsync(key, options, token);
+
         public Task RemoveAsync(string key, System.Threading.CancellationToken? token = null)
             => inner.RemoveAsync(key, token);
     }

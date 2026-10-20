@@ -39,6 +39,10 @@ public sealed class TenantEntityStorage(IEntityStorage inner, ITenantAccessor te
         => inner.TrySetIfAbsentAsync(TenantKey.Of(tenantAccessor, key), value, options, token);
 
     /// <inheritdoc />
+    public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        => inner.TryExtendAsync(TenantKey.Of(tenantAccessor, key), options, token);
+
+    /// <inheritdoc />
     public Task RemoveAsync(string key, CancellationToken? token = null)
         => inner.RemoveAsync(TenantKey.Of(tenantAccessor, key), token);
 }

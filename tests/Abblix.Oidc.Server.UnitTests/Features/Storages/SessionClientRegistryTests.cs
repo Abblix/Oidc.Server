@@ -135,34 +135,237 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
-    /// The records of one session expire together, measured from the first client, so a session whose record
-    /// has expired starts a new list rather than one with an older client still sitting above the gap.
+    /// The records of one session expire together, at most two retentions after its last authorization, so a
+    /// session whose record has expired starts a new list rather than one with an older client still sitting
+    /// above the gap.
     /// </summary>
     [Fact]
-    public async Task A_client_signing_in_later_leaves_with_the_first_one()
+    public async Task Clients_are_forgotten_two_retentions_after_the_last_authorization()
     {
         var registry = Registry();
         await registry.AddClientAsync(SessionId, "first", Ct);
         _time.Advance(Retention / 2);
         await registry.AddClientAsync(SessionId, "second", Ct);
 
-        _time.Advance(Retention / 2 + TimeSpan.FromSeconds(1));
+        _time.Advance(2 * Retention + TimeSpan.FromSeconds(1));
         await registry.AddClientAsync(SessionId, "third", Ct);
 
         Assert.Equal(["third"], await registry.GetClientsAsync(SessionId, Ct));
     }
 
     [Fact]
-    public async Task Clients_stay_listed_until_the_retention_counted_from_the_first_one_has_passed()
+    public async Task Clients_stay_listed_until_the_retention_counted_from_the_last_authorization_has_passed()
     {
         var registry = Registry();
         await registry.AddClientAsync(SessionId, "first", Ct);
         _time.Advance(Retention / 2);
         await registry.AddClientAsync(SessionId, "second", Ct);
 
-        _time.Advance(Retention / 2 - TimeSpan.FromSeconds(1));
+        _time.Advance(Retention - TimeSpan.FromSeconds(1));
 
         Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A session kept under its id by a re-authentication outlives two retentions from its first client, and its
+    /// logout still names the client that signed in before then.
+    /// </summary>
+    [Fact]
+    public async Task A_client_signing_in_again_keeps_the_list_past_two_retentions_from_the_first_one()
+    {
+        var registry = Registry();
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention * 1.5);
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention);
+        await registry.AddClientAsync(SessionId, "second", Ct);
+
+        _time.Advance(Retention / 2);
+
+        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// The note that a client is already recorded lives as long as the list, so a client signing in again after
+    /// two retentions from its first sign-in takes no second position.
+    /// </summary>
+    [Fact]
+    public async Task A_client_signing_in_again_after_two_retentions_from_its_first_sign_in_takes_no_second_position()
+    {
+        var registry = Registry();
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention / 2);
+        await registry.AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention / 2 + TimeSpan.FromSeconds(1));
+        await registry.AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention);
+
+        await registry.AddClientAsync(SessionId, "first", Ct);
+
+        Assert.Null(await StoredPositionAsync(3));
+    }
+
+    /// <summary>
+    /// The list is renewed once a retention rather than on every authorization, so a session signing in again
+    /// within a retention of the last renewal writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_client_signing_in_again_within_a_retention_of_the_last_renewal_writes_nothing()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention - TimeSpan.FromSeconds(1));
+        var counting = new CountsOperations(_storage);
+
+        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+
+        Assert.Equal(0, counting.Writes);
+    }
+
+    /// <summary>
+    /// A list just started already lasts as long as a renewal would make it, so the authorization starting it
+    /// renews nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_authorization_starting_a_list_renews_nothing()
+    {
+        var counting = new CountsOperations(_storage);
+
+        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+
+        Assert.Equal(0, counting.Extensions);
+    }
+
+    /// <summary>
+    /// The note of a renewal ends a retention before the end the renewal set, however long the renewal took, so
+    /// the authorization after that moment renews the list again.
+    /// </summary>
+    [Fact]
+    public async Task A_slow_renewal_is_due_again_a_retention_before_the_end_it_set()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention + TimeSpan.FromSeconds(1));
+        var renewedAt = _time.GetUtcNow();
+        await Registry(new ClockMovesOnEachExtension(_storage, _time)).AddClientAsync(SessionId, "first", Ct);
+
+        _time.SetUtcNow(renewedAt + Retention + TimeSpan.FromSeconds(1));
+        var counting = new CountsOperations(_storage);
+        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+
+        Assert.NotEqual(0, counting.Extensions);
+    }
+
+    /// <summary>
+    /// Moves the clock a minute at every extension made through it, as a renewal of a long list over a slow store
+    /// takes time.
+    /// </summary>
+    private sealed class ClockMovesOnEachExtension(IEntityStorage inner, FakeTimeProvider time) : IEntityStorage
+    {
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        {
+            time.Advance(TimeSpan.FromMinutes(1));
+            return inner.TryExtendAsync(key, options, token);
+        }
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
+    /// A renewal that stops half way is made again by the next authorization rather than a retention later, so
+    /// the list still lasts a retention past that authorization.
+    /// </summary>
+    [Fact]
+    public async Task A_renewal_stopping_half_way_is_made_again_by_the_next_authorization()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention + TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Registry(new FailsTheThirdExtension(_storage)).AddClientAsync(SessionId, "first", Ct));
+
+        _time.Advance(Retention / 2);
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention - TimeSpan.FromSeconds(1));
+
+        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Fails the third extension made through it, part way through a renewal of a list of two clients.
+    /// </summary>
+    private sealed class FailsTheThirdExtension(IEntityStorage inner) : IEntityStorage
+    {
+        private int _extensions;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => Interlocked.Increment(ref _extensions) == 3
+                ? throw new InvalidOperationException("The store refused the write.")
+                : inner.TryExtendAsync(key, options, token);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
+    /// A generation that ends while it is being renewed stays ended, so the next authorization starts a list
+    /// that its logout reads, rather than finding the old one brought back with its first positions gone.
+    /// </summary>
+    [Fact]
+    public async Task A_generation_ending_while_it_is_renewed_is_not_brought_back()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
+        var ending = new ClockMovesAtTheFirstExtension(_storage, () =>
+        {
+            _time.Advance(TimeSpan.FromMilliseconds(2));
+            return Task.CompletedTask;
+        });
+        await Registry(ending).AddClientAsync(SessionId, "second", Ct);
+
+        _time.Advance(TimeSpan.FromDays(1));
+        await Registry().AddClientAsync(SessionId, "third", Ct);
+
+        Assert.Equal(["third"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A renewal of a generation that another authorization has meanwhile replaced keeps the replacement, so the
+    /// client recorded in it stays listed.
+    /// </summary>
+    [Fact]
+    public async Task A_generation_replaced_while_the_old_one_is_renewed_keeps_its_client()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
+        var replacing = new ClockMovesAtTheFirstExtension(_storage, async () =>
+        {
+            _time.Advance(TimeSpan.FromMilliseconds(2));
+            await Registry().AddClientAsync(SessionId, "elsewhere", Ct);
+        });
+
+        await Registry(replacing).AddClientAsync(SessionId, "second", Ct);
+
+        Assert.Contains("elsewhere", await Registry().GetClientsAsync(SessionId, Ct));
     }
 
     /// <summary>
@@ -215,7 +418,7 @@ public class SessionClientRegistryTests
     public async Task A_client_recorded_as_the_session_records_expire_is_listed()
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
-        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+        _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
         var expiring = new ClockMovesAtTheFirstClaim(_storage, () =>
         {
@@ -241,7 +444,7 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "b", Ct);
         await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "c", Ct);
 
-        _time.Advance(Retention + TimeSpan.FromSeconds(30));
+        _time.Advance(2 * Retention + TimeSpan.FromSeconds(30));
 
         Assert.Equal(["a", "b", "c"], await Registry().GetClientsAsync(SessionId, Ct));
     }
@@ -254,7 +457,7 @@ public class SessionClientRegistryTests
     public async Task A_client_recorded_as_the_records_expire_is_listed_by_a_store_refusing_past_expiries()
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
-        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+        _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
         var expiring = new ClockMovesAtTheFirstClaim(new RefusesAnExpiryInThePast(_storage, _time), () =>
         {
@@ -288,6 +491,12 @@ public class SessionClientRegistryTests
             return inner.TrySetIfAbsentAsync(key, value, options, token);
         }
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        {
+            Refuse(options);
+            return inner.TryExtendAsync(key, options, token);
+        }
+
         public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
 
         private void Refuse(StorageOptions options)
@@ -305,7 +514,7 @@ public class SessionClientRegistryTests
     public async Task A_client_losing_to_a_record_that_then_expires_is_listed()
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
-        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+        _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
         var racing = new ClockMovesAtTheFirstClaim(_storage, async () =>
         {
@@ -325,7 +534,7 @@ public class SessionClientRegistryTests
     public async Task A_client_recorded_as_the_records_expire_is_listed_once_after_signing_in_again()
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
-        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+        _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
         var expiring = new ClockMovesAfterTheFirstRecordRead(_storage, () => _time.Advance(TimeSpan.FromMilliseconds(2)));
         await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
 
@@ -342,7 +551,7 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_holding_two_positions_is_listed_once()
     {
-        var failing = new FailsTheFirstWrite(_storage);
+        var failing = new FailsTheFirstClientWrite(_storage);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => Registry(failing).AddClientAsync(SessionId, "first", Ct));
 
@@ -403,15 +612,24 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
-    /// Counts the reads and the plain writes made through it.
+    /// Counts the reads and the writes made through it, a plain write or one keeping an entry longer.
     /// </summary>
     private sealed class CountsOperations(IEntityStorage inner) : IEntityStorage
     {
         private int _reads;
         private int _writes;
+        private int _extensions;
 
         public int Reads => _reads;
         public int Writes => _writes;
+        public int Extensions => _extensions;
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        {
+            Interlocked.Increment(ref _writes);
+            Interlocked.Increment(ref _extensions);
+            return inner.TryExtendAsync(key, options, token);
+        }
 
         public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
         {
@@ -433,17 +651,20 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
-    /// Fails the first plain write through it, which is the one that records a client already holding a
-    /// position.
+    /// Fails the first plain write of a client through it, which is the one that records a client already
+    /// holding a position.
     /// </summary>
-    private sealed class FailsTheFirstWrite(IEntityStorage inner) : IEntityStorage
+    private sealed class FailsTheFirstClientWrite(IEntityStorage inner) : IEntityStorage
     {
         private int _writes;
 
         public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => Interlocked.Increment(ref _writes) == 1
+            => value is StoredSessionClient && Interlocked.Increment(ref _writes) == 1
                 ? throw new InvalidOperationException("The store refused the write.")
                 : inner.SetAsync(key, value, options, token);
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => inner.TryExtendAsync(key, options, token);
 
         public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
             => inner.GetAsync<T>(key, removeOnRetrieval, token);
@@ -480,6 +701,9 @@ public class SessionClientRegistryTests
     {
         private Action? _step = step;
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => inner.TryExtendAsync(key, options, token);
+
         public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => inner.SetAsync(key, value, options, token);
 
@@ -500,12 +724,44 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
+    /// Runs a step once, just before the first extension made through it: the moment a renewal has seen the
+    /// session's records alive and has not yet kept any of them longer.
+    /// </summary>
+    private sealed class ClockMovesAtTheFirstExtension(IEntityStorage inner, Func<Task> step) : IEntityStorage
+    {
+        private Func<Task>? _step = step;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public async Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        {
+            if (Interlocked.Exchange(ref _step, null) is { } once)
+                await once();
+
+            return await inner.TryExtendAsync(key, options, token);
+        }
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
     /// Runs a step once, just before the first claim made through it: the moment a caller has decided where to
     /// write and has not yet written.
     /// </summary>
     private sealed class ClockMovesAtTheFirstClaim(IEntityStorage inner, Func<Task> step) : IEntityStorage
     {
         private Func<Task>? _step = step;
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => inner.TryExtendAsync(key, options, token);
 
         public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => inner.SetAsync(key, value, options, token);

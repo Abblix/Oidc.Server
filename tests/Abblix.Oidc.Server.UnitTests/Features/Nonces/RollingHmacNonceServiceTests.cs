@@ -240,6 +240,9 @@ public class RollingHmacNonceServiceTests
         public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => Task.FromResult(false);
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(false);
+
         public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
     }
 

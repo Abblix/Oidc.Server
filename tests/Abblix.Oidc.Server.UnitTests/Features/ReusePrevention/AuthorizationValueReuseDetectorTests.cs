@@ -90,6 +90,9 @@ public class AuthorizationValueReuseDetectorTests
             return Task.FromResult(true);
         }
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(_store.ContainsKey(key));
+
         public Task RemoveAsync(string key, CancellationToken? token = null)
         {
             _store.Remove(key);

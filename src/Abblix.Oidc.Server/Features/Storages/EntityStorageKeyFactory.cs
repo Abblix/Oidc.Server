@@ -135,6 +135,10 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:SessionClient:{sessionId}:{generation}:Client:{clientId}";
 
     /// <inheritdoc />
+    public string SessionClientsRenewalKey(string sessionId, string generation)
+        => $"Abblix.Oidc.Server:SessionClient:{sessionId}:{generation}:Renewed";
+
+    /// <inheritdoc />
     public string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash)
         => $"Abblix.Oidc.Server:Reuse:{clientId}:{valueKind}:{valueHash}";
 

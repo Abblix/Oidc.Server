@@ -64,6 +64,9 @@ public class TenantEntityStorageTests
         public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => Task.FromResult(Entries.TryAdd(key, value));
 
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(Entries.ContainsKey(key));
+
         public Task RemoveAsync(string key, CancellationToken? token = null)
         {
             Entries.TryRemove(key, out _);
@@ -105,6 +108,22 @@ public class TenantEntityStorageTests
         _tenant.Enter("acme");
         Assert.False(await Storage.TrySetIfAbsentAsync("UserCode:ABCD", 3, Options));
         Assert.Equal(1, await Storage.GetAsync<int>("UserCode:ABCD", removeOnRetrieval: false));
+    }
+
+    /// <summary>
+    /// An entry written under one tenant is not found to keep longer under another.
+    /// </summary>
+    [Fact]
+    public async Task Extending_ActsOnlyWithinTheTenant()
+    {
+        _tenant.Enter("acme");
+        await Storage.SetAsync("SessionClient:s", "acme's", Options);
+
+        _tenant.Enter("globex");
+        Assert.False(await Storage.TryExtendAsync("SessionClient:s", Options));
+
+        _tenant.Enter("acme");
+        Assert.True(await Storage.TryExtendAsync("SessionClient:s", Options));
     }
 
     /// <summary>
@@ -175,6 +194,7 @@ public class TenantEntityStorageTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.SetAsync("k", 1, Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.GetAsync<int>("k", removeOnRetrieval: false));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TrySetIfAbsentAsync("k", 1, Options));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TryExtendAsync("k", Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.RemoveAsync("k"));
         Assert.Empty(_inner.Entries);
     }
