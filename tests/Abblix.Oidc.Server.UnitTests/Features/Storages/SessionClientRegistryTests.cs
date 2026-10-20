@@ -237,6 +237,51 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
+    /// The note of a renewal ends a retention before the end the renewal set, however long the renewal took, so
+    /// the authorization after that moment renews the list again.
+    /// </summary>
+    [Fact]
+    public async Task A_slow_renewal_is_due_again_a_retention_before_the_end_it_set()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+        _time.Advance(Retention + TimeSpan.FromSeconds(1));
+        var renewedAt = _time.GetUtcNow();
+        await Registry(new ClockMovesOnEachExtension(_storage, _time)).AddClientAsync(SessionId, "first", Ct);
+
+        _time.SetUtcNow(renewedAt + Retention + TimeSpan.FromSeconds(1));
+        var counting = new CountsOperations(_storage);
+        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+
+        Assert.NotEqual(0, counting.Extensions);
+    }
+
+    /// <summary>
+    /// Moves the clock a minute at every extension made through it, as a renewal of a long list over a slow store
+    /// takes time.
+    /// </summary>
+    private sealed class ClockMovesOnEachExtension(IEntityStorage inner, FakeTimeProvider time) : IEntityStorage
+    {
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+        {
+            time.Advance(TimeSpan.FromMinutes(1));
+            return inner.TryExtendAsync(key, options, token);
+        }
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
     /// A renewal that stops half way is made again by the next authorization rather than a retention later, so
     /// the list still lasts a retention past that authorization.
     /// </summary>

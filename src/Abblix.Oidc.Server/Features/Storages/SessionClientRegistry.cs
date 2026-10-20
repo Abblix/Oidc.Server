@@ -31,7 +31,10 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// expire on the schedule of the first client: the generation and its records are written to last two
 /// retentions, and once a retention has passed since the last renewal, the next authorization keeps every one of
 /// them two retentions from then. A renewal moves only the expiry of what is still stored, so it never brings
-/// back a generation that has ended or writes an old one over the one that replaced it.
+/// back a generation that has ended or writes an old one over the one that replaced it. A renewal of a generation
+/// that is replaced while the renewal runs gives the replacement the end it computed, which is earlier than the
+/// replacement's own by the time between the two, so the replacement may end that much less than a retention
+/// after an authorization.
 /// </para>
 /// <para>
 /// A second key per client says the client is already recorded, so recording a client the session already knows
@@ -151,7 +154,7 @@ public partial class SessionClientRegistry(
                 key, started, new StorageOptions { AbsoluteExpiration = expiresAt }, cancellationToken))
         {
             // A generation just started lasts as long as a renewal would make it
-            await NoteRenewedAsync(sessionId, started, cancellationToken);
+            await NoteRenewedAsync(sessionId, started, expiresAt, cancellationToken);
             return started;
         }
 
@@ -213,8 +216,8 @@ public partial class SessionClientRegistry(
     /// </summary>
     /// <remarks>
     /// The records are kept longer before the generation, so none expires before the generation that lists
-    /// them. The renewal is noted only once the generation is kept longer too, so one that stopped half way is
-    /// made again by the next authorization rather than waiting a retention.
+    /// them. The renewal is noted after the attempt to keep the generation longer, so one that stopped half way
+    /// is made again by the next authorization rather than waiting a retention.
     /// </remarks>
     private async Task RenewWhenDueAsync(
         string sessionId, Proto.SessionClientsGeneration generation, CancellationToken cancellationToken)
@@ -223,7 +226,8 @@ public partial class SessionClientRegistry(
         if (await storage.GetAsync<Proto.SessionClientsGeneration>(renewalKey, false, cancellationToken) != null)
             return;
 
-        var storageOptions = new StorageOptions { AbsoluteExpiration = KeptUntil() };
+        var keptUntil = KeptUntil();
+        var storageOptions = new StorageOptions { AbsoluteExpiration = keptUntil };
         for (var position = 1; position <= MaxClientsPerSession; position++)
         {
             var positionKey = keyFactory.SessionClientKey(sessionId, generation.Id, position);
@@ -241,18 +245,26 @@ public partial class SessionClientRegistry(
         await storage.TryExtendAsync(
             keyFactory.SessionClientsGenerationKey(sessionId), storageOptions, cancellationToken);
 
-        await NoteRenewedAsync(sessionId, generation, cancellationToken);
+        await NoteRenewedAsync(sessionId, generation, keptUntil, cancellationToken);
     }
 
     /// <summary>
-    /// Notes that a generation lasts two retentions from now, so no authorization renews it for a retention.
+    /// Notes that a generation was set to last until <paramref name="keptUntil"/>, so no authorization renews it
+    /// until a retention before then.
     /// </summary>
+    /// <remarks>
+    /// Counted back from that end rather than forward from the moment the note is written, so the time the
+    /// writes before it took does not carry the note past the point a renewal is due.
+    /// </remarks>
     private Task NoteRenewedAsync(
-        string sessionId, Proto.SessionClientsGeneration generation, CancellationToken cancellationToken)
+        string sessionId,
+        Proto.SessionClientsGeneration generation,
+        DateTimeOffset keptUntil,
+        CancellationToken cancellationToken)
         => storage.SetAsync(
             keyFactory.SessionClientsRenewalKey(sessionId, generation.Id),
             generation,
-            new StorageOptions { AbsoluteExpiration = clock.GetUtcNow() + options.Value.SessionClientsRetention },
+            new StorageOptions { AbsoluteExpiration = keptUntil - options.Value.SessionClientsRetention },
             cancellationToken);
 
     /// <summary>

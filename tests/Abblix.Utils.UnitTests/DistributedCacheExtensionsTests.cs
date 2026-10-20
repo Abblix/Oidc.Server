@@ -376,8 +376,8 @@ public class DistributedCacheExtensionsTests
 	}
 
 	/// <summary>
-	/// A claim of the key made while an extension is between its read and its write waits for the extension, so
-	/// a caller told it wrote finds its own value there afterwards rather than the one the extension read.
+	/// A claim of the key made while an extension is between its read and its write waits for the extension, and
+	/// then finds the value the extension wrote, rather than writing one the extension then writes over.
 	/// </summary>
 	[Fact]
 	public async Task TryExtendAsync_AClaimDuringTheExtension_IsNotWrittenOver()
@@ -388,8 +388,8 @@ public class DistributedCacheExtensionsTests
 		await cache.TryExtendAsync("kept", new (), TestContext.Current.CancellationToken);
 		var wrote = await cache.Claim.NotNull(nameof(cache.Claim));
 
-		var expected = wrote ? "second" : "first";
-		Assert.Equal(expected, Encoding.UTF8.GetString(
+		Assert.False(wrote);
+		Assert.Equal("first", Encoding.UTF8.GetString(
 			(await cache.GetAsync("kept", TestContext.Current.CancellationToken)).NotNull("kept")));
 	}
 
