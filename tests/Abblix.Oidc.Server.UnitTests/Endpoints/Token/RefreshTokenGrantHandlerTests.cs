@@ -71,7 +71,7 @@ public class RefreshTokenGrantHandlerTests
     public async Task ValidRefreshToken_ShouldReturnNewGrant()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId) { OfflineAccessAllowed = true };
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccess = OfflineAccess.Allowed };
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
 
@@ -100,12 +100,10 @@ public class RefreshTokenGrantHandlerTests
     /// A refresh token exists only for offline access, so a client not allowed it, as when the host withdrew the
     /// permission after the token was issued, is refused rather than renewed.
     /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    public async Task RefreshToken_FromClientNotAllowedOfflineAccess_IsRefused(bool? offlineAccessAllowed)
+    [Fact]
+    public async Task RefreshToken_FromClientNotAllowedOfflineAccess_IsRefused()
     {
-        var clientInfo = new ClientInfo(ClientId) { OfflineAccessAllowed = offlineAccessAllowed };
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccess = OfflineAccess.Disabled };
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
         _jwtValidator

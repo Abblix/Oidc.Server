@@ -94,10 +94,9 @@ public class ScopeValidatorTests
     private static AuthorizationValidationContext CreateContext(
         string[] scopes,
         FlowTypes flowType = FlowTypes.AuthorizationCode,
-        bool? offlineAccessAllowed = null,
+        OfflineAccess offlineAccess = OfflineAccess.Disabled,
         ResourceDefinition[]? resources = null,
         string[]? prompt = null,
-        bool offlineAccessWithoutConsentPrompt = false,
         string[]? responseType = null)
     {
         var request = new AuthorizationRequest
@@ -111,8 +110,7 @@ public class ScopeValidatorTests
 
         var clientInfo = new ClientInfo(ClientId)
         {
-            OfflineAccessAllowed = offlineAccessAllowed,
-            OfflineAccessWithoutConsentPrompt = offlineAccessWithoutConsentPrompt,
+            OfflineAccess = offlineAccess,
         };
 
         return new AuthorizationValidationContext(request)
@@ -154,23 +152,22 @@ public class ScopeValidatorTests
     /// Ignored, it leaves the request itself too, which the host's consent provider reads.
     /// </summary>
     [Theory]
-    [InlineData(FlowTypes.AuthorizationCode, "code", true, false, true)]
-    [InlineData(FlowTypes.AuthorizationCode, "code", false, true, true)]
-    [InlineData(FlowTypes.AuthorizationCode, "code", false, false, false)]
-    [InlineData(FlowTypes.Hybrid, "code id_token", true, false, true)]
-    [InlineData(FlowTypes.Hybrid, "code id_token", false, false, false)]
-    [InlineData(FlowTypes.Hybrid, "code token", true, true, false)]
-    [InlineData(FlowTypes.Hybrid, "code id_token token", true, true, false)]
-    [InlineData(FlowTypes.None, "none", true, true, false)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", true, OfflineAccess.ConsentRequired, true)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", false, OfflineAccess.Allowed, true)]
+    [InlineData(FlowTypes.AuthorizationCode, "code", false, OfflineAccess.ConsentRequired, false)]
+    [InlineData(FlowTypes.Hybrid, "code id_token", true, OfflineAccess.ConsentRequired, true)]
+    [InlineData(FlowTypes.Hybrid, "code id_token", false, OfflineAccess.ConsentRequired, false)]
+    [InlineData(FlowTypes.Hybrid, "code token", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.Hybrid, "code id_token token", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.None, "none", true, OfflineAccess.Allowed, false)]
     public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyWithConsentPromptOrClientConditions(
-        FlowTypes flowType, string responseType, bool promptConsent, bool withoutConsentPrompt, bool received)
+        FlowTypes flowType, string responseType, bool promptConsent, OfflineAccess offlineAccess, bool received)
     {
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
             flowType,
-            offlineAccessAllowed: true,
+            offlineAccess: offlineAccess,
             prompt: promptConsent ? [Prompts.Consent] : null,
-            offlineAccessWithoutConsentPrompt: withoutConsentPrompt,
             responseType: responseType.Split(' '));
 
         var result = await _validator.ValidateAsync(context);
@@ -191,9 +188,8 @@ public class ScopeValidatorTests
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
             FlowTypes.Implicit,
-            offlineAccessAllowed: true,
+            offlineAccess: OfflineAccess.Allowed,
             prompt: [Prompts.Consent],
-            offlineAccessWithoutConsentPrompt: true,
             responseType: [ResponseTypes.IdToken, ResponseTypes.Token]);
 
         var result = await _validator.ValidateAsync(context);
@@ -219,7 +215,7 @@ public class ScopeValidatorTests
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
             flowType,
-            offlineAccessAllowed: false,
+            offlineAccess: OfflineAccess.Disabled,
             prompt: promptConsent ? [Prompts.Consent] : null,
             responseType: responseType.Split(' '));
 
@@ -230,12 +226,11 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects offline_access when OfflineAccessAllowed is null.
-    /// Per validation logic, OfflineAccessAllowed must be explicitly true (not null or false).
-    /// Tests strict authorization requirement.
+    /// Verifies that ValidateAsync rejects offline_access from a client left with the default offline access,
+    /// Disabled: offline access is the host's explicit grant.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_OfflineAccessWhenNotExplicitlyAllowed_ShouldReturnError()
+    public async Task ValidateAsync_OfflineAccessWhenDisabledByDefault_ShouldReturnError()
     {
         // Arrange
         var context = CreateContext(
@@ -379,7 +374,7 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false,
+            offlineAccess: OfflineAccess.Disabled,
             prompt: [Prompts.Consent]);
         var originalScope = context.Scope;
 
@@ -403,7 +398,7 @@ public class ScopeValidatorTests
         var redirectUri = new Uri("https://client.example.com/callback");
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false,
+            offlineAccess: OfflineAccess.Disabled,
             prompt: [Prompts.Consent]);
         context.ValidRedirectUri = redirectUri;
 
@@ -427,7 +422,7 @@ public class ScopeValidatorTests
         const string responseMode = ResponseModes.Fragment;
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false,
+            offlineAccess: OfflineAccess.Disabled,
             prompt: [Prompts.Consent]);
         context.ResponseMode = responseMode;
 
@@ -529,7 +524,7 @@ public class ScopeValidatorTests
 
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess, "unknown"],
-            offlineAccessAllowed: false,
+            offlineAccess: OfflineAccess.Disabled,
             prompt: [Prompts.Consent]);
 
         // Act

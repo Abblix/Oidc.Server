@@ -47,7 +47,7 @@ public class RefreshTokenSubjectTokenResolverTests
         // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(OriginalClientId))
-            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccessAllowed = true });
+            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Allowed });
 
         _resolver = new RefreshTokenSubjectTokenResolver(
             _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);
@@ -159,17 +159,15 @@ public class RefreshTokenSubjectTokenResolverTests
     /// A refresh token exists only for offline access, so one whose client is not allowed it, as when the host
     /// withdrew the permission, ends the exchange before its grant is looked up, as it ends the refresh grant.
     /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    public async Task ClientNotAllowedOfflineAccess_Rejected(bool? offlineAccessAllowed)
+    [Fact]
+    public async Task ClientNotAllowedOfflineAccess_Rejected()
     {
         _jwtValidator
             .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(NewRefreshJwt());
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(OriginalClientId))
-            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccessAllowed = offlineAccessAllowed });
+            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Disabled });
 
         var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 

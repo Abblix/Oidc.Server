@@ -7,12 +7,15 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -23,6 +26,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -117,16 +121,55 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
         Assert.NotNull(tokens[TokenRequest.Parameters.RefreshToken]);
     }
 
+    /// <summary>
+    /// A client registering itself without saying what offline access it asks for is registered with offline access
+    /// that requires prompt=consent, and its registration says so.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteringItself_ReceivesOfflineAccessWithConsentPrompt_WhenItDoesNotSay()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var registered = await RegisterClientAsync(client, discovery, PublicClient());
+
+        Assert.Equal(
+            OfflineAccess.ConsentRequired,
+            registered[RequestMembers.OfflineAccess].Deserialize<OfflineAccess>());
+    }
+
+    /// <summary>
+    /// Waiving prompt=consent is the host's statement about a client, so a client asking for it at registration is
+    /// refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteringItself_AskingForOfflineAccessWithoutConsentPrompt_IsRefused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var body = PublicClient();
+        body[RequestMembers.OfflineAccess] = JsonSerializer.SerializeToNode(OfflineAccess.Allowed);
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint, body, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonObject>(TestContext.Current.CancellationToken);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error?[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    private static JsonObject PublicClient() => new()
+    {
+        [RequestMembers.ClientName] = "offline access",
+        [RequestMembers.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
+        [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken),
+        [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
+        [RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.None,
+    };
+
     private static async Task<string> RegisterPublicClientAsync(HttpClient client, DiscoveryDocument discovery)
     {
-        var registered = await RegisterClientAsync(client, discovery, new JsonObject
-        {
-            [RequestMembers.ClientName] = "offline access",
-            [RequestMembers.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
-            [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken),
-            [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
-            [RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.None,
-        });
+        var registered = await RegisterClientAsync(client, discovery, PublicClient());
         return registered[ResponseMembers.ClientId]!.GetValue<string>();
     }
 

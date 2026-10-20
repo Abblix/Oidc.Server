@@ -48,6 +48,7 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OfflineAccessValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelLogoutUriValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, JwksUriValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, StoredUriValidator>(),

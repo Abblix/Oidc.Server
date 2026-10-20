@@ -177,10 +177,9 @@ builder.Services.AddOidcServices(options =>
         PostLogoutRedirectUris = [new Uri(MinimalApiTestConstants.PostLogoutRedirectUri, UriKind.Absolute)],
         AuthorizationDetailsTypes = allowlist,
         ForceAuthorizationDetailsInIdentityToken = idTokenRar,
-        OfflineAccessAllowed = true,
         // The host grants consent on its own, so it states the conditions that let its clients receive offline
         // access without prompt=consent (OpenID Connect Core 1.0, section 11)
-        OfflineAccessWithoutConsentPrompt = true,
+        OfflineAccess = OfflineAccess.Allowed,
         RequireDPoP = requireDPoP,
     };
 });

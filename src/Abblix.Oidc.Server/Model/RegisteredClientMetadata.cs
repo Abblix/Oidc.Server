@@ -373,11 +373,11 @@ public record RegisteredClientMetadata
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? PkceRequired { get; init; }
 
-    /// <summary>Whether the client may receive refresh tokens for offline access.</summary>
+    /// <summary>The offline access the client receives.</summary>
     [JsonPropertyOrder(156)]
-    [JsonPropertyName(Parameters.OfflineAccessAllowed)]
+    [JsonPropertyName(Parameters.OfflineAccess)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? OfflineAccessAllowed { get; init; }
+    public OfflineAccess? OfflineAccess { get; init; }
 
     /// <summary>The authorization details types the client may request (RFC 9396 section 10).</summary>
     [JsonPropertyOrder(157)]
@@ -470,7 +470,7 @@ public record RegisteredClientMetadata
         RequirePushedAuthorizationRequests = client.RequirePushedAuthorizationRequests,
         RequireSignedRequestObject = client.RequireSignedRequestObject,
         PkceRequired = client.EffectivePkceRequired,
-        OfflineAccessAllowed = client.OfflineAccessAllowed,
+        OfflineAccess = client.OfflineAccess,
         AuthorizationDetailsTypes = client.AuthorizationDetailsTypes,
         TokenExchangeSubjectTokenTypes = client.TokenExchangeAllowedSubjectTokenTypes,
         TokenExchangeAudiences = client.TokenExchangeAllowedAudiences,
