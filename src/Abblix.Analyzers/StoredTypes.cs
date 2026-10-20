@@ -14,18 +14,21 @@ namespace Abblix.Analyzers;
 /// </summary>
 /// <param name="storage">The entity storage interface.</param>
 /// <param name="codec">The generic codec type.</param>
+/// <param name="registry">The mark of a field holding the codecs the serializer uses.</param>
 /// <param name="message">The interface every Protocol Buffers message implements, when the compilation sees it.</param>
 /// <param name="storedAsJson">The mark of a type stored as JSON on purpose, when declared.</param>
 /// <param name="notStored">The mark of a property kept out of the message on purpose, when declared.</param>
 internal sealed class StoredTypes(
     INamedTypeSymbol storage,
     INamedTypeSymbol codec,
+    INamedTypeSymbol registry,
     INamedTypeSymbol? message,
     INamedTypeSymbol? storedAsJson,
     INamedTypeSymbol? notStored)
 {
     /// <summary>
-    /// The symbols of <paramref name="compilation"/>, or null when it does not declare the codec itself.
+    /// The symbols of <paramref name="compilation"/>, or null when it does not declare the codec itself, or declares
+    /// no mark of a codec registry.
     /// </summary>
     /// <remarks>
     /// The codecs are built where the codec is declared, and a compilation that only references that assembly sees
@@ -35,9 +38,11 @@ internal sealed class StoredTypes(
         => compilation.GetTypeByMetadataName(StoredTypeAnalyzer.StorageName) is { } storage
            && compilation.GetTypeByMetadataName(StoredTypeAnalyzer.CodecName) is { } codec
            && SymbolEqualityComparer.Default.Equals(codec.ContainingAssembly, compilation.Assembly)
+           && compilation.GetTypeByMetadataName(StoredTypeAnalyzer.CodecRegistryName) is { } registry
             ? new StoredTypes(
                 storage,
                 codec,
+                registry,
                 compilation.GetTypeByMetadataName(StoredTypeAnalyzer.MessageName),
                 compilation.GetTypeByMetadataName(StoredTypeAnalyzer.StoredAsJsonName),
                 compilation.GetTypeByMetadataName(StoredTypeAnalyzer.NotStoredName))
@@ -57,6 +62,11 @@ internal sealed class StoredTypes(
     }
 
     /// <summary>
+    /// Whether <paramref name="type"/> implements the storage, as a decorator wrapping another one does.
+    /// </summary>
+    public bool IsStorage(INamedTypeSymbol type) => type.AllInterfaces.Contains(storage, SymbolEqualityComparer.Default);
+
+    /// <summary>
     /// The type a codec serves, when <paramref name="type"/> is a codec.
     /// </summary>
     public ITypeSymbol? ServedBy(ITypeSymbol? type)
@@ -64,6 +74,11 @@ internal sealed class StoredTypes(
            && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, codec)
             ? named.TypeArguments[0]
             : null;
+
+    /// <summary>
+    /// Whether <paramref name="field"/> holds codecs the serializer uses.
+    /// </summary>
+    public bool IsRegistry(IFieldSymbol field) => HasMark(field, registry);
 
     /// <summary>
     /// Whether <paramref name="type"/> is a Protocol Buffers message.

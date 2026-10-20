@@ -14,7 +14,8 @@ namespace Abblix.Analyzers;
 /// mapped from.
 /// </summary>
 /// <param name="types">The symbols the rules are asked of.</param>
-internal sealed class StoredMembers(StoredTypes types)
+/// <param name="setInConstructor">Whether a constructor of its type sets a property with no setter.</param>
+internal sealed class StoredMembers(StoredTypes types, Func<IPropertySymbol, bool> setInConstructor)
 {
     /// <summary>
     /// Whether <paramref name="type"/> is declared in this compilation rather than referenced from a built assembly.
@@ -33,27 +34,39 @@ internal sealed class StoredMembers(StoredTypes types)
 
     /// <summary>
     /// The properties of <paramref name="stored"/> and its base types declared here that hold data: those that can be
-    /// written, and auto-properties set only in a constructor, but not a computed one, and not one marked as kept out
-    /// of the message.
+    /// written, and auto-properties a constructor sets, but not a computed one or one holding the same value for every
+    /// instance, and not one marked as kept out of the message.
     /// </summary>
-    public IEnumerable<IPropertySymbol> PropertiesOf(ITypeSymbol stored)
-    {
-        for (var type = stored; type != null && IsInSource(type); type = type.BaseType)
-        {
-            var autoProperties = new HashSet<IPropertySymbol>(
-                type.GetMembers().OfType<IFieldSymbol>().Select(field => field.AssociatedSymbol).OfType<IPropertySymbol>(),
-                SymbolEqualityComparer.Default);
+    public IEnumerable<IPropertySymbol> PropertiesOf(ITypeSymbol stored) => PropertiesUpTo(stored, null);
 
-            foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
-            {
-                if (property is { IsStatic: false, IsIndexer: false, IsImplicitlyDeclared: false }
-                    && (property.SetMethod != null || autoProperties.Contains(property))
-                    && !types.IsNotStored(property))
-                {
-                    yield return property;
-                }
-            }
+    /// <summary>
+    /// The properties holding data that <paramref name="derived"/> and its base types below
+    /// <paramref name="served"/> declare, which a codec of <paramref name="served"/> knows nothing of.
+    /// </summary>
+    public IEnumerable<IPropertySymbol> PropertiesBelow(ITypeSymbol derived, ITypeSymbol served)
+        => PropertiesUpTo(derived, served);
+
+    private IEnumerable<IPropertySymbol> PropertiesUpTo(ITypeSymbol stored, ITypeSymbol? end)
+    {
+        for (var type = stored;
+             type != null && IsInSource(type) && !SymbolEqualityComparer.Default.Equals(type, end);
+             type = type.BaseType)
+        {
+            foreach (var property in HoldingData(type))
+                yield return property;
         }
+    }
+
+    private IEnumerable<IPropertySymbol> HoldingData(ITypeSymbol type)
+    {
+        var autoProperties = new HashSet<IPropertySymbol>(
+            type.GetMembers().OfType<IFieldSymbol>().Select(field => field.AssociatedSymbol).OfType<IPropertySymbol>(),
+            SymbolEqualityComparer.Default);
+
+        return type.GetMembers().OfType<IPropertySymbol>().Where(property =>
+            property is { IsStatic: false, IsIndexer: false, IsImplicitlyDeclared: false }
+            && (property.SetMethod != null || (autoProperties.Contains(property) && setInConstructor(property)))
+            && !types.IsNotStored(property));
     }
 
     /// <summary>

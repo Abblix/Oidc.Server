@@ -11,15 +11,15 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Abblix.Analyzers;
 
 /// <summary>
-/// What one body of code touches: the properties it names, the methods and constructors it calls, and the types it
-/// builds.
+/// What one body of code touches: the properties it names, the methods and constructors it calls or hands on as a
+/// delegate, and the types it builds.
 /// </summary>
 internal sealed class BodyFacts
 {
     /// <summary>The properties named, whether read or written.</summary>
     public HashSet<IPropertySymbol> Properties { get; } = new(SymbolEqualityComparer.Default);
 
-    /// <summary>The methods and constructors called.</summary>
+    /// <summary>The methods and constructors called, or handed on as a delegate.</summary>
     public HashSet<IMethodSymbol> Calls { get; } = new(SymbolEqualityComparer.Default);
 
     /// <summary>The types built with <c>new</c>.</summary>
@@ -48,9 +48,25 @@ internal sealed class BodyFacts
                 case IInvocationOperation invocation:
                     facts.Calls.Add(invocation.TargetMethod.OriginalDefinition);
                     break;
+
+                // A method handed on as a delegate, a nested mapper passed to a helper among them, runs as surely as
+                // one called
+                case IMethodReferenceOperation reference:
+                    facts.Calls.Add(reference.Method.OriginalDefinition);
+                    break;
             }
         }
 
+        return facts;
+    }
+
+    /// <summary>
+    /// The facts of a body that only calls <paramref name="method"/>.
+    /// </summary>
+    public static BodyFacts Calling(IMethodSymbol method)
+    {
+        var facts = new BodyFacts();
+        facts.Calls.Add(method.OriginalDefinition);
         return facts;
     }
 

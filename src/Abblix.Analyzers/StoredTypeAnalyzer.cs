@@ -20,14 +20,16 @@ namespace Abblix.Analyzers;
 /// The server's serializer writes a type with no codec as JSON and says so only in a warning. JSON carries no field
 /// numbers, so two versions of the server running side by side during a deploy can misread each other's records. A
 /// call to the storage is found by the method it calls, on the storage interface or a type implementing it, and its
-/// type is the call's type argument; a call whose type argument is a type parameter passes the decision to its own
-/// caller. A type has a codec when a <c>ProtobufCodec&lt;T&gt;</c> of it is built anywhere in the compilation, or, for
-/// a write, when a base type has one, as the serializer looks a written value's codec up by its base types too. A type
-/// meant to stay JSON carries <c>[StoredAsJson]</c> with the reason.
+/// type is the call's type argument. A type parameter there is accepted only inside a type implementing the storage,
+/// which passes its own caller's type on; anywhere else the type is not named where it is stored, and the call is
+/// reported. A type has a codec when a <c>ProtobufCodec&lt;T&gt;</c> of it is built in the initializer of a field
+/// marked <c>[CodecRegistry]</c>, which is where the serializer takes its codecs from, or, for a write, when a base type
+/// has one, as the serializer looks a written value's codec up by its base types too; the properties the derived type
+/// adds are then owed a mark. A type meant to stay JSON carries <c>[StoredAsJson]</c> with the reason.
 /// </para>
 /// <para>
 /// A mapped codec is checked in both directions, because a property one mapper forgets is dropped on every write with
-/// nothing to report it. What <see cref="StoredMapping"/> counts as taking part, and where it stops looking, is
+/// nothing to report it. What <see cref="StoredVerdicts"/> counts as taking part, and where it stops looking, is
 /// written there. A property kept out of the message on purpose carries <c>[NotStored]</c> with the reason. The check
 /// shows that every member takes part, not that it lands in the right place: a round-trip test shows that.
 /// </para>
@@ -45,6 +47,9 @@ public sealed class StoredTypeAnalyzer : DiagnosticAnalyzer
 
     /// <summary>The codec a stored type is served by.</summary>
     internal const string CodecName = "Abblix.Oidc.Server.Features.Storages.ProtobufCodec`1";
+
+    /// <summary>The mark of a field holding the codecs the serializer uses.</summary>
+    internal const string CodecRegistryName = "Abblix.Oidc.Server.Features.Storages.CodecRegistryAttribute";
 
     /// <summary>The mark of a type stored as JSON on purpose.</summary>
     internal const string StoredAsJsonName = "Abblix.Oidc.Server.Features.Storages.StoredAsJsonAttribute";
@@ -105,7 +110,8 @@ public sealed class StoredTypeAnalyzer : DiagnosticAnalyzer
                 return;
 
             var mapping = new StoredMapping(types);
-            start.RegisterOperationAction(mapping.CollectInvocation, OperationKind.Invocation);
+            start.RegisterOperationAction(mapping.CollectStorageCall, OperationKind.Invocation);
+            start.RegisterOperationAction(mapping.CollectRegistry, OperationKind.FieldInitializer);
             start.RegisterOperationBlockAction(mapping.CollectBody);
             start.RegisterCompilationEndAction(mapping.Report);
         });

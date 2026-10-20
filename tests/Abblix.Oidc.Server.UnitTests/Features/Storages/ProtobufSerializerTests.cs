@@ -41,6 +41,21 @@ public class ProtobufSerializerTests
     private readonly ProtobufSerializer _serializer = new();
 
     /// <summary>
+    /// Text is stored as its bare UTF-8 bytes, which is what every record of text written before reads back from, so a
+    /// codec writing it any other way would leave those records unreadable.
+    /// </summary>
+    [Fact]
+    public void Serialize_Text_IsItsUtf8Bytes()
+    {
+        const string text = "клиент-é";
+
+        var bytes = _serializer.Serialize(text);
+
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes(text), bytes);
+        Assert.Equal(text, _serializer.Deserialize<string>(System.Text.Encoding.UTF8.GetBytes(text)));
+    }
+
+    /// <summary>
     /// The next-poll instant survives a round trip.
     /// </summary>
     [Fact]
