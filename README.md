@@ -64,9 +64,14 @@ dotnet add package Abblix.OIDC.Server.MinimalApi
 
 ```csharp
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.MinimalApi;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Grants every client everything it asks for, which suits only clients of your own;
+// to ask the end user for consent, register your own IUserConsentsProvider instead
+builder.Services.AddConsentGrantedForEveryClient();
 
 // Turn your ASP.NET Core app into an OpenID Connect provider
 builder.Services.AddOidcServices(options =>

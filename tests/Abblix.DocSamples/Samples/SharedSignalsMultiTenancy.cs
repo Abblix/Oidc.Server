@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 // </ambient>
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.SharedSignals;
@@ -43,6 +44,10 @@ internal static class SharedSignalsMultiTenancySample
             JwksUri = new Uri("https://idp.example.com/.well-known/jwks"),
             EventsSupported = ["https://schemas.openid.net/secevent/caep/event-type/session-revoked"],
         });
+
+        // Grants every client everything it asks for, which suits only clients of your own;
+        // to ask the end user for consent, register your own IUserConsentsProvider instead
+        builder.Services.AddConsentGrantedForEveryClient();
 
         builder.Services.AddOidcServices(_ => { });
         builder.Services

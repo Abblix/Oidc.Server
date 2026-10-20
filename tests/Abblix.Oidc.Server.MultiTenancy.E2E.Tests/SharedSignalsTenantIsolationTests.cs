@@ -39,6 +39,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Consents;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
 #pragma warning disable ABXMT001
@@ -379,6 +380,7 @@ public sealed class SharedSignalsTenantIsolationTests
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
 
         builder.Services.AddSecurityEvents();

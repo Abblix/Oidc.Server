@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 // </ambient>
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.MinimalApi;
 
 namespace Abblix.DocSamples.Samples;
@@ -30,6 +31,10 @@ internal static class ReadmeQuickstartSample
     {
         // <sample>
         var builder = WebApplication.CreateBuilder(args);
+
+        // Grants every client everything it asks for, which suits only clients of your own;
+        // to ask the end user for consent, register your own IUserConsentsProvider instead
+        builder.Services.AddConsentGrantedForEveryClient();
 
         // Turn your ASP.NET Core app into an OpenID Connect provider
         builder.Services.AddOidcServices(options =>

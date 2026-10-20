@@ -29,6 +29,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Net.Http.Headers;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.Consents;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 
@@ -139,6 +140,7 @@ public class SameCookieAuthorizationLogoutTests
         services.AddAuthentication().AddCookie();
         services.AddSingleton(Mock.Of<IUserInfoProvider>());
 
+        services.AddConsentGrantedForEveryClient();
         services.AddOidcServices(options =>
         {
             options.Issuer = TestConstants.DefaultIssuer;

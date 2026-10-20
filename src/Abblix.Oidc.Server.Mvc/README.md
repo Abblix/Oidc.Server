@@ -35,6 +35,10 @@ This package includes Abblix.OIDC.Server, Abblix.OIDC, Abblix.JWT, Abblix.Depend
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
+// Grants every client everything it asks for, which suits only clients of your own;
+// to ask the end user for consent, register your own IUserConsentsProvider instead
+builder.Services.AddConsentGrantedForEveryClient();
+
 builder.Services.AddOidcServices(options =>
 {
     options.Clients = new[] { /* client configurations */ };

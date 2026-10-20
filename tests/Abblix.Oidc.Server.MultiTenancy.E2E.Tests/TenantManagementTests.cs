@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using Abblix.Oidc.Server.Features.Consents;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
 #pragma warning disable ABXMT001
@@ -74,6 +75,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(options => options.EnabledEndpoints = OidcEndpoints.Base);
 
         builder.Services.AddSingleton<ITenantStore>(_store);

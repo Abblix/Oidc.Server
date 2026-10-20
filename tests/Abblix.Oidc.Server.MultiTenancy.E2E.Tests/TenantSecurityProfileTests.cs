@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Features.Consents;
 
 #pragma warning disable ABXMT001
 
@@ -68,6 +69,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
         builder.Services.AddMultiTenancy(options =>
         {

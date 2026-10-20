@@ -11,6 +11,7 @@ using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.Consents;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -49,6 +50,7 @@ public sealed class JsonWebKeySetHostOptionsTests : IAsyncLifetime
 
         var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         signingKey.KeyId = KeyId;
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(options =>
         {
             // The issuer of the rest of the suite: the license counts issuers across the process

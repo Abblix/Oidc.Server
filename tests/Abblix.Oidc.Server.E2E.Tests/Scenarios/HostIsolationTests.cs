@@ -15,6 +15,7 @@ using System.Text.Json.Serialization.Metadata;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Scenarios.HostIsolation;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -66,12 +67,15 @@ public sealed class HostIsolationTests : IAsyncLifetime
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         if (withLibrary)
+        {
+            builder.Services.AddConsentGrantedForEveryClient();
             builder.Services.AddOidcServices(options =>
             {
                 // The issuer of the rest of the suite: the license counts issuers across the process
                 options.Issuer = TestConstants.IssuerUri;
                 options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
             });
+        }
 
         var app = builder.Build();
         app.UseCors();

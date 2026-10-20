@@ -28,6 +28,7 @@ using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.Swagger;
 using Xunit;
+using Abblix.Oidc.Server.Features.Consents;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -264,6 +265,7 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(options =>
         {
             options.Issuer = TestConstants.IssuerUri;

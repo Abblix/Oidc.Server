@@ -71,6 +71,7 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IUserInfoProvider, SignedInUserInfo>();
+        builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(options => options.EnabledEndpoints = OidcEndpoints.Base);
 
         // The user is signed in and has consented, so the authorization endpoint answers with a code at once

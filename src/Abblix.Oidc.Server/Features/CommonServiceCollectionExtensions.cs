@@ -33,7 +33,7 @@ public static class CommonServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> with the common services registered.</returns>
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
-        services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
+        services.AddConsentProviderChoice();
         services.TryAddSingleton<IUserInteractionRequirement, NoUserInteractionRequirement>();
 
         services.TryAddSingleton(TimeProvider.System);
