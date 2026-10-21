@@ -143,8 +143,6 @@ public class AuthorizationResponseFormatterTests
         public string Id => string.Empty;
         public string KeyPartition => string.Empty;
         public CancellationToken Released => CancellationToken.None;
-        public IEnumerable<ClientInfo> Clients => [];
-        public ScopeDefinition[]? Scopes => null;
         public ResourceDefinition[]? Resources => null;
         public Uri? DefaultResourceIndicator => null;
         public bool InferResourceFromScope => false;
@@ -154,11 +152,7 @@ public class AuthorizationResponseFormatterTests
         public Uri? LoginUri { get; init; } = new(Base + "login");
         public Uri? RegistrationUri { get; init; } = new(Base + "registration");
         public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
-        public PairwiseSubjectSettings? PairwiseSubject => null;
         public string CheckSessionCookieName => "session";
-        public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> SigningKeys => [];
-        public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> EncryptionKeys => [];
-        public Abblix.Jwt.ExternalKeys.CustodianHeldKeys? CustodianKeys => null;
         public Uri? MtlsBaseUri => null;
         public MtlsAliasesOptions? MtlsEndpointAliases => null;
     }

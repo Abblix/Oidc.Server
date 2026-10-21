@@ -7,14 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Jwt;
-using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -48,12 +45,6 @@ public sealed class TenantIssuerSettings(
     string? ILicensedIssuer.VouchedId => catalog is StoreTenantCatalog ? Tenant.Id : null;
 
     /// <inheritdoc />
-    public IEnumerable<ClientInfo> Clients => Tenant.Clients;
-
-    /// <inheritdoc />
-    public ScopeDefinition[]? Scopes => Tenant.Scopes;
-
-    /// <inheritdoc />
     public ResourceDefinition[]? Resources => Tenant.Resources;
 
     /// <inheritdoc />
@@ -81,9 +72,6 @@ public sealed class TenantIssuerSettings(
     public ClientSecurityProfile DefaultSecurityProfile => Tenant.DefaultSecurityProfile;
 
     /// <inheritdoc />
-    public PairwiseSubjectSettings? PairwiseSubject => Tenant.PairwiseSubject;
-
-    /// <inheritdoc />
     /// <remarks>
     /// The configured name with the tenant's id after it, since tenants sharing a host share its cookies and each
     /// would otherwise overwrite the session the others' check-session pages read. A tenant's id holds only
@@ -91,15 +79,6 @@ public sealed class TenantIssuerSettings(
     /// </remarks>
     public string CheckSessionCookieName
         => $"{options.CurrentValue.CheckSessionCookie.Name}.{TenantKey.IdOf(Tenant)}";
-
-    /// <inheritdoc />
-    public IReadOnlyCollection<JsonWebKey> SigningKeys => Tenant.SigningKeys;
-
-    /// <inheritdoc />
-    public IReadOnlyCollection<JsonWebKey> EncryptionKeys => Tenant.EncryptionKeys;
-
-    /// <inheritdoc />
-    public CustodianHeldKeys? CustodianKeys => Tenant.CustodianKeys;
 
     /// <inheritdoc />
     public Uri? MtlsBaseUri => Tenant.MtlsBaseUri;

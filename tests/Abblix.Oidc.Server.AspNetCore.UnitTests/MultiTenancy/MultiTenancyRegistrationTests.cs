@@ -330,16 +330,21 @@ public partial class MultiTenancyRegistrationTests
     }
 
     [Fact]
-    public void UnderATenant_TheClientsAreTheOnesItDeclares()
+    public void UnderATenant_TheSettingsAreTheOnesItDeclares()
     {
-        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = [new ClientInfo("client")] };
+        var acme = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri(AcmeIssuer),
+            Resources = [new ResourceDefinition(new Uri("https://api.example.com"))],
+        };
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
         services.AddServerStorage().ServeTenants(options => options.Tenants.Add(acme));
         using var provider = services.BuildServiceProvider();
         EnterTenant(provider, acme);
 
-        Assert.Same(acme.Clients, provider.GetRequiredService<IIssuerSettings>().Clients);
+        Assert.Same(acme.Resources, provider.GetRequiredService<IIssuerSettings>().Resources);
     }
 
     [Fact]
@@ -424,7 +429,7 @@ public partial class MultiTenancyRegistrationTests
 
         var settings = provider.GetRequiredService<IIssuerSettings>();
 
-        var refusal = Assert.Throws<InvalidOperationException>(() => settings.Clients);
+        var refusal = Assert.Throws<InvalidOperationException>(() => settings.Resources);
         Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
     }
 

@@ -36,10 +36,6 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
 
     public string KeyPartition => Rest.KeyPartition;
 
-    public IEnumerable<ClientInfo> Clients => Rest.Clients;
-
-    public ScopeDefinition[]? Scopes => Rest.Scopes;
-
     public ResourceDefinition[]? Resources => Rest.Resources;
 
     public Uri? DefaultResourceIndicator => Rest.DefaultResourceIndicator;
@@ -58,15 +54,7 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
 
     public ClientSecurityProfile DefaultSecurityProfile => Rest.DefaultSecurityProfile;
 
-    public PairwiseSubjectSettings? PairwiseSubject => Rest.PairwiseSubject;
-
     public string CheckSessionCookieName => Rest.CheckSessionCookieName;
-
-    public IReadOnlyCollection<JsonWebKey> SigningKeys => Rest.SigningKeys;
-
-    public IReadOnlyCollection<JsonWebKey> EncryptionKeys => Rest.EncryptionKeys;
-
-    public CustodianHeldKeys? CustodianKeys => Rest.CustodianKeys;
 
     public Uri? MtlsBaseUri => Rest.MtlsBaseUri;
 

@@ -6,12 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
-using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 namespace Abblix.Oidc.Server.Features.Issuer;
 
@@ -44,16 +41,6 @@ public interface IIssuerSettings
     /// server cannot tell are gone.
     /// </summary>
     CancellationToken Released { get; }
-
-    /// <summary>
-    /// The clients registered with the issuer.
-    /// </summary>
-    IEnumerable<ClientInfo> Clients { get; }
-
-    /// <summary>
-    /// The scopes the issuer defines beyond the standard ones.
-    /// </summary>
-    ScopeDefinition[]? Scopes { get; }
 
     /// <summary>
     /// The resources the issuer issues tokens for.
@@ -101,29 +88,9 @@ public interface IIssuerSettings
     ClientSecurityProfile DefaultSecurityProfile { get; }
 
     /// <summary>
-    /// The key sealing the issuer's pairwise subject identifiers, or null when its clients take public ones only.
-    /// </summary>
-    PairwiseSubjectSettings? PairwiseSubject { get; }
-
-    /// <summary>
     /// The name of the cookie carrying the user's session at the issuer, which its check-session page reads.
     /// </summary>
     string CheckSessionCookieName { get; }
-
-    /// <summary>
-    /// The keys the issuer signs with and publishes, when they come from its settings.
-    /// </summary>
-    IReadOnlyCollection<JsonWebKey> SigningKeys { get; }
-
-    /// <summary>
-    /// The keys clients encrypt to the issuer with, when they come from its settings.
-    /// </summary>
-    IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; }
-
-    /// <summary>
-    /// The custodian's keys the issuer produces with, when its keys are held by a custodian; null when none are named.
-    /// </summary>
-    CustodianHeldKeys? CustodianKeys { get; }
 
     /// <summary>
     /// The address the issuer's mutual-TLS endpoint aliases are served at, or null when it declares none.
