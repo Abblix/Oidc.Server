@@ -38,8 +38,8 @@ public partial class PollModeCompletionHandler(
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
-    ITenantAccessor tenantAccessor,
-    IBackChannelLongPollingService? statusNotifier)
+    IBackChannelLongPollingService? statusNotifier,
+    ITenantAccessor tenantAccessor)
     : AuthenticationCompletionHandler(
         logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor, statusNotifier)
 {
