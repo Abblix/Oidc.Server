@@ -216,6 +216,30 @@ public class RevocationCutoffRegistryTests
     }
 
     /// <summary>
+    /// A record written before the expiry was kept in it, holding a cutoff ahead of now, is left as it is by a
+    /// revocation naming an earlier moment: its own expiry, set to outlast that cutoff, is not cut down to the
+    /// shorter one this call carries, so the revocation does not end before the moment it names.
+    /// </summary>
+    [Fact]
+    public async Task A_record_without_an_expiry_holding_a_future_cutoff_outlives_an_earlier_revocation()
+    {
+        var future = Earlier.AddDays(40);
+        var ownExpiry = future.AddDays(31);
+        await _storage.SetAsync(
+            Key,
+            new StoredCutoff { Cutoff = Timestamp.FromDateTimeOffset(future) },
+            new StorageOptions { AbsoluteExpiration = ownExpiry },
+            Ct);
+
+        var shorterExpiry = Earlier.AddDays(31);
+        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, shorterExpiry, Ct);
+
+        _time.SetUtcNow(shorterExpiry.AddDays(1));
+
+        Assert.Equal(future, await CutoffAsync());
+    }
+
+    /// <summary>
     /// A storage that never reports a replace as made fails the revocation with an error, instead of keeping the
     /// call reading and retrying for good.
     /// </summary>

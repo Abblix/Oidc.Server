@@ -73,13 +73,11 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
                 continue;
             }
 
-            var keptCutoff = Later(stored.Cutoff, cutoff);
-            var keptExpiry = Later(stored.ExpiresAt, expiresAt);
-            if (keptCutoff == stored.Cutoff?.ToDateTimeOffset() && keptExpiry == stored.ExpiresAt?.ToDateTimeOffset())
+            if (Merged(stored, cutoff, expiresAt) is not { } merged)
                 return;
 
             if (await storage.TryReplaceAsync(
-                    key, stored, Record(keptCutoff, keptExpiry), Expiring(keptExpiry), cancellationToken))
+                    key, stored, merged, Expiring(merged.ExpiresAt.ToDateTimeOffset()), cancellationToken))
                 return;
         }
 
@@ -89,8 +87,30 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
     }
 
     /// <summary>
-    /// The later of a recorded instant and a new one; an instant not recorded, as in a record from before the
-    /// field existed, yields the new one.
+    /// The record to replace <paramref name="stored"/> with, keeping the later cutoff and the later expiry, or null
+    /// when it already holds both.
+    /// </summary>
+    private static Proto.RevocationCutoff? Merged(
+        Proto.RevocationCutoff stored, DateTimeOffset cutoff, DateTimeOffset expiresAt)
+    {
+        var keptCutoff = Later(stored.Cutoff, cutoff);
+        var cutoffKept = keptCutoff == stored.Cutoff?.ToDateTimeOffset();
+
+        // A record written before the expiry was kept in it expires when it was told to, which this call cannot
+        // see: a cutoff ahead of now was written to last past itself, longer than this call may ask. Only a later
+        // cutoff replaces it, and that one's expiry is the later, since both its cutoff and its now are.
+        if (stored.ExpiresAt is null && cutoffKept)
+            return null;
+
+        var keptExpiry = Later(stored.ExpiresAt, expiresAt);
+        if (cutoffKept && keptExpiry == stored.ExpiresAt?.ToDateTimeOffset())
+            return null;
+
+        return Record(keptCutoff, keptExpiry);
+    }
+
+    /// <summary>
+    /// The later of a recorded instant and a new one; an instant not recorded yields the new one.
     /// </summary>
     private static DateTimeOffset Later(Timestamp? recorded, DateTimeOffset given)
         => recorded?.ToDateTimeOffset() is { } instant && instant > given ? instant : given;

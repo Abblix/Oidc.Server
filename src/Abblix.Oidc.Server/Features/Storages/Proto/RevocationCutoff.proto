@@ -25,7 +25,7 @@ message RevocationCutoff {
 
   // When the record may be dropped, kept so that a later revocation naming an earlier or
   // the same cutoff can still keep the record longer without moving the cutoff back. A
-  // record written before this field existed carries none, and is given the expiry of the
-  // revocation that next reads it, which is never earlier than the one it was written with.
+  // record written before this field existed carries none: its expiry is unknown, so it is
+  // replaced only by a later cutoff, whose expiry is never the earlier of the two.
   google.protobuf.Timestamp expires_at = 2;
 }
