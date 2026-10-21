@@ -202,4 +202,11 @@ public sealed class TenantDefinition
     /// the address therefore carries no path of its own.
     /// </summary>
     public Uri? MtlsBaseUri { get; init; }
+
+    /// <summary>
+    /// The mutual-TLS endpoint aliases (RFC 8705 section 5) this tenant names itself, each an absolute address served
+    /// over mutual TLS; an alias it leaves out is the endpoint moved onto <see cref="MtlsBaseUri"/>, when it declares
+    /// one.
+    /// </summary>
+    public MtlsAliasesOptions? MtlsEndpointAliases { get; init; }
 }

@@ -8,6 +8,7 @@
 
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -39,6 +40,7 @@ public sealed class TestTenantSettings
     public PairwiseSubjectSettings? PairwiseSubject { get; set; }
     public CustodianHeldKeys? CustodianKeys { get; set; }
     public Uri? MtlsBaseUri { get; set; }
+    public MtlsAliasesOptions? MtlsEndpointAliases { get; set; }
 
     /// <summary>
     /// The tenant these settings describe.
@@ -60,5 +62,6 @@ public sealed class TestTenantSettings
         PairwiseSubject = PairwiseSubject,
         CustodianKeys = CustodianKeys,
         MtlsBaseUri = MtlsBaseUri,
+        MtlsEndpointAliases = MtlsEndpointAliases,
     };
 }

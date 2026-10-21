@@ -28,6 +28,7 @@ public class DiscoveryControllerMtlsTests
     private readonly Mock<IOidcEndpointResolver> _endpointResolverMock;
     private readonly ConfigurationResponseFormatter _formatter;
     private readonly OidcOptions _oidcOptions;
+    private readonly TestIssuer _issuer = new();
 
     public DiscoveryControllerMtlsTests()
     {
@@ -54,7 +55,7 @@ public class DiscoveryControllerMtlsTests
             _optionsMock.Object,
             _endpointResolverMock.Object,
             Mock.Of<ISignedMetadataProvider>(),
-            SingleIssuer.SettingsOf(_optionsMock.Object));
+            SingleIssuer.SettingsOf(() => _issuer, _oidcOptions));
     }
 
     /// <summary>
@@ -101,7 +102,7 @@ public class DiscoveryControllerMtlsTests
         string mtlsBaseUri,
         string resolved)
     {
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri(mtlsBaseUri);
+        _issuer.MtlsBaseUri = new Uri(mtlsBaseUri);
         _endpointResolverMock
             .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri(resolved));
@@ -121,7 +122,7 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithMtlsBaseUriOnly_ShouldAutoComputeAliases()
     {
         // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
         var baseResponse = MinimalResponse();
 
         // Act
@@ -143,7 +144,7 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithExplicitMtlsAliases_ShouldUseExplicitValues()
     {
         // Arrange
-        _oidcOptions.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions
+        _issuer.MtlsEndpointAliases = new MtlsAliasesOptions
         {
             TokenEndpoint = new Uri("https://mtls.example.com/custom-token"),
             RevocationEndpoint = new Uri("https://mtls.example.com/custom-revocation"),
@@ -171,8 +172,8 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithBothExplicitAndBaseUri_ShouldPreferExplicit()
     {
         // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
-        _oidcOptions.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions
+        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _issuer.MtlsEndpointAliases = new MtlsAliasesOptions
         {
             TokenEndpoint = new Uri("https://custom.example.com/token"),
             // Others not set - should be auto-computed
@@ -192,52 +193,13 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
-    /// Verifies mTLS base URI with path is handled correctly.
-    /// </summary>
-    [Fact]
-    public async Task ConfigurationAsync_WithMtlsBaseUriWithPath_ShouldCombinePaths()
-    {
-        // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com/oauth");
-        var baseResponse = MinimalResponse();
-
-        // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
-
-        // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://mtls.example.com/oauth/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/oauth/revocation"), result.Value.MtlsEndpointAliases.RevocationEndpoint);
-    }
-
-    /// <summary>
-    /// Verifies mTLS base URI with trailing slash is normalized.
-    /// </summary>
-    [Fact]
-    public async Task ConfigurationAsync_WithMtlsBaseUriTrailingSlash_ShouldNormalizePath()
-    {
-        // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com/oauth/");
-        var baseResponse = MinimalResponse();
-
-        // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
-
-        // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://mtls.example.com/oauth/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-    }
-
-    /// <summary>
     /// Verifies mTLS aliases are null when standard endpoints are disabled.
     /// </summary>
     [Fact]
     public async Task ConfigurationAsync_WithDisabledEndpoints_ShouldHaveNullMtlsAliases()
     {
         // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
         _oidcOptions.EnabledEndpoints = 0; // Disable all endpoints
         var baseResponse = MinimalResponse();
 
@@ -258,7 +220,7 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithMtlsBaseUriDifferentPort_ShouldPreservePort()
     {
         // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com:8443");
+        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com:8443");
         var baseResponse = MinimalResponse();
 
         // Act
@@ -278,8 +240,8 @@ public class DiscoveryControllerMtlsTests
     public async Task ConfigurationAsync_WithPartialExplicitAliases_ShouldMixExplicitAndAutoComputed()
     {
         // Arrange
-        _oidcOptions.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
-        _oidcOptions.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions
+        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _issuer.MtlsEndpointAliases = new MtlsAliasesOptions
         {
             TokenEndpoint = new Uri("https://custom1.example.com/token"),
             IntrospectionEndpoint = new Uri("https://custom2.example.com/introspect"),

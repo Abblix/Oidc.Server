@@ -9,8 +9,8 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Options for RFC 8705 mTLS endpoint aliases in discovery.
-/// Allows explicitly setting alias URIs. Use DiscoveryOptions.MtlsBaseUri to auto-compute aliases.
+/// The RFC 8705 mTLS endpoint aliases a tenant names itself in discovery. An alias left out is computed from the
+/// tenant's mutual-TLS host, when it declares one.
 /// </summary>
 public class MtlsAliasesOptions
 {

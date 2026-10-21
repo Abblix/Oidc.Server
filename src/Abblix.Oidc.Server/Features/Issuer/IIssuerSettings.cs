@@ -129,4 +129,9 @@ public interface IIssuerSettings
     /// The address the issuer's mutual-TLS endpoint aliases are served at, or null when it declares none.
     /// </summary>
     Uri? MtlsBaseUri { get; }
+
+    /// <summary>
+    /// The mutual-TLS endpoint aliases the issuer names itself, or null when it names none.
+    /// </summary>
+    MtlsAliasesOptions? MtlsEndpointAliases { get; }
 }

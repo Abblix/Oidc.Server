@@ -69,4 +69,6 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
     public CustodianHeldKeys? CustodianKeys => Rest.CustodianKeys;
 
     public Uri? MtlsBaseUri => Rest.MtlsBaseUri;
+
+    public MtlsAliasesOptions? MtlsEndpointAliases => Rest.MtlsEndpointAliases;
 }

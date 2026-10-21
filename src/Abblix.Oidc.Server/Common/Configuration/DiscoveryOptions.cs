@@ -29,19 +29,6 @@ public class DiscoveryOptions
     public bool SignedMetadata { get; set; }
 
     /// <summary>
-    /// RFC 8705: Optional mTLS endpoint aliases to advertise.
-    /// Configure with absolute URIs hosted on an mTLS-enabled origin.
-    /// </summary>
-    public MtlsAliasesOptions? MtlsEndpointAliases { get; set; }
-
-    /// <summary>
-    /// RFC 8705: Optional base URI for computing mTLS endpoint aliases automatically.
-    /// If set, and a specific alias is not provided, discovery will derive the alias by
-    /// taking the standard endpoint path and applying this base URI (scheme/host/port and optional base path).
-    /// </summary>
-    public Uri? MtlsBaseUri { get; set; }
-
-    /// <summary>
     /// Optional ACR (Authentication Context Class Reference) values supported by this provider.
     /// These values represent authentication assurance levels that can be requested and achieved.
     /// If not set, no acr_values_supported will be included in the discovery document.
