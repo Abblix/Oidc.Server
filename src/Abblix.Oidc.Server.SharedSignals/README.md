@@ -39,9 +39,8 @@ builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
 // to ask the end user for consent, register your own IUserConsentsProvider instead
 builder.Services.AddConsentGrantedForEveryClient();
 
-builder.Services.AddOidcServices(_ => { });
 builder.Services
-    .AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+    .AddOidcServices(options => options.Tenants.Add(new TenantDefinition
     {
         Id = "acme",
         Issuer = new Uri("https://idp.example.com/acme"),
@@ -49,8 +48,6 @@ builder.Services
     }))
     .AddSharedSignals();
 ```
-
-Multi-tenancy is experimental, so the compiler reports `ABXMT001` on these calls until the project suppresses it, for example with `<NoWarn>$(NoWarn);ABXMT001</NoWarn>`.
 
 The transmitter's issuer names the host without a path. Each tenant's addresses take their paths from the options and put them under the tenant's issuer: for a tenant whose issuer is `https://idp.example.com/acme`, the configuration document is served at `https://idp.example.com/.well-known/ssf-configuration/acme` and its key set address is `https://idp.example.com/acme/.well-known/jwks`.
 

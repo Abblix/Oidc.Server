@@ -50,6 +50,7 @@ public static class CommonServiceCollectionExtensions
         services.TryAddSingleton<IEntityStorage>(
             serviceProvider => serviceProvider.GetRequiredKeyedService<IEntityStorage>(TenantServiceKeys.Shared));
         services.AddTelemetryDecorator<IEntityStorage, MeasuredEntityStorage>();
+        services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
         services.Decorate<IEntityStorage, TenantEntityStorage>();
 
         // The next-poll instant of a polled request, kept apart from the request itself: a poll

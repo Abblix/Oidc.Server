@@ -32,10 +32,8 @@ public record PairwiseSubjectSettings
     /// <exception cref="ArgumentException">The salt is missing, is not valid base64, or decodes to fewer than
     /// 32 bytes.</exception>
     /// <remarks>
-    /// Judged by whoever wires it rather than on assignment: settings the host bound are judged when the host
-    /// starts, by <see cref="PairwiseSubjectSettingsValidator"/>, and an instance handed to
-    /// <c>AddPairwiseSubjectIdentifiers</c> is judged there. Refusing in the accessor would sound stricter and
-    /// be worse - the configuration binder assigns properties by reflection, so the refusal would reach the
+    /// Judged when the tenant declaring it enters the server, by the check of the tenant list, rather than on
+    /// assignment. Refusing in the accessor would sound stricter and be worse - the configuration binder assigns properties by reflection, so the refusal would reach the
     /// host wrapped in a <c>TargetInvocationException</c> naming reflection instead of the setting, and it
     /// would fire before any validator could say which rule failed.
     /// </remarks>

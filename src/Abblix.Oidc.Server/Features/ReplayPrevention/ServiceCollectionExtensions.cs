@@ -64,6 +64,7 @@ public static class ServiceCollectionExtensions
         // package registered first, and which of them registered it does not decide whether the server's clock skew
         // and log events apply. The tenant's form is outermost, so each tenant reserves in a space of its own.
         services.Decorate<IReplayCache, ConfiguredReplayCache>();
+        services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
         services.Decorate<IReplayCache, TenantReplayCache>();
 
         return services;

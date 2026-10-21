@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
@@ -16,9 +17,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// serve no tenant at all.
 /// </summary>
 /// <param name="checks">The checks of a tenant list.</param>
-/// <param name="store">Where the tenants are read from, which tells whether any can arrive while the server runs.
+/// <param name="serviceProvider">Resolves where the tenants are read from, which tells whether any can arrive while
+/// the server runs. It is asked when the check runs rather than when this is built, because the server's own store
+/// reads the very settings this check judges, and taking it here would make the settings depend on themselves.
 /// </param>
-public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks, ITenantStore store)
+public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks, IServiceProvider serviceProvider)
     : IValidateOptions<OidcOptions>
 {
     // The periods System.Threading.PeriodicTimer accepts
@@ -32,7 +35,7 @@ public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks, ITena
 
         // Tenants come from these settings alone unless the host keeps them in a store of its own, which the tenant
         // manager writes to while the server runs; with none declared here the server could never serve a request
-        if (options.Tenants.Count == 0 && store is OptionsTenantStore)
+        if (options.Tenants.Count == 0 && serviceProvider.GetRequiredService<ITenantStore>() is OptionsTenantStore)
         {
             failures.Add(
                 $"{nameof(OidcOptions)}.{nameof(OidcOptions.Tenants)} declares no tenant, and the tenants come from " +

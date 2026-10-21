@@ -64,7 +64,9 @@ dotnet add package Abblix.OIDC.Server.MinimalApi
 
 ```csharp
 using Abblix.Jwt;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -73,14 +75,19 @@ var builder = WebApplication.CreateBuilder(args);
 // to ask the end user for consent, register your own IUserConsentsProvider instead
 builder.Services.AddConsentGrantedForEveryClient();
 
-// Turn your ASP.NET Core app into an OpenID Connect provider
-builder.Services.AddOidcServices(options =>
+// Turn your ASP.NET Core app into an OpenID Connect provider serving one issuer
+builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
-    options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-    options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-});
+    Id = "main",
+    Issuer = new Uri("https://auth.example.com"),
+    LoginUri = new Uri("/Auth/Login", UriKind.Relative),
+    SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+}));
 
 var app = builder.Build();
+
+// Resolve each request to the tenant its address names, before routing
+app.UseMultiTenancy();
 app.MapOidcEndpoints();
 app.Run();
 ```

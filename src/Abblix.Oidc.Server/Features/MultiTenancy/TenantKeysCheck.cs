@@ -60,7 +60,7 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
             where tenant.SigningKeys.Count == 0
             select TenantRefusal.Of(
                 tenant,
-                $"Tenant '{tenant.Id}': no signing key is declared, so the tenant cannot issue a single token and " +
+                $"Tenant '{tenant.Id}': No signing key is declared, so the tenant cannot issue a single token and " +
                 $"publishes an empty JWKS. Supply at least one JWK with a private part in " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a " +
                 "custodian or minted by the server.");
