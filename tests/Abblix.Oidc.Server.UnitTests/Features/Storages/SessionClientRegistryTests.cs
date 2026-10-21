@@ -272,6 +272,10 @@ public class SessionClientRegistryTests
             string key, T value, StorageOptions options, CancellationToken? token = null)
             => inner.TrySetIfAbsentAsync(key, value, options, token);
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
+
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         {
             time.Advance(TimeSpan.FromMinutes(1));
@@ -317,6 +321,10 @@ public class SessionClientRegistryTests
         public Task<bool> TrySetIfAbsentAsync<T>(
             string key, T value, StorageOptions options, CancellationToken? token = null)
             => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
 
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
             => Interlocked.Increment(ref _extensions) == 3
@@ -491,6 +499,10 @@ public class SessionClientRegistryTests
             return inner.TrySetIfAbsentAsync(key, value, options, token);
         }
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
+
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         {
             Refuse(options);
@@ -624,6 +636,10 @@ public class SessionClientRegistryTests
         public int Writes => _writes;
         public int Extensions => _extensions;
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
+
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         {
             Interlocked.Increment(ref _writes);
@@ -663,6 +679,10 @@ public class SessionClientRegistryTests
                 ? throw new InvalidOperationException("The store refused the write.")
                 : inner.SetAsync(key, value, options, token);
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
+
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
             => inner.TryExtendAsync(key, options, token);
 
@@ -700,6 +720,10 @@ public class SessionClientRegistryTests
     private sealed class ClockMovesAfterTheFirstRecordRead(IEntityStorage inner, Action step) : IEntityStorage
     {
         private Action? _step = step;
+
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
 
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
             => inner.TryExtendAsync(key, options, token);
@@ -741,6 +765,10 @@ public class SessionClientRegistryTests
             string key, T value, StorageOptions options, CancellationToken? token = null)
             => inner.TrySetIfAbsentAsync(key, value, options, token);
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
+
         public async Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         {
             if (Interlocked.Exchange(ref _step, null) is { } once)
@@ -759,6 +787,10 @@ public class SessionClientRegistryTests
     private sealed class ClockMovesAtTheFirstClaim(IEntityStorage inner, Func<Task> step) : IEntityStorage
     {
         private Func<Task>? _step = step;
+
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
 
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
             => inner.TryExtendAsync(key, options, token);

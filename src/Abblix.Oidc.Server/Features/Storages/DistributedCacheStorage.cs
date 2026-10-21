@@ -101,6 +101,43 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	}
 
 	/// <summary>
+	/// Replaces an entry only when it still holds what the caller read, through
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryReplaceAsync"/> under the per-key gate, so it is
+	/// decided WITHIN THIS PROCESS and no further.
+	/// </summary>
+	/// <remarks>
+	/// What the key holds is read back and written again by this serializer before it is compared with the
+	/// expected value written the same way, so two encodings of one value, such as a field written out at its
+	/// default by another writer, compare equal. Compared as stored bytes they would never match, and a caller
+	/// retrying until its replace succeeds would never stop.
+	/// </remarks>
+	/// <typeparam name="T">The type of the object to store.</typeparam>
+	/// <param name="key">The key whose value is replaced.</param>
+	/// <param name="expected">The object the caller read.</param>
+	/// <param name="value">The object to store in its place.</param>
+	/// <param name="options">Configuration options for the cache entry, such as expiration.</param>
+	/// <param name="token">An optional cancellation token to cancel the operation.</param>
+	/// <returns>True when the key held the expected object and this caller replaced it; false otherwise.</returns>
+	public Task<bool> TryReplaceAsync<T>(
+		string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+	{
+		ArgumentNullException.ThrowIfNull(key);
+		var expectedBytes = serializer.Serialize(expected);
+		return cache.TryReplaceAsync(
+			key,
+			current => serializer.Deserialize<T>(current) is { } read
+				&& serializer.Serialize(read).AsSpan().SequenceEqual(expectedBytes),
+			serializer.Serialize(value),
+			new ()
+			{
+				AbsoluteExpiration = options.AbsoluteExpiration,
+				AbsoluteExpirationRelativeToNow = options.AbsoluteExpirationRelativeToNow,
+				SlidingExpiration = options.SlidingExpiration,
+			},
+			token ?? CancellationToken.None);
+	}
+
+	/// <summary>
 	/// Gives an entry a new expiration policy through
 	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryExtendAsync"/>, which reads the value and writes
 	/// it straight back under the per-key gate, so it is decided WITHIN THIS PROCESS and no further.

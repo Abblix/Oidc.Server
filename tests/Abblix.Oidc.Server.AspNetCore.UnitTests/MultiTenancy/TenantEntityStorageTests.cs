@@ -64,6 +64,10 @@ public class TenantEntityStorageTests
         public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => Task.FromResult(Entries.TryAdd(key, value));
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(Entries.TryUpdate(key, value, expected));
+
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
             => Task.FromResult(Entries.ContainsKey(key));
 
@@ -124,6 +128,24 @@ public class TenantEntityStorageTests
 
         _tenant.Enter("acme");
         Assert.True(await Storage.TryExtendAsync("SessionClient:s", Options));
+    }
+
+    /// <summary>
+    /// An entry written under one tenant is not replaced under another, even by a caller holding its value.
+    /// </summary>
+    [Fact]
+    public async Task Replacing_ActsOnlyWithinTheTenant()
+    {
+        _tenant.Enter("acme");
+        await Storage.SetAsync("Cutoff:s", "acme's", Options);
+
+        _tenant.Enter("globex");
+        Assert.False(await Storage.TryReplaceAsync("Cutoff:s", "acme's", "globex's", Options));
+
+        _tenant.Enter("acme");
+        Assert.Equal("acme's", await Storage.GetAsync<string>("Cutoff:s", removeOnRetrieval: false));
+        Assert.True(await Storage.TryReplaceAsync("Cutoff:s", "acme's", "acme's later", Options));
+        Assert.Equal("acme's later", await Storage.GetAsync<string>("Cutoff:s", removeOnRetrieval: false));
     }
 
     /// <summary>
@@ -194,6 +216,7 @@ public class TenantEntityStorageTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.SetAsync("k", 1, Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.GetAsync<int>("k", removeOnRetrieval: false));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TrySetIfAbsentAsync("k", 1, Options));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TryReplaceAsync("k", 1, 2, Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TryExtendAsync("k", Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.RemoveAsync("k"));
         Assert.Empty(_inner.Entries);

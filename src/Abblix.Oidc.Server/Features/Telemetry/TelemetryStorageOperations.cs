@@ -29,6 +29,11 @@ public static class TelemetryStorageOperations
     public const string SetIfAbsent = "set_if_absent";
 
     /// <summary>
+    /// Replacing an entry only while it holds what was read.
+    /// </summary>
+    public const string Replace = "replace";
+
+    /// <summary>
     /// Keeping an entry that is there for longer.
     /// </summary>
     public const string Extend = "extend";

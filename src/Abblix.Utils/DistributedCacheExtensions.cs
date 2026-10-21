@@ -217,6 +217,51 @@ public static class DistributedCacheExtensions
 	}
 
 	/// <summary>
+	/// Writes a value at a key only when what the key holds is still what the caller read, as
+	/// <paramref name="isExpected"/> judges it.
+	/// </summary>
+	/// <remarks>
+	/// The judgement is the caller's rather than a comparison of bytes, because a value read and written again by a
+	/// serializer need not come back as the bytes some other writer stored for it, and a comparison of bytes would
+	/// then never match. The read, the judgement and the write happen under one hold of the per-key gate
+	/// <see cref="TrySetIfAbsentAsync"/> takes, so within this process exactly one of several callers that read
+	/// the same value is told it replaced it. A second process sees neither the gate nor the hold, and neither
+	/// does a plain <c>SetAsync</c>; a deployment spread over several nodes supplies its own <c>IEntityStorage</c>
+	/// that uses its store's own comparison, such as a transaction watching the key in Redis.
+	/// </remarks>
+	/// <param name="cache">The distributed cache instance.</param>
+	/// <param name="key">The key whose value is replaced.</param>
+	/// <param name="isExpected">Whether the bytes the key holds are what the caller read.</param>
+	/// <param name="value">The bytes to write in their place.</param>
+	/// <param name="options">Expiration policy for the entry, when one is written.</param>
+	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+	/// <returns>True when the key held what the caller read and this caller replaced it; false when it held
+	/// nothing or something else, in which case nothing is written.</returns>
+	public static Task<bool> TryReplaceAsync(
+		this IDistributedCache cache,
+		string key,
+		Func<byte[], bool> isExpected,
+		byte[] value,
+		DistributedCacheEntryOptions options,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cache);
+		ArgumentNullException.ThrowIfNull(key);
+		ArgumentNullException.ThrowIfNull(isExpected);
+		ArgumentNullException.ThrowIfNull(value);
+
+		return UnderGateAsync(key, cancellationToken, async () =>
+		{
+			var current = await cache.GetAsync(key, cancellationToken);
+			if (current == null || !isExpected(current))
+				return false;
+
+			await cache.SetAsync(key, value, options, cancellationToken);
+			return true;
+		});
+	}
+
+	/// <summary>
 	/// Gives the value at a key a new expiration policy, keeping the value, when the key holds one.
 	/// </summary>
 	/// <remarks>
