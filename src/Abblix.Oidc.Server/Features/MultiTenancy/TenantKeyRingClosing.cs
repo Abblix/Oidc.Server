@@ -37,18 +37,11 @@ public sealed class TenantKeyRingClosing(IServiceProvider serviceProvider) : ITe
         if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
             return new Dictionary<TenantDefinition, Exception>();
 
-        // A partition names one creation of one tenant once its id and generation are partition segments
-        var byPartition = tenants
-            .Where(NamesItsOwnPartition)
-            .ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
+        var byPartition = tenants.ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
 
         var failures = await serviceProvider.GetRequiredService<IKeyRings>()
             .DeleteAsync(byPartition.Keys, cancellationToken);
 
         return failures.ToDictionary(failure => byPartition[failure.Key], failure => failure.Value);
     }
-
-    private static bool NamesItsOwnPartition(TenantDefinition tenant)
-        => TenantKey.IsPartitionSegment(tenant.Id) &&
-           (tenant.Generation.Length == 0 || TenantKey.IsPartitionSegment(tenant.Generation));
 }

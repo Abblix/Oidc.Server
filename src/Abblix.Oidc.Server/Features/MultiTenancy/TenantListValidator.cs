@@ -25,11 +25,7 @@ public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks) : IVa
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
     {
-        var failures = (
-            from check in checks
-            from refusal in check.Check(options.Tenants)
-            select refusal.Message
-        ).ToList();
+        var failures = TenantRefusal.AllOf(checks, options.Tenants).Select(refusal => refusal.Message).ToList();
 
         if (options.RefreshEvery < ShortestPeriod || options.RefreshEvery > LongestPeriod)
         {

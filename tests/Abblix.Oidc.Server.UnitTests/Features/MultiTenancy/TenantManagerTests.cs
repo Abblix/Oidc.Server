@@ -437,4 +437,23 @@ public sealed class TenantManagerTests : IDisposable
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
     }
+
+    /// <summary>
+    /// A tenant whose id could spell another tenant's data is refused and not stored, even when the host has
+    /// replaced every check of the tenant list.
+    /// </summary>
+    [Theory]
+    [InlineData("acme:eu")]
+    [InlineData("acme~eu")]
+    [InlineData("acme.eu")]
+    [InlineData("münchen")]
+    public async Task ATenantThatCannotNameItsData_IsNotStored_WithoutAnyCheck(string id)
+    {
+        var manager = new TenantManager(NullLogger<TenantManager>.Instance, _store, [], _catalog, _store);
+
+        var created = await manager.CreateAsync(Tenant(id, "https://acme.example.com"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(created));
+        Assert.Empty(_store.Tenants);
+    }
 }

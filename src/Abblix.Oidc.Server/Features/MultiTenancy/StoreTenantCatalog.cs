@@ -27,8 +27,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="logger">Records the tenants left out.</param>
 /// <param name="store">Where the tenants are read from.</param>
-/// <param name="checks">The checks of the tenant list. They must refuse a tenant with no id or with an id held
-/// twice, as <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
+/// <param name="checks">The checks of the tenant list. They must refuse an id held twice, as
+/// <see cref="TenantDefinitionsCheck"/> does, since the tenants served are kept by id.</param>
 /// <param name="openings">What readies each tenant the checks pass before it is first served.</param>
 /// <param name="closings">What lets go of each tenant once it is released.</param>
 /// <param name="options">How long the openings of one reading may take, and how long a tenant gone from the store
@@ -101,11 +101,7 @@ public sealed partial class StoreTenantCatalog(
             cancellationToken);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
-        var refusals = (
-            from check in checks
-            from refusal in check.Check([..stored.Select(tenant => tenant.Tenant)])
-            select refusal
-        ).ToArray();
+        var refusals = TenantRefusal.AllOf(checks, [..stored.Select(tenant => tenant.Tenant)]).ToArray();
 
         foreach (var refusal in refusals.Where(refusal => previous?.Refused.Contains(refusal.Message) != true))
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);

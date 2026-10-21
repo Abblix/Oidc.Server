@@ -131,18 +131,26 @@ public class TenantEntityStorageTests
     }
 
     /// <summary>
-    /// An id may hold the separator, so the id and the key must not run together: tenant <c>a</c> with key
-    /// <c>b:x</c> and tenant <c>a:b</c> with key <c>x</c> are two entries.
+    /// A tenant served by a catalog of the host's own passes none of the server's checks, so one whose id or
+    /// generation could spell another tenant's space - tenant <c>a:b</c> with key <c>x</c> reading what tenant
+    /// <c>a</c> wrote under <c>b:x</c> - stores and reads nothing.
     /// </summary>
-    [Fact]
-    public async Task ATenantIdHoldingTheSeparator_DoesNotRunIntoTheKey()
+    [Theory]
+    [InlineData("a:b", "")]
+    [InlineData("acme~2", "")]
+    [InlineData("acme.eu", "")]
+    [InlineData("acme eu", "")]
+    [InlineData("münchen", "")]
+    [InlineData("acme", "2:x")]
+    [InlineData("acme", "2~x")]
+    public async Task ATenantThatCannotNameItsSpace_StoresAndReadsNothing(string id, string generation)
     {
-        _tenant.Enter("a");
-        await Storage.SetAsync("b:x", "a's", Options);
+        _tenant.Enter(id, generation);
 
-        _tenant.Enter("a:b");
-        Assert.Null(await Storage.GetAsync<string>("x", removeOnRetrieval: false));
-        Assert.Single(WrittenKeys());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.SetAsync("x", "value", Options));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Storage.GetAsync<string>("x", removeOnRetrieval: false));
+        Assert.Empty(_inner.Invocations);
     }
 
     /// <summary>
@@ -160,16 +168,19 @@ public class TenantEntityStorageTests
     }
 
     /// <summary>
-    /// A tenant the settings declare has no generation and keeps the key form it had before generations, so what
-    /// it stored before an upgrade is still its own.
+    /// A key reads as the tenant's id, its generation when it has one, and the key, so an operator looking at the
+    /// storage tells whose entry it is.
     /// </summary>
-    [Fact]
-    public async Task ATenantWithoutAGeneration_KeepsTheKeyItHadBefore()
+    [Theory]
+    [InlineData("acme", "", "tenant:acme:code")]
+    [InlineData("acme-eu_1", "", "tenant:acme-eu_1:code")]
+    [InlineData("acme", "2f9c", "tenant:acme~2f9c:code")]
+    public async Task AKey_NamesTheTenantAndItsGeneration(string id, string generation, string expected)
     {
-        _tenant.Enter("acme");
+        _tenant.Enter(id, generation);
         await Storage.SetAsync("code", "acme's", Options);
 
-        Assert.Equal("tenant:4:acme:code", Assert.Single(WrittenKeys()));
+        Assert.Equal(expected, Assert.Single(WrittenKeys()));
     }
 
     /// <summary>

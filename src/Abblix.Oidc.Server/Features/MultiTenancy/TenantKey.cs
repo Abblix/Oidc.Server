@@ -8,7 +8,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -20,56 +19,108 @@ public static class TenantKey
 {
     private const char GenerationSeparator = '~';
 
+    private const string Naming = "a tenant's id and generation may hold only ASCII letters, digits, '-' and '_'.";
+
     /// <summary>
     /// <paramref name="key"/> in the space of the tenant <paramref name="accessor"/> resolved.
     /// </summary>
     /// <remarks>
-    /// The id's length goes before the id, because an id may hold the separator: without it tenant <c>a</c>
-    /// with key <c>b:x</c> and tenant <c>a:b</c> with key <c>x</c> would be one entry.
+    /// The space holds no separator of the key, so tenant <c>a</c> with key <c>b:x</c> and tenant <c>a:b</c> with
+    /// key <c>x</c> cannot be one entry: no tenant is named <c>a:b</c>.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says, or the
+    /// one resolved is not named as <see cref="IsNamed"/> requires.</exception>
     public static string Of(ITenantAccessor accessor, string key)
         => string.Create(CultureInfo.InvariantCulture, $"tenant:{SpaceOf(CurrentTenant(accessor))}:{key}");
 
     /// <summary>
     /// What tells the space of <paramref name="tenant"/> from every other tenant's, this creation of its id
-    /// included.
+    /// included: the id, followed by the separator and the generation when it has one.
     /// </summary>
-    /// <remarks>
-    /// A tenant the settings declare has no generation and keeps the form a tenant had before generations, so
-    /// what it stored stays its own. After the length-prefixed id comes either the end or the separator and the
-    /// length-prefixed generation, so no id and generation spell another's.
-    /// </remarks>
-    internal static string SpaceOf(TenantDefinition tenant)
-        => tenant.Generation.Length == 0
-            ? string.Create(CultureInfo.InvariantCulture, $"{tenant.Id.Length}:{tenant.Id}")
-            : string.Create(
-                CultureInfo.InvariantCulture,
-                $"{tenant.Id.Length}:{tenant.Id}{GenerationSeparator}{tenant.Generation.Length}:{tenant.Generation}");
+    /// <exception cref="InvalidOperationException"><paramref name="tenant"/> is not named as <see cref="IsNamed"/>
+    /// requires.</exception>
+    internal static string SpaceOf(TenantDefinition tenant) => PartitionOf(tenant);
 
     /// <summary>
     /// The space of the tenant <paramref name="accessor"/> resolved, as <see cref="SpaceOf"/> tells it.
     /// </summary>
-    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says, or the
+    /// one resolved is not named as <see cref="IsNamed"/> requires.</exception>
     internal static string CurrentSpace(ITenantAccessor accessor) => SpaceOf(CurrentTenant(accessor));
 
     /// <summary>
     /// The partition of the key ring that keeps the keys the server mints for <paramref name="tenant"/>.
     /// </summary>
-    /// <remarks>
-    /// The separator is one neither a tenant id nor a generation may hold where the server mints the keys, so no
-    /// id and generation name another's partition.
-    /// </remarks>
+    /// <exception cref="InvalidOperationException"><paramref name="tenant"/> is not named as <see cref="IsNamed"/>
+    /// requires.</exception>
     public static string PartitionOf(TenantDefinition tenant)
-        => tenant.Generation.Length == 0 ? tenant.Id : $"{tenant.Id}{GenerationSeparator}{tenant.Generation}";
+    {
+        var id = IdOf(tenant);
+        return tenant.Generation.Length == 0 ? id : $"{id}{GenerationSeparator}{tenant.Generation}";
+    }
 
     /// <summary>
-    /// Whether <paramref name="value"/> can stand on either side of the separator in a partition name.
+    /// The id of <paramref name="tenant"/>, to build a name from.
     /// </summary>
-    internal static bool IsPartitionSegment(string value)
-        => KeyRingOptions.IsPartitionName(value) && !value.Contains(GenerationSeparator);
+    /// <remarks>
+    /// Wherever the server takes a tenant in, one that is not named is refused, but a host may serve tenants from a
+    /// catalog of its own, which nothing of the server judges. A name built from such a tenant could spell another
+    /// tenant's, and its requests would read and write that tenant's data, so building one fails instead.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException"><paramref name="tenant"/> is not named as <see cref="IsNamed"/>
+    /// requires.</exception>
+    internal static string IdOf(TenantDefinition tenant)
+        => IsNamed(tenant)
+            ? tenant.Id
+            : throw new InvalidOperationException(
+                $"The tenant '{tenant.Id}' in generation '{tenant.Generation}' cannot name its data: {Naming}");
+
+    /// <summary>
+    /// Whether the id of <paramref name="tenant"/>, and its generation when it has one, can stand in every name
+    /// built from them: storage keys, the key ring partition and the check-session cookie name.
+    /// </summary>
+    /// <remarks>
+    /// Neither holds a separator those names use, so no id and generation spell another's, and the names need no
+    /// escaping.
+    /// </remarks>
+    internal static bool IsNamed(TenantDefinition tenant)
+        => IsName(tenant.Id) && (tenant.Generation.Length == 0 || IsName(tenant.Generation));
+
+    /// <summary>
+    /// Refuses each of <paramref name="tenants"/> that is not named as <see cref="IsNamed"/> requires.
+    /// </summary>
+    /// <remarks>
+    /// Every way a tenant enters the server - the settings at startup, a reading of the store of tenants, a change
+    /// through the tenant manager - judges it by this as well as by the checks of the tenant list
+    /// (<see cref="TenantRefusal.AllOf"/>). A host can replace those checks but not this, since a tenant it lets
+    /// through would share another tenant's data.
+    /// </remarks>
+    internal static IEnumerable<TenantRefusal> Unnamed(IEnumerable<TenantDefinition> tenants)
+    {
+        foreach (var tenant in tenants)
+        {
+            if (string.IsNullOrEmpty(tenant.Id))
+            {
+                yield return TenantRefusal.Of(
+                    tenant,
+                    $"A tenant with the issuer '{tenant.Issuer?.OriginalString}' has no id.");
+            }
+            else if (!IsName(tenant.Id))
+            {
+                yield return TenantRefusal.Of(tenant, $"The id of tenant '{tenant.Id}' is refused: {Naming}");
+            }
+
+            if (tenant.Generation.Length > 0 && !IsName(tenant.Generation))
+            {
+                yield return TenantRefusal.Of(
+                    tenant,
+                    $"The generation '{tenant.Generation}' of tenant '{tenant.Id}' is refused: {Naming}");
+            }
+        }
+    }
+
+    private static bool IsName(string? value)
+        => !string.IsNullOrEmpty(value) && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 
     /// <summary>
     /// The tenant <paramref name="accessor"/> resolved.

@@ -40,8 +40,7 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 .Concat(CustodianKeysOf(tenants))
                 .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>())),
 
-            MintedKeysProvider => Unread(tenants, "the server mints the keys")
-                .Concat(PartitionsOf(tenants)),
+            MintedKeysProvider => Unread(tenants, "the server mints the keys"),
 
             // A key provider of the host's own is refused under multi-tenancy by the check of the registries
             _ => [],
@@ -119,18 +118,4 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}." +
                 $"{nameof(CustodianHeldKeys.EncryptionAlgorithm)} names, so no token encrypted to the tenant could be " +
                 "opened.");
-
-    /// <summary>
-    /// The server keeps each tenant's minted keys in the store under its id and generation, joined by a separator
-    /// the id may not hold, so the id must be a name the key ring accepts and must not spell another tenant's
-    /// partition.
-    /// </summary>
-    private static IEnumerable<TenantRefusal> PartitionsOf(IReadOnlyCollection<TenantDefinition> tenants)
-        =>
-            from tenant in tenants
-            where !TenantKey.IsPartitionSegment(tenant.Id)
-            select TenantRefusal.Of(
-                tenant,
-                $"Tenant '{tenant.Id}': the server mints the keys and keeps each tenant's in the store under its " +
-                "id, so the id may hold only letters, digits, '-' and '_'.");
 }

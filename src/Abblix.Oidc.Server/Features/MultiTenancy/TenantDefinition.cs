@@ -23,14 +23,18 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 public sealed class TenantDefinition
 {
     /// <summary>
-    /// The identifier the tenant is registered under.
+    /// The identifier the tenant is registered under: ASCII letters, digits, '-' and '_'.
     /// </summary>
+    /// <remarks>
+    /// It stands in the names the tenant's data, keys and check-session cookie are kept under, so a tenant whose id
+    /// holds anything else is refused wherever the server takes it in.
+    /// </remarks>
     public required string Id { get; init; }
 
     /// <summary>
     /// Which creation of the tenant under <see cref="Id"/> this is, assigned each time a tenant is created -
     /// by <see cref="ITenantManager"/>, or by the store of a host writing it otherwise - and kept for as long as it
-    /// lives: letters, digits, '-' and '_'. Empty for a tenant the settings declare.
+    /// lives: ASCII letters, digits, '-' and '_'. Empty for a tenant the settings declare.
     /// </summary>
     /// <remarks>
     /// What the server keeps for a tenant - its stored codes and tokens, its minted keys, what it builds from the

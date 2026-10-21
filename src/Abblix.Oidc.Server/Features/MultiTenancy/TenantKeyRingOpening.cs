@@ -38,14 +38,9 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
         if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
             return new Dictionary<string, Exception>();
 
-        // Tenants opened together that share a partition would sign with each other's keys, so none of them is
-        // opened; across the whole list the checks of the tenant list refuse such tenants
-        var byPartition = tenants.ToLookup(TenantKey.PartitionOf, StringComparer.Ordinal);
-        var shared = byPartition.Where(sharing => sharing.Count() > 1).ToArray();
-        var alone = byPartition.Where(sharing => sharing.Count() == 1).ToDictionary(
-            sharing => sharing.Key,
-            sharing => sharing.Single(),
-            StringComparer.Ordinal);
+        // A tenant's id holds no separator of its generation, so each creation of each tenant names a partition
+        // of its own
+        var alone = tenants.ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
 
         var rings = serviceProvider.GetRequiredService<IKeyRings>();
         var failures = await rings.OpenAsync(alone.Keys, cancellationToken);
@@ -57,14 +52,10 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
                 StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => Close(rings, partition));
         }
 
-        return failures
-            .Select(failure => (alone[failure.Key].Id, failure.Value))
-            .Concat(
-                from sharing in shared
-                from tenant in sharing
-                select (tenant.Id, (Exception)new InvalidOperationException(
-                    $"Tenant '{tenant.Id}' shares the key ring partition '{sharing.Key}' with another tenant.")))
-            .ToDictionary(failure => failure.Item1, failure => failure.Item2, StringComparer.Ordinal);
+        return failures.ToDictionary(
+            failure => alone[failure.Key].Id,
+            failure => failure.Value,
+            StringComparer.Ordinal);
     }
 
     private void Close(IKeyRings rings, string partition)

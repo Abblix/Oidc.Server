@@ -965,4 +965,34 @@ public class StoreTenantCatalogTests
             return failures;
         }
     }
+
+    /// <summary>
+    /// A stored tenant whose id or generation could spell another tenant's data is left out and logged, while the
+    /// others are served, even when the host has replaced every check of the tenant list.
+    /// </summary>
+    [Theory]
+    [InlineData("acme:eu", "")]
+    [InlineData("acme~eu", "")]
+    [InlineData("acme.eu", "")]
+    [InlineData("acme/eu", "")]
+    [InlineData("acme eu", "")]
+    [InlineData("münchen", "")]
+    [InlineData("acme", "g:1")]
+    [InlineData("acme", "g~1")]
+    public async Task ATenantThatCannotNameItsData_IsLeftOut_WithoutAnyCheck(string id, string generation)
+    {
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = id, Issuer = new Uri("https://acme.example.com"), Generation = generation },
+            Version));
+        var catalog = new StoreTenantCatalog(
+            _logger, _store, [], [_opening], [_closing], Options.Create(_options), _time);
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Null(await catalog.FindByIdAsync(id, ct));
+        Assert.Contains(id, Assert.Single(_logger.Errors), StringComparison.Ordinal);
+    }
 }

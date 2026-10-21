@@ -622,27 +622,6 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// Tenants whose ids and generations spell one partition would sign with each other's keys, so none of them is
-    /// opened, each refused on its own, while the other tenants open as usual.
-    /// </summary>
-    [Fact]
-    public async Task TenantsSharingAPartition_AreEachRefused_AndTheOthersOpened()
-    {
-        using var provider = MintingKeys();
-        var opening = provider.GetServices<ITenantOpening>().OfType<TenantKeyRingOpening>().Single();
-
-        var failures = await opening.OpenAsync(
-            [
-                new TenantDefinition { Id = "acme~g1", Issuer = new Uri(AcmeIssuer) },
-                new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Generation = "g1" },
-                new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") },
-            ],
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(["acme", "acme~g1"], failures.Keys.Order());
-    }
-
-    /// <summary>
     /// Encryption keys a tenant declares while the server mints its keys are never read, so startup refuses them.
     /// </summary>
     [Fact]
@@ -662,22 +641,6 @@ public partial class MultiTenancyRegistrationTests
             "but the server mints the keys",
             refusal.Message,
             StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The server keeps each tenant's minted keys under its id and generation, so an id the key ring cannot name its
-    /// part of the store by, or one holding the separator of a generation, is refused at startup, naming the tenant.
-    /// </summary>
-    [Theory]
-    [InlineData("acme.eu")]
-    [InlineData("acme~eu")] // the separator of a generation, which would let this id name another tenant's partition
-    public void ATenantIdTheKeyRingCannotNameAPartitionBy_IsRefusedAtStartup(string id)
-    {
-        using var provider = MintingKeys(new TenantDefinition { Id = id, Issuer = new Uri(AcmeIssuer) });
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains($"Tenant '{id}': the server mints the keys", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

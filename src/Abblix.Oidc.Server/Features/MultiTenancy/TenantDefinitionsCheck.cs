@@ -58,11 +58,6 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     {
         var failures = new List<TenantRefusal>();
 
-        failures.AddRange(
-            from tenant in tenants
-            where string.IsNullOrEmpty(tenant.Id)
-            select TenantRefusal.Of(tenant, $"A tenant with the issuer '{tenant.Issuer?.OriginalString}' has no id."));
-
         // Required by the compiler only: configuration without the key, or a store holding none, gives no issuer
         failures.AddRange(
             from tenant in tenants
@@ -77,15 +72,6 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
                 tenant,
                 $"The issuer '{tenant.Issuer.OriginalString}' of tenant '{tenant.Id}' names a host with no ASCII form, " +
                 "which no request can carry."));
-
-        // It is part of the names the tenant's data and keys are kept under, which every store accepts in this form
-        failures.AddRange(
-            from tenant in tenants
-            where !TenantKey.IsPartitionSegment(tenant.Generation)
-            select TenantRefusal.Of(
-                tenant,
-                $"The generation '{tenant.Generation}' of tenant '{tenant.Id}' must hold only letters, digits, " +
-                "'-' and '_'."));
 
         failures.AddRange(
             from tenant in tenants

@@ -298,4 +298,43 @@ public class TenantDefinitionsCheckTests
         Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme"]));
         Assert.DoesNotContain(refusals, refusal => refusal.TenantIds.Contains("globex"));
     }
+
+    /// <summary>
+    /// A tenant's id and generation stand in the names its data and keys are kept under, so one holding anything
+    /// but ASCII letters, digits, '-' and '_' could spell another tenant's. Startup refuses it even when the host
+    /// has replaced every check of the tenant list.
+    /// </summary>
+    [Theory]
+    [InlineData("acme:eu", "")]
+    [InlineData("acme~eu", "")]
+    [InlineData("acme.eu", "")]
+    [InlineData("acme/eu", "")]
+    [InlineData("acme eu", "")]
+    [InlineData("münchen", "")]
+    [InlineData("acme", "g:1")]
+    [InlineData("acme", "g~1")]
+    public void ATenantThatCannotNameItsData_IsRefused_WithoutAnyCheck(string id, string generation)
+    {
+        var result = new TenantListValidator([]).Validate(null, new MultiTenancyOptions
+        {
+            Tenants =
+            [
+                new TenantDefinition { Id = id, Issuer = new Uri("https://auth.example.com"), Generation = generation },
+            ],
+        });
+
+        Assert.True(result.Failed);
+    }
+
+    [Theory]
+    [InlineData("acme", "")]
+    [InlineData("Acme-EU_2", "")]
+    [InlineData("acme", "7f3c-Gen_2")]
+    public void ATenantNamedWithLettersDigitsHyphensAndUnderscores_IsAccepted(string id, string generation)
+        => Assert.Null(FailureOf(new TenantDefinition
+        {
+            Id = id,
+            Issuer = new Uri("https://auth.example.com"),
+            Generation = generation,
+        }));
 }
