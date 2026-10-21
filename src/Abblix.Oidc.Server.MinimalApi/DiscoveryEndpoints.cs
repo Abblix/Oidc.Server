@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.MinimalApi;
 
@@ -90,11 +91,12 @@ internal static class DiscoveryEndpoints
     /// </summary>
     private static async Task<IResult> KeysAsync(
         IAuthServiceKeysProvider serviceKeysProvider,
+        ITenantAccessor tenantAccessor,
         IOptions<OidcOptions> options,
         HttpResponse response,
         ILogger<IAuthServiceKeysProvider> logger)
     {
-        var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
+        var keys = await serviceKeysProvider.GetPublishedKeysAsync(tenantAccessor.CurrentTenant(), logger);
 
         // The JWKS is public, cacheable metadata: advertise a lifetime equal to the key-rollover propagation
         // window, overriding the group-wide no-cache policy (SetCacheableHeaders clears the Pragma/Expires the

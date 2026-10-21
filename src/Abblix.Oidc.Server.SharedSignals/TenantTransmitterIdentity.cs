@@ -50,7 +50,7 @@ public sealed class TenantTransmitterIdentity(
     /// </remarks>
     public string? TenantId => tenantAccessor.Current?.Tenant.Id;
 
-    private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
+    private TenantDefinition Tenant => tenantAccessor.CurrentTenant();
 
     private Uri Under(string pathAndQuery) => new(Tenant.Issuer.OriginalString.TrimEnd('/') + pathAndQuery, UriKind.Absolute);
 }

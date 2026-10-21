@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -67,13 +68,15 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="clientInfoProvider">Resolves the client a token names, so a pairwise pseudonym can be opened
 /// back into the subject a host would revoke.</param>
 /// <param name="subjectTypeConverter">Opens that pseudonym.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RevocationCutoffChecker(
     ILogger<RevocationCutoffChecker> logger,
     IRevocationCutoffRegistry cutoffRegistry,
     IIssuerProvider issuerProvider,
     IOptions<OidcOptions> options,
     IClientInfoProvider clientInfoProvider,
-    ISubjectTypeConverter subjectTypeConverter) : IRevocationCutoffChecker
+    ISubjectTypeConverter subjectTypeConverter,
+    ITenantAccessor tenantAccessor) : IRevocationCutoffChecker
 {
     /// <inheritdoc />
     public async Task<JwtValidationError?> CheckAsync(JsonWebTokenPayload payload)
@@ -198,7 +201,7 @@ public partial class RevocationCutoffChecker(
         // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
         // on an ID token but may be a resource or this server's own address on another token, so one that names no
         // existing client leaves the subject as it is.
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         if (clientInfo is null)
             return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
 
@@ -210,7 +213,7 @@ public partial class RevocationCutoffChecker(
             // Throws rather than answering null when pairwise identifiers are not configured at all, which a
             // client registered as pairwise can still reach by presenting an assertion it never received a
             // token for. Same unknown, same answer.
-            return subjectTypeConverter.ConvertBack(subject, clientInfo) is { } realSubject
+            return subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), subject, clientInfo) is { } realSubject
                 ? (true, realSubject)
                 : (false, null);
         }

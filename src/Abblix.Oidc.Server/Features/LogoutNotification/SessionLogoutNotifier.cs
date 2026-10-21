@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
@@ -23,13 +24,15 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// <param name="clientInfoProvider">Resolves each recorded client.</param>
 /// <param name="logoutNotifier">Delivers the notification to one client.</param>
 /// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class SessionLogoutNotifier(
     ILogger<SessionLogoutNotifier> logger,
     ISessionClientRegistry sessionClients,
     IIssuerProvider issuerProvider,
     IClientInfoProvider clientInfoProvider,
     ILogoutNotifier logoutNotifier,
-    IIssuerSettings issuerSettings) : ISessionLogoutNotifier
+    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor) : ISessionLogoutNotifier
 {
     /// <inheritdoc />
     public async Task<LogoutContext> NotifyClientsAsync(string sessionId, string subject)
@@ -40,7 +43,7 @@ public partial class SessionLogoutNotifier(
         var tasks = new List<Task>();
         foreach (var clientId in await sessionClients.GetClientsAsync(sessionId))
         {
-            var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+            var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
             if (clientInfo == null)
                 continue;
 

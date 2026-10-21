@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -38,6 +39,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 /// <param name="cutoffChecker">Asked before minting whether a revocation refuses the grant, as the token endpoint
 /// asks for a poll or ping client redeeming the same request.</param>
+/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
@@ -47,8 +49,9 @@ public partial class PushModeCompletionHandler(
     ITokenRequestProcessor tokenRequestProcessor,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider clock,
-    IRevocationCutoffChecker cutoffChecker)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock)
+    IRevocationCutoffChecker cutoffChecker,
+    ITenantAccessor tenantAccessor)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 

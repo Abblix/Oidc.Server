@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -24,11 +25,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="issuerSettings">The settings of that issuer, which tell the license when it stops counting.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
 	IIssuerProvider issuerProvider,
 	IIssuerSettings issuerSettings,
-	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
+	IAuthServiceKeysProvider serviceKeysProvider,
+	ITenantAccessor tenantAccessor) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
@@ -53,8 +56,8 @@ public class AuthServiceJwtValidator(
 				TokenTypes = tokenTypes,
 				ValidateIssuer = ValidateIssuerAsync,
 				ValidateAudience = ValidateAudienceAsync,
-				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(),
-				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenantAccessor.CurrentTenant()),
+				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenantAccessor.CurrentTenant(), true),
 
 				// No profile tolerance here, and the absence is a decision. These are tokens this
 				// server issued and reads back, so the freshness a profile bounds is not the

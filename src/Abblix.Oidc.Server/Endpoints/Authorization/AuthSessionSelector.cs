@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -25,7 +26,8 @@ internal sealed class AuthSessionSelector(
 	IAuthSessionService authSessionService,
 	IRevocationCutoffChecker cutoffChecker,
 	ISubjectTypeConverter subjectTypeConverter,
-	TimeProvider clock)
+	TimeProvider clock,
+	ITenantAccessor tenantAccessor)
 {
 	/// <summary>
 	/// The values of <c>prompt</c> whose pages a session answers, in the order the pages come: account creation or
@@ -274,11 +276,11 @@ internal sealed class AuthSessionSelector(
 		// a claims request means - and nothing has to decide that if each simply binds.
 		if (request.IdTokenHintSubject is { } hinted)
 			authSessions = authSessions.Where(
-				session => subjectTypeConverter.Names(session, [hinted], clientInfo));
+				session => subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), session, [hinted], clientInfo));
 
 		if (request.RequestedSubjects is { } requested)
 			authSessions = authSessions.Where(
-				session => subjectTypeConverter.Names(session, requested, clientInfo));
+				session => subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), session, requested, clientInfo));
 
 		// A revocation reaches the session as well as the tokens, and it has to be read here because
 		// everything below mints against whichever session survives, stamping a fresh iat that no

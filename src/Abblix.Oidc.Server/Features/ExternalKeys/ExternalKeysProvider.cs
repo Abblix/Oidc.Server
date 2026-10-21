@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 public sealed partial class ExternalKeysProvider(
     ILogger<ExternalKeysProvider> logger,
     IKeyCustodian custodian,
-    IIssuerSettings settings,
+    ITenantCatalog catalog,
     IOptions<OidcOptions> options,
     TimeProvider timeProvider)
     : IAuthServiceKeysProvider
@@ -43,25 +43,30 @@ public sealed partial class ExternalKeysProvider(
     /// The refusal of a custodian placement that names no key to produce with.
     /// </summary>
     internal const string NoKeyNamed =
-        "The keys are held by a custodian, and none is named to produce with: pass the custodian's key names to " +
-        $"{nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian)}, or, under multi-tenancy, name " +
-        $"each tenant's in {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}.";
+        "The keys are held by a custodian, and none is named to produce with: name the custodian's keys of the " +
+        $"tenant in {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}.";
 
-    // The names of the issuer serving the request: each tenant's own under multi-tenancy
-    private CustodianHeldKeys Keys => settings.CustodianKeys ?? throw new InvalidOperationException(NoKeyNamed);
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-        => PublishAsync(Keys.SigningKeyName, PublicKeyUsages.Signature, Keys.SigningAlgorithm);
+    private static CustodianHeldKeys KeysOf(TenantDefinition tenant)
+        => tenant.CustodianKeys ?? throw new InvalidOperationException(NoKeyNamed);
 
     /// <inheritdoc />
-    public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
+    public IAsyncEnumerable<JsonWebKey> GetSigningKeys(TenantDefinition tenant, bool includePrivateKeys = false)
+    {
+        var keys = KeysOf(tenant);
+        return PublishAsync(tenant, keys.SigningKeyName, PublicKeyUsages.Signature, keys.SigningAlgorithm);
+    }
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(TenantDefinition tenant, bool includePrivateKeys = false)
+    {
         // A provider that issues no encrypted token names no encryption key, and then there is nothing to publish.
         // Asking the custodian for a guessed name instead would fail against a custodian that holds only a signing
         // key, which is the common high-assurance setup.
-        => Keys.EncryptionKeyName is { } encryptionKeyName
-            ? PublishAsync(encryptionKeyName, PublicKeyUsages.Encryption, Keys.EncryptionAlgorithm)
+        var keys = KeysOf(tenant);
+        return keys.EncryptionKeyName is { } encryptionKeyName
+            ? PublishAsync(tenant, encryptionKeyName, PublicKeyUsages.Encryption, keys.EncryptionAlgorithm)
             : AsyncEnumerable.Empty<JsonWebKey>();
+    }
 
     // The last enumeration that succeeded, per key name. It is not an optimization: the published set is what
     // relying parties verify already-issued tokens against, so letting a custodian outage empty it stops them
@@ -79,12 +84,13 @@ public sealed partial class ExternalKeysProvider(
     // the new version. KeyRingRefreshService says the same of the minted-key path. That is why the fallback is
     // reported rather than silent.
     //
-    // Kept per issuer and key name, so a tenant created again under a key name another creation used keeps a set of
+    // Kept per tenant and key name, so a tenant created again under a key name another creation used keeps a set of
     // its own, and each creation's sets go with it
     private readonly ConcurrentDictionary<(string Partition, string KeyName), IReadOnlyList<KeyVersion>>
         _lastPublished = new();
 
     private async IAsyncEnumerable<JsonWebKey> PublishAsync(
+        TenantDefinition tenant,
         string keyName,
         string usage,
         string algorithm,
@@ -94,17 +100,17 @@ public sealed partial class ExternalKeysProvider(
         try
         {
             versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
-            var issuerKey = (settings.KeyPartition, keyName);
-            if (_lastPublished.TryAdd(issuerKey, versions))
-                settings.Released.Register(() => _lastPublished.TryRemove(issuerKey, out _));
+            var tenantKey = (TenantKey.PartitionOf(tenant), keyName);
+            if (_lastPublished.TryAdd(tenantKey, versions))
+                StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => _lastPublished.TryRemove(tenantKey, out _));
             else
-                _lastPublished[issuerKey] = versions;
+                _lastPublished[tenantKey] = versions;
         }
         catch (KeyCustodianUnavailableException failure)
         {
             // A cold start has nothing to fall back on, and saying so is the honest answer: the endpoint turns
             // this into the status that says whether to come back.
-            if (!_lastPublished.TryGetValue((settings.KeyPartition, keyName), out var lastKnown))
+            if (!_lastPublished.TryGetValue((TenantKey.PartitionOf(tenant), keyName), out var lastKnown))
                 throw;
 
             LogServingLastKnownKeys(keyName, lastKnown.Count, failure);

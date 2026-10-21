@@ -15,8 +15,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
 /// The client store the server serves clients from unless the host registers its own:
-/// each issuer serves the clients its <see cref="IIssuerSettings"/> configure as they are after every reload, and a
-/// client registered, changed or removed later is so only at the issuer it happened at.
+/// each tenant serves the clients its definition configures as it is after every change, and a client registered,
+/// changed or removed later is so only at the tenant it happened at.
 /// </summary>
 /// <remarks>
 /// The two are kept apart so that a reload of the settings brings the clients they now configure while keeping
@@ -37,24 +37,22 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a registration dropped for an id the settings came to configure.</param>
-/// <param name="settings">The settings of the issuer serving the request, holding its client configurations.</param>
-/// <param name="configured">The clients each issuer's settings configure.</param>
-/// <param name="registrations">The clients registration added or changed at the issuer serving the request.</param>
+/// <param name="catalog">The catalog the tenants are resolved from, asked which definition of a tenant is in force.
+/// </param>
+/// <param name="configured">The clients each tenant's definition configures.</param>
+/// <param name="registrations">The clients registration added or changed at each tenant.</param>
 internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
-    IIssuerSettings settings,
+    ITenantCatalog catalog,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
     IClientRegistrations registrations)
     : IClientInfoStore
 {
-    private Dictionary<string, ClientInfo> Configured
+    private Dictionary<string, ClientInfo> ConfiguredAt(TenantDefinition tenant)
     {
-        get
-        {
-            var clients = settings.Clients;
-            return configured.GetOrCreate(clients, () => Evicting(
-                clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
-        }
+        var clients = tenant.Clients;
+        return configured.GetOrCreate(tenant, clients, () => Evicting(
+            tenant, clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
     }
 
     /// <summary>
@@ -63,18 +61,21 @@ internal partial class ReloadableClientInfoStorage(
     /// the current ones allow. Only registrations kept in memory are dropped here; a host keeping them in a store of
     /// its own sees them there, and a registration met under such an id is dropped when it is met.
     /// </summary>
-    private Dictionary<string, ClientInfo> Evicting(Dictionary<string, ClientInfo> clients)
+    private Dictionary<string, ClientInfo> Evicting(TenantDefinition tenant, Dictionary<string, ClientInfo> clients)
     {
-        foreach (var clientId in registrations.DropHeld(id => clients.ContainsKey(id) && ConfiguredInForce(id)))
-            LogRegistrationEvicted(clientId, settings.Id);
+        foreach (var clientId in registrations.DropHeld(
+                     tenant, id => clients.ContainsKey(id) && ConfiguredInForce(tenant, id)))
+        {
+            LogRegistrationEvicted(clientId, tenant.Id);
+        }
 
         return clients;
     }
 
-    private async Task EvictAsync(RegisteredClient registration)
+    private async Task EvictAsync(TenantDefinition tenant, RegisteredClient registration)
     {
-        if (await registrations.TryRemoveAsync(registration))
-            LogRegistrationEvicted(registration.ClientInfo.ClientId, settings.Id);
+        if (await registrations.TryRemoveAsync(tenant, registration))
+            LogRegistrationEvicted(registration.ClientInfo.ClientId, tenant.Id);
     }
 
     /// <summary>
@@ -83,65 +84,74 @@ internal partial class ReloadableClientInfoStorage(
     /// </summary>
     /// <returns>Whether the settings configure the id, and so the registration is not kept - dropped here, or already
     /// by a build of the clients.</returns>
-    private async Task<bool> RecheckAsync(RegisteredClient client)
+    private async Task<bool> RecheckAsync(TenantDefinition tenant, RegisteredClient client)
     {
-        if (!ConfiguredInForce(client.ClientInfo.ClientId))
+        if (!ConfiguredInForce(tenant, client.ClientInfo.ClientId))
             return false;
 
-        await EvictAsync(client);
+        await EvictAsync(tenant, client);
         return true;
     }
 
     /// <summary>
-    /// Whether the settings in force configure <paramref name="clientId"/>, read from them rather than from the
-    /// clients built: a request begun before the settings changed holds the former ones, and the clients of the
-    /// current ones may not be built yet, or be built from former settings.
+    /// Whether the definition of <paramref name="tenant"/> in force (<see cref="StoreTenantCatalog.InForce"/>)
+    /// configures <paramref name="clientId"/>, read from it rather than from the clients built: a request begun before
+    /// the definition changed holds the former one, and the clients of the current one may not be built yet, or be
+    /// built from a former one. The definition the request holds answers where the server's own catalog has no
+    /// definition in force for this creation of the tenant, or is not the catalog in use.
     /// </summary>
-    private bool ConfiguredInForce(string clientId)
+    private bool ConfiguredInForce(TenantDefinition tenant, string clientId)
     {
-        var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
-        return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
+        var inForce = catalog is StoreTenantCatalog own ? own.InForce(tenant) ?? tenant : tenant;
+        return inForce.Clients.Any(
+            client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
     /// Asynchronously searches for a client by its identifier.
     /// </summary>
+    /// <param name="tenant">The tenant whose clients are searched.</param>
     /// <param name="clientId">The unique identifier of the client to find.</param>
     /// <returns>
     /// A task that returns the <see cref="ClientInfo"/> if found; otherwise, null.
     /// </returns>
-    public async Task<ClientInfo?> TryFindClientAsync(string clientId)
+    public async Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        if (Configured.TryGetValue(clientId, out var configuredClient))
+        if (ConfiguredAt(tenant).TryGetValue(clientId, out var configuredClient))
             return configuredClient;
 
-        var registration = await registrations.TryFindAsync(clientId);
-        return registration is null || await RecheckAsync(registration) ? null : registration.ClientInfo;
+        var registration = await registrations.TryFindAsync(tenant, clientId);
+        return registration is null || await RecheckAsync(tenant, registration) ? null : registration.ClientInfo;
     }
 
     /// <summary>
     /// Adds a registered client, unless a client is already known under its id; of two added at once, the first is
     /// kept.
     /// </summary>
+    /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
     /// <returns>Whether the client was added and kept.</returns>
-    public async Task<bool> TryAddClientAsync(RegisteredClient client)
-        => await registrations.TryAddAsync(client) && !await RecheckAsync(client);
+    public async Task<bool> TryAddClientAsync(TenantDefinition tenant, RegisteredClient client)
+        => await registrations.TryAddAsync(tenant, client) && !await RecheckAsync(tenant, client);
 
     /// <inheritdoc />
-    public async Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
+    public async Task<RegisteredClient?> TryFindRegisteredClientAsync(TenantDefinition tenant, string clientId)
     {
         // The settings are read last, so the answer is theirs as they stand once the registration was read: a reload
         // configuring the id before that drops the registration here, so it does not come back once they let it go
-        var client = await registrations.TryFindAsync(clientId);
-        return client is null || await RecheckAsync(client) ? null : client;
+        var client = await registrations.TryFindAsync(tenant, clientId);
+        return client is null || await RecheckAsync(tenant, client) ? null : client;
     }
 
     /// <inheritdoc />
-    public async Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
-        => await registrations.TryReplaceAsync(current, updated) && !await RecheckAsync(updated);
+    public async Task<bool> TryUpdateClientAsync(
+        TenantDefinition tenant,
+        RegisteredClient current,
+        RegisteredClient updated)
+        => await registrations.TryReplaceAsync(tenant, current, updated) && !await RecheckAsync(tenant, updated);
 
     /// <inheritdoc />
-    public Task<bool> TryRemoveClientAsync(RegisteredClient current) => registrations.TryRemoveAsync(current);
+    public Task<bool> TryRemoveClientAsync(TenantDefinition tenant, RegisteredClient current)
+        => registrations.TryRemoveAsync(tenant, current);
 }

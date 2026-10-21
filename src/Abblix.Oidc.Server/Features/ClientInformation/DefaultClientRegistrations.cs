@@ -22,6 +22,6 @@ internal static class DefaultClientRegistrations
     /// </summary>
     public static IClientRegistrations Create(IServiceProvider serviceProvider)
         => serviceProvider.GetService<ITenantClientRegistrationStore>() is { } store
-            ? new TenantStoreClientRegistrations(store, serviceProvider.GetRequiredService<ITenantAccessor>())
+            ? new TenantStoreClientRegistrations(store)
             : ActivatorUtilities.CreateInstance<IssuerClientRegistrations>(serviceProvider);
 }

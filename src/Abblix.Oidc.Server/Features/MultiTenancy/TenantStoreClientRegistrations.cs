@@ -15,25 +15,24 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The registrations kept in the host's store, each call naming the tenant of the request.
 /// </summary>
 /// <param name="store">The host's store of registrations.</param>
-/// <param name="tenantAccessor">The tenant of the request.</param>
-internal sealed class TenantStoreClientRegistrations(
-    ITenantClientRegistrationStore store,
-    ITenantAccessor tenantAccessor) : IClientRegistrations
+internal sealed class TenantStoreClientRegistrations(ITenantClientRegistrationStore store) : IClientRegistrations
 {
-    private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
 
-    public Task<RegisteredClient?> TryFindAsync(string clientId) => store.TryFindAsync(Tenant, clientId);
+    public Task<RegisteredClient?> TryFindAsync(TenantDefinition tenant, string clientId)
+        => store.TryFindAsync(tenant, clientId);
 
-    public Task<bool> TryAddAsync(RegisteredClient client) => store.TryAddAsync(Tenant, client);
+    public Task<bool> TryAddAsync(TenantDefinition tenant, RegisteredClient client)
+        => store.TryAddAsync(tenant, client);
 
-    public Task<bool> TryReplaceAsync(RegisteredClient current, RegisteredClient updated)
-        => store.TryReplaceAsync(Tenant, current, updated);
+    public Task<bool> TryReplaceAsync(TenantDefinition tenant, RegisteredClient current, RegisteredClient updated)
+        => store.TryReplaceAsync(tenant, current, updated);
 
-    public Task<bool> TryRemoveAsync(RegisteredClient current) => store.TryRemoveAsync(Tenant, current);
+    public Task<bool> TryRemoveAsync(TenantDefinition tenant, RegisteredClient current)
+        => store.TryRemoveAsync(tenant, current);
 
     /// <remarks>
     /// The server holds none of the host's registrations, so it drops none here: the host sees its store, and a
     /// registration met under a configured id is dropped when it is met.
     /// </remarks>
-    public IReadOnlyCollection<string> DropHeld(Func<string, bool> configured) => [];
+    public IReadOnlyCollection<string> DropHeld(TenantDefinition tenant, Func<string, bool> configured) => [];
 }

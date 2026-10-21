@@ -15,13 +15,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// One value for each tenant, since each tenant is an issuer.
 /// </summary>
-/// <remarks>
-/// Outside any tenant there is no value to hand out, and the call refuses rather than answer with another tenant's.
-/// </remarks>
-/// <param name="tenantAccessor">Resolves the current tenant.</param>
 /// <param name="catalog">The catalog the tenants are resolved from, asked whether it still serves the definition a
 /// request holds.</param>
-public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenantCatalog catalog) : IIssuerLocal<T>
+public sealed class TenantIssuerLocal<T>(ITenantCatalog catalog) : IIssuerLocal<T>
     where T : class
 {
     private readonly ConcurrentDictionary<string, Built> _values = new(StringComparer.Ordinal);
@@ -38,9 +34,8 @@ public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenant
     /// this creation of the tenant, or is not the catalog in use, a changed source decides alone.
     /// </para>
     /// </remarks>
-    public T GetOrCreate(object? source, Func<T> create)
+    public T GetOrCreate(TenantDefinition tenant, object? source, Func<T> create)
     {
-        var tenant = TenantKey.CurrentTenant(tenantAccessor);
         var space = TenantKey.SpaceOf(tenant);
         while (true)
         {

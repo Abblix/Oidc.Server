@@ -30,10 +30,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="keys">The signing keys of the tenant serving the request.</param>
 /// <param name="creator">The JWT core's token creator.</param>
 /// <param name="options">What the deployment allows to sign with.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public sealed class TenantSecurityEventTokenSigner(
     IAuthServiceKeysProvider keys,
     IJsonWebTokenCreator creator,
-    IOptions<SecurityEventsOptions> options) : ISecurityEventTokenSigner
+    IOptions<SecurityEventsOptions> options,
+    ITenantAccessor tenantAccessor) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
@@ -45,7 +47,7 @@ public sealed class TenantSecurityEventTokenSigner(
 
     /// <exception cref="InvalidOperationException">The tenant has no signing key of an allowed algorithm.</exception>
     private async Task<JsonWebKey> SigningKeyAsync(string[] allowed, CancellationToken cancellationToken)
-        => await keys.GetSigningKeys(true).FirstOrDefaultAsync(
+        => await keys.GetSigningKeys(tenantAccessor.CurrentTenant(), true).FirstOrDefaultAsync(
                key => key.Algorithm is { } algorithm && allowed.Contains(algorithm, StringComparer.Ordinal),
                cancellationToken)
            ?? throw new InvalidOperationException(

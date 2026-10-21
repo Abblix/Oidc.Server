@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -40,12 +41,14 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// handler outside this library keeps compiling - a deployment that registered none simply has nobody
 /// to wake.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
+/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
+    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier = null)
 {
     /// <summary>
@@ -150,7 +153,7 @@ public abstract partial class AuthenticationCompletionHandler(
         // Judged here rather than in the router so that each mode refuses the way it already refuses its own
         // failures: a mode that cannot leave a denied request behind removes it instead.
         if (request.RequestedSubjects is { } accepted &&
-            !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
+            !subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
             LogAuthenticatedUserNotTheOneRequested(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);

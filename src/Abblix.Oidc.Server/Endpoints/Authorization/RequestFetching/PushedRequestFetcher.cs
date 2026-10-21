@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
@@ -31,12 +32,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="clientInfoProvider">
 /// Resolves the requesting client's registration to enforce the per-client PAR requirement.</param>
 /// <param name="consumedRequestUris">The flows that ended, whose remaining pages are refused.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
     IIssuerSettings issuerSettings,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IClientInfoProvider clientInfoProvider,
-    IConsumedRequestUriRegistry consumedRequestUris) : IAuthorizationRequestFetcher
+    IConsumedRequestUriRegistry consumedRequestUris,
+    ITenantAccessor tenantAccessor) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously retrieves the pushed authorization request object associated with the specified URN.
@@ -140,7 +143,7 @@ public class PushedRequestFetcher(
         if (clientId is null)
             return false;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         if (clientInfo is null)
             return false;
 

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -24,8 +25,9 @@ public class ClientSecretBasicAuthenticator(
 	ILogger<ClientSecretBasicAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService)
-	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
+	IHashService hashService,
+	ITenantAccessor tenantAccessor)
+	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService, tenantAccessor), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_basic'.

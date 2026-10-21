@@ -8,34 +8,32 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
 /// <summary>
-/// Converts subjects with the pairwise key of the issuer serving the request, keeping one
-/// <see cref="SubjectTypeConverter"/> for each issuer.
+/// Converts subjects with the pairwise key of the tenant they are issued for, keeping one
+/// <see cref="SubjectTypeConverter"/> for each tenant.
 /// </summary>
-/// <param name="settings">The settings of the issuer serving the request, holding its pairwise key.</param>
-/// <param name="converters">The converter of each issuer.</param>
-internal sealed class IssuerSubjectTypeConverter(
-    IIssuerSettings settings,
-    IIssuerLocal<SubjectTypeConverter> converters) : ISubjectTypeConverter
+/// <param name="converters">The converter of each tenant.</param>
+internal sealed class IssuerSubjectTypeConverter(IIssuerLocal<SubjectTypeConverter> converters) : ISubjectTypeConverter
 {
-    private SubjectTypeConverter Converter
+    private SubjectTypeConverter ConverterOf(TenantDefinition tenant)
     {
-        get
-        {
-            var pairwiseSubject = settings.PairwiseSubject;
-            return converters.GetOrCreate(pairwiseSubject, () => new SubjectTypeConverter(pairwiseSubject));
-        }
+        var pairwiseSubject = tenant.PairwiseSubject;
+        return converters.GetOrCreate(tenant, pairwiseSubject, () => new SubjectTypeConverter(pairwiseSubject));
     }
 
     /// <inheritdoc />
-    public IEnumerable<string> SubjectTypesSupported => Converter.SubjectTypesSupported;
+    public IEnumerable<string> SubjectTypesSupported(TenantDefinition tenant)
+        => ConverterOf(tenant).SubjectTypesSupported;
 
     /// <inheritdoc />
-    public string Convert(string subject, ClientInfo clientInfo) => Converter.Convert(subject, clientInfo);
+    public string Convert(TenantDefinition tenant, string subject, ClientInfo clientInfo)
+        => ConverterOf(tenant).Convert(subject, clientInfo);
 
     /// <inheritdoc />
-    public string? ConvertBack(string subject, ClientInfo clientInfo) => Converter.ConvertBack(subject, clientInfo);
+    public string? ConvertBack(TenantDefinition tenant, string subject, ClientInfo clientInfo)
+        => ConverterOf(tenant).ConvertBack(subject, clientInfo);
 }

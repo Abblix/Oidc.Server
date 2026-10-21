@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
@@ -23,6 +24,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <item>An addition, change or removal names the registration it is about, and takes effect only while the store
 /// still allows it: an addition only where no client is known under the id, a change or removal only while the store
 /// holds the token identifier of the registration it was decided on. It answers whether it took effect.</item>
+/// <item>Every call names the tenant it is made for, and a registration made at one tenant is never found, changed
+/// or removed at another.</item>
 /// </list>
 /// </remarks>
 public interface IClientInfoManager
@@ -30,33 +33,37 @@ public interface IClientInfoManager
     /// <summary>
     /// Adds a registered client, unless a client is already known under its id.
     /// </summary>
+    /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="client">The client and the identifier of the registration access token issued for it.</param>
     /// <returns>Whether the client was added and kept: a registration answered with <c>true</c> is one the
     /// store serves.</returns>
-    Task<bool> TryAddClientAsync(RegisteredClient client);
+    Task<bool> TryAddClientAsync(TenantDefinition tenant, RegisteredClient client);
 
     /// <summary>
     /// Finds the client registration added under <paramref name="clientId"/>.
     /// </summary>
+    /// <param name="tenant">The tenant the registration is looked up at.</param>
     /// <param name="clientId">The client id to look up.</param>
     /// <returns>The registration, or <c>null</c> when none is held under the id, as for a client the store serves
     /// from the settings.</returns>
-    Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId);
+    Task<RegisteredClient?> TryFindRegisteredClientAsync(TenantDefinition tenant, string clientId);
 
     /// <summary>
     /// Replaces a registration, per RFC 7592 section 2.2, provided the store still holds the token identifier of
     /// <paramref name="current"/>.
     /// </summary>
+    /// <param name="tenant">The tenant the registration is held at.</param>
     /// <param name="current">The registration the change was decided on.</param>
     /// <param name="updated">The registration replacing it, with the identifier of the rotated token.</param>
     /// <returns>Whether the registration was replaced.</returns>
-    Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated);
+    Task<bool> TryUpdateClientAsync(TenantDefinition tenant, RegisteredClient current, RegisteredClient updated);
 
     /// <summary>
     /// Removes a registration, per RFC 7592 section 2.3, provided the store still holds the token identifier of
     /// <paramref name="current"/>.
     /// </summary>
+    /// <param name="tenant">The tenant the registration is held at.</param>
     /// <param name="current">The registration the removal was decided on.</param>
     /// <returns>Whether the registration was removed.</returns>
-    Task<bool> TryRemoveClientAsync(RegisteredClient current);
+    Task<bool> TryRemoveClientAsync(TenantDefinition tenant, RegisteredClient current);
 }

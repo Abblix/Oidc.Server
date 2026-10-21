@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.UserInfo;
 
@@ -17,7 +18,8 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// facilitating the retrieval of appropriate claims for given scopes during the authorization process.
 /// </summary>
 /// <param name="scopeManager">The scope manager used to look up scope definitions.</param>
-public class ScopeClaimsProvider(IScopeManager scopeManager) : IScopeClaimsProvider
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class ScopeClaimsProvider(IScopeManager scopeManager, ITenantAccessor tenantAccessor) : IScopeClaimsProvider
 {
     /// <summary>
     /// Retrieves the specific claims associated with the requested scopes and any additional requested claims.
@@ -31,7 +33,7 @@ public class ScopeClaimsProvider(IScopeManager scopeManager) : IScopeClaimsProvi
         IEnumerable<string>? requestedClaims)
     {
         var claimNames = scopes
-            .SelectMany(scope => scopeManager.TryGet(scope, out var scopeDefinition)
+            .SelectMany(scope => scopeManager.TryGet(tenantAccessor.CurrentTenant(), scope, out var scopeDefinition)
                 ? scopeDefinition.ClaimTypes
                 : [])
             .Prepend(JwtClaimTypes.Subject);
@@ -48,11 +50,13 @@ public class ScopeClaimsProvider(IScopeManager scopeManager) : IScopeClaimsProvi
     /// A collection of all the scopes supported by this provider.
     /// </summary>
     public IEnumerable<string> ScopesSupported
-        => scopeManager.Select(def => def.Scope);
+        => scopeManager.ScopesOf(tenantAccessor.CurrentTenant()).Select(def => def.Scope);
 
     /// <summary>
     /// A collection of all the claims that can be provided by this provider.
     /// </summary>
     public IEnumerable<string> ClaimsSupported
-        => scopeManager.SelectMany(def => def.ClaimTypes).Distinct(StringComparer.Ordinal);
+        => scopeManager.ScopesOf(tenantAccessor.CurrentTenant())
+            .SelectMany(def => def.ClaimTypes)
+            .Distinct(StringComparer.Ordinal);
 }

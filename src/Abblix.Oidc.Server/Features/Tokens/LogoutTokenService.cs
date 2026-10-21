@@ -17,6 +17,7 @@ using Abblix.SecurityEvents;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -32,13 +33,15 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
 /// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
 /// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
     IClientJwtFormatter jwtFormatter,
     ITokenIdGenerator tokenIdGenerator,
-    IOptions<OidcOptions> options) : ILogoutTokenService
+    IOptions<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : ILogoutTokenService
 {
     /// <summary>
     /// Asynchronously creates a logout token based on the provided client information and logout event context.
@@ -58,7 +61,7 @@ public partial class LogoutTokenService(
             throw new InvalidOperationException($"The client {clientInfo.ClientId} requires session id");
         }
 
-        var subjectId = subjectTypeConverter.Convert(logoutContext.SubjectId, clientInfo);
+        var subjectId = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), logoutContext.SubjectId, clientInfo);
         if (string.IsNullOrEmpty(subjectId) && string.IsNullOrEmpty(logoutContext.SessionId))
         {
             throw new InvalidOperationException(

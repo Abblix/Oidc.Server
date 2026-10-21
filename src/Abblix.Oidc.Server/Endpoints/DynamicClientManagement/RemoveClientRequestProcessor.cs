@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -24,10 +25,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
 /// <param name="issuerSettings">The settings of the issuer the client is removed from, whose license count it leaves.
 /// </param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    IIssuerSettings issuerSettings) : IRemoveClientRequestProcessor
+    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor) : IRemoveClientRequestProcessor
 {
     /// <summary>
     /// Deletes the addressed client and returns the recorded removal timestamp.
@@ -39,7 +42,7 @@ public class RemoveClientRequestProcessor(
 
         // Only the registration this request was authenticated against: one rotated meanwhile is left
         // to whoever holds the rotated token.
-        if (!await clientInfoManager.TryRemoveClientAsync(request.Client))
+        if (!await clientInfoManager.TryRemoveClientAsync(tenantAccessor.CurrentTenant(), request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
         if (LicenseChecker.ClientIssuerOf(issuerSettings) is { } issuerId)

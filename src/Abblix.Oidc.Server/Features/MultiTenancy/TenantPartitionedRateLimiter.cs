@@ -47,7 +47,7 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     {
         get
         {
-            var tenant = TenantKey.CurrentTenant(tenantAccessor);
+            var tenant = tenantAccessor.CurrentTenant();
             var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
             if (released.IsCancellationRequested)
                 return Unlimited;

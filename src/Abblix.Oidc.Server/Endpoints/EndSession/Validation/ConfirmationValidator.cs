@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -26,10 +27,12 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// client's own spelling of the end user is what the hint is compared against.</param>
 /// <param name="confirmationStore">Redeems the value that carries the end user's answer back from the page that
 /// asked them.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ConfirmationValidator(
     IAuthSessionService authSessionService,
     ISubjectTypeConverter subjectTypeConverter,
-    ILogoutConfirmationStore confirmationStore) : IEndSessionContextValidator
+    ILogoutConfirmationStore confirmationStore,
+    ITenantAccessor tenantAccessor) : IEndSessionContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
@@ -88,6 +91,6 @@ public class ConfirmationValidator(
         // skipping one.
         return context.ClientInfo is { } clientInfo &&
                hint.Subject is { } subject &&
-               subjectTypeConverter.Names(authSession, [subject], clientInfo);
+               subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), authSession, [subject], clientInfo);
     }
 }

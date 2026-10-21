@@ -9,8 +9,8 @@
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.Common.Implementation;
@@ -23,12 +23,9 @@ namespace Abblix.Oidc.Server.Common.Implementation;
 /// It is recommended to implement a dynamic resolution mechanism in production environments
 /// to enable seamless certificate replacement without the need for service reloading.
 /// </remarks>
-/// <param name="settings">The settings of the issuer serving the request, holding its keys: each tenant's own under
-/// multi-tenancy, so no two tenants sign or decrypt with one key.</param>
 /// <param name="placement">Where the host said its keys live.</param>
 /// <param name="custodian">The custodian the host registered, if any.</param>
 internal class OidcOptionsKeysProvider(
-	IIssuerSettings settings,
 	IOptions<KeyPlacementChoice> placement,
 	IKeyCustodian? custodian = null) : IAuthServiceKeysProvider
 {
@@ -58,14 +55,15 @@ internal class OidcOptionsKeysProvider(
 	/// <summary>
 	/// Retrieves a collection of JSON Web Keys used for encryption, based on the configured encryption certificates.
 	/// </summary>
+	/// <param name="tenant">The tenant whose keys are asked for.</param>
 	/// <param name="includePrivateKeys">Specifies whether to include private keys in the JWKs. Default is false.</param>
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for encryption purposes.</returns>
-	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
+	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(TenantDefinition tenant, bool includePrivateKeys = false)
 	{
 		RefuseIfPlacementNotChosen();
 
 		var jsonWebKeys =
-			from jwk in settings.EncryptionKeys
+			from jwk in tenant.EncryptionKeys
 			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();
@@ -74,14 +72,15 @@ internal class OidcOptionsKeysProvider(
 	/// <summary>
 	/// Retrieves a collection of JSON Web Keys used for signing, based on the configured signing certificates.
 	/// </summary>
+	/// <param name="tenant">The tenant whose keys are asked for.</param>
 	/// <param name="includePrivateKeys">Specifies whether to include private keys in the JWKs. Default is false.</param>
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for signing purposes.</returns>
-	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
+	public IAsyncEnumerable<JsonWebKey> GetSigningKeys(TenantDefinition tenant, bool includePrivateKeys = false)
 	{
 		RefuseIfPlacementNotChosen();
 
 		var jsonWebKeys =
-			from jwk in settings.SigningKeys
+			from jwk in tenant.SigningKeys
 			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);
 
 		return jsonWebKeys.ToAsyncEnumerable();

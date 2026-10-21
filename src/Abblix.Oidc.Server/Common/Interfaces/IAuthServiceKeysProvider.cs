@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.Common.Interfaces;
@@ -27,6 +28,9 @@ namespace Abblix.Oidc.Server.Common.Interfaces;
 /// move it to first to activate it once client JWKS caches have caught up, and keep a retired key trailing (still
 /// published so its tokens keep verifying) until they expire. Do NOT order the set so that a retired or
 /// not-yet-active key comes first for its algorithm, or the service would produce with it.
+/// <para>
+/// Every call names the tenant whose keys are asked for, and no two tenants sign or decrypt with one key.
+/// </para>
 /// </remarks>
 public interface IAuthServiceKeysProvider
 {
@@ -35,13 +39,15 @@ public interface IAuthServiceKeysProvider
 	/// tokens with; the rest are published so inbound JWE can be decrypted and to overlap a rotation. See the
 	/// ordering note in the interface remarks.
 	/// </summary>
+	/// <param name="tenant">The tenant whose keys are asked for.</param>
 	/// <param name="includePrivateKeys">Whether to include private keys in the result.</param>
-	IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false);
+	IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(TenantDefinition tenant, bool includePrivateKeys = false);
 
 	/// <summary>
 	/// Gets the signing keys used by the service. The first key per algorithm is the one it signs with; the rest
 	/// are published for verification and to overlap a rotation. See the ordering note in the interface remarks.
 	/// </summary>
+	/// <param name="tenant">The tenant whose keys are asked for.</param>
 	/// <param name="includePrivateKeys">Whether to include private keys in the result.</param>
-	IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false);
+	IAsyncEnumerable<JsonWebKey> GetSigningKeys(TenantDefinition tenant, bool includePrivateKeys = false);
 }

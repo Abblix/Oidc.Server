@@ -12,6 +12,7 @@ using Abblix.Utils;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -30,14 +31,17 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// normally present even where the setting is disabled - the waiting is what the setting decides, and a
 /// notification nobody waits for is a no-op.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
+/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
+    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
+    : AuthenticationCompletionHandler(
+        logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor, statusNotifier)
 {
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.

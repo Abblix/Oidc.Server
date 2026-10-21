@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -27,7 +28,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </remarks>
 /// <param name="tokenRegistry">Records the grant as revoked.</param>
 /// <param name="clientInfoProvider">Finds the client whose refresh and access token lifetimes bound the grant.</param>
-public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoProvider clientInfoProvider)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoProvider clientInfoProvider, ITenantAccessor tenantAccessor)
 {
     /// <summary>
     /// Revokes the grant <paramref name="refreshToken"/> was issued under; a token naming no grant revokes nothing.
@@ -55,7 +57,7 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
         if (refreshToken is not { IssuedAt: { } issuedAt, ClientId: { } clientId })
             return null;
 
-        return await clientInfoProvider.TryFindClientAsync(clientId) is { } client
+        return await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId) is { } client
             ? issuedAt + client.RefreshToken.AbsoluteExpiresIn + client.AccessTokenExpiresIn
             : null;
     }

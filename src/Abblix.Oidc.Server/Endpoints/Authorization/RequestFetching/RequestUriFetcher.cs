@@ -18,6 +18,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
 using AuthorizationErrorFactory = Abblix.Oidc.Server.Endpoints.Authorization.Validation.ErrorFactory;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
@@ -31,10 +32,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
 /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
 /// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
     IClientInfoProvider clientInfoProvider,
-    ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
+    ISecureHttpFetcher secureHttpFetcher,
+    ITenantAccessor tenantAccessor) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously fetches the authorization request object from the given request URI.
@@ -77,7 +80,7 @@ public partial class RequestUriFetcher(
                 ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);

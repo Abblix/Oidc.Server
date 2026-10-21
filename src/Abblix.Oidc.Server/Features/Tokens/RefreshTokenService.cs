@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -43,6 +44,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
 /// </param>
 /// <param name="issuerSettings">Provides the issuer's licensing state for the token it signs.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
     Justification = "Every dependency is used: the token's issuer, clock, identifier, format, registry, grant revocation, rotation policy and subject each come from their own service, the server's options carry the service-token policy, and the issuer's settings the licensing state the issuer claim is checked against.")]
 public class RefreshTokenService(
@@ -55,7 +57,8 @@ public class RefreshTokenService(
 	RefreshTokenRotationPolicy rotationPolicy,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
-	IIssuerSettings issuerSettings) : IRefreshTokenService
+	IIssuerSettings issuerSettings,
+	ITenantAccessor tenantAccessor) : IRefreshTokenService
 {
 	/// <inheritdoc />
 	public async Task<bool> TrySpendAsync(JsonWebToken refreshToken, ClientInfo clientInfo)
@@ -156,7 +159,7 @@ public class RefreshTokenService(
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
 		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.
-		newToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
+		newToken.Payload.Subject = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
 
 		var encoded = await jwtFormatter.FormatAsync(
 			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
@@ -205,7 +208,7 @@ public class RefreshTokenService(
 		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
 		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
 		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo);
+		var subject = subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
 		if (subject is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the

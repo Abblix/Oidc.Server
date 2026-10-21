@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Common.Interfaces;
 
@@ -26,21 +27,25 @@ public static partial class AuthServiceKeysProviderExtensions
     /// never leak a private key, even if an upstream provider mistakenly returns one.
     /// </summary>
     /// <param name="provider">The provider of the service's signing and encryption keys.</param>
+    /// <param name="tenant">The tenant whose keys are published.</param>
     /// <param name="logger">Logger used to warn when a private key is stripped before publication.</param>
     /// <returns>The signing keys followed by the asymmetric encryption public keys.</returns>
-    public static async Task<JsonWebKey[]> GetPublishedKeysAsync(this IAuthServiceKeysProvider provider, ILogger logger)
+    public static async Task<JsonWebKey[]> GetPublishedKeysAsync(
+        this IAuthServiceKeysProvider provider,
+        TenantDefinition tenant,
+        ILogger logger)
     {
         // Strip any private material first, then keep only keys that still have a publishable public half. A
         // symmetric key's only material is its shared secret, so once stripped it has nothing left to publish and
         // is dropped here: it can never reach the public JWKS, even if a provider hands it over carrying the secret.
         // Each surviving key is then stamped with its role's use, so every published key is explicitly labeled.
-        var signingKeys = await provider.GetSigningKeys()
+        var signingKeys = await provider.GetSigningKeys(tenant)
             .Select(key => PublicOnly(key, logger))
             .Where(key => key.HasPublicKey)
             .Select(key => key with { Usage = PublicKeyUsages.Signature })
             .ToArrayAsync();
 
-        var encryptionKeys = await provider.GetEncryptionKeys()
+        var encryptionKeys = await provider.GetEncryptionKeys(tenant)
             .Select(key => PublicOnly(key, logger))
             .Where(key => key.HasPublicKey)
             .Select(key => key with { Usage = PublicKeyUsages.Encryption })

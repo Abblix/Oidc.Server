@@ -24,7 +24,6 @@ internal static class TenantValidationServiceCollectionExtensions
     {
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantListValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantRegistriesValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantSecurityEventsValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantServicesValidator>(),
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServerWideCustodianKeysValidator>(),

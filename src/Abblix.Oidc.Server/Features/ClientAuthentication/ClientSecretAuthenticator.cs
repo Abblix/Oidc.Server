@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -26,7 +27,8 @@ public abstract partial class ClientSecretAuthenticator(
 	ILogger<ClientSecretAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService)
+	IHashService hashService,
+	ITenantAccessor tenantAccessor)
 {
 	/// <summary>
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
@@ -45,7 +47,7 @@ public abstract partial class ClientSecretAuthenticator(
 			return null;
 		}
 
-		var client = await clientInfoProvider.TryFindClientAsync(clientId);
+		var client = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
 		if (client == null)
 		{
 			LogClientNotFound(clientId);

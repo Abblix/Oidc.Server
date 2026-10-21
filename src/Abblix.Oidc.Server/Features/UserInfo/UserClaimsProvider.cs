@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.UserInfo;
 
@@ -29,11 +30,13 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// </param>
 /// <param name="subjectTypeConverter">The converter used to translate user identifiers into subject types as
 /// required by different client configurations.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class UserClaimsProvider(
     ILogger<UserClaimsProvider> logger,
     IUserInfoProvider userInfoProvider,
     IScopeClaimsProvider scopeClaimsProvider,
-    ISubjectTypeConverter subjectTypeConverter) : IUserClaimsProvider
+    ISubjectTypeConverter subjectTypeConverter,
+    ITenantAccessor tenantAccessor) : IUserClaimsProvider
 {
     /// <summary>
     /// Asynchronously retrieves structured user claims based on an authentication session and specific claim parameters.
@@ -66,7 +69,7 @@ public partial class UserClaimsProvider(
             return null;
         }
 
-        var subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
+        var subject = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
         userInfo.SetProperty(JwtClaimTypes.Subject, subject);
 
         return userInfo;

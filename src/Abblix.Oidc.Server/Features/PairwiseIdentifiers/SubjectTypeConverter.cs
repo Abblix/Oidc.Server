@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 /// authenticated encryption keyed by the pairwise salt and bound to the sector as associated data, so different
 /// sectors seal the same user to unlinkable values and a pseudonym cannot be opened under the wrong sector.
 /// </summary>
-public class SubjectTypeConverter : ISubjectTypeConverter
+public class SubjectTypeConverter
 {
     private readonly DeterministicAeadEncryptor? _encryptor;
 

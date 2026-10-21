@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ScopeManagement;
 
@@ -24,6 +25,7 @@ public static class ScopeManagerExtensions
     /// definitions.
     /// </summary>
     /// <param name="scopeManager">The scope manager that maintains the definitions of scopes.</param>
+    /// <param name="tenant">The tenant whose scopes the request is judged against.</param>
     /// <param name="scopes">A collection of scope identifiers to be validated.</param>
     /// <param name="resources">An optional array of <see cref="ResourceDefinition"/> objects to validate scopes
     /// against.</param>
@@ -37,6 +39,7 @@ public static class ScopeManagerExtensions
     /// <returns>True if all requested scopes are valid and permissible, false otherwise.</returns>
     public static bool Validate(
         this IScopeManager scopeManager,
+        TenantDefinition tenant,
         IEnumerable<string> scopes,
         ResourceDefinition[]? resources,
         string[]? allowedClientScopes,
@@ -68,7 +71,7 @@ public static class ScopeManagerExtensions
             }
 
             // Check if the scope is recognized by the scope manager
-            if (scopeManager.TryGet(scope, out var scopeDefinition))
+            if (scopeManager.TryGet(tenant, scope, out var scopeDefinition))
             {
                 scopeList.Add(scopeDefinition);
             }

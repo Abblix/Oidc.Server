@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 
@@ -25,9 +26,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
 /// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider) : IAuthorizationContextValidator
+    IClientInfoProvider clientInfoProvider,
+    ITenantAccessor tenantAccessor) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client specified in the authorization request.
@@ -48,7 +51,7 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);

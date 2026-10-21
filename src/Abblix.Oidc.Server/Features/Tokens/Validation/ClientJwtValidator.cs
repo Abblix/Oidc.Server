@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -42,6 +43,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// a client without one of its own falls back to.</param>
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
     Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the issuer's settings carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
@@ -53,7 +55,8 @@ public partial class ClientJwtValidator(
     IIssuerProvider issuerProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
     IIssuerSettings issuerSettings,
-    TimeProvider timeProvider) : IClientJwtValidator
+    TimeProvider timeProvider,
+    ITenantAccessor tenantAccessor) : IClientJwtValidator
 {
     private SecurityProfileRequirements Profile
         => SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile);
@@ -75,7 +78,7 @@ public partial class ClientJwtValidator(
         TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, clientJwksProvider);
+        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenantAccessor.CurrentTenant());
 
         var result = await tokenValidator.ValidateAsync(
             jwt,
@@ -90,7 +93,7 @@ public partial class ClientJwtValidator(
                 // the server's own private keys; the inner JWS is then verified with the client's key
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
                 // only runs for an actual JWE token).
-                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenantAccessor.CurrentTenant(), true),
                 // The tolerance belongs to the profile this deployment is held to, ceiling
                 // included.
                 ClockSkew = Profile.ClockSkewOrDefault(),
@@ -110,7 +113,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt);
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientIdFromJwt);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -195,7 +198,8 @@ public partial class ClientJwtValidator(
     /// </summary>
     private sealed class ValidationContext(
         IClientInfoProvider clientInfoProvider,
-        IClientKeysProvider clientJwksProvider)
+        IClientKeysProvider clientJwksProvider,
+        TenantDefinition tenant)
     {
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
@@ -230,7 +234,7 @@ public partial class ClientJwtValidator(
             if (!_clientLookupPerformed)
             {
                 // Attempt to find the client by issuer
-                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer);
+                ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, issuer);
                 _clientLookupPerformed = true;
             }
 
