@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace Abblix.Oidc.Server.Mvc.Filters;
 
 /// <summary>
-/// Answers 404 to a request that multi-tenancy left without a tenant, before the action runs.
+/// Answers 404 to a request no tenant was resolved for, before the action runs.
 /// </summary>
 /// <remarks>
 /// A resource filter: it runs after the authorization filters an OpenID controller carries - the HTTPS

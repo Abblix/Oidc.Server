@@ -39,7 +39,7 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
             MintedKeysProvider => Unread(tenants, "the server mints the keys"),
 
-            // A key provider of the host's own is refused under multi-tenancy by the check of the registries
+            // A key provider of the host's own answers for each tenant's keys itself, so nothing here judges them
             _ => [],
         };
 

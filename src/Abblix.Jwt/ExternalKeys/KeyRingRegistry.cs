@@ -84,7 +84,8 @@ internal sealed class KeyRingRegistry(KeyRingFactory factory, KeyRingSetup setup
     /// <paramref name="partition"/>, when the ring keeps it.
     /// </summary>
     /// <remarks>
-    /// The refusal counts the partitions kept rather than naming them: under multi-tenancy they name every tenant.
+    /// The refusal counts the partitions kept rather than naming them: on a server keeping a partition for each tenant
+    /// they name every tenant.
     /// </remarks>
     private string Kept(string partition)
     {

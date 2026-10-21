@@ -12,8 +12,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Keeps the clients dynamic client registration adds (RFC 7591) under multi-tenancy, for a host that keeps them
-/// itself, each with the identifier of the registration access token that manages it (RFC 7592).
+/// Keeps the clients dynamic client registration adds (RFC 7591), for a host that keeps them itself, each with the identifier of the registration access token that manages it (RFC 7592).
 /// </summary>
 /// <remarks>
 /// Every call names the tenant of the request, and a registration is kept and found under that tenant's

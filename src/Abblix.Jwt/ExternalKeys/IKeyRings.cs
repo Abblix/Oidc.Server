@@ -29,8 +29,7 @@ public interface IKeyRings
     /// </param>
     /// <param name="cancellationToken">Cancels the opening of those not opened yet.</param>
     /// <returns>Why each partition that could not be opened was not, by its name: a name that cannot name a
-    /// partition, keys adopted into the ring, which only the unnamed partition takes, or the store or the custodian
-    /// failing. The others are ready.</returns>
+    /// partition, or the store or the custodian failing. The others are ready.</returns>
     Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken);

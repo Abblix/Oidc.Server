@@ -16,7 +16,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses at startup a multi-tenant server that signs security event tokens with one key for every tenant.
+/// Refuses at startup a server that signs security event tokens with one key for every tenant.
 /// </summary>
 /// <remarks>
 /// A transmitter of security events cannot start without a signer, so refusing a signer that is not the tenants'
@@ -40,8 +40,8 @@ public sealed class TenantSecurityEventsValidator(IServiceProvider serviceProvid
         {
             return ValidateOptionsResult.Fail(
                 $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.SigningKeySource)} gives one key " +
-                "for every tenant, so each tenant's security events would be signed alike. Under multi-tenancy " +
-                $"leave it unset and register {nameof(TenantSecurityEventTokenSigner)} as the " +
+                "for every tenant, so each tenant's security events would be signed alike. " +
+                $"Leave it unset and register {nameof(TenantSecurityEventTokenSigner)} as the " +
                 $"{nameof(ISecurityEventTokenSigner)}; " + SharedSignalsTransmitter);
         }
 
@@ -49,7 +49,7 @@ public sealed class TenantSecurityEventsValidator(IServiceProvider serviceProvid
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(
                 $"{nameof(ISecurityEventTokenSigner)} is the host's own, which signs every tenant's security events " +
-                $"alike. Under multi-tenancy register {nameof(TenantSecurityEventTokenSigner)} instead; " +
+                $"alike. Register {nameof(TenantSecurityEventTokenSigner)} instead; " +
                 SharedSignalsTransmitter);
     }
 

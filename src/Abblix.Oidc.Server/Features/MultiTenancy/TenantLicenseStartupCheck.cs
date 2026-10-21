@@ -94,8 +94,7 @@ internal sealed class TenantLicenseStartupCheck(
         catch (TimeoutException exception)
         {
             throw new InvalidOperationException(
-                "The license was not loaded in time to judge the tenants the settings declare against it. " +
-                "Register the server's services before multi-tenancy, so the license is loaded first.",
+                "The license was not loaded in time to judge the tenants the settings declare against it.",
                 exception);
         }
     }

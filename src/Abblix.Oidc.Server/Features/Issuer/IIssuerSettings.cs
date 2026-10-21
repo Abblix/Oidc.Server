@@ -17,15 +17,14 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 /// every issuer of a deployment shares.
 /// </summary>
 /// <remarks>
-/// A deployment serving one issuer takes them from <see cref="OidcOptions"/>; under multi-tenancy each tenant is an
-/// issuer and declares its own. A service that builds something from them once keeps it in an
+/// Each tenant is an issuer and declares its own. A service that builds something from them once keeps it in an
 /// <see cref="IIssuerLocal{T}"/>, so that each issuer gets one built from its own settings.
 /// </remarks>
 public interface IIssuerSettings
 {
     /// <summary>
-    /// Tells the issuer apart from the others a deployment serves: a tenant's id, or empty for a server without
-    /// tenants. It is declared, never taken from a request.
+    /// Tells the issuer apart from the others a deployment serves: its tenant's id. It is declared, never taken
+    /// from a request.
     /// </summary>
     string Id { get; }
 
@@ -37,8 +36,7 @@ public interface IIssuerSettings
     /// <summary>
     /// Canceled once the issuer is gone for good, so a service keeping something in memory for it lets that go:
     /// for a tenant, at least one refresh period after its store stopped listing it, so a request under way finishes
-    /// first; never for a server without tenants, nor for the tenants of a catalog of the host's own, which the
-    /// server cannot tell are gone.
+    /// first; never for the tenants of a catalog of the host's own, which the server cannot tell are gone.
     /// </summary>
     CancellationToken Released { get; }
 

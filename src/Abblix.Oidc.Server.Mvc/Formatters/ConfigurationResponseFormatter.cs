@@ -172,7 +172,7 @@ public class ConfigurationResponseFormatter(
 	/// </summary>
 	/// <remarks>
 	/// The host is compared as a tenant is resolved by it, so whatever request reaches the tenant on its mutual-TLS host
-	/// is answered so. A server without tenants whose mutual-TLS host differs from its ordinary one only by port
+	/// is answered so. An issuer whose mutual-TLS host differs from its ordinary one only by port
 	/// therefore names the ordinary endpoints on the issuer's host on either.
 	/// </remarks>
 	private Uri? OnIssuersHost(Uri? endpoint, Uri issuer)

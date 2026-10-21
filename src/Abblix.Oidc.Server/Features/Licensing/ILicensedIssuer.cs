@@ -16,8 +16,8 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 internal interface ILicensedIssuer
 {
     /// <summary>
-    /// The tenant the issuer serves, counted as one place wherever its address moves; empty on a server without
-    /// tenants, and null when the server cannot vouch for the tenant because a catalog of the host's own resolved it.
+    /// The tenant the issuer serves, counted as one place wherever its address moves; null when the server cannot
+    /// vouch for the tenant because a catalog of the host's own resolved it.
     /// </summary>
     string? VouchedId { get; }
 

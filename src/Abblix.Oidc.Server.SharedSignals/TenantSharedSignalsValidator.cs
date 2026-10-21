@@ -16,7 +16,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.SharedSignals;
 
 /// <summary>
-/// Refuses to start a multi-tenant server whose transmitter would share anything between tenants.
+/// Refuses to start a server whose transmitter would share anything between tenants.
 /// </summary>
 /// <remarks>
 /// Each part the transmitter keeps per tenant is checked as resolved, so a registration made after
@@ -51,8 +51,8 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
         if (!Uri.TryCreate(transmitter.Issuer, UriKind.Absolute, out var issuerUri) || issuerUri.AbsolutePath != "/")
         {
             failures.Add(
-                $"The transmitter's issuer '{transmitter.Issuer}' must name the host without a path under "
-                + "multi-tenancy: each tenant's addresses are its paths put under the tenant's own issuer.");
+                $"The transmitter's issuer '{transmitter.Issuer}' must name the host without a path: "
+                + "each tenant's addresses are its paths put under the tenant's own issuer.");
         }
         else if (transmitter.JwksUri is { IsAbsoluteUri: false } relativeJwksUri)
         {
@@ -65,7 +65,7 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
                      StringComparison.OrdinalIgnoreCase) != 0)
         {
             failures.Add(
-                $"The transmitter's key set address '{jwksUri}' must be on the issuer's host under multi-tenancy: "
+                $"The transmitter's key set address '{jwksUri}' must be on the issuer's host: "
                 + "each tenant's key set is served at that path under the tenant's own issuer.");
         }
 

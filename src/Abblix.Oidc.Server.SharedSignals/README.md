@@ -1,8 +1,8 @@
 # Abblix.OIDC.Server.SharedSignals
 
-Runs an [Abblix Shared Signals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter on a multi-tenant Abblix OIDC Server, so that each tenant transmits as itself.
+Runs an [Abblix Shared Signals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter on an Abblix OIDC Server, so that each tenant transmits as itself.
 
-Under multi-tenancy each tenant of the server is an issuer of its own, and a transmitter answering for all of them alike would let one tenant's receivers see another's streams and receive events signed in the name of the wrong issuer. This package keeps them apart:
+Each tenant of the server is an issuer of its own, and a transmitter answering for all of them alike would let one tenant's receivers see another's streams and receive events signed in the name of the wrong issuer. This package keeps them apart:
 
 - each tenant's streams are kept apart from the others' in whatever store the transmitter uses, and its queued events are reached only through those streams;
 - the issuer, the key set address and the endpoint addresses a tenant's receivers see are that tenant's;
@@ -12,7 +12,7 @@ Under multi-tenancy each tenant of the server is an issuer of its own, and a tra
 
 ## Turning it on
 
-Register the transmitter and the stores it uses first, then turn on multi-tenancy and the transmitter's part in it:
+Register the transmitter and the stores it uses first, then the server and the transmitter's part in it:
 
 ```csharp
 using Abblix.Jwt;
@@ -56,6 +56,11 @@ A request that reaches no tenant is answered 404. A receiver is accepted only wi
 A tenant can declare its streams in configuration instead of letting its receivers create them. The declared streams are that tenant's stream set, and only its receivers find them:
 
 ```csharp
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.MinimalApi;
+using Abblix.Oidc.Server.SharedSignals;
+using Abblix.SharedSignals.Transmitter;
+
 builder.Services
     .AddOidcServices(options => options.Tenants.Add(acme))
     .AddSharedSignals()

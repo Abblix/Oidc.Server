@@ -75,9 +75,8 @@ public static partial class LicenseChecker
     /// A client is counted where a token is issued to it, by the client and the issuer the token names, so every
     /// client a token is issued to is counted and two tenants registering a client under one id take two places. A
     /// client of a tenant the server's own catalog serves stops counting once the tenant is released, once the tenant's
-    /// definition stops configuring it, or once it is removed through registration; on a server without tenants, once it is removed through registration or dropped by
-    /// a reload of the settings, served by the reloadable client store. A client counted under any other settings stays
-    /// counted for the life of the process.
+    /// definition stops configuring it, or once it is removed through registration. A client counted under any other
+    /// settings stays counted for the life of the process.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The issuer is beyond the license's terms, or the client is beyond
     /// its client limit by more than the margin.</exception>
@@ -223,8 +222,8 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// The tenant the server's own settings vouch for: empty on a server without tenants, and null for settings a
-    /// host registers or a tenant a catalog of the host's own resolved, which are counted by the issuer they serve.
+    /// The tenant the server's own settings vouch for, and null for settings a host registers or a tenant a catalog
+    /// of the host's own resolved, which are counted by the issuer they serve.
     /// </summary>
     /// <remarks>
     /// Settings a host registers answer for themselves, and taking their word would let one answer count every
@@ -241,7 +240,7 @@ public static partial class LicenseChecker
 
     /// <summary>
     /// The issuer the clients of <paramref name="settings"/> are counted with, when the server can tell it without a
-    /// token: the tenant its own settings vouch for, or none on a server without tenants. Null for any other
+    /// token: the tenant its own settings vouch for. Null for any other
     /// settings, whose clients are counted with the issuer each token names and are not taken off the count.
     /// </summary>
     internal static string? ClientIssuerOf(IIssuerSettings settings) => VouchedId(settings);
@@ -252,8 +251,8 @@ public static partial class LicenseChecker
     /// </summary>
     /// <remarks>
     /// A request that found one of them before the release counts it again, and it then stays counted until its
-    /// issuer is released, for the life of the process when the deployment serves one issuer; with the count past the
-    /// margin, such a request is refused instead.
+    /// issuer is released, or for the life of the process where it never is; with the count past the margin, such a
+    /// request is refused instead.
     /// </remarks>
     internal static void ReleaseClients(string issuerId, IEnumerable<string> clientIds)
     {
@@ -319,8 +318,7 @@ public static partial class LicenseChecker
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
     /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
     /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; settings other than
-    /// those of a tenant the server's own catalog serves, a server's without tenants included, are counted by the
-    /// issuer string and never released.</param>
+    /// those of a tenant the server's own catalog serves are counted by the issuer string and never released.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer, IIssuerSettings settings)
     {

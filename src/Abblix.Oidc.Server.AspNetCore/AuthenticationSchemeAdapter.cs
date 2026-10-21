@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// enabling the use of existing authentication schemes to manage OIDC sessions.
 /// </summary>
 /// <remarks>
-/// On a server with tenants a session belongs to the tenant it was signed in at. A cookie the browser carries to
+/// A session belongs to the tenant it was signed in at. A cookie the browser carries to
 /// another tenant reads there as no session, and a sign-in there writes over it without ending it, so the clients of
 /// the first tenant are not told; keeping each tenant's cookie to its own host and path keeps both.
 /// </remarks>

@@ -104,9 +104,8 @@ public class SubjectTypeConverter
 
     private DeterministicAeadEncryptor Encryptor(ClientInfo clientInfo)
         => _encryptor ?? throw new InvalidOperationException(
-            "A pairwise key must be configured to use pairwise subject identifiers - PairwiseSubjectSettings for " +
-            "a server without tenants, the tenant's PairwiseSubject under multi-tenancy (client " +
-            $"'{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType}).");
+            "A pairwise key must be configured to use pairwise subject identifiers - the tenant's PairwiseSubject " +
+            $"(client '{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType}).");
 
     /// <summary>
     /// The sector the pseudonym is bound to (OIDC Core Section 8.1), as associated-data bytes.
