@@ -114,7 +114,7 @@ internal sealed partial class TenantCreations(
     public IReadOnlyCollection<TenantDefinition> Track(IEnumerable<TenantDefinition> listed, TimeSpan pause)
     {
         var spaces = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var tenant in listed.Where(tenant => !string.IsNullOrEmpty(tenant.Id)))
+        foreach (var tenant in listed.Where(TenantKey.IsNamed))
         {
             var space = TenantKey.SpaceOf(tenant);
             spaces.Add(space);

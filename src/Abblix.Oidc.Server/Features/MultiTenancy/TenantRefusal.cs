@@ -23,4 +23,17 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
     /// A refusal of <paramref name="tenant"/> alone.
     /// </summary>
     public static TenantRefusal Of(TenantDefinition tenant, string message) => new([tenant.Id], message);
+
+    /// <summary>
+    /// Everything that refuses tenants in <paramref name="tenants"/>: a tenant that cannot name its data, as
+    /// <see cref="TenantKey.Unnamed"/> tells, and whatever <paramref name="checks"/> refuse.
+    /// </summary>
+    /// <remarks>
+    /// Every way a tenant enters the server judges it by this, so the host's choice of checks never lets in a tenant
+    /// that would share another's data.
+    /// </remarks>
+    internal static IEnumerable<TenantRefusal> AllOf(
+        IEnumerable<ITenantsCheck> checks,
+        IReadOnlyCollection<TenantDefinition> tenants)
+        => TenantKey.Unnamed(tenants).Concat(from check in checks from refusal in check.Check(tenants) select refusal);
 }

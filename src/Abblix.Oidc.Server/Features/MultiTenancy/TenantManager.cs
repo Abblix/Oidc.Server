@@ -249,8 +249,7 @@ public sealed partial class TenantManager(
         ];
 
         var messages = (
-            from check in checks
-            from refusal in check.Check(candidate)
+            from refusal in TenantRefusal.AllOf(checks, candidate)
             where refusal.TenantIds.Contains(changed.Id, StringComparer.Ordinal)
             select refusal.Message
         ).ToArray();

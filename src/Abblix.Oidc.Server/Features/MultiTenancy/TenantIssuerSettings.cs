@@ -96,11 +96,11 @@ public sealed class TenantIssuerSettings(
     /// <inheritdoc />
     /// <remarks>
     /// The configured name with the tenant's id after it, since tenants sharing a host share its cookies and each
-    /// would otherwise overwrite the session the others' check-session pages read. The id is escaped to the
+    /// would otherwise overwrite the session the others' check-session pages read. A tenant's id holds only
     /// characters a cookie name may hold.
     /// </remarks>
     public string CheckSessionCookieName
-        => $"{options.CurrentValue.CheckSessionCookie.Name}.{Uri.EscapeDataString(Tenant.Id)}";
+        => $"{options.CurrentValue.CheckSessionCookie.Name}.{TenantKey.IdOf(Tenant)}";
 
     /// <inheritdoc />
     public IReadOnlyCollection<JsonWebKey> SigningKeys => Tenant.SigningKeys;
