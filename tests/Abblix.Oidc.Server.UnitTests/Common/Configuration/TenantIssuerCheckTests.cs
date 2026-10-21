@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -16,15 +18,18 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// The configured issuer is an https URL with no query or fragment (OpenID Connect Core 1.0 section 1.2); an http one
-/// is let through only when the deployment allows it for local development.
+/// A tenant's issuer is an https URL with no query or fragment (OpenID Connect Core 1.0 section 1.2), judged by
+/// <see cref="TenantDefinitionsCheck"/>; an http one is let through only when the deployment allows it for local
+/// development.
 /// </summary>
-public class IssuerOptionsValidatorTests
+public class TenantIssuerCheckTests
 {
     private static bool Refused(string issuer, bool allowHttp = false)
-        => new IssuerOptionsValidator()
-            .Validate(null, new OidcOptions { Issuer = new Uri(issuer, UriKind.RelativeOrAbsolute), AllowHttpIssuer = allowHttp })
-            .Failed;
+        => new TenantDefinitionsCheck()
+            .Check(
+                [new TenantDefinition { Id = "acme", Issuer = new Uri(issuer, UriKind.RelativeOrAbsolute) }],
+                new OidcOptions { AllowHttpIssuer = allowHttp })
+            .Any();
 
     [Theory]
     [InlineData("https://auth.example.com")]
@@ -61,23 +66,35 @@ public class IssuerOptionsValidatorTests
         => Assert.True(Refused(issuer, allowHttp: true));
 
     /// <summary>
-    /// The check is part of what the server registers, so an http issuer stops it when its settings are read.
+    /// The check is part of what the server registers for its tenants, so an http issuer stops it when its settings
+    /// are read.
     /// </summary>
     [Fact]
     public void TheServerRefusesAnHttpIssuer_WhenItsSettingsAreRead()
     {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = new Uri("http://localhost:5000"));
-        services.AddIssuer();
-        using var provider = services.BuildServiceProvider();
+        using var provider = ServerServing("http://localhost:5000");
 
         Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
     }
 
     /// <summary>
-    /// With no issuer configured the server takes it from each request, so there is nothing to judge at startup.
+    /// The same tenant at an https issuer is read without a refusal, so the case above is about the scheme rather
+    /// than about a registration that refuses every tenant.
     /// </summary>
     [Fact]
-    public void NoIssuer_IsAccepted()
-        => Assert.False(new IssuerOptionsValidator().Validate(null, new OidcOptions()).Failed);
+    public void TheServerReadsAnHttpsIssuer_WithoutARefusal()
+    {
+        using var provider = ServerServing("https://auth.example.com");
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
+    }
+
+    private static ServiceProvider ServerServing(string issuer)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>().Configure(
+            options => options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = new Uri(issuer) }));
+        services.AddTenants();
+        return services.BuildServiceProvider();
+    }
 }

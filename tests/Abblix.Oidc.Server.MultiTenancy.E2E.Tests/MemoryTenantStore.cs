@@ -9,8 +9,6 @@
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 

@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
@@ -24,7 +25,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.Consents;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -71,7 +71,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
-        builder.Services.AddMultiTenancy(options =>
+        builder.Services.Configure<OidcOptions>(options =>
         {
             options.Tenants.Add(new TenantDefinition
             {

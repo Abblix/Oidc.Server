@@ -111,7 +111,7 @@ public class ClientMayTightenItselfTests
             new Mock<IClientKeysProvider>().Object,
             issuerProvider.Object,
             serviceKeys.Object,
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = deploymentProfile })),
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = deploymentProfile })),
             new FakeTimeProvider(Now));
 
         return await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller, options);

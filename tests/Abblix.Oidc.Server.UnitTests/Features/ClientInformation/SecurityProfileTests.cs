@@ -9,19 +9,33 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
 /// <summary>
 /// Unit tests for the security-profile core: the control bundle a profile resolves to, the
-/// effective-profile fallback from client to server default, and the fail-loud response-type
+/// effective-profile fallback from client to the tenant's default, and the fail-loud response-type
 /// self-consistency check.
 /// </summary>
 public class SecurityProfileTests
 {
+    private static TenantDefinition Tenant(ClientSecurityProfile defaultProfile, params ClientInfo[] clients) => new()
+    {
+        Id = "acme",
+        Issuer = TestConstants.DefaultIssuer,
+        DefaultSecurityProfile = defaultProfile,
+        Clients = clients,
+    };
+
+    private static List<TenantRefusal> Check(TenantDefinition tenant)
+        => new SecurityProfileCheck().Check([tenant], new OidcOptions()).ToList();
+
     [Fact]
     public void Resolve_None_RequiresNothing()
     {
@@ -148,44 +162,35 @@ public class SecurityProfileTests
     }
 
     [Fact]
-    public void OptionsValidator_ConsistentFapi2Client_Succeeds()
+    public void Check_ConsistentFapi2Client_Passes()
     {
-        var options = new OidcOptions
-        {
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    SecurityProfile = ClientSecurityProfile.Fapi2,
-                    AllowedResponseTypes = [[ResponseTypes.Code]],
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.None,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.Fapi2,
+                AllowedResponseTypes = [[ResponseTypes.Code]],
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Succeeded);
+        Assert.Empty(Check(tenant));
     }
 
     [Fact]
-    public void OptionsValidator_InconsistentFapi2Client_Fails()
+    public void Check_InconsistentFapi2Client_Refuses()
     {
-        var options = new OidcOptions
-        {
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    SecurityProfile = ClientSecurityProfile.Fapi2,
-                    AllowedResponseTypes = [[ResponseTypes.IdToken]],
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.None,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.Fapi2,
+                AllowedResponseTypes = [[ResponseTypes.IdToken]],
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+        var refusals = Check(tenant);
 
-        Assert.True(result.Failed);
+        Assert.NotEmpty(refusals);
+        Assert.All(refusals, refusal => Assert.Equal("acme", Assert.Single(refusal.TenantIds)));
     }
 
     /// <summary>
@@ -193,29 +198,23 @@ public class SecurityProfileTests
     /// the client's profile is authoritative and None imposes nothing, so startup validation passes.
     /// </summary>
     [Fact]
-    public void OptionsValidator_UnprofiledClientWithHybrid_Succeeds()
+    public void Check_UnprofiledClientWithHybrid_Passes()
     {
-        var options = new OidcOptions
-        {
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.None,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Succeeded);
+        Assert.Empty(Check(tenant));
     }
 
     /// <summary>
     /// The floor reaches the two controls only this walk enforces. A client naming the empty
-    /// profile under a FAPI 2.0 deployment, registered to authenticate with a shared secret, is
+    /// profile under a FAPI 2.0 tenant, registered to authenticate with a shared secret, is
     /// refused at startup - the profile admits confidential clients authenticating by key, and it
-    /// admits them of every client the deployment serves.
+    /// admits them of every client the tenant serves.
     /// </summary>
     /// <remarks>
     /// These two flags have no other consumer, so a resolution that dropped the floor here would
@@ -226,133 +225,122 @@ public class SecurityProfileTests
     /// walk enforces are there to pay for.
     /// </remarks>
     [Fact]
-    public void OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndUsesASharedSecret_Fails()
+    public void Check_TenantDefaultFapi2_ClientNamesNoneAndUsesASharedSecret_Refuses()
     {
-        var options = new OidcOptions
-        {
-            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    SecurityProfile = ClientSecurityProfile.None,
-                    AllowedResponseTypes = [[ResponseTypes.Code]],
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.Fapi2,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.None,
+                AllowedResponseTypes = [[ResponseTypes.Code]],
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("private key JWT", result.FailureMessage!);
+        Assert.Contains(Check(tenant), refusal => refusal.Message.Contains("private key JWT"));
     }
 
     /// <summary>
     /// The other control this walk owns, given its own case: a client authenticating with NOTHING is
     /// the public client the profile excludes, and the floor reaches it too.
-    /// <see cref="OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndUsesASharedSecret_Fails"/> cannot
+    /// <see cref="Check_TenantDefaultFapi2_ClientNamesNoneAndUsesASharedSecret_Refuses"/> cannot
     /// stand for this one - it uses a shared secret, which is a confidential client by RFC 6749 and
     /// trips the key-based requirement alone, so removing the confidential-client arm would leave it
     /// green.
     /// </summary>
     [Fact]
-    public void OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndAuthenticatesWithNothing_Fails()
+    public void Check_TenantDefaultFapi2_ClientNamesNoneAndAuthenticatesWithNothing_Refuses()
     {
-        var options = new OidcOptions
-        {
-            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    SecurityProfile = ClientSecurityProfile.None,
-                    AllowedResponseTypes = [[ResponseTypes.Code]],
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.Fapi2,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.None,
+                AllowedResponseTypes = [[ResponseTypes.Code]],
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("confidential clients only", result.FailureMessage!);
+        Assert.Contains(Check(tenant), refusal => refusal.Message.Contains("confidential clients only"));
     }
 
     /// <summary>
-    /// The control for the shared-secret case: the same client under a deployment naming no profile
+    /// The control for the shared-secret case: the same client under a tenant naming no profile
     /// starts clean, without which that case would be satisfied by a walk refusing every
-    /// shared-secret client whatever the deployment demands.
+    /// shared-secret client whatever the tenant demands.
     /// </summary>
     [Fact]
-    public void OptionsValidator_NoGlobalDefault_ClientNamesNoneAndUsesASharedSecret_Succeeds()
+    public void Check_NoTenantDefault_ClientNamesNoneAndUsesASharedSecret_Passes()
     {
-        var options = new OidcOptions
-        {
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    SecurityProfile = ClientSecurityProfile.None,
-                    AllowedResponseTypes = [[ResponseTypes.Code]],
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.None,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.None,
+                AllowedResponseTypes = [[ResponseTypes.Code]],
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Succeeded);
+        Assert.Empty(Check(tenant));
     }
 
     /// <summary>
-    /// An unprofiled client inherits the server-wide DefaultSecurityProfile=FAPI 2.0; a hybrid
+    /// An unprofiled client inherits the tenant's DefaultSecurityProfile=FAPI 2.0; a hybrid
     /// response type then makes it inconsistent and startup validation fails.
     /// </summary>
     [Fact]
-    public void OptionsValidator_GlobalDefaultFapi2_UnprofiledHybrid_Fails()
+    public void Check_TenantDefaultFapi2_UnprofiledHybrid_Refuses()
     {
-        var options = new OidcOptions
-        {
-            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.Fapi2,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Failed);
+        Assert.NotEmpty(Check(tenant));
     }
 
     /// <summary>
-    /// A client naming the empty profile under a server-wide FAPI 2.0 default is refused at startup
-    /// for its hybrid response type, the same as one naming no profile at all. The deployment's
+    /// A client naming the empty profile under a tenant's FAPI 2.0 default is refused at startup
+    /// for its hybrid response type, the same as one naming no profile at all. The tenant's
     /// profile is a floor, and naming a profile that demands nothing adds nothing to it.
     /// </summary>
     [Fact]
-    public void OptionsValidator_ExplicitNoneUnderGlobalDefault_StillFails()
+    public void Check_ExplicitNoneUnderTenantDefault_StillRefuses()
     {
-        var options = new OidcOptions
+        var tenant = Tenant(
+            ClientSecurityProfile.Fapi2,
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.None,
+                AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            });
+
+        Assert.NotEmpty(Check(tenant));
+    }
+
+    /// <summary>
+    /// The default is a tenant's own, so a client is held to the floor of the tenant that lists it and to no
+    /// other: the same hybrid client is refused at the FAPI 2.0 tenant and passes at the tenant naming no profile.
+    /// </summary>
+    [Fact]
+    public void Check_EachTenantHoldsItsClientsToItsOwnDefault()
+    {
+        var hybrid = new ClientInfo(TestConstants.DefaultClientId)
         {
-            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
-            Clients =
-            [
-                new ClientInfo(TestConstants.DefaultClientId)
-                {
-                    SecurityProfile = ClientSecurityProfile.None,
-                    AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
-                },
-            ],
+            AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+        };
+        var strict = Tenant(ClientSecurityProfile.Fapi2, hybrid);
+        var lenient = new TenantDefinition
+        {
+            Id = "globex",
+            Issuer = new Uri("https://globex.example.com"),
+            Clients = [hybrid],
         };
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+        var refusals = new SecurityProfileCheck().Check([strict, lenient], new OidcOptions()).ToList();
 
-        Assert.True(result.Failed);
+        Assert.NotEmpty(refusals);
+        Assert.All(refusals, refusal => Assert.Equal("acme", Assert.Single(refusal.TenantIds)));
     }
 
     /// <summary>
@@ -503,74 +491,65 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// The configuration binder binds a NUMBER outside an enum's range as it stands - only a name it
-    /// does not know throws - so a profile value nothing defines reaches the options object. Startup
-    /// has to name it: every reader of the profile refuses such a value, and without this check the
-    /// deployment starts and answers 500 to the first request that carries a client.
+    /// The library's own profiles pass the same walk at startup, through the validator a server registers, so a
+    /// profile edited into an unpaid relaxation stops the server rather than shipping.
     /// </summary>
     [Fact]
-    public void Validate_UndefinedDefaultProfile_Fails()
+    public void RelaxationsValidator_ShippedProfiles_Succeeds()
     {
-        // With a client on the options, because a validator holding no clients never resolves the
-        // default at all: the case this check is for is a deployment that HAS clients inheriting it.
-        var options = new OidcOptions
-        {
-            DefaultSecurityProfile = (ClientSecurityProfile)7,
-            Clients =
-            [
-                new ClientInfo("client-1")
-                {
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-                },
-            ],
-        };
-
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("DefaultSecurityProfile"));
+        Assert.True(new SecurityProfileRelaxationsValidator().Validate(null, new OidcOptions()).Succeeded);
     }
 
     /// <summary>
-    /// The same for a client naming its own profile, and it is checked whether or not the server-wide
+    /// The configuration binder binds a NUMBER outside an enum's range as it stands - only a name it
+    /// does not know throws - so a profile value nothing defines reaches the tenant's definition. Startup
+    /// has to name it: every reader of the profile refuses such a value, and without this check the
+    /// tenant starts and answers 500 to the first request that carries a client.
+    /// </summary>
+    [Fact]
+    public void Check_UndefinedDefaultProfile_Refuses()
+    {
+        // With a client on the tenant, because the case this check is for is a tenant that HAS clients
+        // inheriting the default, and each of them must be named without the walk resolving the value.
+        var tenant = Tenant(
+            (ClientSecurityProfile)7,
+            new ClientInfo("client-1")
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            });
+
+        Assert.Contains(Check(tenant), refusal => refusal.Message.Contains("DefaultSecurityProfile"));
+    }
+
+    /// <summary>
+    /// The same for a client naming its own profile, and it is checked whether or not the tenant's
     /// default is sound.
     /// </summary>
     [Fact]
-    public void Validate_UndefinedClientProfile_Fails()
+    public void Check_UndefinedClientProfile_Refuses()
     {
-        var options = new OidcOptions
-        {
-            Clients =
-            [
-                new ClientInfo("client-1")
-                {
-                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-                    SecurityProfile = (ClientSecurityProfile)9,
-                },
-            ],
-        };
+        var tenant = Tenant(
+            ClientSecurityProfile.None,
+            new ClientInfo("client-1")
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                SecurityProfile = (ClientSecurityProfile)9,
+            });
 
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("client-1"));
+        Assert.Contains(Check(tenant), refusal => refusal.Message.Contains("client-1"));
     }
 
     /// <summary>
-    /// Both defined profiles pass, which is what keeps <see cref="Validate_UndefinedDefaultProfile_Fails"/>
-    /// and <see cref="Validate_UndefinedClientProfile_Fails"/> from being a check that refuses every
-    /// configuration.
+    /// Both defined profiles pass, which is what keeps <see cref="Check_UndefinedDefaultProfile_Refuses"/>
+    /// and <see cref="Check_UndefinedClientProfile_Refuses"/> from being a check that refuses every
+    /// tenant.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.None)]
     [InlineData(ClientSecurityProfile.Fapi2)]
-    public void Validate_DefinedProfile_Succeeds(ClientSecurityProfile profile)
+    public void Check_DefinedProfile_Passes(ClientSecurityProfile profile)
     {
-        var options = new OidcOptions { DefaultSecurityProfile = profile };
-
-        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
-
-        Assert.True(result.Succeeded);
+        Assert.Empty(Check(Tenant(profile)));
     }
 
     /// <summary>

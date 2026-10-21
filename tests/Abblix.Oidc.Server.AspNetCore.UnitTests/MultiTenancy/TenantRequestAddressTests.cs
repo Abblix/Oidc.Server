@@ -13,8 +13,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -60,22 +58,15 @@ public class TenantRequestAddressTests
     public void UnderATenant_TheRequestAddressCarriesThePathBase()
         => Assert.Equal("https://auth.example.com/tenants/globex/connect/token", RequestUriOf(Request(underTenant: true)));
 
-    [Fact]
-    public void WithoutATenant_TheRequestAddressIsWhatItAlwaysWas()
-        => Assert.Equal("https://auth.example.com/connect/token", RequestUriOf(Request(underTenant: false)));
-
     /// <summary>
-    /// Under a tenant every relative address is the tenant's: a login page addressed from the root would run
-    /// without the tenant, and the MVC transport advertises endpoints by route templates that carry no leading
-    /// slash. Without tenants both resolve as they always did.
+    /// Every relative address is the tenant's: a login page addressed from the root would run without the tenant,
+    /// and the MVC transport advertises endpoints by route templates that carry no leading slash.
     /// </summary>
     [Theory]
-    [InlineData(true, "/Auth/Login", "https://auth.example.com/tenants/globex/Auth/Login")]
-    [InlineData(true, "connect/token", "https://auth.example.com/tenants/globex/connect/token")]
-    [InlineData(false, "/Auth/Login", "https://auth.example.com/Auth/Login")]
-    [InlineData(false, "connect/token", "https://auth.example.com/tenants/connect/token")]
-    public void ARelativeAddress_IsTheTenants_OnlyUnderATenant(bool underTenant, string path, string expected)
-        => Assert.Equal(new Uri(expected), Request(underTenant).Request.ResolveInteractionUri(path));
+    [InlineData("/Auth/Login", "https://auth.example.com/tenants/globex/Auth/Login")]
+    [InlineData("connect/token", "https://auth.example.com/tenants/globex/connect/token")]
+    public void ARelativeAddress_IsTheTenants(string path, string expected)
+        => Assert.Equal(new Uri(expected), Request(underTenant: true).Request.ResolveInteractionUri(path));
 
     [Theory]
     [InlineData(true)]

@@ -19,8 +19,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -39,9 +37,8 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation();
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         using var provider = services.BuildServiceProvider();
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
@@ -72,7 +69,7 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(CancellationToken.None);
         Assert.Same(built, local.GetOrCreate(null, () => new object()));
 
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(CancellationToken.None);
         Assert.NotSame(built, local.GetOrCreate(null, () => new object()));
     }
@@ -127,7 +124,6 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantStore>(store);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider());
@@ -137,7 +133,7 @@ public partial class MultiTenancyRegistrationTests
             services.AddSingleton<ITenantCatalog>(serviceProvider => serviceProvider.GetRequiredService<HostCatalog>());
         }
 
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
     }
 
@@ -728,33 +724,27 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// The default client store follows each tenant's definition under multi-tenancy, whichever of the two calls
-    /// comes first, and reads a server's clients once without it, as before; the store finding clients is the one
-    /// keeping them.
+    /// The default client store follows each tenant's definition, whichever of the two calls comes first; the store
+    /// finding clients is the one keeping them.
     /// </summary>
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public void DefaultClientStore_FollowsTenants_OnlyUnderMultiTenancy(bool multiTenancy, bool clientsFirst)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DefaultClientStore_FollowsTenants(bool clientsFirst)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         if (clientsFirst)
             services.AddClientInformation();
-        if (multiTenancy)
-            services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         if (!clientsFirst)
             services.AddClientInformation();
         using var provider = services.BuildServiceProvider();
 
         var finding = provider.GetRequiredService<IClientInfoProvider>();
         Assert.Same(finding, provider.GetRequiredService<IClientInfoManager>());
-        Assert.Equal(
-            multiTenancy ? "ReloadableClientInfoStorage" : "ClientInfoStorage",
-            finding.GetType().Name);
+        Assert.Equal("ReloadableClientInfoStorage", finding.GetType().Name);
     }
 }

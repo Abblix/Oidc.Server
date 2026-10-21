@@ -64,7 +64,7 @@ public class ProfileClockSkewReachesValidationTests
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
             new Mock<IIssuerProvider>().Object,
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = profile })));
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })));
 
         await authenticator.TryAuthenticateClientAsync(new ClientRequest
         {
@@ -99,7 +99,6 @@ public class ProfileClockSkewReachesValidationTests
             .SetupGet(o => o.CurrentValue)
             .Returns(new OidcOptions
             {
-                DefaultSecurityProfile = profile,
                 SoftwareStatement = new SoftwareStatementOptions
                 {
                     TrustedIssuers =
@@ -117,7 +116,8 @@ public class ProfileClockSkewReachesValidationTests
             NullLogger<SoftwareStatementValidator>.Instance,
             tokenValidator.Object,
             options.Object,
-            SingleIssuer.SettingsOf(Options.Create(options.Object.CurrentValue)),
+            SingleIssuer.SettingsOf(
+                Options.Create(options.Object.CurrentValue), new TestIssuer { DefaultSecurityProfile = profile }),
             new Mock<ISecureHttpFetcher>().Object);
 
         await validator.ValidateAsync(new ClientRegistrationValidationContext(
@@ -166,7 +166,7 @@ public class ProfileClockSkewReachesValidationTests
             new Mock<IClientKeysProvider>().Object,
             issuerProvider.Object,
             serviceKeys.Object,
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = profile })),
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })),
             TimeProvider.System);
 
         await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller);

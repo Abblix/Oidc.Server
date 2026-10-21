@@ -19,8 +19,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Options;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -103,7 +101,6 @@ public partial class MultiTenancyRegistrationTests
         services.AddSingleton<IKeyRingStore>(new MemoryKeyRingStore());
         services.AddSingleton<ITenantStore>(store);
         services.AddJsonWebTokens();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement()
             .UseKeysInProcess(new MintedKeys
@@ -111,7 +108,7 @@ public partial class MultiTenancyRegistrationTests
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
                 AdoptedKeys = adoptedKeys,
             });
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
     }
 
@@ -134,7 +131,7 @@ public partial class MultiTenancyRegistrationTests
     {
         var store = new ChangingTenantStore();
         using var provider = MintingRealKeys(store);
-        Assert.Empty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.Empty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
 
         var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
@@ -194,7 +191,7 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
 
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.Throws<InvalidOperationException>(() => rings.For("acme"));
     }
@@ -216,7 +213,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [new StoredTenant(globex, "1")];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
@@ -242,7 +239,7 @@ public partial class MultiTenancyRegistrationTests
         store.Tenants = [new StoredTenant(second, "1")];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
@@ -267,7 +264,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [new StoredTenant(live, "1")];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
@@ -289,7 +286,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         var loadsBefore = keyStore.Loads;
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 

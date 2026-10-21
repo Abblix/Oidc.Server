@@ -48,9 +48,9 @@ public class FlowTypeValidatorTests
         _validator = new FlowTypeValidator(logger.Object, processors, SingleIssuer.SettingsOf(ProfileOptions()));
     }
 
-    private static IOptions<OidcOptions> ProfileOptions(
+    private static IOptions<TestIssuer> ProfileOptions(
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile });
+        => Options.Create(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile });
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.

@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
-using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Moq;
 using Xunit;
@@ -31,16 +30,11 @@ public class ServiceTokensAlgorithmsValidatorTests
 
     public ServiceTokensAlgorithmsValidatorTests()
     {
-        _validator = CreateValidator();
-    }
-
-    private static ServiceTokensAlgorithmsValidator CreateValidator(IKeyCustodian? custodian = null)
-    {
         var jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         jwtCreator.SetupGet(c => c.SignedResponseAlgorithmsSupported).Returns(RegisteredSigningAlgorithms);
         jwtCreator.SetupGet(c => c.EncryptedResponseAlgorithmsSupported).Returns(RegisteredKeyManagementAlgorithms);
 
-        return new ServiceTokensAlgorithmsValidator(jwtCreator.Object, custodian);
+        _validator = new ServiceTokensAlgorithmsValidator(jwtCreator.Object);
     }
 
     /// <summary>
@@ -107,65 +101,15 @@ public class ServiceTokensAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// A host that requires encryption while no key can serve it is refused at startup, naming both the
-    /// setting and the way out. Left to run, it would reach issuance and produce a token whose confidentiality
-    /// the configuration promises and the output does not carry.
+    /// Whether a key exists to encrypt with is a question about each tenant, answered by
+    /// <see cref="ServiceTokenEncryptionKeysCheck"/>; this validator judges the algorithms alone, so a host that
+    /// asks for encryption still validates here.
     /// </summary>
     [Fact]
-    public void Validate_EncryptRequiredWithoutAnyKey_Fails()
+    public void Validate_EncryptRequired_IsNotJudgedHere()
     {
         var options = new OidcOptions();
         options.ServiceTokens.AccessToken.Encrypt = true;
-
-        var result = _validator.Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("AccessToken.Encrypt is true"));
-    }
-
-    /// <summary>
-    /// The same requirement validates once a key is configured, which is the whole condition being checked.
-    /// </summary>
-    [Fact]
-    public void Validate_EncryptRequiredWithConfiguredKey_Succeeds()
-    {
-        var options = new OidcOptions();
-        options.ServiceTokens.AccessToken.Encrypt = true;
-        options.EncryptionKeys = [new RsaJsonWebKey { KeyId = "enc-key" }];
-
-        var result = _validator.Validate(null, options);
-
-        Assert.True(result.Succeeded, string.Join("; ", result.Failures ?? []));
-    }
-
-    /// <summary>
-    /// With an external custodian registered the keys live outside the options, so an empty
-    /// <see cref="OidcOptions.EncryptionKeys"/> says nothing about whether a key exists. Refusing here would
-    /// reject startup for exactly the deployments that keep their keys in a Vault or Key Vault backend.
-    /// </summary>
-    [Fact]
-    public void Validate_EncryptRequiredWithCustodian_Succeeds()
-    {
-        var validator = CreateValidator(new Mock<IKeyCustodian>(MockBehavior.Strict).Object);
-        var options = new OidcOptions();
-        options.ServiceTokens.AccessToken.Encrypt = true;
-
-        var result = validator.Validate(null, options);
-
-        Assert.True(result.Succeeded, string.Join("; ", result.Failures ?? []));
-    }
-
-    /// <summary>
-    /// A host that never stated a decision keeps starting with no keys configured, which is what separates
-    /// "asked to encrypt" from "did not object" and why the setting is nullable. The shipped default is this
-    /// state, so refusing it would break every deployment that does not use encryption at all.
-    /// </summary>
-    [Fact]
-    public void Validate_EncryptUnstatedWithoutAnyKey_Succeeds()
-    {
-        var options = new OidcOptions();
-
-        Assert.Null(options.ServiceTokens.AccessToken.Encrypt);
 
         var result = _validator.Validate(null, options);
 

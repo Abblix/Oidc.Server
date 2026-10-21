@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -244,7 +245,7 @@ public class AddAuthorizationGrantTests
     public void AddOidcServices_RegistersBuiltInGrantHandlersAsGrantTypeInformer()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+        services.AddOidcServices(opts => opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer }));
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -267,7 +268,7 @@ public class AddAuthorizationGrantTests
     public void AddOidcServices_WithoutPasswordOptIn_ExcludesPasswordGrantFromInformer()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+        services.AddOidcServices(opts => opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer }));
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -290,7 +291,7 @@ public class AddAuthorizationGrantTests
         var services = new ServiceCollection();
         services
             .EnablePasswordGrant()
-            .AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+            .AddOidcServices(opts => opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer }));
 
         var informerImpls = services
             .Where(d => d.ServiceType == typeof(IGrantTypeInformer))
@@ -310,7 +311,7 @@ public class AddAuthorizationGrantTests
     public void AddAuthorizationGrant_AfterOidcCore_ThrowsWithOrderingGuidance()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+        services.AddOidcServices(opts => opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer }));
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.AddAuthorizationGrant<StubGrantHandler>());
@@ -330,7 +331,7 @@ public class AddAuthorizationGrantTests
         services.AddAuthorizationGrant<StubGrantHandler>();
 
         var exception = Record.Exception(
-            () => services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer));
+            () => services.AddOidcServices(opts => opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer })));
 
         Assert.Null(exception);
     }
@@ -345,7 +346,7 @@ public class AddAuthorizationGrantTests
     public void EnablePasswordGrant_AfterOidcCore_IsRejectedByTheOrderingGuard()
     {
         var services = new ServiceCollection();
-        services.AddOidcServices(opts => opts.Issuer = TestConstants.DefaultIssuer);
+        services.AddOidcServices(opts => opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer }));
 
         var exception = Assert.Throws<InvalidOperationException>(() => services.EnablePasswordGrant());
 

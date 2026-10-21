@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -31,10 +30,9 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantClientRegistrationStore>(registrations);
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
     }
 

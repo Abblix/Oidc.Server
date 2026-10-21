@@ -13,8 +13,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 

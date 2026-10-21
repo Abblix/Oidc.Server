@@ -30,8 +30,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -78,7 +76,7 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
         builder.Services.Replace(ServiceDescriptor.Singleton<IAuthSessionService, SignedInUser>());
         builder.Services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider, EverythingConsented>());
 
-        builder.Services.AddMultiTenancy(options =>
+        builder.Services.Configure<OidcOptions>(options =>
         {
             options.Tenants.Add(Tenant("acme", Acme));
             options.Tenants.Add(Tenant("globex", Globex));

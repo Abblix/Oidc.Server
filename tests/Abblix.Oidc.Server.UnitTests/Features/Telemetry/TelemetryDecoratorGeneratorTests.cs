@@ -14,6 +14,7 @@ using System.Diagnostics.Metrics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.SourceGenerators.Telemetry;
@@ -48,7 +49,7 @@ public sealed class TelemetryDecoratorGeneratorTests
         inner.Setup(h => h.HandleAsync("request")).ReturnsAsync("handled");
         var decorator = new ObservedProbeHandler(
             inner.Object,
-            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>()));
+            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>()), tenants: NoTenant.Accessor);
 
         var trace = ActivityTraceId.CreateRandom();
         using (new Activity("test").SetParentId(trace, ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded).Start())

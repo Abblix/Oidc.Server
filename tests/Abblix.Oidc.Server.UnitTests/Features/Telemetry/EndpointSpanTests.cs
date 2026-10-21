@@ -14,6 +14,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -31,7 +32,6 @@ using Moq;
 using Xunit;
 
 // The tenant a span names comes from the multi-tenancy feature
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Telemetry;
 
@@ -88,7 +88,7 @@ public sealed class EndpointSpanTests : IDisposable
 
     private Task<Result<TokenIssued, OidcError>> Token(Result<TokenIssued, OidcError> result)
         => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(result), EndpointObservation.ErrorOf);
+            TelemetryEndpoints.Token, _instruments, NoTenant.Accessor, () => Task.FromResult(result), EndpointObservation.ErrorOf);
 
     private static TokenIssued Issued => new(
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
@@ -134,7 +134,7 @@ public sealed class EndpointSpanTests : IDisposable
             request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null);
 
         var span = await SpanOf(() => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Authorize, _instruments, null, () => Task.FromResult(error), EndpointObservation.ErrorOf));
+            TelemetryEndpoints.Authorize, _instruments, NoTenant.Accessor, () => Task.FromResult(error), EndpointObservation.ErrorOf));
 
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         Assert.Equal(ErrorCodes.AccessDenied, span.GetTagItem(TelemetryTags.Error));
@@ -147,7 +147,7 @@ public sealed class EndpointSpanTests : IDisposable
             () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
-                null,
+                NoTenant.Accessor,
                 () => throw new InvalidOperationException("The license terms violation detected"),
                 EndpointObservation.ErrorOf)));
 
@@ -162,7 +162,7 @@ public sealed class EndpointSpanTests : IDisposable
         var tenants = Mock.Of<ITenantAccessor>(accessor => accessor.Current == served);
 
         var span = await SpanOf(() => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Configuration, _instruments, tenants, () => Task.FromResult(0), EndpointObservation.NoError));
+            TelemetryEndpoints.Configuration, _instruments, tenants ?? NoTenant.Accessor, () => Task.FromResult(0), EndpointObservation.NoError));
 
         Assert.Equal("acme", span.GetTagItem(TelemetryTags.Tenant));
     }
@@ -186,7 +186,7 @@ public sealed class EndpointSpanTests : IDisposable
             .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Issued);
         var grants = Mock.Of<IAuthorizationGrantHandler>(g => g.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode });
-        var traced = new ObservedTokenHandler(inner.Object, grants, _instruments);
+        var traced = new ObservedTokenHandler(inner.Object, grants, _instruments, tenants: NoTenant.Accessor);
 
         var span = await SpanOf(() => traced.HandleAsync(
             new TokenRequest { GrantType = requested }, new ClientRequest(), CancellationToken.None));
@@ -203,7 +203,7 @@ public sealed class EndpointSpanTests : IDisposable
             .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Issued);
         var observed = new ObservedTokenHandler(
-            inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments, enrichers: [enricher.Object]);
+            inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments, enrichers: [enricher.Object], tenants: NoTenant.Accessor);
         var request = new TokenRequest();
 
         var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest(), CancellationToken.None));
@@ -226,7 +226,7 @@ public sealed class EndpointSpanTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(request, It.IsAny<ClientRequest>()))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.InvalidRequest, "Refused", ResponseModes.Query, null));
-        var observed = new ObservedPushedAuthorizationHandler(inner.Object, _instruments);
+        var observed = new ObservedPushedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest()));
 

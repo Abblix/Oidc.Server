@@ -6,8 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// The feature is marked experimental for its consumers; these hosts are where it is built.
-#pragma warning disable ABXMT001
 
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;

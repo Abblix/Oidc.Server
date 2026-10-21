@@ -6,8 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// The feature is marked experimental for its consumers; these hosts are where it is built.
-#pragma warning disable ABXMT001
 
 using Abblix.Oidc;
 using System.Security.Cryptography;
@@ -28,7 +26,6 @@ using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -61,8 +58,11 @@ builder.Services.AddDynamicClientRegistration();
 builder.Services.AddFrontChannelLogout();
 builder.Services.AddBackChannelLogout();
 
-builder.Services.AddOidcServices(options =>
+builder.Services.AddOidcServices((options, services) =>
 {
+    // The host serves one tenant at the issuer, built from settings a test may change for its own host.
+    options.Tenants.Add(services.GetRequiredService<IOptions<TestTenantSettings>>().Value.ToTenant());
+
     // RFC 8628 device flow settings. The host opts into device authorization (AddDeviceAuthorization() below),
     // which enables the endpoint and makes these settings mandatory; no client here drives the device grant.
     options.DeviceAuthorization = new DeviceAuthorizationOptions
@@ -211,11 +211,6 @@ builder.Services.AddDistributedMemoryCache();
 
 // AutoConsentsProvider reads the per-test override out of HttpContext.Items via this accessor.
 builder.Services.AddHttpContextAccessor();
-
-// The host serves one tenant at the issuer, built from settings a test may change for its own host.
-builder.Services.AddMultiTenancy(_ => { });
-builder.Services.AddOptions<MultiTenancyOptions>()
-    .Configure<IOptions<TestTenantSettings>>((tenancy, tenant) => tenancy.Tenants.Add(tenant.Value.ToTenant()));
 
 var app = builder.Build();
 app.UseMultiTenancy();

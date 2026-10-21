@@ -37,8 +37,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.Consents;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -110,7 +108,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.CheckSession | OidcEndpoints.Introspection |
                                        OidcEndpoints.Revocation;
         });
-        builder.Services.AddMultiTenancy(options =>
+        builder.Services.Configure<OidcOptions>(options =>
         {
             // Both tenants register a client under the same id; only acme registers the second one
             options.Tenants.Add(new TenantDefinition

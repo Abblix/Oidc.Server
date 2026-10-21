@@ -37,13 +37,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
 /// <summary>
-/// What <see cref="MultiTenancyExtensions.AddMultiTenancy"/> puts in the container, the issuer a request gets
+/// What registering the tenants puts in the container, the issuer a request gets
 /// through it, and the tenant lists startup refuses.
 /// </summary>
 public partial class MultiTenancyRegistrationTests
@@ -58,8 +56,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddOptions<OidcOptions>();
 
         // The library's own issuer registration, not a stand-in, since it is what AddMultiTenancy has to win over.
-        services.AddIssuer();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
 
         return services.BuildServiceProvider();
     }
@@ -83,67 +80,20 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// Multi-tenancy keeps each tenant's data apart by wrapping the storage the server registered, so a call
-    /// placed before that storage would leave it shared - it is refused, naming the order.
+    /// A host wrapping the storage the server resolves takes the tenants' form away, so startup refuses it and says
+    /// where its own storage goes instead.
     /// </summary>
     [Fact]
-    public void AddMultiTenancy_BeforeTheServersStorage_IsRefused()
-    {
-        var services = new ServiceCollection();
-
-        var refusal = Assert.Throws<InvalidOperationException>(
-            () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
-        Assert.Contains("after AddOidcServices()", refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The refusal names each service it finds missing, the per-caller budgets registered under a key included:
-    /// storage in place but client authentication not yet registered is still the wrong order.
-    /// </summary>
-    [Fact]
-    public void AddMultiTenancy_BeforeTheFailureBudget_IsRefused_NamingIt()
-    {
-        var services = new ServiceCollection()
-            .AddLogging()
-            .AddDistributedMemoryCache()
-            .AddCommonServices()
-            .AddReplayPrevention();
-
-        var refusal = Assert.Throws<InvalidOperationException>(
-            () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
-        Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A second call would wrap the storage again and change every key it holds, losing what was stored
-    /// before, so it is refused.
-    /// </summary>
-    [Fact]
-    public void ASecondCallToAddMultiTenancy_IsRefused()
+    public void AStorageDecoratedAfterTheServer_IsRefused_NamingTheSharedKey()
     {
         var services = new ServiceCollection().AddServerStorage();
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
-
-        var refusal = Assert.Throws<InvalidOperationException>(
-            () => services.AddMultiTenancy(options => options.Tenants.Add(Acme)));
-        Assert.Contains("already", refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A host wrapping the storage itself after multi-tenancy is refused too, and told what to move rather than
-    /// that something replaced the storage.
-    /// </summary>
-    [Fact]
-    public void AStorageDecoratedAfterMultiTenancy_IsRefused_NamingTheOrder()
-    {
-        var services = new ServiceCollection().AddServerStorage();
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.ServeTenants(options => options.Tenants.Add(Acme));
         services.Decorate<IEntityStorage, PassThroughStorage>();
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("registered or decorated after", refusal.Message, StringComparison.Ordinal);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(nameof(TenantServiceKeys.Shared), refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>A host's own storage wrapper, adding nothing.</summary>
@@ -171,34 +121,6 @@ public partial class MultiTenancyRegistrationTests
             => inner.RemoveAsync(key, token);
     }
 
-    /// <summary>
-    /// The server's own mutual-TLS address, or its fixed aliases, name one address for every tenant, which no
-    /// request can tell apart, so startup refuses them under multi-tenancy.
-    /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ServerWideMutualTlsAddresses_AreRefusedAtStartup(bool aliases)
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options =>
-        {
-            if (aliases)
-                options.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = new Uri("https://mtls.example.com/token") };
-            else
-                options.Discovery.MtlsBaseUri = new Uri("https://mtls.example.com");
-        });
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains(
-            aliases ? nameof(DiscoveryOptions.MtlsEndpointAliases) : nameof(DiscoveryOptions.MtlsBaseUri),
-            refusal.Message,
-            StringComparison.Ordinal);
-    }
-
     public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
     {
         {
@@ -208,7 +130,7 @@ public partial class MultiTenancyRegistrationTests
                 Issuer = new Uri(AcmeIssuer),
                 DefaultResourceIndicator = new Uri("https://api.acme.example"),
             },
-            nameof(OidcOptions.DefaultResourceIndicator)
+            nameof(TenantDefinition.DefaultResourceIndicator)
         },
         {
             new TenantDefinition
@@ -252,11 +174,10 @@ public partial class MultiTenancyRegistrationTests
         var tenant = new TenantDefinition { Id = "local", Issuer = new Uri("http://localhost:5000/tenants/local") };
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>().Configure(options => options.AllowHttpIssuer = allowHttp);
-        services.AddIssuer();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(tenant));
         using var provider = services.BuildServiceProvider();
 
-        var read = Record.Exception(() => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        var read = Record.Exception(() => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
 
         Assert.Equal(refused, read is OptionsValidationException);
         if (refused)
@@ -264,40 +185,36 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// What a tenant declares passes the checks the server's own settings pass at startup, so a tenant's mistake is
-    /// refused there, naming the tenant, rather than surfacing on the first request that meets it.
+    /// What a tenant declares is judged by the checks of its settings at startup, so a tenant's mistake is refused
+    /// there, naming the tenant, rather than surfacing on the first request that meets it.
     /// </summary>
     [Theory]
     [MemberData(nameof(TenantsTheServersChecksRefuse))]
-    public void ATenantsSettings_PassTheServersOwnChecks(TenantDefinition tenant, string mistake)
+    public void ATenantsSettings_AreJudgedAtStartup(TenantDefinition tenant, string mistake)
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
-        ]);
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        services.AddClientInformation();
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(tenant));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains($"Tenant '{tenant.Id}': ", refusal.Message, StringComparison.Ordinal);
         Assert.Contains(mistake, refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// A mistake in the server's own settings is reported by those settings, and does not hide what is wrong with the
-    /// tenant list.
+    /// A mistake in the server's own settings is reported beside what is wrong with the tenant list, neither hiding
+    /// the other.
     /// </summary>
     [Fact]
-    public void InvalidServerSettings_LeaveTheTenantListsOwnRefusalsVisible()
+    public void InvalidServerSettings_AndTheTenantListsRefusals_AreReportedTogether()
     {
         var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = new Uri("https://auth.example.com"));
-        services.AddServerStorage().AddMultiTenancy(options =>
+        services.AddOptions<OidcOptions>().Configure(options => options.JwtBearer.ClockSkew = TimeSpan.FromSeconds(-1));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewValidator>());
+        services.AddServerStorage().ServeTenants(options =>
         {
             options.Tenants.Add(Acme);
             options.Tenants.Add(new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/other") });
@@ -305,31 +222,10 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Equal(typeof(MultiTenancyOptions), refusal.OptionsType);
-        Assert.Contains("The tenant id 'acme' is declared more than once.", refusal.Failures);
-        Assert.DoesNotContain(refusal.Failures, failure => failure.Contains(nameof(OidcOptions.Issuer), StringComparison.Ordinal));
-    }
-
-    /// <summary>
-    /// A pairwise client set for the whole server under multi-tenancy gets the refusal of server-wide clients, not a
-    /// failure from asking a tenant's settings outside any tenant.
-    /// </summary>
-    [Fact]
-    public void AServerWidePairwiseClient_UnderMultiTenancy_IsRefusedAsServerWide()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options =>
-            options.Clients = [new ClientInfo("pairwise") { SubjectType = SubjectTypes.Pairwise }]);
-        services.AddIssuer();
-        services.AddClientInformation().AddUserInfo();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)} applies to the whole server",
-            refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(typeof(OidcOptions), refusal.OptionsType);
+        Assert.Contains("The tenant id 'acme' is declared more than once.", refusal.Failures);
+        Assert.Contains(refusal.Failures, failure => failure.Contains(nameof(JwtBearerOptions.ClockSkew), StringComparison.Ordinal));
     }
 
     public static TheoryData<Type, object> HostsOwnRegistries => new()
@@ -352,11 +248,11 @@ public partial class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton(service, registry);
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains($"{service.Name} is the host's own", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -369,29 +265,24 @@ public partial class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => Moq.Mock.Of<IClientInfoProvider>());
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains($"{nameof(IClientInfoProvider)} is the host's own", refusal.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TheServersOwnRegistries_PassTheStartupCheck(bool reloadableClients)
+    [Fact]
+    public void TheServersOwnRegistries_PassTheStartupCheck()
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation().AddUserInfo();
-        if (reloadableClients)
-            services.AddReloadableClientInformation();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
-        Assert.Single(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.Single(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
     }
 
     [Fact]
@@ -399,34 +290,34 @@ public partial class MultiTenancyRegistrationTests
     {
         using var provider = BuildProvider();
 
-        Assert.Single(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.Single(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
     }
 
     /// <summary>
-    /// A registration made after multi-tenancy replaces the wrapper silently, and every tenant would then read the
-    /// others' data - so startup refuses it, naming the service.
+    /// A storage put in place of the one the server resolves takes the tenants' form away, and every tenant would
+    /// then read the others' data - so startup refuses it, naming the service.
     /// </summary>
     [Fact]
-    public void AStorageReplacedAfterMultiTenancy_IsRefusedAtStartup()
+    public void AStorageReplacedAfterTheServer_IsRefusedAtStartup()
     {
         var services = new ServiceCollection().AddServerStorage();
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.ServeTenants(options => options.Tenants.Add(Acme));
         services.Replace(ServiceDescriptor.Singleton<IEntityStorage, DistributedCacheStorage>());
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains($"{nameof(IEntityStorage)} is not kept per tenant", refusal.Message, StringComparison.Ordinal);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains($"{nameof(IEntityStorage)} resolves to {nameof(DistributedCacheStorage)}", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// A budget of an enabled endpoint is checked as well, named with its key.
     /// </summary>
     [Fact]
-    public void AnEndpointBudgetReplacedAfterMultiTenancy_IsRefusedAtStartup()
+    public void AnEndpointBudgetReplacedAfterTheServer_IsRefusedAtStartup()
     {
         var services = new ServiceCollection().AddServerStorage().AddIntrospection();
-        services.AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.ServeTenants(options => options.Tenants.Add(Acme));
         services.AddKeyedSingleton(
             CallerRateLimiters.Introspection,
             PartitionedRateLimiter.Create<(string ClientId, string? Source), string>(
@@ -434,7 +325,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(CallerRateLimiters.Introspection, refusal.Message, StringComparison.Ordinal);
     }
 
@@ -463,43 +354,12 @@ public partial class MultiTenancyRegistrationTests
     }
 
     [Fact]
-    public void AConfiguredIssuer_IsRefusedAtStartup()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Issuer = new Uri("https://auth.example.com"));
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains(nameof(OidcOptions.Issuer), refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A setting a tenant declares, set for the whole server, is refused at startup. Which settings those are is
-    /// held by the core's own tests of the refusal; this one holds that multi-tenancy puts the refusal in force.
-    /// </summary>
-    [Fact]
-    public void ServerWideClients_AreRefusedAtStartup()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>().Configure(options => options.Clients = [new ClientInfo("client")]);
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.Clients)} ", refusal.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void UnderATenant_TheClientsAreTheOnesItDeclares()
     {
         var acme = new TenantDefinition { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = [new ClientInfo("client")] };
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(acme));
         using var provider = services.BuildServiceProvider();
         EnterTenant(provider, acme);
 
@@ -576,7 +436,7 @@ public partial class MultiTenancyRegistrationTests
         });
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains("The generation 'a.b' of tenant 'acme'", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -596,7 +456,7 @@ public partial class MultiTenancyRegistrationTests
     public async Task TheCatalog_FindsATenantByIdExactly_AndByItsIssuersAddress()
     {
         var services = new ServiceCollection();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         await using var provider = services.BuildServiceProvider();
         var catalog = provider.GetRequiredService<ITenantCatalog>();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -620,7 +480,7 @@ public partial class MultiTenancyRegistrationTests
         var logs = new EventRecorder();
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(logs);
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         await using var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };
@@ -668,16 +528,12 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A request that names no tenant is refused at the OpenID endpoints only where multi-tenancy is on; a
-    /// deployment that never enabled it serves as before.
+    /// A request that names no tenant is refused at the OpenID endpoints, and one resolved to a tenant is served.
     /// </summary>
     [Fact]
-    public void TheTenantRequirement_HoldsOnlyUnderMultiTenancy()
+    public void TheTenantRequirement_HoldsForARequestNamingNoTenant()
     {
-        using var plain = new ServiceCollection().BuildServiceProvider();
         using var multiTenant = BuildProvider();
-
-        Assert.False(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = plain }));
 
         EnterTenant(multiTenant, null);
         Assert.True(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = multiTenant }));
@@ -695,7 +551,7 @@ public partial class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<ITenantAccessor>(new FixedTenantAccessor(Acme));
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };

@@ -37,7 +37,7 @@ public class ResourceManagerExtensionsTests
             new Uri("https://api2.example.com"),
             new ScopeDefinition("api2:admin", "admin_claim"));
 
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             Resources = [resource1, resource2]
         });
@@ -291,7 +291,7 @@ public class ResourceManagerExtensionsTests
             new Uri("https://api.example.com?version=v1"),
             new ScopeDefinition("api:read"));
 
-        var options = Options.Create(new OidcOptions { Resources = [resourceWithQuery] });
+        var options = Options.Create(new TestIssuer { Resources = [resourceWithQuery] });
         var manager = SingleIssuer.ResourceManager(options);
 
         var resources = new[] { new Uri("https://api.example.com?version=v1") };
@@ -398,7 +398,7 @@ public class ResourceManagerExtensionsTests
             new Uri("https://api.example.com:8443"),
             new ScopeDefinition("api:read"));
 
-        var options = Options.Create(new OidcOptions { Resources = [resourceWithPort] });
+        var options = Options.Create(new TestIssuer { Resources = [resourceWithPort] });
         var manager = SingleIssuer.ResourceManager(options);
 
         var resources = new[] { new Uri("https://api.example.com:8443") };

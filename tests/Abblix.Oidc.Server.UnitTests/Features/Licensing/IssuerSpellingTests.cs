@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
@@ -51,8 +52,10 @@ public sealed class IssuerSpellingTests : IDisposable
     [InlineData("http://Localhost:5000", true)]
     public async Task TheIssuer_IsWrittenIntoATokenAndCountedAsConfigured(string configured, bool allowHttp)
     {
-        var options = Options.Create(new OidcOptions { Issuer = new Uri(configured), AllowHttpIssuer = allowHttp });
-        Assert.False(new IssuerOptionsValidator().Validate(null, options.Value).Failed);
+        var options = Options.Create(new TestIssuer { Issuer = new Uri(configured) });
+        Assert.Empty(new TenantDefinitionsCheck().Check(
+            [options.Value.ToTenant()],
+            new OidcOptions { AllowHttpIssuer = allowHttp }));
 
         var issuerProvider = Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == options.Value.Issuer);
         var formatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
@@ -68,7 +71,7 @@ public sealed class IssuerSpellingTests : IDisposable
             Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "token-id"),
             formatter.Object,
             new SubjectTypeConverter(),
-            options,
+            Options.Create(new OidcOptions()),
             SingleIssuer.SettingsOf(options),
             new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
             ScopeClaims.Of());

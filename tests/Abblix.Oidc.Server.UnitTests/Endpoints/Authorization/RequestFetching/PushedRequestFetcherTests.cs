@@ -42,15 +42,11 @@ public class PushedRequestFetcherTests
         var snapshot = new Mock<IOptionsSnapshot<OidcOptions>>();
         snapshot
             .Setup(s => s.Value)
-            .Returns(new OidcOptions
-            {
-                RequirePushedAuthorizationRequests = serverWideRequirement,
-                DefaultSecurityProfile = defaultSecurityProfile,
-            });
+            .Returns(new OidcOptions { RequirePushedAuthorizationRequests = serverWideRequirement });
 
         return new PushedRequestFetcher(
             snapshot.Object,
-            SingleIssuer.SettingsOf(snapshot.Object),
+            SingleIssuer.SettingsOf(snapshot.Object, new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }),
             _storage.Object,
             _clientInfoProvider.Object,
             _consumedRequestUris.Object);

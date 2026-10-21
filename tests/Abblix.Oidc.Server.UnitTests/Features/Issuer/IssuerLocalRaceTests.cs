@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Xunit;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Issuer;
 
@@ -23,17 +22,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Issuer;
 /// </summary>
 public class IssuerLocalRaceTests
 {
-    [Fact]
-    public async Task WithoutTenants_TwoFirstCallers_ShareOneValue()
-    {
-        var local = new SingleIssuerLocal<object>();
-
-        var (first, second) = await BuildAtOnceAsync(local);
-
-        Assert.Same(first, second);
-        Assert.Same(first, local.GetOrCreate(null, () => new object()));
-    }
-
     [Fact]
     public async Task UnderATenant_TwoFirstCallers_ShareOneValue()
     {

@@ -41,7 +41,7 @@ public class UriResolverTests
 	[Theory]
 	[InlineData("~/images/logo.png", "https://example.com/app/images/logo.png")]
 	[InlineData("~/content/site.css", "https://example.com/app/content/site.css")]
-	[InlineData("images/logo.png", "https://example.com/images/logo.png")] // Relative to server root, not app
+	[InlineData("images/logo.png", "https://example.com/app/images/logo.png")] // Relative to the tenant's base
 	public void Content_StaticPath_ReturnsAbsoluteUri(string path, string expectedUrl)
 	{
 		// Arrange
@@ -73,7 +73,7 @@ public class UriResolverTests
 	[Theory]
 	[InlineData("https", "api.example.com", "/v1", "~/connect/userinfo", "https://api.example.com/v1/connect/userinfo")]
 	[InlineData("http", "localhost", "", "~/static/file.js", "http://localhost/static/file.js")]
-	[InlineData("https", "secure.app", "/base", "images/icon.png", "https://secure.app/images/icon.png")] // Relative to server root
+	[InlineData("https", "secure.app", "/base", "images/icon.png", "https://secure.app/base/images/icon.png")] // Relative to the tenant's base
 	public void Content_VariousRequestConfigurations_ReturnsCorrectUri(
 		string scheme,
 		string host,

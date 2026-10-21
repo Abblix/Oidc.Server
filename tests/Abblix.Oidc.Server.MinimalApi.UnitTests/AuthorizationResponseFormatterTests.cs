@@ -107,21 +107,13 @@ public class AuthorizationResponseFormatterTests
     }
 
     /// <summary>
-    /// A formatter whose server-wide options name other pages, so a page read from them shows in the address.
+    /// A formatter reading the pages from <paramref name="issuerSettings"/>, the settings of the request's tenant.
     /// </summary>
     private static AuthorizationResponseFormatter Formatter(
         IIssuerSettings issuerSettings,
         ISessionManagementService? sessionManagement = null)
     {
-        const string serverWide = "https://server-wide.example.com/";
-        var options = new OidcOptions
-        {
-            AccountSelectionUri = new Uri(serverWide + "account-selection"),
-            ConsentUri = new Uri(serverWide + "consent"),
-            InteractionUri = new Uri(serverWide + "interaction"),
-            LoginUri = new Uri(serverWide + "login"),
-            RegistrationUri = new Uri(serverWide + "registration"),
-        };
+        var options = new OidcOptions();
 
         return new AuthorizationResponseFormatter(
             Options.Create(options),

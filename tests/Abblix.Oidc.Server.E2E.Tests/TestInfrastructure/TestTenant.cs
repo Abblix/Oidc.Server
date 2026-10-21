@@ -6,11 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -33,7 +31,7 @@ public static class TestTenant
     /// Synchronous on purpose: a scope entered inside an async method ends for its caller when the method returns.
     /// </remarks>
     public static TenantScope Enter(IServiceProvider services)
-        => TenantScope.Enter(services.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants.Single(
+        => TenantScope.Enter(services.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants.Single(
             tenant => tenant.Id == TestTenantSettings.TenantId));
 
     /// <summary>
@@ -42,13 +40,13 @@ public static class TestTenant
     /// <remarks>
     /// The issuer and id of the shared test host's tenant: the license counts tenants across the process.
     /// </remarks>
-    public static void ServeOn(IServiceCollection services, params JsonWebKey[] signingKeys)
-        => services.AddMultiTenancy(tenancy => tenancy.Tenants.Add(new TenantDefinition
+    public static void ServeOn(OidcOptions options, params JsonWebKey[] signingKeys)
+        => options.Tenants.Add(new TenantDefinition
         {
             Id = TestTenantSettings.TenantId,
             Issuer = TestConstants.IssuerUri,
             SigningKeys = signingKeys,
-        }));
+        });
 
     /// <summary>
     /// The server's revoker, each call made within the test host's tenant.

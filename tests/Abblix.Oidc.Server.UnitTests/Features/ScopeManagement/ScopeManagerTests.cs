@@ -30,7 +30,7 @@ public class ScopeManagerTests
     public void Constructor_WithNoCustomScopes_ShouldRegisterStandardScopes()
     {
         // Arrange
-        var options = Options.Create(new OidcOptions());
+        var options = Options.Create(new TestIssuer());
 
         // Act
         var manager = SingleIssuer.ScopeManager(options);
@@ -65,7 +65,7 @@ public class ScopeManagerTests
         // Arrange
         var customScope = new ScopeDefinition("custom:read", "claim1", "claim2");
 
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             Scopes = [customScope]
         });
@@ -96,7 +96,7 @@ public class ScopeManagerTests
             new ScopeDefinition("admin")
         };
 
-        var options = Options.Create(new OidcOptions { Scopes = scopes });
+        var options = Options.Create(new TestIssuer { Scopes = scopes });
 
         // Act
         var manager = SingleIssuer.ScopeManager(options);
@@ -115,7 +115,7 @@ public class ScopeManagerTests
     public void TryGet_WithUnregisteredScope_ShouldReturnFalse()
     {
         // Arrange
-        var options = Options.Create(new OidcOptions());
+        var options = Options.Create(new TestIssuer());
         var manager = SingleIssuer.ScopeManager(options);
 
         // Act
@@ -134,7 +134,7 @@ public class ScopeManagerTests
     public void TryGet_IsCaseSensitive()
     {
         // Arrange
-        var options = Options.Create(new OidcOptions());
+        var options = Options.Create(new TestIssuer());
         var manager = SingleIssuer.ScopeManager(options);
 
         // Act & Assert
@@ -154,7 +154,7 @@ public class ScopeManagerTests
         // Arrange
         var customProfile = new ScopeDefinition(Scopes.Profile, "custom_claim");
 
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             Scopes = [customProfile]
         });
@@ -178,7 +178,7 @@ public class ScopeManagerTests
     {
         // Arrange
         var restated = StandardScopes.Email.ClaimTypes[0];
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             Scopes = [new ScopeDefinition(Scopes.Email, restated)]
         });
@@ -200,7 +200,7 @@ public class ScopeManagerTests
     {
         // Arrange
         var customScope = new ScopeDefinition("custom");
-        var options = Options.Create(new OidcOptions { Scopes = [customScope] });
+        var options = Options.Create(new TestIssuer { Scopes = [customScope] });
         var manager = SingleIssuer.ScopeManager(options);
 
         // Act
@@ -226,7 +226,7 @@ public class ScopeManagerTests
     public void Constructor_WithEmptyCustomScopesArray_ShouldRegisterStandardScopesOnly()
     {
         // Arrange
-        var options = Options.Create(new OidcOptions { Scopes = [] });
+        var options = Options.Create(new TestIssuer { Scopes = [] });
 
         // Act
         var manager = SingleIssuer.ScopeManager(options);
@@ -249,7 +249,7 @@ public class ScopeManagerTests
     public void Constructor_WithNullCustomScopes_ShouldRegisterStandardScopesOnly()
     {
         // Arrange
-        var options = Options.Create(new OidcOptions { Scopes = null });
+        var options = Options.Create(new TestIssuer { Scopes = null });
 
         // Act
         var manager = SingleIssuer.ScopeManager(options);
@@ -269,7 +269,7 @@ public class ScopeManagerTests
         // Arrange
         var customScope = new ScopeDefinition("api:full", "claim1", "claim2", "claim3");
 
-        var options = Options.Create(new OidcOptions { Scopes = [customScope] });
+        var options = Options.Create(new TestIssuer { Scopes = [customScope] });
         var manager = SingleIssuer.ScopeManager(options);
 
         // Act
@@ -292,7 +292,7 @@ public class ScopeManagerTests
     public void TryGet_StandardScopes_ShouldHaveClaimTypes()
     {
         // Arrange
-        var options = Options.Create(new OidcOptions());
+        var options = Options.Create(new TestIssuer());
         var manager = SingleIssuer.ScopeManager(options);
 
         // Act & Assert - openid scope
@@ -323,7 +323,7 @@ public class ScopeManagerTests
             new ScopeDefinition("duplicate", "claim2")
         };
 
-        var options = Options.Create(new OidcOptions { Scopes = scopes });
+        var options = Options.Create(new TestIssuer { Scopes = scopes });
 
         // Act
         var manager = SingleIssuer.ScopeManager(options);
@@ -347,7 +347,7 @@ public class ScopeManagerTests
             new ScopeDefinition("api") // Duplicate
         };
 
-        var options = Options.Create(new OidcOptions { Scopes = scopes });
+        var options = Options.Create(new TestIssuer { Scopes = scopes });
         var manager = SingleIssuer.ScopeManager(options);
 
         // Act

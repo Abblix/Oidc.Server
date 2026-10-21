@@ -8,6 +8,7 @@
 
 using System;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Mvc;
@@ -29,9 +30,10 @@ public class EnabledEndpointsRegistrationValidatorTests
     public void AllWithoutOptIns_FailsFast_NamingTheUnregisteredEndpoint()
     {
         var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
         services.AddOidcServices(o =>
         {
-            o.Issuer = TestConstants.DefaultIssuer;
+            o.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer });
             o.EnabledEndpoints = OidcEndpoints.All;
         });
 
@@ -47,6 +49,7 @@ public class EnabledEndpointsRegistrationValidatorTests
     public void AllWithEveryOptIn_Validates()
     {
         var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
         services
             .AddCheckSession()
             .AddRevocation()
@@ -56,10 +59,14 @@ public class EnabledEndpointsRegistrationValidatorTests
             .AddDeviceAuthorization()
             .AddOidcServices(o =>
             {
-                o.Issuer = TestConstants.DefaultIssuer;
-                // A signing key, because a host with none is refused at startup by
-                // SigningKeysPresenceValidator and this test is about endpoint registration.
-                o.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+                // A signing key, because a tenant with none is refused at startup by TenantKeysCheck and this test
+                // is about endpoint registration.
+                o.Tenants.Add(new TenantDefinition
+                {
+                    Id = TestIssuer.TenantId,
+                    Issuer = TestConstants.DefaultIssuer,
+                    SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+                });
                 o.DeviceAuthorization = new DeviceAuthorizationOptions
                 {
                     VerificationUri = new Uri("https://provider.example/device"),

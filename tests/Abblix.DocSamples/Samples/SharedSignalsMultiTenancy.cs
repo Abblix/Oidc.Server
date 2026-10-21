@@ -6,8 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// The feature is marked experimental for its consumers; the README says how a project accepts that.
-#pragma warning disable ABXMT001
 
 // <ambient>
 using Microsoft.AspNetCore.Builder;
@@ -49,9 +47,8 @@ internal static class SharedSignalsMultiTenancySample
         // to ask the end user for consent, register your own IUserConsentsProvider instead
         builder.Services.AddConsentGrantedForEveryClient();
 
-        builder.Services.AddOidcServices(_ => { });
         builder.Services
-            .AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+            .AddOidcServices(options => options.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
                 Issuer = new Uri("https://idp.example.com/acme"),

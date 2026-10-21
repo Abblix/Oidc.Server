@@ -41,12 +41,9 @@ public class KeyRolloverPropagationValidatorTests
         services.AddLogging();
         services.AddSingleton(TimeProvider.System);
         services.AddOptions<OidcOptions>().Configure(options =>
-        {
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-            options.KeyRolloverPropagation = TimeSpan.FromSeconds(-1);
-        });
+            options.KeyRolloverPropagation = TimeSpan.FromSeconds(-1));
         services.AddJsonWebTokens();
-        services.AddIssuer();
+        services.AddSingleton(SingleIssuer.Settings);
         services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();

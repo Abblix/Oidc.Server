@@ -12,6 +12,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
@@ -287,8 +288,7 @@ public class SignInOverSessionTests
         services.AddConsentGrantedForEveryClient();
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
 
         var clients = new Mock<IClientInfoProvider>();
@@ -305,6 +305,6 @@ public class SignInOverSessionTests
         services.Replace(ServiceDescriptor.Singleton(notifier.Object));
         configure?.Invoke(services);
 
-        return services.BuildServiceProvider();
+        return services.ResolveToTheDeclaredTenant().BuildServiceProvider();
     }
 }

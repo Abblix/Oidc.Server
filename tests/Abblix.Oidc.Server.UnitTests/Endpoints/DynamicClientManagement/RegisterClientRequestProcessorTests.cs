@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -118,10 +119,12 @@ public class RegisterClientRequestProcessorTests
     [Fact]
     public async Task TheSecondOfTwoRegistrationsUnderOneId_IsRefusedByTheStore()
     {
-        var store = new ClientInfoStorage(
+        var store = new ReloadableClientInfoStorage(
+            NullLogger<ReloadableClientInfoStorage>.Instance,
             SingleIssuer.Settings,
-            new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-            new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
+            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(() => new TestIssuer()),
+            new IssuerClientRegistrations(
+                SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>(() => new TestIssuer())));
         var processor = Processor(store);
 
         Assert.True((await processor.ProcessAsync(Request())).TryGetSuccess(out _));

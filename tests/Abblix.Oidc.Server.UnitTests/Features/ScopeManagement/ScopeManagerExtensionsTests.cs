@@ -33,7 +33,7 @@ public class ScopeManagerExtensionsTests
             new ScopeDefinition("custom:write", "write_claim")
         };
 
-        var options = Options.Create(new OidcOptions { Scopes = customScopes });
+        var options = Options.Create(new TestIssuer { Scopes = customScopes });
         _scopeManager = SingleIssuer.ScopeManager(options);
     }
 

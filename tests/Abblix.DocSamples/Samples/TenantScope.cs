@@ -9,8 +9,6 @@
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
-// The feature is marked experimental for its consumers, and the sample is written as one of them.
-#pragma warning disable ABXMT001
 
 namespace Abblix.DocSamples.Samples;
 

@@ -6,8 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using System.Text.Json;
@@ -55,8 +53,7 @@ public sealed class JsonWebKeySetHostOptionsTests : IAsyncLifetime
         var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         signingKey.KeyId = KeyId;
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
-        TestTenant.ServeOn(builder.Services, signingKey);
+        builder.Services.AddOidcServices(options => TestTenant.ServeOn(options, signingKey));
 
         _app = builder.Build();
         _app.UseMultiTenancy();

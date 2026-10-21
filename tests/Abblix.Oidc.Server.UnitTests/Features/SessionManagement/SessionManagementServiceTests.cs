@@ -170,7 +170,7 @@ public class SessionManagementServiceTests
         var cookie = service.GetSessionCookie(SessionPersistence.BrowserSession);
 
         // Assert
-        Assert.Equal(CookieName, cookie.Name);
+        Assert.Equal($"{CookieName}.{TestIssuer.TenantId}", cookie.Name);
     }
 
     /// <summary>
@@ -700,7 +700,7 @@ public class SessionManagementServiceTests
         var response = await service.GetCheckSessionResponseAsync();
 
         // Assert
-        Assert.Contains(JavaScriptStringEncode("Test\"Cookie'Name", true), response.HtmlContent);
+        Assert.Contains(JavaScriptStringEncode($"Test\"Cookie'Name.{TestIssuer.TenantId}", true), response.HtmlContent);
         Assert.DoesNotContain("Test\"Cookie'Name", response.HtmlContent); // Raw name should not appear
     }
 
@@ -718,7 +718,7 @@ public class SessionManagementServiceTests
         var response = await service.GetCheckSessionResponseAsync();
 
         // Assert
-        Assert.Equal(CookieName, response.CacheKey);
+        Assert.Equal($"{CookieName}.{TestIssuer.TenantId}", response.CacheKey);
     }
 
     /// <summary>
@@ -776,8 +776,8 @@ public class SessionManagementServiceTests
 
         // Assert
         Assert.NotEqual(response1.HtmlContent, response2.HtmlContent);
-        Assert.Contains(JavaScriptStringEncode("CookieName1", true), response1.HtmlContent);
-        Assert.Contains(JavaScriptStringEncode("CookieName2", true), response2.HtmlContent);
+        Assert.Contains(JavaScriptStringEncode($"CookieName1.{TestIssuer.TenantId}", true), response1.HtmlContent);
+        Assert.Contains(JavaScriptStringEncode($"CookieName2.{TestIssuer.TenantId}", true), response2.HtmlContent);
     }
 
     private static AuthorizationRequest CreateRequest(

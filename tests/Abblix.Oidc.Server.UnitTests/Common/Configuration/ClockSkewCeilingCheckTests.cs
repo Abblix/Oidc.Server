@@ -7,62 +7,67 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
-using Microsoft.Extensions.Options;
-using Xunit;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
 /// Where a profile names a bound the validator holds it whatever a caller asks for, so this guard is
 /// not what makes the requirement true. It is what keeps a deployment from reading a setting back and
-/// believing a number the validator will not honour - and it says nothing at all to a deployment held
+/// believing a number the validator will not honor - and it says nothing at all to a tenant held
 /// to no bounding profile, which RFC 7523 Section 3 leaves free to choose.
 /// </summary>
-public class ClockSkewCeilingValidatorTests
+public class ClockSkewCeilingCheckTests
 {
-    private static ValidateOptionsResult Validate(
+    private static List<TenantRefusal> Check(
         TimeSpan? skew,
         ClientSecurityProfile profile = ClientSecurityProfile.Fapi2)
-        => new ClockSkewCeilingValidator().Validate(
-            null,
-            new OidcOptions
-            {
-                DefaultSecurityProfile = profile,
-                JwtBearer = new JwtBearerOptions { ClockSkew = skew },
-            });
+        => new ClockSkewCeilingCheck().Check(
+            [
+                new TenantDefinition
+                {
+                    Id = "acme",
+                    Issuer = new Uri("https://auth.example.com"),
+                    DefaultSecurityProfile = profile,
+                },
+            ],
+            new OidcOptions { JwtBearer = new JwtBearerOptions { ClockSkew = skew } }).ToList();
 
     /// <summary>
     /// Both ends of the permitted range and the default pass, so the refusals in
-    /// <see cref="AboveTheCeiling_Fails"/>, <see cref="TheLibraryDefault_SetExplicitly_Fails"/> and
-    /// <see cref="Negative_Fails"/> cannot be satisfied by a guard that refuses everything.
+    /// <see cref="AboveTheCeiling_Refuses"/> and <see cref="TheLibraryDefault_SetExplicitly_Refuses"/>
+    /// cannot be satisfied by a guard that refuses everything.
     /// </summary>
     [Theory]
     [InlineData(0)]
     [InlineData(10)]
     [InlineData(59)]
     [InlineData(60)]
-    public void WithinTheRange_Succeeds(int seconds)
+    public void WithinTheRange_Passes(int seconds)
     {
-        Assert.False(Validate(TimeSpan.FromSeconds(seconds)).Failed);
+        Assert.Empty(Check(TimeSpan.FromSeconds(seconds)));
     }
 
     /// <summary>
-    /// A second past the bound is refused, and the message names the setting so the operator edits a
-    /// number rather than reads the validator.
+    /// A second past the bound is refused, naming the tenant whose profile sets it, and the message names the
+    /// setting so the operator edits a number rather than reads the validator.
     /// </summary>
     [Theory]
     [InlineData(61)]
     [InlineData(300)]
-    public void AboveTheCeiling_Fails(int seconds)
+    public void AboveTheCeiling_Refuses(int seconds)
     {
-        var result = Validate(TimeSpan.FromSeconds(seconds));
+        var refusal = Assert.Single(Check(TimeSpan.FromSeconds(seconds)));
 
-        Assert.True(result.Failed);
-        Assert.Contains(nameof(JwtBearerOptions.ClockSkew), result.FailureMessage!);
+        Assert.Equal("acme", Assert.Single(refusal.TenantIds));
+        Assert.Contains(nameof(JwtBearerOptions.ClockSkew), refusal.Message);
     }
 
     /// <summary>
@@ -72,14 +77,14 @@ public class ClockSkewCeilingValidatorTests
     /// deployment asking for a window this profile does not permit.
     /// </summary>
     [Fact]
-    public void TheLibraryDefault_SetExplicitly_Fails()
+    public void TheLibraryDefault_SetExplicitly_Refuses()
     {
-        Assert.True(Validate(TimeSpan.FromMinutes(5)).Failed);
+        Assert.NotEmpty(Check(TimeSpan.FromMinutes(5)));
     }
 
     /// <summary>
     /// And outside a profile that bounds this, the same values pass. RFC 7523 Section 3 allows for
-    /// clock skew and names no bound, so a deployment held to no profile is entitled to them -
+    /// clock skew and names no bound, so a tenant held to no profile is entitled to them -
     /// without this case the guard would be refusing on its own authority rather than the profile's.
     /// </summary>
     [Theory]
@@ -87,33 +92,33 @@ public class ClockSkewCeilingValidatorTests
     [InlineData(3600)]
     public void WithNoProfile_AnythingPasses(int seconds)
     {
-        Assert.False(
-            Validate(TimeSpan.FromSeconds(seconds), ClientSecurityProfile.None).Failed);
+        Assert.Empty(Check(TimeSpan.FromSeconds(seconds), ClientSecurityProfile.None));
     }
 
     /// <summary>
-    /// A negative value is refused whatever the profile: it is not a loosening somebody may want but
-    /// a window that refuses an assertion valid at the instant its request arrives.
+    /// A profile the enumeration does not define is the business of the check of the profiles, which names it;
+    /// this check has no ceiling to read from it, so it stays silent rather than refusing the same tenant twice
+    /// or failing to resolve the value.
     /// </summary>
     [Fact]
-    public void WithNoProfile_NegativeStillFails()
+    public void AnUndefinedProfile_IsLeftToTheCheckOfTheProfiles()
     {
-        Assert.True(Validate(TimeSpan.FromSeconds(-1), ClientSecurityProfile.None).Failed);
+        Assert.Empty(Check(TimeSpan.FromMinutes(5), (ClientSecurityProfile)7));
     }
 
     /// <summary>
-    /// A negative window refuses an assertion valid at the instant its request arrives, which reads
-    /// as an intermittent fault rather than as a setting.
+    /// A negative value is the business of <see cref="ClockSkewValidator"/>, which refuses it once for the whole
+    /// server; refusing it here too would repeat that refusal for every tenant.
     /// </summary>
     [Fact]
-    public void Negative_Fails()
+    public void Negative_IsLeftToTheValidator()
     {
-        Assert.True(Validate(TimeSpan.FromSeconds(-1)).Failed);
+        Assert.Empty(Check(TimeSpan.FromSeconds(-1)));
     }
 
     /// <summary>
     /// Nothing set is not a value to refuse: it asks the profile to decide, and what the profile
-    /// decides is by construction what the profile allows. Refusing it would fail every deployment
+    /// decides is by construction what the profile allows. Refusing it would fail every tenant
     /// held to a bounding profile over a number nobody chose - which is what a default written into
     /// the options object would have been.
     /// </summary>
@@ -122,7 +127,7 @@ public class ClockSkewCeilingValidatorTests
     [InlineData(ClientSecurityProfile.Fapi2)]
     public void NothingSet_Passes(ClientSecurityProfile profile)
     {
-        Assert.False(Validate(null, profile).Failed);
+        Assert.Empty(Check(null, profile));
     }
 
     /// <summary>
@@ -181,7 +186,7 @@ public class ClockSkewCeilingValidatorTests
     /// The ceiling is applied where the tolerance is resolved, so a value above it comes back cut
     /// down rather than traveling onward beside a bound somebody must remember to pass. This is the
     /// case that would go on passing if the bound were dropped from the resolution: the startup
-    /// guard <see cref="ClockSkewCeilingValidator"/> refuses such a value only for the SERVER's own
+    /// guard <see cref="ClockSkewCeilingCheck"/> refuses such a value only for each TENANT's own
     /// profile, while a client carrying a profile of its own reaches this path with a value nothing
     /// refused.
     /// </summary>
@@ -247,20 +252,20 @@ public class ClockSkewCeilingValidatorTests
     /// <summary>
     /// A replay reservation has to outlive the window in which the thing it names could still be
     /// accepted, and the widest such window belongs to a client held to NO bounding profile - which
-    /// a deployment under a bounding one still may have. Resolving the retention from the
-    /// deployment's own profile would leave exactly that client replayable in the gap between the
+    /// a tenant under a bounding one still may have. Resolving the retention from the
+    /// tenant's own profile would leave exactly that client replayable in the gap between the
     /// two, which is a hole rather than a tidy cache.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.None)]
     [InlineData(ClientSecurityProfile.Fapi2)]
-    public void RetentionCoversTheLoosestClientWindow(ClientSecurityProfile serverProfile)
+    public void RetentionCoversTheLoosestClientWindow(ClientSecurityProfile tenantProfile)
     {
-        var options = new OidcOptions { DefaultSecurityProfile = serverProfile };
+        var options = new OidcOptions();
         var optedOutClient = new ClientInfo("client-1") { SecurityProfile = ClientSecurityProfile.None };
 
         var accepted = options.JwtBearer.ResolveClockSkew(
-            optedOutClient.SecurityProfile ?? options.DefaultSecurityProfile).Past;
+            optedOutClient.SecurityProfile ?? tenantProfile).Past;
 
         var retained = options.JwtBearer.ClockSkew
                        ?? SecurityProfileRequirements

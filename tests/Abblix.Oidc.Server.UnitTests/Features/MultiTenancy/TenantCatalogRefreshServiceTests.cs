@@ -10,7 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,9 +18,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-#pragma warning disable ABXMT001
 
-namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
+namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 
 /// <summary>
 /// The server reads the store of tenants before serving and again every period, and an outage of the store after
@@ -88,12 +87,12 @@ public class TenantCatalogRefreshServiceTests
             [],
             [],
             [],
-            Options.Create(new MultiTenancyOptions()),
+            Options.Create(new OidcOptions()),
             _time);
     }
 
     private TenantCatalogRefreshService Service()
-        => new(_logger, _catalog, Options.Create(new MultiTenancyOptions { RefreshEvery = Period }), _time);
+        => new(_logger, _catalog, Options.Create(new OidcOptions { RefreshTenantsEvery = Period }), _time);
 
     private static StoredTenant Stored(string id)
         => new(new TenantDefinition { Id = id, Issuer = new Uri($"https://{id}.example.com") }, "1");

@@ -9,6 +9,7 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -66,13 +67,16 @@ public class RegisterClientHandlerIntegrationTests
 
         services.AddOidcServices(opts =>
         {
-            opts.Issuer = TestConstants.DefaultIssuer;
-
             // Generate an in-memory RS256 signing key for the registration access token the
             // success-path test asserts on. Production hosts feed real certificates in this
             // slot, but tests need only a freshly minted key. RsaJsonWebKey is a self-contained
             // POCO, so this stays a simple Add without any further DI plumbing.
-            opts.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            opts.Tenants.Add(new TenantDefinition
+            {
+                Id = TestIssuer.TenantId,
+                Issuer = TestConstants.DefaultIssuer,
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
+            });
 
             // Anonymous registration: opt out of RFC 7591 section 3 initial access token gating so
             // the test focuses on the response_types / grant_types support gates added by
@@ -85,7 +89,7 @@ public class RegisterClientHandlerIntegrationTests
             configureOptions?.Invoke(opts);
         });
 
-        return services.BuildServiceProvider();
+        return services.ResolveToTheDeclaredTenant().BuildServiceProvider();
     }
 
     private static ClientRegistrationRequest CreateRequest(

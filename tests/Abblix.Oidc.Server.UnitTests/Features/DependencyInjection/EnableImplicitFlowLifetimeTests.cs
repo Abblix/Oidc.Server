@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -52,8 +53,7 @@ public class EnableImplicitFlowLifetimeTests
         // only a real web host can satisfy under ValidateOnBuild.
         services.AddOidcCore(opts =>
         {
-            opts.Issuer = TestConstants.DefaultIssuer;
-            opts.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            opts.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
 
         services.EnableImplicitFlow();

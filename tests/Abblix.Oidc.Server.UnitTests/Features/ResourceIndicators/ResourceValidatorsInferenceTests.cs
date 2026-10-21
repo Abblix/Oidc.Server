@@ -53,7 +53,7 @@ public class ResourceValidatorsInferenceTests
         Uri[]? resources,
         params string[] scopes)
     {
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             InferResourceFromScope = infer,
             Resources =
@@ -167,7 +167,7 @@ public class ResourceValidatorsInferenceTests
     [Fact]
     public async Task ATokenExchangeNamingAnAudience_HasNothingInferred()
     {
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             InferResourceFromScope = true,
             Resources = [new ResourceDefinition(Orders, new ScopeDefinition(OrdersRead))],
@@ -196,7 +196,7 @@ public class ResourceValidatorsInferenceTests
     [InlineData(GrantTypes.Ciba)]
     public async Task AGrantAuthorizedEarlier_HasNothingInferred(string grantType)
     {
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             InferResourceFromScope = true,
             Resources =

@@ -41,8 +41,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.Consents;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -381,7 +379,11 @@ public sealed class SharedSignalsTenantIsolationTests
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        var server = builder.Services.AddOidcServices(options =>
+        {
+            options.Tenants.Add(TenantAt("acme", Acme));
+            options.Tenants.Add(TenantAt("globex", Globex));
+        });
 
         builder.Services.AddSecurityEvents();
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
@@ -396,13 +398,7 @@ public sealed class SharedSignalsTenantIsolationTests
         });
         beforeMultiTenancy?.Invoke(builder.Services);
 
-        builder.Services
-            .AddMultiTenancy(options =>
-            {
-                options.Tenants.Add(TenantAt("acme", Acme));
-                options.Tenants.Add(TenantAt("globex", Globex));
-            })
-            .AddSharedSignals();
+        server.AddSharedSignals();
         afterSharedSignals?.Invoke(builder.Services);
 
         var app = builder.Build();

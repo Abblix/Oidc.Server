@@ -68,6 +68,7 @@ public class RollingHmacNonceServiceTests
         // The server's own storage over the cache, so instances sharing the cache share the secrets as they do
         // in a deployment.
         services.AddCommonServices();
+        services.AddSingleton(SingleIssuer.AccessorOf(() => new TestIssuer()));
         services.AddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.AddSingleton<INonceService, RollingHmacNonceService>();
 

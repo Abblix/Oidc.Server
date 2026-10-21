@@ -9,6 +9,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -31,8 +32,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.Features.Consents;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -79,7 +78,7 @@ public sealed class SharedSignalsTenantReleaseTests
         var stored = (await store.ListAsync(ct)).Single(entry => entry.Tenant.Id == "acme");
         Assert.True(await store.RemoveAsync("acme", stored.Version, ct));
         await catalog.RefreshAsync(ct);
-        time.Advance(new MultiTenancyOptions().RefreshEvery);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
 
         Assert.Empty(await StreamsOfAsync(app, acme, ct));
@@ -117,7 +116,7 @@ public sealed class SharedSignalsTenantReleaseTests
         var stored = Assert.Single(await store.ListAsync(ct));
         Assert.True(await store.RemoveAsync("acme", stored.Version, ct));
         await catalog.RefreshAsync(ct);
-        time.Advance(new MultiTenancyOptions().RefreshEvery);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
 
         Assert.Equal(2, streams.Deletions);
@@ -211,7 +210,7 @@ public sealed class SharedSignalsTenantReleaseTests
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        var server = builder.Services.AddOidcServices(_ => { });
 
         builder.Services.AddSecurityEvents();
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
@@ -226,7 +225,7 @@ public sealed class SharedSignalsTenantReleaseTests
         builder.Services.AddSingleton<ITenantStore>(store);
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
-        builder.Services.AddMultiTenancy(_ => { }).AddSharedSignals();
+        server.AddSharedSignals();
 
         var app = builder.Build();
 

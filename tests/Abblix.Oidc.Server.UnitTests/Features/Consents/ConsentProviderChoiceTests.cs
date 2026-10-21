@@ -10,6 +10,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,8 +45,7 @@ public class ConsentProviderChoiceTests
 				case Server:
 					services.AddOidcCore(options =>
 					{
-						options.Issuer = TestConstants.DefaultIssuer;
-						options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+						options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)] });
 					});
 					break;
 

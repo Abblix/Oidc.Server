@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Abblix.Jwt;
@@ -38,7 +40,7 @@ public sealed class HttpIssuerTests(HttpIssuerTests.HttpLetThroughFactory httpsF
         using var client = httpsFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = HttpAddress,
+            BaseAddress = HttpsIssuerOverHttp,
         });
         using var response = await client.GetAsync(
             "/.well-known/openid-configuration", TestContext.Current.CancellationToken);
@@ -49,7 +51,8 @@ public sealed class HttpIssuerTests(HttpIssuerTests.HttpLetThroughFactory httpsF
 
     /// <summary>
     /// The keys of an http issuer are served over http. The keys rather than discovery, which the license of this
-    /// suite would refuse for an issuer it does not name.
+    /// suite would refuse for an issuer it does not name, and the tenant from a store of the host's own, since the
+    /// license refuses at startup a tenant of the settings it does not name.
     /// </summary>
     [Fact]
     public async Task TheKeys_OfAnHttpIssuer_AreServedOverHttp()
@@ -59,13 +62,15 @@ public sealed class HttpIssuerTests(HttpIssuerTests.HttpLetThroughFactory httpsF
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(options =>
+        builder.Services.AddSingleton<ITenantStore>(new OneTenant(new TenantDefinition
         {
-            options.Issuer = HttpAddress;
-            options.AllowHttpIssuer = true;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-        });
+            Id = "local",
+            Issuer = HttpAddress,
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
+        builder.Services.AddOidcServices(options => options.AllowHttpIssuer = true);
         await using var app = builder.Build();
+        app.UseMultiTenancy();
         app.UseCors();
         app.MapOidcEndpoints();
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -93,7 +98,18 @@ public sealed class HttpIssuerTests(HttpIssuerTests.HttpLetThroughFactory httpsF
         }
     }
 
+    /// <summary>A store of the host's own holding one tenant.</summary>
+    private sealed class OneTenant(TenantDefinition tenant) : ITenantStore
+    {
+        public Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyCollection<StoredTenant>>([new StoredTenant(tenant, "1")]);
+    }
+
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "In-memory TestServer base address; not a deployment URL.")]
     private static readonly Uri HttpAddress = new("http://localhost");
+
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "In-memory TestServer base address; not a deployment URL.")]
+    private static readonly Uri HttpsIssuerOverHttp = new("http://auth.example.com");
 }

@@ -32,8 +32,6 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
@@ -91,7 +89,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         await Assert.ThrowsAsync<LicenseViolationException>(() => EndpointObservation.RunAsync(
             TelemetryEndpoints.UserInfo,
             new OidcInstruments(NullLoggerFactory.Instance, meters),
-            null,
+            NoTenant.Accessor,
             () => Task.FromResult(LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings)),
             EndpointObservation.NoError));
 
@@ -252,7 +250,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
         var catalog = Catalog(store);
         var manager = new TenantManager(
-            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], catalog, store);
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], catalog, Options.Create(new OidcOptions()), store);
 
         var result = await manager.CreateAsync(
             new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, ct);
@@ -284,7 +282,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var store = new WritableTenantStore();
         await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
         var manager = new TenantManager(
-            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), store);
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), Options.Create(new OidcOptions()), store);
 
         var created = await manager.CreateAsync(
             new TenantDefinition { Id = "initech", Issuer = new Uri("https://initech.example.com") }, ct);
@@ -359,7 +357,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         ITenantStore? store = null,
         TimeProvider? clock = null)
     {
-        var options = Options.Create(new MultiTenancyOptions
+        var options = Options.Create(new OidcOptions
         {
             Tenants =
             [
@@ -430,7 +428,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var store = new WritableTenantStore();
         await store.AddAsync(new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }, ct);
         var manager = new TenantManager(
-            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), store);
+            NullLogger<TenantManager>.Instance, store, [new TenantDefinitionsCheck()], Catalog(store), Options.Create(new OidcOptions()), store);
 
         var changed = await manager.UpdateAsync(
             new TenantDefinition
@@ -694,22 +692,9 @@ public sealed class LicenseEnforcementTests : IDisposable
         Assert.Throws<LicenseViolationException>(
             () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
 
-        time.Advance(new MultiTenancyOptions().RefreshEvery);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
-    }
-
-    [Fact]
-    public async Task A_client_removed_through_registration_frees_its_place()
-    {
-        // A client its registrant deleted is no longer served, so the next client takes its place
-        ArrangeClientLimitOfTwo();
-        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
-        CountPastTheMargin(SingleIssuer.Settings, removed.ClientInfo);
-
-        await RemoveThroughRegistrationAsync(removed, SingleIssuer.Settings);
-
-        AssertOnePlaceFree(SingleIssuer.Settings);
     }
 
     [Fact]
@@ -769,31 +754,6 @@ public sealed class LicenseEnforcementTests : IDisposable
         await catalog.RefreshAsync(ct);
 
         AssertOnePlaceFree(acme);
-    }
-
-    [Fact]
-    public async Task A_client_a_reload_of_the_settings_drops_frees_its_place_once_the_reloaded_settings_are_served()
-    {
-        // A server without tenants serving its clients from the reloadable store takes a client the reloaded
-        // settings no longer configure off the count when it first serves them
-        ArrangeClientLimitOfTwo();
-        var current = new OidcOptions { Clients = [new("client-0"), new("client-1"), new("client-2")] };
-        var monitor = new Mock<IOptionsMonitor<OidcOptions>>();
-        monitor.SetupGet(options => options.CurrentValue).Returns(() => current);
-        var settings = new OptionsIssuerSettings(monitor.Object);
-        var clients = new ReloadableClientInfoStorage(
-            NullLogger<ReloadableClientInfoStorage>.Instance,
-            settings,
-            new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-            new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
-        foreach (var client in current.Clients)
-            _ = Issues((await clients.TryFindClientAsync(client.ClientId))!, settings);
-        Assert.False(Issues(new ClientInfo("newcomer"), settings));
-
-        current = new OidcOptions { Clients = [new("client-1"), new("client-2")] };
-        await clients.TryFindClientAsync("client-1");
-
-        AssertOnePlaceFree(settings);
     }
 
     /// <summary>
@@ -879,7 +839,7 @@ public sealed class LicenseEnforcementTests : IDisposable
             [new TenantDefinitionsCheck()],
             [opening.Object],
             [],
-            Options.Create(new MultiTenancyOptions()),
+            Options.Create(new OidcOptions()),
             time ?? new FakeTimeProvider());
     }
 

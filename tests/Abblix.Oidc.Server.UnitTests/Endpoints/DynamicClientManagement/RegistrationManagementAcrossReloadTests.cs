@@ -29,31 +29,21 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
 /// A registration access token manages the registration holding its jti and nothing else: a client the store
-/// serves from the settings is held by no registration, so no token manages it, and a registration the reloading store drops when
+/// serves from the settings is held by no registration, so no token manages it, and a registration the store drops when
 /// the settings come to configure its id takes its token's reach with it.
 /// </summary>
 public class RegistrationManagementAcrossReloadTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
 
-    private readonly Reloadable _options = new(new OidcOptions());
-    private readonly OptionsIssuerSettings _settings;
-
-    public RegistrationManagementAcrossReloadTests()
-    {
-        _settings = new OptionsIssuerSettings(_options);
-    }
+    private readonly Reloadable _options = new(new TestIssuer());
 
     private ReloadableClientInfoStorage ReloadableStore() => new(
         NullLogger<ReloadableClientInfoStorage>.Instance,
-        _settings,
-        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
-
-    private ClientInfoStorage DefaultStore() => new(
-        _settings,
-        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
+        SingleIssuer.SettingsOf(_options),
+        SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(() => _options.CurrentValue),
+        new IssuerClientRegistrations(
+            SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>(() => _options.CurrentValue)));
 
     private static async Task RegisterAsync(IClientInfoManager clients, string tokenId)
         => Assert.True(await clients.TryAddClientAsync(
@@ -70,7 +60,7 @@ public class RegistrationManagementAcrossReloadTests
         return result.TryGetSuccess(out var request) ? request : null;
     }
 
-    private OidcOptions Configuring() => new()
+    private static TestIssuer Configuring() => new()
     {
         Clients = [new ClientInfo(ClientId) { ClientName = "configured" }],
     };
@@ -96,7 +86,7 @@ public class RegistrationManagementAcrossReloadTests
         _options.Reload(Configuring());
         Assert.Null(await ManagesAsync(clients, "first"));
 
-        _options.Reload(new OidcOptions());
+        _options.Reload(new TestIssuer());
         Assert.Null(await clients.TryFindClientAsync(ClientId));
         Assert.Null(await ManagesAsync(clients, "first"));
 
@@ -106,45 +96,28 @@ public class RegistrationManagementAcrossReloadTests
     }
 
     /// <summary>
-    /// The default store does not follow a reload, so a registration it still serves stays its registrant's to
-    /// manage when the settings come to configure its id; they take it over at the next start.
-    /// </summary>
-    [Fact]
-    public async Task UnderTheDefaultStore_ARegistrationItStillServes_StaysManaged()
-    {
-        var clients = DefaultStore();
-        await RegisterAsync(clients, "first");
-
-        _options.Reload(Configuring());
-
-        Assert.Equal("registered", (await ManagesAsync(clients, "first"))?.Client.ClientInfo.ClientName);
-    }
-
-    /// <summary>
     /// The shape a restart leaves: the registration is gone with the memory that held it, the settings now configure
     /// its id, and the registrant still holds its token. No registration is held under the id, so the token manages
     /// nothing, before and after the settings change again.
     /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ATokenOutlivingItsRegistration_ManagesNoConfiguredClient(bool defaultStore)
+    [Fact]
+    public async Task ATokenOutlivingItsRegistration_ManagesNoConfiguredClient()
     {
         _options.Reload(Configuring());
-        IClientInfoManager clients = defaultStore ? DefaultStore() : ReloadableStore();
+        var clients = ReloadableStore();
 
         Assert.Null(await ManagesAsync(clients, "left over"));
 
-        _options.Reload(new OidcOptions { Clients = [new ClientInfo(ClientId) { ClientName = "changed" }] });
+        _options.Reload(new TestIssuer { Clients = [new ClientInfo(ClientId) { ClientName = "changed" }] });
         Assert.Null(await ManagesAsync(clients, "left over"));
     }
 
-    private sealed class Reloadable(OidcOptions initial) : IOptionsMonitor<OidcOptions>
+    private sealed class Reloadable(TestIssuer initial) : IOptionsMonitor<TestIssuer>
     {
-        public OidcOptions CurrentValue { get; private set; } = initial;
-        public void Reload(OidcOptions options) => CurrentValue = options;
-        public OidcOptions Get(string? name) => CurrentValue;
-        public IDisposable? OnChange(Action<OidcOptions, string?> listener) => null;
+        public TestIssuer CurrentValue { get; private set; } = initial;
+        public void Reload(TestIssuer options) => CurrentValue = options;
+        public TestIssuer Get(string? name) => CurrentValue;
+        public IDisposable? OnChange(Action<TestIssuer, string?> listener) => null;
     }
 
     /// <summary>

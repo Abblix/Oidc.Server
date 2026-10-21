@@ -6,8 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using System.Collections;
@@ -73,8 +71,8 @@ public sealed class HostIsolationTests : IAsyncLifetime
         if (withLibrary)
         {
             builder.Services.AddConsentGrantedForEveryClient();
-            builder.Services.AddOidcServices(_ => { });
-            TestTenant.ServeOn(builder.Services, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature));
+            builder.Services.AddOidcServices(
+                options => TestTenant.ServeOn(options, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)));
         }
 
         var app = builder.Build();
