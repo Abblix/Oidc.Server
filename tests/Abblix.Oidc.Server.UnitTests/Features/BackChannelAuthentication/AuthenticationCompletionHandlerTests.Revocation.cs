@@ -13,11 +13,13 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -110,14 +112,22 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
+        var fault = new InvalidOperationException("the cutoff store is unavailable");
         var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
-        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>()))
-            .ThrowsAsync(new InvalidOperationException("the cutoff store is unavailable"));
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ThrowsAsync(fault);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(cutoffs: cutoffs.Object)
-            .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+        var logger = new Mock<ILogger<PushModeCompletionHandler>>();
+        // [LoggerMessage] gates each call on IsEnabled, which a loose mock answers false
+        logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
 
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreatePushModeHandler(logger: logger.Object, cutoffs: cutoffs.Object)
+                .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+
+        // The store's own fault, not one the handler made up: it is what the host has to diagnose the outage by.
+        Assert.Same(fault, thrown);
         _tokenRequestProcessor.VerifyNoOtherCalls();
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         _notificationService.Verify(
             n => n.SendAsync(
                 It.IsAny<Uri>(),
@@ -126,6 +136,15 @@ public partial class AuthenticationCompletionHandlerTests
                     payload is BackChannelPushErrorNotificationRequest
                     && ((BackChannelPushErrorNotificationRequest)payload).Error == ErrorCodes.TransactionFailed),
                 BackchannelTokenDeliveryModes.Push),
+            Times.Once);
+        _notificationService.VerifyNoOtherCalls();
+        logger.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.Is<EventId>(id => id.Id == LogEvents.Device.PushModeCompletionHandler.RevocationCheckFaulted),
+                It.IsAny<It.IsAnyType>(),
+                fault,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
     }
 }

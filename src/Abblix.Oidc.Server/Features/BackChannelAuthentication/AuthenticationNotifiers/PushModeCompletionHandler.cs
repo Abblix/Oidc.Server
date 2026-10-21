@@ -226,7 +226,7 @@ public partial class PushModeCompletionHandler(
         bool revoked;
         try
         {
-            revoked = await IsRevokedAsync(request.AuthorizedGrant);
+            revoked = await cutoffChecker.IsGrantRefusedAsync(request.AuthorizedGrant, GrantTypes.Ciba);
         }
         catch (Exception exception)
         {
@@ -244,14 +244,6 @@ public partial class PushModeCompletionHandler(
         await SendErrorAsync(authenticationRequestId, request, RevokedGrant);
         return true;
     }
-
-    /// <summary>
-    /// Whether a revocation refuses the grant: one recorded against its session or its subject, or against the end
-    /// user at its client before they approved it.
-    /// </summary>
-    private async Task<bool> IsRevokedAsync(AuthorizedGrant grant)
-        => await cutoffChecker.IsSessionRefusedAsync(grant.AuthSession) ||
-           await cutoffChecker.IsGrantRefusedAtItsClientAsync(grant);
 
     /// <summary>
     /// Issues the tokens of a taken push request, telling the client the transaction failed when issuing throws.
