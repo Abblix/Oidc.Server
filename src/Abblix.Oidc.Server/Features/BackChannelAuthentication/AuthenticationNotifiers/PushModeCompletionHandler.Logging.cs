@@ -77,4 +77,20 @@ partial class PushModeCompletionHandler
         Message = "Issuing the tokens of auth_req_id {AuthReqId} failed, so the client was told the transaction " +
                   "failed. ClientId: {ClientId}")]
     private partial void LogTokenIssuanceFaulted(Exception exception, Fingerprint AuthReqId, string ClientId);
+
+    // Information: a revoked grant refused is the control working. The request is named, since the revocation
+    // checker's own line names the session or the client and not the request a client complains about.
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.GrantRevoked,
+        Level = LogLevel.Information,
+        Message = "A revocation refused the grant completing auth_req_id {AuthReqId} of client {ClientId}, so the " +
+                  "client was sent access_denied and no tokens were issued")]
+    private partial void LogGrantRevoked(Fingerprint AuthReqId, string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.RevocationCheckFaulted,
+        Level = LogLevel.Error,
+        Message = "Checking whether a revocation refuses the grant completing auth_req_id {AuthReqId} failed, so the " +
+                  "client {ClientId} was told the transaction failed")]
+    private partial void LogRevocationCheckFaulted(Exception exception, Fingerprint AuthReqId, string ClientId);
 }

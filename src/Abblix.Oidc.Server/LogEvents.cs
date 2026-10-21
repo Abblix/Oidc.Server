@@ -602,6 +602,8 @@ internal static class LogEvents
             public const int GrantedAuthorizationDetailsRefused = Base + 5;
             public const int GrantedAuthorizationDetailsFaulted = Base + 6;
             public const int TokenIssuanceFaulted = Base + 7;
+            public const int GrantRevoked = Base + 8;
+            public const int RevocationCheckFaulted = Base + 9;
         }
 
         /// <summary>

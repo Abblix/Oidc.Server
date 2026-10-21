@@ -74,7 +74,8 @@ public interface ITokenRevoker
     /// tokens run out. Their browser sessions stay usable, since they serve the other clients too; the client gets
     /// new tokens only through a new authorization, which asks for consent again once the host has deleted the
     /// stored one: a code, a device authorization or a CIBA request the end user approved before the revocation is
-    /// refused at redemption too. Deleting the stored consent stays with the host, whose consent provider keeps it.
+    /// refused at redemption too, or, for a client whose CIBA tokens are pushed to it, when the host completes the
+    /// request. Deleting the stored consent stays with the host, whose consent provider keeps it.
     /// <para>
     /// A token another client obtained by exchanging one of this client's tokens before the revocation belongs to
     /// that other client and is left alone; revoking the end user there takes a call naming that client.

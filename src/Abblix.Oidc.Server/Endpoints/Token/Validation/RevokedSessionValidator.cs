@@ -66,7 +66,7 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : I
         if (context.Request.GrantType is not { } grantType || !RedeemsAnEarlierSession.Contains(grantType))
             return null;
 
-        if (!await IsRefusedAsync(context.AuthorizedGrant, grantType))
+        if (!await cutoffChecker.IsGrantRefusedAsync(context.AuthorizedGrant, grantType))
             return null;
 
         // RFC 6749 Section 5.2 names this case in the definition of the code: the grant is "invalid,
@@ -75,32 +75,5 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : I
         return new OidcError(
             ErrorCodes.InvalidGrant,
             "The session this grant was authorized from has been revoked.");
-    }
-
-    /// <summary>
-    /// Whether a cutoff refuses the grant: one recorded against its session or its subject, or, for a grant the end
-    /// user authorized at its client, one recorded against them at that client.
-    /// </summary>
-    /// <remarks>
-    /// A refresh token is left to its own issue time at the client: the token side already refuses one issued
-    /// before such a cutoff, while its grant carries no authorization moment and would be measured against its
-    /// session, refusing a family founded after the end user consented again in that same session.
-    /// </remarks>
-    private async Task<bool> IsRefusedAsync(AuthorizedGrant grant, string grantType)
-    {
-        if (await cutoffChecker.IsSessionRefusedAsync(grant.AuthSession))
-            return true;
-
-        switch (grantType)
-        {
-            case GrantTypes.RefreshToken:
-                return false;
-
-            case GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba:
-                return await cutoffChecker.IsGrantRefusedAtItsClientAsync(grant);
-
-            default:
-                throw new InvalidOperationException($"No revocation check is defined for the grant type {grantType}");
-        }
     }
 }

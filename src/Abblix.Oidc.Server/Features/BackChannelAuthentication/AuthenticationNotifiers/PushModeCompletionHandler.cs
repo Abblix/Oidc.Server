@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -35,6 +36,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="authorizationDetailsPolicy">The per-type validators, asked before delivery whether
 /// the grant the host completed with is still one the deployment will issue.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
+/// <param name="cutoffChecker">Asked before minting whether a revocation refuses the grant, as the token endpoint
+/// asks for a poll or ping client redeeming the same request.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
@@ -43,13 +46,17 @@ public partial class PushModeCompletionHandler(
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
-    TimeProvider clock)
+    TimeProvider clock,
+    IRevocationCutoffChecker cutoffChecker)
     : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
     private static readonly OidcError RefusedGrant =
         new(ErrorCodes.AccessDenied, "The grant carries authorization_details that were refused");
+
+    private static readonly OidcError RevokedGrant =
+        new(ErrorCodes.AccessDenied, "The grant was revoked");
 
     private static readonly OidcError TokensNotIssued =
         new(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
@@ -121,6 +128,13 @@ public partial class PushModeCompletionHandler(
 
         if (await TakeRequestAsync(authenticationRequestId) is null)
             throw ClaimLost(authenticationRequestId);
+
+        // The revocation checks the token endpoint makes before redeeming a grant, asked HERE for the same reason as
+        // the per-type validators below: a push client never redeems, so without them a request whose session or
+        // subject was revoked, or which the end user approved before withdrawing consent from this client, would be
+        // answered with tokens in push mode and refused in poll or ping.
+        if (await RefusedAsRevokedAsync(authenticationRequestId, request, clientInfo))
+            return;
 
         // The per-type validators, asked HERE because this is where a push grant is spent. Poll and ping
         // reach the same question at the token endpoint when their client redeems; a push client never
@@ -198,6 +212,37 @@ public partial class PushModeCompletionHandler(
                 await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
                 return null;
             });
+    }
+
+    /// <summary>
+    /// Refuses a taken request whose grant a revocation refuses, telling the client access_denied, or the
+    /// transaction failed when the check itself throws; answers whether it refused.
+    /// </summary>
+    private async Task<bool> RefusedAsRevokedAsync(
+        [Credential] string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        ClientInfo clientInfo)
+    {
+        bool revoked;
+        try
+        {
+            revoked = await cutoffChecker.IsGrantRefusedAsync(request.AuthorizedGrant, GrantTypes.Ciba);
+        }
+        catch (Exception exception)
+        {
+            // The store the cutoffs live in failing. The request is already taken and a push client never polls, so
+            // it is told the transaction failed before the fault goes on to the host that completed the request.
+            LogRevocationCheckFaulted(exception, FingerprintOf(authenticationRequestId), clientInfo.ClientId);
+            await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
+            throw;
+        }
+
+        if (!revoked)
+            return false;
+
+        LogGrantRevoked(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
+        await SendErrorAsync(authenticationRequestId, request, RevokedGrant);
+        return true;
     }
 
     /// <summary>
