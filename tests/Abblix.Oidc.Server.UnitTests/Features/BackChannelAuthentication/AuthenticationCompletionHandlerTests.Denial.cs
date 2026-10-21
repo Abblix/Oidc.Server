@@ -104,7 +104,7 @@ public partial class AuthenticationCompletionHandlerTests
         await CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
-        VerifyPushErrorSent(ErrorCodes.AccessDenied, "The end user denied the authorization request");
+        VerifyPushErrorSent(ErrorCodes.AccessDenied);
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 

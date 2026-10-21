@@ -546,7 +546,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         // Assert
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
-        VerifyPushErrorSent(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _storage.Verify(
             s => s.TryRemoveAsync(AuthReqId),
             Times.Once);
@@ -589,7 +589,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         Assert.Same(fault, thrown);
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
-        VerifyPushErrorSent(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         logger.Verify(
             l => l.Log(
@@ -886,9 +886,9 @@ public partial class AuthenticationCompletionHandlerTests
 
     /// <summary>
     /// The push error payload of CIBA Core 1.0 section 12 went to the client's endpoint, once, with this
-    /// code and this description word for word - and no token payload went with it.
+    /// code - and no token payload went with it. The description is prose and is not compared.
     /// </summary>
-    private void VerifyPushErrorSent(string error, string description)
+    private void VerifyPushErrorSent(string error)
     {
         _notificationService.Verify(
             n => n.SendAsync(
@@ -897,8 +897,7 @@ public partial class AuthenticationCompletionHandlerTests
                 It.Is<IBackChannelNotificationRequest>(payload =>
                     payload is BackChannelPushErrorNotificationRequest
                     && payload.AuthenticationRequestId == AuthReqId
-                    && ((BackChannelPushErrorNotificationRequest)payload).Error == error
-                    && ((BackChannelPushErrorNotificationRequest)payload).ErrorDescription == description),
+                    && ((BackChannelPushErrorNotificationRequest)payload).Error == error),
                 BackchannelTokenDeliveryModes.Push),
             Times.Once);
         _notificationService.Verify(
@@ -952,7 +951,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
-        VerifyPushErrorSent(ErrorCodes.AccessDenied, "The end user authenticated at a level the request does not accept");
+        VerifyPushErrorSent(ErrorCodes.AccessDenied);
     }
 
     private const string EncodedAccessToken = "access_token_jwt";

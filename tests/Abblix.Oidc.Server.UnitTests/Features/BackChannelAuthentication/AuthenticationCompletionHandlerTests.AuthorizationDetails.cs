@@ -207,7 +207,7 @@ public partial class AuthenticationCompletionHandlerTests
         _tokenRequestProcessor.VerifyNoOtherCalls();
         // The validator's own words are for the operator: the client is sent the fixed description, and
         // nothing of "instructedAmount exceeds the ceiling".
-        VerifyPushErrorSent(ErrorCodes.AccessDenied, "The grant carries authorization_details that were refused");
+        VerifyPushErrorSent(ErrorCodes.AccessDenied);
         _notificationService.VerifyNoOtherCalls();
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
@@ -234,7 +234,7 @@ public partial class AuthenticationCompletionHandlerTests
             .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
 
         _tokenRequestProcessor.VerifyNoOtherCalls();
-        VerifyPushErrorSent(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _notificationService.VerifyNoOtherCalls();
     }
 

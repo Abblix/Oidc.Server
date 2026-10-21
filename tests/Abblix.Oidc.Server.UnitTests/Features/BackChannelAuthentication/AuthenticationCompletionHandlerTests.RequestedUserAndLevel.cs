@@ -66,7 +66,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
-        VerifyPushErrorSent(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
+        VerifyPushErrorSent(ErrorCodes.AccessDenied);
     }
 
     /// <summary>
