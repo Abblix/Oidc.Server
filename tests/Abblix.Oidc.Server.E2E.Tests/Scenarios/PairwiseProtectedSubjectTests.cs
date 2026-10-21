@@ -260,8 +260,6 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         return Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
-                services.AddPairwiseSubjectIdentifiers(
-                    new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
 
                 // Emit a real pairwise id_token: the default host stub writes the raw subject to the id_token's
                 // 'sub', so replace it with a provider that applies the pairwise conversion exactly as the
@@ -279,8 +277,13 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
                             // independent of service-token encryption (it is keyed by the pairwise salt).
                             options.ServiceTokens.AccessToken.Encrypt = false;
                             options.ServiceTokens.RefreshToken.Encrypt = false;
-                            options.Clients = [.. options.Clients, pairwiseClient];
                         }));
+
+                services.PostConfigure<TestTenantSettings>(tenant =>
+                {
+                    tenant.PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) };
+                    tenant.Clients = [.. tenant.Clients, pairwiseClient];
+                });
             }));
     }
 

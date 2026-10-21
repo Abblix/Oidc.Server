@@ -112,6 +112,7 @@ public sealed class EndpointMetricsTests(TestFactory factory) : TestBase(factory
             var admitted = key switch
             {
                 TelemetryTags.Endpoint => endpoints.Contains(text),
+                TelemetryTags.Tenant => text == TestTenantSettings.TenantId,
                 TelemetryTags.Outcome => outcomes.Contains(text),
                 TelemetryTags.Error => errors.Contains(text),
                 TelemetryTags.TokenType => tokenTypes.Contains(text),

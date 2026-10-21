@@ -261,7 +261,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("http://localhost"),
+            BaseAddress = new Uri("http://auth.example.com"),
         });
 
         // Over http the group's HTTPS filter refuses a credential-carrying POST rather than serving it in cleartext,
@@ -284,7 +284,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("http://localhost"),
+            BaseAddress = new Uri("http://auth.example.com"),
         });
 
         // Discovery and JWKS are gated on HTTPS like every other endpoint: over cleartext a man-in-the-middle could

@@ -7,6 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 #if !MINIMAL_API_TRANSPORT
+// The feature is marked experimental for its consumers; these tests are where it is built.
+#pragma warning disable ABXMT001
+
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -266,13 +271,11 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(options =>
-        {
-            options.Issuer = TestConstants.IssuerUri;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-        });
+        builder.Services.AddOidcServices(_ => { });
+        TestTenant.ServeOn(builder.Services, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature));
 
         var app = builder.Build();
+        app.UseMultiTenancy();
         convention(app.MapOidcControllers());
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;

@@ -9,6 +9,7 @@
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -87,6 +88,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         // the host (which is what triggers LicenseLoader.LoadAsync on the embedded JWT).
         var client = CreateClient();
         _ = await FetchDiscoveryAsync(client);
+        using var tenant = TestTenant.Enter(Factory.Services);
         var settings = Factory.Services.GetRequiredService<IIssuerSettings>();
 
         Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer, settings));

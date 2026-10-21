@@ -21,6 +21,7 @@
        the only adapter-specific code is this project's Program.cs (AddOidcMinimalApi + MapOidcEndpoints). -->
   <ItemGroup>
     <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestInfrastructure\TestConstants.cs" Link="TestInfrastructure\TestConstants.cs" />
+    <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestInfrastructure\TestTenantSettings.cs" Link="TestInfrastructure\TestTenantSettings.cs" />
     <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\AutoAuthSessionService.cs" Link="TestStubs\AutoAuthSessionService.cs" />
     <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\AutoConsentsProvider.cs" Link="TestStubs\AutoConsentsProvider.cs" />
     <Compile Include="..\Abblix.Oidc.Server.E2E.TestHost\TestStubs\StaticUserClaimsProvider.cs" Link="TestStubs\StaticUserClaimsProvider.cs" />
@@ -31,6 +32,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
   </ItemGroup>
 
   <!-- Expose internal Program to the test assembly so WebApplicationFactory<Program>

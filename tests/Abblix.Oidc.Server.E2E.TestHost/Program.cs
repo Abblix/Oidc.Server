@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+// The feature is marked experimental for its consumers; these hosts are where it is built.
+#pragma warning disable ABXMT001
+
 using Abblix.Oidc;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,6 +27,9 @@ using Abblix.Oidc.Server.Features.NoneFlow;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -57,19 +63,33 @@ builder.Services.AddBackChannelLogout();
 
 builder.Services.AddOidcServices(options =>
 {
-    options.Issuer = TestConstants.IssuerUri;
+    // RFC 8628 device flow settings. The host opts into device authorization (AddDeviceAuthorization() below),
+    // which enables the endpoint and makes these settings mandatory; no client here drives the device grant.
+    options.DeviceAuthorization = new DeviceAuthorizationOptions
+    {
+        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
+        CodeLifetime = TimeSpan.FromMinutes(15),
+        PollingInterval = TimeSpan.FromSeconds(5),
+        DeviceCodeLength = 32,
+        UserCodeLength = 8,
+    };
+});
+
+builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
+{
+    tenant.Issuer = TestConstants.IssuerUri;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
     // A host that configures only LoginUri leaves the other arms of the authorization response formatter
     // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.
-    options.LoginUri = new Uri("/login", UriKind.Relative);
-    options.ConsentUri = new Uri("/consent", UriKind.Relative);
-    options.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
-    options.RegistrationUri = new Uri("/register", UriKind.Relative);
-    options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+    tenant.LoginUri = new Uri("/login", UriKind.Relative);
+    tenant.ConsentUri = new Uri("/consent", UriKind.Relative);
+    tenant.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
+    tenant.RegistrationUri = new Uri("/register", UriKind.Relative);
+    tenant.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
 
-    options.Clients =
+    tenant.Clients =
     [
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
@@ -131,21 +151,11 @@ builder.Services.AddOidcServices(options =>
 
     // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
-    options.Resources =
+    tenant.Resources =
     [
         new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
     ];
 
-    // RFC 8628 device flow settings. The host opts into device authorization (AddDeviceAuthorization() below),
-    // which enables the endpoint and makes these settings mandatory; no client here drives the device grant.
-    options.DeviceAuthorization = new DeviceAuthorizationOptions
-    {
-        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
-        CodeLifetime = TimeSpan.FromMinutes(15),
-        PollingInterval = TimeSpan.FromSeconds(5),
-        DeviceCodeLength = 32,
-        UserCodeLength = 8,
-    };
     return;
 
     static ClientInfo Mint(
@@ -202,8 +212,13 @@ builder.Services.AddDistributedMemoryCache();
 // AutoConsentsProvider reads the per-test override out of HttpContext.Items via this accessor.
 builder.Services.AddHttpContextAccessor();
 
+// The host serves one tenant at the issuer, built from settings a test may change for its own host.
+builder.Services.AddMultiTenancy(_ => { });
+builder.Services.AddOptions<MultiTenancyOptions>()
+    .Configure<IOptions<TestTenantSettings>>((tenancy, tenant) => tenancy.Tenants.Add(tenant.Value.ToTenant()));
+
 var app = builder.Build();
-app.UseRouting();
+app.UseMultiTenancy();
 
 // Lift the X-Test-Consent-Override-AuthorizationDetails header into HttpContext.Items before
 // the OIDC pipeline reaches AutoConsentsProvider.

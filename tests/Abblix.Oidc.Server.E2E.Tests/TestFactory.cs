@@ -56,7 +56,7 @@ public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
     protected override void ConfigureClient(HttpClient client)
     {
         // OIDC MVC controllers carry [RequireHttps]; force the in-memory
-        // TestServer client to https://localhost so Request.IsHttps == true.
+        // TestServer client to https on the tenant's host, so Request.IsHttps == true and the request reaches it.
         client.BaseAddress = TestServerAddress.BaseAddress;
     }
 }

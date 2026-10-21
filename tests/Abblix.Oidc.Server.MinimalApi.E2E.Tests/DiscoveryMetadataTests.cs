@@ -9,6 +9,7 @@
 using System.Text.Json;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -54,6 +55,18 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
             builder.ConfigureTestServices(services => services.PostConfigure(configure)));
 
     /// <summary>
+    /// The shared host with its tenant's mutual-TLS host at <paramref name="mtlsBaseUri"/>, and the server's
+    /// own settings changed by <paramref name="configure"/>.
+    /// </summary>
+    private WebApplicationFactory<Program> HostWithMtls(Uri mtlsBaseUri, Action<OidcOptions>? configure = null)
+        => factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.MtlsBaseUri = mtlsBaseUri);
+                services.PostConfigure(configure ?? (_ => { }));
+            }));
+
+    /// <summary>
     /// With a mutual-TLS base configured, the document gains an alias block naming the same endpoints on that
     /// host, so a client holding a certificate knows where to present it. The paths must survive the rebase:
     /// an alias pointing at the right host but the wrong path is a 404 for every certificate-bound client.
@@ -61,7 +74,7 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task A_configured_mtls_base_publishes_aliases_on_that_host_with_the_same_paths()
     {
-        await using var host = HostWith(options => options.Discovery.MtlsBaseUri = MtlsBaseUri);
+        await using var host = HostWithMtls(MtlsBaseUri);
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();
@@ -165,11 +178,8 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task A_disabled_endpoint_is_missing_from_the_alias_block_too()
     {
-        await using var host = HostWith(options =>
-        {
-            options.Discovery.MtlsBaseUri = MtlsBaseUri;
-            options.EnabledEndpoints &= ~OidcEndpoints.Revocation;
-        });
+        await using var host = HostWithMtls(
+            MtlsBaseUri, options => options.EnabledEndpoints &= ~OidcEndpoints.Revocation);
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();
@@ -192,11 +202,8 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task With_path_discovery_off_the_document_names_no_endpoint_addresses()
     {
-        await using var host = HostWith(options =>
-        {
-            options.Discovery.AllowEndpointPathsDiscovery = false;
-            options.Discovery.MtlsBaseUri = MtlsBaseUri;
-        });
+        await using var host = HostWithMtls(
+            MtlsBaseUri, options => options.Discovery.AllowEndpointPathsDiscovery = false);
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();
