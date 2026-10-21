@@ -53,4 +53,13 @@ The transmitter's issuer names the host without a path. Each tenant's addresses 
 
 A request that reaches no tenant is answered 404. A receiver is accepted only with credentials the tenant's own issuer issued: the issuer is read from the `iss` claim the host's authentication leaves behind, or through `ReceiverIssuerSelector` of `SharedSignalsEndpointOptions` where the host keeps it elsewhere. So a receiver of one tenant cannot reach another tenant's streams by presenting its credentials under that tenant's address, even with the same identifier.
 
-The server does not start when the stream store, the transmitter's identity or its delivery pass has been replaced after `AddSharedSignals()`, when the transmitter's issuer names a path or its key set address is on another host, or when streams are declared in configuration, since declared streams belong to no tenant.
+A tenant can declare its streams in configuration instead of letting its receivers create them. The declared streams are that tenant's stream set, and only its receivers find them:
+
+```csharp
+builder.Services
+    .AddOidcServices(options => options.Tenants.Add(acme))
+    .AddSharedSignals()
+    .AddConfiguredStreams("acme", builder.Configuration.GetSection("Acme:Streams").Get<ConfiguredStream[]>() ?? []);
+```
+
+The server does not start when the stream store, the transmitter's identity or its delivery pass has been replaced after `AddSharedSignals()`, when the transmitter's issuer names a path or its key set address is on another host, or when streams are declared for the whole server with `AddSharedSignalsConfiguredStreams`, since those belong to no tenant's receivers.

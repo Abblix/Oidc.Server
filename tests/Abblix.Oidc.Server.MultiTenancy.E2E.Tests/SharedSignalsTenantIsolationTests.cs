@@ -283,8 +283,8 @@ public sealed class SharedSignalsTenantIsolationTests
             () => StartAsync(issuer, new Uri(jwksUri, UriKind.RelativeOrAbsolute)));
 
     /// <summary>
-    /// Streams declared in configuration belong to no tenant, so the server does not start with them, whether
-    /// they are delivered by push or polled.
+    /// Streams declared for the whole server belong to no tenant's receivers, so the server does not start with them,
+    /// whether they are delivered by push or polled.
     /// </summary>
     [Theory]
     [InlineData(PushEndpoint)]
@@ -301,6 +301,25 @@ public sealed class SharedSignalsTenantIsolationTests
                 }])));
 
         Assert.Single(refusal.Failures);
+    }
+
+    /// <summary>
+    /// The streams a tenant declares are its receiver's, as created through the management API would be, and no other
+    /// tenant's receiver finds them.
+    /// </summary>
+    [Fact]
+    public async Task ATenantsDeclaredStreams_AreItsReceiversAndNoOneElses()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync(declare: server => server.AddConfiguredStreams(
+            "acme",
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }]));
+
+        var acme = await ClientOf(app, Host + Acme).GetFromJsonAsync<StreamConfiguration[]>(Acme + StreamPath, ct);
+        var globex = await ClientOf(app, Host + Globex).GetFromJsonAsync<StreamConfiguration[]>(Globex + StreamPath, ct);
+
+        Assert.Equal("alerts", Assert.Single(acme!).StreamId);
+        Assert.Empty(globex!);
     }
 
     private static async Task<int> DispatchAsync(WebApplication app, string tenantId, CancellationToken ct)
@@ -368,7 +387,8 @@ public sealed class SharedSignalsTenantIsolationTests
         string issuer = Host,
         Uri? jwksUri = null,
         Action<IServiceCollection>? beforeMultiTenancy = null,
-        Action<IServiceCollection>? afterSharedSignals = null)
+        Action<IServiceCollection>? afterSharedSignals = null,
+        Action<IOidcServerBuilder>? declare = null)
     {
         await TestLicense.Loaded;
 
@@ -399,6 +419,7 @@ public sealed class SharedSignalsTenantIsolationTests
         beforeMultiTenancy?.Invoke(builder.Services);
 
         server.AddSharedSignals();
+        declare?.Invoke(server);
         afterSharedSignals?.Invoke(builder.Services);
 
         var app = builder.Build();

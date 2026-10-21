@@ -36,12 +36,13 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
         if (serviceProvider.GetService<IReadOnlyList<ConfiguredStream>>() is not null)
         {
             return ValidateOptionsResult.Fail(
-                "Streams declared in configuration belong to no tenant, so a multi-tenant server cannot serve them; "
-                + "let each tenant's receivers create their streams through the stream management API.");
+                "Streams declared for the whole server belong to no tenant's receivers; declare each tenant's with "
+                + $"{nameof(SharedSignalsMultiTenancyExtensions.AddConfiguredStreams)}() on what AddOidcServices() "
+                + "returns.");
         }
 
         var failures = new List<string>();
-        Require<IStreamStore, TenantStreamStore>(failures);
+        Require<IStreamStore, TenantConfiguredStreamStore>(failures);
 
         Require<ITransmitterIdentity, TenantTransmitterIdentity>(failures);
         Require<IPushDeliverySweep, TenantPushDeliverySweep>(failures);
@@ -82,5 +83,6 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
     private static string Shared<TService, TPerTenant>(object service)
         => $"{typeof(TService).Name} is {service.GetType().Name}, which every tenant would share; it is replaced "
            + $"after {nameof(SharedSignalsMultiTenancyExtensions.AddSharedSignals)}() rather than wrapped by "
-           + $"{typeof(TPerTenant).Name}. Register it before AddMultiTenancy().";
+           + $"{typeof(TPerTenant).Name}. Register it before "
+           + $"{nameof(SharedSignalsMultiTenancyExtensions.AddSharedSignals)}().";
 }

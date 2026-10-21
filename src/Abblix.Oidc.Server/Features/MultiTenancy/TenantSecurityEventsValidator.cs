@@ -59,7 +59,7 @@ public sealed class TenantSecurityEventsValidator(IServiceProvider serviceProvid
     /// </summary>
     private const string SharedSignalsTransmitter =
         "a Shared Signals transmitter is made per tenant, its signer included, by AddSharedSignals() of " +
-        "Abblix.Oidc.Server.SharedSignals on what AddMultiTenancy() returns.";
+        "Abblix.Oidc.Server.SharedSignals on what AddOidcServices() returns.";
 
     /// <summary>
     /// The registered signer, or null where none can be built - as the one <c>AddSecurityEvents</c> registers
