@@ -36,4 +36,15 @@ public interface IMintedKeysBuilder
     /// the call does nothing. See <see cref="MintedKeys.AdoptedKeys"/> for what adoption does to the ordering.
     /// </remarks>
     IMintedKeysBuilder AdoptExistingKeys(params JsonWebKey[] keys);
+
+    /// <summary>
+    /// Takes keys an issuer already signs with into the ring's partition <paramref name="partition"/>, so that the
+    /// issuer switching to minted keys does not change which key produces on the day it happens; no other partition
+    /// serves them.
+    /// </summary>
+    /// <param name="partition">The partition the keys are taken into: under a server keeping one partition for each
+    /// tenant, the tenant's id, followed by its generation when it declares one.</param>
+    /// <param name="keys">The keys to take, private halves included.</param>
+    /// <returns>The same builder, so the <c>PersistRingTo...</c> call follows.</returns>
+    IMintedKeysBuilder AdoptExistingKeys(string partition, params JsonWebKey[] keys);
 }

@@ -25,14 +25,18 @@ internal sealed class KeyRingRefresh(
 
     /// <summary>Refreshes from <paramref name="source"/> and returns the opened keys the ring is to hold.</summary>
     /// <param name="source">Where the entries are read from and written to.</param>
+    /// <param name="partition">The partition of the ring refreshed.</param>
     /// <param name="cancellationToken">Cancels the refresh.</param>
-    public async Task<IReadOnlyList<OpenedKey>> RunAsync(IKeyRingStore source, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<OpenedKey>> RunAsync(
+        IKeyRingStore source,
+        string partition,
+        CancellationToken cancellationToken)
     {
         var entries = await source.LoadAsync(cancellationToken);
 
         // Adoption first, and in the same refresh as the first mint: the adopted key is dated a period back, so
         // the key minted below trails it rather than taking over the instant it appears.
-        var adopted = await adoption.AdoptExistingKeysAsync(entries, source, cancellationToken);
+        var adopted = await adoption.AdoptExistingKeysAsync(partition, entries, source, cancellationToken);
 
         if (await minting.MintDueKeysAsync(entries, source, cancellationToken) || adopted)
         {

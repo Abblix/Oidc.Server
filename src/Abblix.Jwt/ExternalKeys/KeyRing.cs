@@ -28,7 +28,12 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <param name="store">The ring's partition of the store.</param>
 /// <param name="refresh">The steps of a refresh.</param>
 /// <param name="schedule">The clock and the propagation window that decide which held key produces.</param>
-internal sealed class KeyRing(IKeyRingStore store, KeyRingRefresh refresh, KeyRingSchedule schedule) : IKeyRing
+/// <param name="partition">The name of the ring's partition, which the keys a host hands over are addressed to.</param>
+internal sealed class KeyRing(
+    IKeyRingStore store,
+    KeyRingRefresh refresh,
+    KeyRingSchedule schedule,
+    string partition) : IKeyRing
 {
     private readonly HeldKeys _held = new(schedule);
 
@@ -51,5 +56,5 @@ internal sealed class KeyRing(IKeyRingStore store, KeyRingRefresh refresh, KeyRi
     /// <param name="source">Where the entries are read from and written to.</param>
     /// <param name="cancellationToken">Cancels the refresh.</param>
     internal async Task RefreshAsync(IKeyRingStore source, CancellationToken cancellationToken)
-        => _held.Replace(await refresh.RunAsync(source, cancellationToken));
+        => _held.Replace(await refresh.RunAsync(source, partition, cancellationToken));
 }

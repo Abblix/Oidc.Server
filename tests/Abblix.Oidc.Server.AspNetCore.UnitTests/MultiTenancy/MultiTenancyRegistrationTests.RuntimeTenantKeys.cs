@@ -77,7 +77,9 @@ public partial class MultiTenancyRegistrationTests
     /// A container minting its keys for real: each ring seals what it mints to a key-encryption key a stub custodian
     /// holds, and keeps it in a store in memory.
     /// </summary>
-    private static ServiceProvider MintingRealKeys(ChangingTenantStore store, params JsonWebKey[] adoptedKeys)
+    private static ServiceProvider MintingRealKeys(
+        ChangingTenantStore store,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null)
     {
         var keyEncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "kek-1" };
         var custodian = new Moq.Mock<IKeyCustodian>();
@@ -106,7 +108,7 @@ public partial class MultiTenancyRegistrationTests
             .UseKeysInProcess(new MintedKeys
             {
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
-                AdoptedKeys = adoptedKeys,
+                AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
             });
         services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
@@ -344,15 +346,43 @@ public partial class MultiTenancyRegistrationTests
         => entry => entry.Id.StartsWith(partition + ".", StringComparison.Ordinal);
 
     /// <summary>
-    /// Keys adopted into the ring would be seeded into each tenant's part of it, so a server serving tenants refuses
-    /// to start with them, its store empty or not.
+    /// Keys adopted into the tenant's part of the ring are served by that tenant and no other.
     /// </summary>
     [Fact]
-    public async Task AdoptedKeys_UnderMultiTenancy_RefuseTheStart()
+    public async Task KeysAdoptedIntoATenantsPartition_AreServedByThatTenantAlone()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var store = new ChangingTenantStore();
+        using var provider = MintingRealKeys(
+            store,
+            new Dictionary<string, IReadOnlyList<JsonWebKey>> { [TenantKey.PartitionOf(Acme)] = [adopted] });
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(ct);
+
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+        var atAcme = await keys.GetSigningKeys((await catalog.FindByIdAsync("acme", ct))!).ToArrayAsync(ct);
+        var atGlobex = await keys.GetSigningKeys((await catalog.FindByIdAsync("globex", ct))!).ToArrayAsync(ct);
+
+        Assert.Contains(atAcme, key => key.KeyId == adopted.KeyId);
+        Assert.DoesNotContain(atGlobex, key => key.KeyId == adopted.KeyId);
+    }
+
+    /// <summary>
+    /// Keys adopted into the unnamed part of the ring would be served by no tenant, so the server refuses to start
+    /// with them, its store empty or not.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoTheUnnamedPartition_RefuseTheStart()
     {
         using var provider = MintingRealKeys(
             new ChangingTenantStore(),
-            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature));
+            new Dictionary<string, IReadOnlyList<JsonWebKey>>
+            {
+                [KeyRingOptions.DefaultPartition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            });
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
