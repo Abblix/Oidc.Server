@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Microsoft.Extensions.Time.Testing;
 using System;
 using Abblix.Jwt;
@@ -103,10 +104,24 @@ public partial class AuthenticationCompletionHandlerTests
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
-        ILogger<PushModeCompletionHandler>? logger = null) =>
+        ILogger<PushModeCompletionHandler>? logger = null,
+        IRevocationCutoffChecker? cutoffs = null) =>
         new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             _notificationService.Object, _tokenRequestProcessor.Object,
-            policy ?? StubAuthorizationDetailsPolicy.Accepting, new FakeTimeProvider(ApprovedAt));
+            policy ?? StubAuthorizationDetailsPolicy.Accepting, new FakeTimeProvider(ApprovedAt),
+            cutoffs ?? Cutoffs(sessionRefused: false, grantRefused: false));
+
+    /// <summary>
+    /// A revocation checker answering as told: whether the session behind a grant is refused, and whether the grant
+    /// itself is refused at its client.
+    /// </summary>
+    private static IRevocationCutoffChecker Cutoffs(bool sessionRefused, bool grantRefused)
+    {
+        var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(sessionRefused);
+        cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(It.IsAny<AuthorizedGrant>())).ReturnsAsync(grantRefused);
+        return cutoffs.Object;
+    }
 
     /// <summary>
     /// A converter for a public client, where what the client sees is the session's own subject.
