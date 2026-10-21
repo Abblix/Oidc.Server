@@ -34,6 +34,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
 /// <param name="authorizationDetailsPolicy">The per-type validators, asked before delivery whether
 /// the grant the host completed with is still one the deployment will issue.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
@@ -41,8 +42,9 @@ public partial class PushModeCompletionHandler(
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor,
-    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter)
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
+    TimeProvider clock)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 

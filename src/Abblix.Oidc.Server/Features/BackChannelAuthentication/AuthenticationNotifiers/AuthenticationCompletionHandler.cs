@@ -39,11 +39,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="statusNotifier">Wakes a client waiting on a long poll. Optional, and defaulted so a
 /// handler outside this library keeps compiling - a deployment that registered none simply has nobody
 /// to wake.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
+    TimeProvider clock,
     IBackChannelLongPollingService? statusNotifier = null)
 {
     /// <summary>
@@ -201,6 +203,13 @@ public abstract partial class AuthenticationCompletionHandler(
         // client would read access_denied where the redemption gate answers with the code RFC 9396
         // registers for it. Push has no token endpoint to reach, so PushModeCompletionHandler asks it
         // there, before it mints.
+
+        // When the end user approved it, unless the host already said: a revocation of the end user at this client is
+        // measured against it at redemption, and the session the host hands over may be older than the approval
+        request.AuthorizedGrant = request.AuthorizedGrant with
+        {
+            AuthorizedAt = request.AuthorizedGrant.AuthorizedAt ?? clock.GetUtcNow(),
+        };
 
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;

@@ -150,22 +150,24 @@ public class RevocationCutoffCheckerClientSubjectTests
 
     /// <summary>
     /// A grant the end user approved before the cutoff at its client is refused at redemption, one approved after it
-    /// is not, and one carrying no approval moment is measured against its session's authentication.
+    /// is not, and one carrying no approval moment is measured against its session's authentication. A grant approved
+    /// within the token side's clock tolerance after the cutoff is refused too, since its node's clock may run ahead.
     /// </summary>
     [Theory]
-    [InlineData(-10, null, true)]
-    [InlineData(10, null, false)]
-    [InlineData(null, -10, true)]
-    [InlineData(null, 10, false)]
+    [InlineData(-600, null, true)]
+    [InlineData(600, null, false)]
+    [InlineData(2, null, true)]
+    [InlineData(null, -600, true)]
+    [InlineData(null, 600, false)]
     public async Task AGrant_IsRefusedWhenApprovedBeforeTheCutoffAtItsClient(
-        int? authorizedMinutes, int? authenticatedMinutes, bool refused)
+        int? authorizedSeconds, int? authenticatedSeconds, bool refused)
     {
         SetupCutoff(ClientId, IssuedAt);
         var grant = new AuthorizedGrant(
-            new AuthSession(Subject, "session_7", IssuedAt.AddMinutes(authenticatedMinutes ?? -60), "local"),
+            new AuthSession(Subject, "session_7", IssuedAt.AddSeconds(authenticatedSeconds ?? -3600), "local"),
             new AuthorizationContext(ClientId, [], null))
         {
-            AuthorizedAt = authorizedMinutes is { } minutes ? IssuedAt.AddMinutes(minutes) : null,
+            AuthorizedAt = authorizedSeconds is { } seconds ? IssuedAt.AddSeconds(seconds) : null,
         };
 
         Assert.Equal(refused, await Checker().IsGrantRefusedAtItsClientAsync(grant));

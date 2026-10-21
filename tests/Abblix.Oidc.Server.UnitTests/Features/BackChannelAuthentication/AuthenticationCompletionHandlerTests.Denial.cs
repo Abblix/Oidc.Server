@@ -40,7 +40,8 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.UpdateAsync(AuthReqId, stored, _expiresIn)).Returns(Task.CompletedTask);
 
         var handler = new PollModeCompletionHandler(
-            Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(), notifier.Object);
+            Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
+            TimeProvider.System, notifier.Object);
 
         await handler.DenyAuthenticationAsync(AuthReqId, _expiresIn);
 

@@ -146,11 +146,12 @@ public partial class RevocationCutoffChecker(
     /// <inheritdoc />
     public async Task<bool> IsGrantRefusedAtItsClientAsync(AuthorizedGrant grant)
     {
-        // No tolerance, as on the session side: widening would refuse the grant an end user approves again
-        // right after the revocation, and approving again lands in the same window
+        // The token side's tolerance, unlike the session side: a grant approved on a node whose clock runs ahead
+        // of the one that wrote the cutoff would otherwise pass and found a refresh family outliving it, while the
+        // tokens a grant approved inside the window mints are refused by the token side all the same
         var authorizedAt = grant.AuthorizedAt ?? grant.AuthSession.AuthenticationTime;
         var principal = RevocationPrincipal.ClientSubject(grant.Context.ClientId, grant.AuthSession.Subject);
-        if (!await IsBeforeCutoffAsync(RevocationScope.ClientSubject, principal, authorizedAt, TimeSpan.Zero))
+        if (!await IsBeforeCutoffAsync(RevocationScope.ClientSubject, principal, authorizedAt, Skew))
             return false;
 
         LogGrantRefusedByCutoff(grant.Context.ClientId, authorizedAt, RevocationScope.ClientSubject);
@@ -193,9 +194,9 @@ public partial class RevocationCutoffChecker(
         if (payload.Subject is not { Length: > 0 } subject || payload.NamedClientId() is not { Length: > 0 } clientId)
             return (true, payload.Subject);
 
-        // A client_id names a client, so a token whose client is gone is refused. An azp or an audience names one
-        // only on an ID token: elsewhere it may be a resource or an endpoint, and a token naming no client this way
-        // carries its subject as it is.
+        // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
+        // on an ID token but may be a resource or this server's own address on another token, so one that names no
+        // existing client leaves the subject as it is.
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo is null)
             return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);

@@ -29,13 +29,15 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// register none, NOT because long-polling is off: the default registration is unconditional, so this is
 /// normally present even where the setting is disabled - the waiting is what the setting decides, and a
 /// notification nobody waits for is a no-op.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
+    TimeProvider clock,
     IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, statusNotifier)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Time.Testing;
 using System;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -90,19 +91,22 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.TryGetAsync(It.IsAny<string>())).ReturnsAsync(stored);
     }
 
+    private static readonly DateTimeOffset ApprovedAt = new(2024, 1, 15, 11, 30, 0, TimeSpan.Zero);
+
     private PollModeCompletionHandler CreatePollModeHandler() =>
-        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(), null);
+        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
+            new FakeTimeProvider(ApprovedAt), null);
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            _notificationService.Object);
+            _notificationService.Object, new FakeTimeProvider(ApprovedAt));
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
         ILogger<PushModeCompletionHandler>? logger = null) =>
         new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             _notificationService.Object, _tokenRequestProcessor.Object,
-            policy ?? StubAuthorizationDetailsPolicy.Accepting);
+            policy ?? StubAuthorizationDetailsPolicy.Accepting, new FakeTimeProvider(ApprovedAt));
 
     /// <summary>
     /// A converter for a public client, where what the client sees is the session's own subject.
@@ -165,6 +169,10 @@ public partial class AuthenticationCompletionHandlerTests
         Assert.Equal(2, callOrder.Count);
         Assert.Equal("update", callOrder[0]);
         Assert.Equal("notify", callOrder[1]);
+
+        // The approval is stamped with its moment, which a revocation at the client is measured against when the
+        // client redeems it; without it the grant would be measured against the session the host handed over
+        Assert.Equal(ApprovedAt, request.AuthorizedGrant.AuthorizedAt);
     }
 
     /// <summary>
@@ -739,7 +747,8 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         var handler = new PollModeCompletionHandler(
-            Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(), notifier.Object);
+            Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
+            TimeProvider.System, notifier.Object);
 
         await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
 
@@ -791,10 +800,10 @@ public partial class AuthenticationCompletionHandlerTests
         AuthenticationCompletionHandler handler = isPing
             ? new PingModeCompletionHandler(
                 Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-                _notificationService.Object, notifier.Object)
+                _notificationService.Object, TimeProvider.System, notifier.Object)
             : new PollModeCompletionHandler(
                 Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-                notifier.Object);
+                TimeProvider.System, notifier.Object);
 
         await handler.CompleteAuthenticationAsync(
             AuthReqId, request, isPing ? PingClient() : PollClient(), _expiresIn);

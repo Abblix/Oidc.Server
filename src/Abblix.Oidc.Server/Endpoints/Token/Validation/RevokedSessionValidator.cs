@@ -14,7 +14,8 @@ using Abblix.Oidc.Server.Features.Tokens.Revocation;
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
-/// Refuses a grant whose authentication session a revocation cutoff has caught.
+/// Refuses a grant whose authentication session a revocation cutoff has caught, or which the end user approved
+/// before a cutoff recorded against them at the grant's client.
 /// </summary>
 /// <remarks>
 /// The third place a revocation has to be read, and the only one that sees this case. The token side compares
@@ -37,7 +38,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// client identifier, and under the assertion grants it belongs to a federated issuer.
 /// </para>
 /// </remarks>
-/// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant.</param>
+/// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself
+/// at its client.</param>
 public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : ITokenContextValidator
 {
     /// <summary>

@@ -31,14 +31,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="statusNotifier">Wakes a client waiting on a long poll. A ping client polls the token
 /// endpoint the same way a poll client does, and the long-poll gate does not read the delivery mode - so
 /// one that polls before its notification arrives waits, and is woken from here.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
+    TimeProvider clock,
     IBackChannelLongPollingService? statusNotifier = null)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, statusNotifier)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
