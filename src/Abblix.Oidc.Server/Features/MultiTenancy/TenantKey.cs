@@ -26,7 +26,7 @@ public static class TenantKey
     /// </summary>
     /// <remarks>
     /// The space holds no separator of the key, so tenant <c>a</c> with key <c>b:x</c> and tenant <c>a:b</c> with
-    /// key <c>x</c> cannot be one entry: no tenant is named <c>a:b</c>.
+    /// key <c>x</c> cannot be one entry: a tenant named <c>a:b</c> builds no key at all.
     /// </remarks>
     /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says, or the
     /// one resolved is not named as <see cref="IsNamed"/> requires.</exception>

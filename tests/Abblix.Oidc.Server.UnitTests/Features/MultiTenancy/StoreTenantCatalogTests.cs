@@ -995,4 +995,24 @@ public class StoreTenantCatalogTests
         Assert.Null(await catalog.FindByIdAsync(id, ct));
         Assert.Contains(id, Assert.Single(_logger.Errors), StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// A store whose deserializer leaves a tenant's generation null serves that tenant as one with no generation,
+    /// and the reading serves the others rather than failing.
+    /// </summary>
+    [Fact]
+    public async Task ATenantStoredWithANullGeneration_IsServedAsOneWithNone()
+    {
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), Generation = null! },
+            Version));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Equal(string.Empty, (await catalog.FindByIdAsync("acme", ct))?.Generation);
+    }
 }

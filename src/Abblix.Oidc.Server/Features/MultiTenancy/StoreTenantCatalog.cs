@@ -201,7 +201,8 @@ public sealed partial class StoreTenantCatalog(
     /// The definition already served for <paramref name="fresh"/>'s tenant when the store holds it unchanged.
     /// </summary>
     /// <remarks>
-    /// It runs before the checks, so it meets a tenant the store holds with no id, which the checks refuse.
+    /// It runs before any refusal, so it meets a tenant the store holds with no id, which
+    /// <see cref="TenantKey.Unnamed"/> refuses.
     /// </remarks>
     private static StoredTenant? Unchanged(Reading? previous, StoredTenant fresh)
     {

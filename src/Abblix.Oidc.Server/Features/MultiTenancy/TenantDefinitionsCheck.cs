@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses a tenant with no id or no address it can be reached at, and tenants sharing an id or an address.
+/// Refuses a tenant with no address it can be reached at, and tenants sharing an id or an address.
 /// </summary>
 /// <remarks>
 /// A tenant with no issuer is refused here; whether a given issuer can be an issuer is judged by the check of the

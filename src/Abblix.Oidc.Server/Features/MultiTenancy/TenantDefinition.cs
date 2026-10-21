@@ -42,7 +42,9 @@ public sealed class TenantDefinition
     /// removed starts with none of it.
     /// </remarks>
 #pragma warning disable S2292 // The field is written by WithGeneration on a copy, where an init accessor cannot be
-    public string Generation { get => _generation; init => _generation = value; }
+    // A store's deserializer may write null here whatever the annotation says, and the tenant is then one with no
+    // generation rather than one that fails every reading of the store
+    public string Generation { get => _generation; init => _generation = value ?? string.Empty; }
 #pragma warning restore S2292
 
     private string _generation = string.Empty;

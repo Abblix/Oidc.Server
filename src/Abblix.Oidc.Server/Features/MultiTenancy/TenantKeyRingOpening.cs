@@ -40,20 +40,20 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
 
         // A tenant's id holds no separator of its generation, so each creation of each tenant names a partition
         // of its own
-        var alone = tenants.ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
+        var byPartition = tenants.ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);
 
         var rings = serviceProvider.GetRequiredService<IKeyRings>();
-        var failures = await rings.OpenAsync(alone.Keys, cancellationToken);
+        var failures = await rings.OpenAsync(byPartition.Keys, cancellationToken);
 
         var catalog = serviceProvider.GetRequiredService<ITenantCatalog>();
-        foreach (var (partition, tenant) in alone.Where(opened => !failures.ContainsKey(opened.Key)))
+        foreach (var (partition, tenant) in byPartition.Where(opened => !failures.ContainsKey(opened.Key)))
         {
             if (_watched.TryAdd(partition, default))
                 StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => Close(rings, partition));
         }
 
         return failures.ToDictionary(
-            failure => alone[failure.Key].Id,
+            failure => byPartition[failure.Key].Id,
             failure => failure.Value,
             StringComparer.Ordinal);
     }
