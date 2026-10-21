@@ -76,8 +76,13 @@ public interface IEntityStorage
     /// to replace it, at most one may be told it wrote, and a key that holds nothing, or a value another caller has
     /// written since, is left as it is. This is what lets a record only ever move one way, such as a revocation
     /// cutoff that must never be moved back: the caller reads it, decides, and replaces it only if nobody changed it
-    /// in between, or reads it again. Values are compared as the storage holds them, so the expected value is the
-    /// one the caller read.
+    /// in between, or reads it again.
+    /// <para>
+    /// The other half is as binding: when nobody has written since the caller read, the caller must be told it
+    /// wrote. The comparison is therefore of values, not of stored bytes - a value read and written again need not
+    /// come back as the bytes another writer stored for it - and a replace that can never match leaves a caller
+    /// that reads again and retries unable to record anything at all.
+    /// </para>
     /// </remarks>
     /// <typeparam name="T">The type of the entity to store.</typeparam>
     /// <param name="key">The key whose value is replaced.</param>

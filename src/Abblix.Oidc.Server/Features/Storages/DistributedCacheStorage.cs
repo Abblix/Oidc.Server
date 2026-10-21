@@ -102,9 +102,15 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 
 	/// <summary>
 	/// Replaces an entry only when it still holds what the caller read, through
-	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryReplaceAsync"/>, which compares the serialized bytes
-	/// under the per-key gate, so it is decided WITHIN THIS PROCESS and no further.
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryReplaceAsync"/> under the per-key gate, so it is
+	/// decided WITHIN THIS PROCESS and no further.
 	/// </summary>
+	/// <remarks>
+	/// What the key holds is read back and written again by this serializer before it is compared with the
+	/// expected value written the same way, so two encodings of one value, such as a field written out at its
+	/// default by another writer, compare equal. Compared as stored bytes they would never match, and a caller
+	/// retrying until its replace succeeds would never stop.
+	/// </remarks>
 	/// <typeparam name="T">The type of the object to store.</typeparam>
 	/// <param name="key">The key whose value is replaced.</param>
 	/// <param name="expected">The object the caller read.</param>
@@ -116,9 +122,11 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 		string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
 	{
 		ArgumentNullException.ThrowIfNull(key);
+		var expectedBytes = serializer.Serialize(expected);
 		return cache.TryReplaceAsync(
 			key,
-			serializer.Serialize(expected),
+			current => serializer.Deserialize<T>(current) is { } read
+				&& serializer.Serialize(read).AsSpan().SequenceEqual(expectedBytes),
 			serializer.Serialize(value),
 			new ()
 			{

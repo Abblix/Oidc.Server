@@ -384,7 +384,7 @@ public class DistributedCacheExtensionsTests
 
 		var replaced = await cache.TryReplaceAsync(
 			"cutoff",
-			Encoding.UTF8.GetBytes("earlier"),
+			current => Encoding.UTF8.GetString(current) == "earlier",
 			Encoding.UTF8.GetBytes("later"),
 			options,
 			TestContext.Current.CancellationToken);
@@ -403,7 +403,7 @@ public class DistributedCacheExtensionsTests
 
 		var replaced = await cache.TryReplaceAsync(
 			key,
-			Encoding.UTF8.GetBytes("read before"),
+			current => Encoding.UTF8.GetString(current) == "read before",
 			Encoding.UTF8.GetBytes("decided on the old read"),
 			new (),
 			TestContext.Current.CancellationToken);
@@ -421,7 +421,7 @@ public class DistributedCacheExtensionsTests
 
 		var replaced = await cache.TryReplaceAsync(
 			key,
-			Encoding.UTF8.GetBytes("read before it expired"),
+			_ => true,
 			Encoding.UTF8.GetBytes("later"),
 			new (),
 			TestContext.Current.CancellationToken);

@@ -35,11 +35,23 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
         return record?.Cutoff?.ToDateTimeOffset();
     }
 
+    /// <summary>
+    /// How many times a cutoff is read and written before recording it is given up as impossible.
+    /// </summary>
+    /// <remarks>
+    /// Each attempt that fails means another caller wrote the same principal's record in between, and revocations of
+    /// one principal arriving together are a handful at most. A storage that never reports a replace as made, against
+    /// its contract, would otherwise keep the revoking call, and a thread, busy for good: a bound turns that into an
+    /// error naming the cause.
+    /// </remarks>
+    private const int RecordingAttempts = 16;
+
     /// <inheritdoc />
     /// <remarks>
-    /// Read, compare, and write only if nobody wrote in between, or read again: a write of its own would let a
-    /// call with an earlier cutoff that lands later, a retry or a slower concurrent call, move the record back.
-    /// The record's expiry follows the cutoff it holds, so a cutoff left in place keeps its own.
+    /// Read, compare, and write only if nobody wrote in between, or read again: a plain write would let a call
+    /// with an earlier cutoff that lands later, a retry or a slower concurrent call, move the record back. The
+    /// expiry is kept the same way, the later of the two, so a revocation repeated later keeps the record longer
+    /// even when its cutoff is not later.
     /// </remarks>
     public async Task SetCutoffAsync(
         RevocationScope scope,
@@ -49,25 +61,45 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
         CancellationToken cancellationToken = default)
     {
         var key = keyFactory.RevocationCutoffKey(scope, principal);
-        var record = new Proto.RevocationCutoff { Cutoff = Timestamp.FromDateTimeOffset(cutoff) };
-        var options = new StorageOptions { AbsoluteExpiration = expiresAt };
 
-        while (true)
+        for (var attempt = 0; attempt < RecordingAttempts; attempt++)
         {
             var stored = await storage.GetAsync<Proto.RevocationCutoff>(key, false, cancellationToken);
             if (stored is null)
             {
-                if (await storage.TrySetIfAbsentAsync(key, record, options, cancellationToken))
+                if (await storage.TrySetIfAbsentAsync(key, Record(cutoff, expiresAt), Expiring(expiresAt), cancellationToken))
                     return;
 
                 continue;
             }
 
-            if (stored.Cutoff is { } recorded && cutoff <= recorded.ToDateTimeOffset())
+            var keptCutoff = Later(stored.Cutoff, cutoff);
+            var keptExpiry = Later(stored.ExpiresAt, expiresAt);
+            if (keptCutoff == stored.Cutoff?.ToDateTimeOffset() && keptExpiry == stored.ExpiresAt?.ToDateTimeOffset())
                 return;
 
-            if (await storage.TryReplaceAsync(key, stored, record, options, cancellationToken))
+            if (await storage.TryReplaceAsync(
+                    key, stored, Record(keptCutoff, keptExpiry), Expiring(keptExpiry), cancellationToken))
                 return;
         }
+
+        throw new InvalidOperationException(
+            $"The {scope} revocation cutoff could not be recorded: the storage reported its record changed on each " +
+            $"of {RecordingAttempts} attempts, which a storage that never reports a replace as made also does");
     }
+
+    /// <summary>
+    /// The later of a recorded instant and a new one; an instant not recorded, as in a record from before the
+    /// field existed, yields the new one.
+    /// </summary>
+    private static DateTimeOffset Later(Timestamp? recorded, DateTimeOffset given)
+        => recorded?.ToDateTimeOffset() is { } instant && instant > given ? instant : given;
+
+    private static Proto.RevocationCutoff Record(DateTimeOffset cutoff, DateTimeOffset expiresAt) => new()
+    {
+        Cutoff = Timestamp.FromDateTimeOffset(cutoff),
+        ExpiresAt = Timestamp.FromDateTimeOffset(expiresAt),
+    };
+
+    private static StorageOptions Expiring(DateTimeOffset expiresAt) => new() { AbsoluteExpiration = expiresAt };
 }

@@ -17,8 +17,15 @@ import "google/protobuf/timestamp.proto";
 // fails - so a store carrying cutoffs from a build that encoded them differently must be
 // cleared before deploying this one, or those principals see errors until the records
 // expire. Failing that way round is the right one: an unreadable revocation must not read
-// as no revocation.
+// as no revocation. A new revocation of such a principal fails the same way, since the
+// record is read before it is replaced.
 message RevocationCutoff {
   // The instant recorded by whoever performed the revocation.
   google.protobuf.Timestamp cutoff = 1;
+
+  // When the record may be dropped, kept so that a later revocation naming an earlier or
+  // the same cutoff can still keep the record longer without moving the cutoff back. A
+  // record written before this field existed carries none, and is given the expiry of the
+  // revocation that next reads it, which is never earlier than the one it was written with.
+  google.protobuf.Timestamp expires_at = 2;
 }

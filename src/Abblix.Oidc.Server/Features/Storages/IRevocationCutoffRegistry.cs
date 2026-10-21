@@ -43,8 +43,9 @@ public interface IRevocationCutoffRegistry
     /// </summary>
     /// <remarks>
     /// A cutoff only ever moves forward: one earlier than the recorded cutoff changes nothing, however late it
-    /// arrives, since moving it back would let the tokens issued between the two be used again. Implementations
-    /// must decide this between concurrent callers, so of two racing writes the later cutoff stays.
+    /// arrives, since moving it back would let the tokens issued between the two be used again. The record is
+    /// kept until the later of the two expiries, so a revocation repeated later keeps it longer either way.
+    /// Implementations must decide this between concurrent callers, so of two racing writes the later cutoff stays.
     /// </remarks>
     /// <param name="scope">Whether the principal is an end user or a single session.</param>
     /// <param name="principal">The subject identifier or the session identifier.</param>
