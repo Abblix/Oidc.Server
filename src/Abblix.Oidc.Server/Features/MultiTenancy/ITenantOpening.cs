@@ -21,7 +21,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// period, and the token is canceled when it runs out, except on that reading for the tenants the settings declare,
 /// since the start waits for all of them.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantOpening
 {
     /// <summary>

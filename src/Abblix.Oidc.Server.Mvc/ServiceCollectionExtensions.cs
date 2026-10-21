@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -36,11 +37,14 @@ public static class ServiceCollectionExtensions
 	/// answers 500. The policy itself is registered here; only the middleware call belongs to the host,
 	/// since the framework accepts the middleware only when it runs after routing has selected an
 	/// endpoint - a place no library can insert it from.
+	/// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
+	/// declaring one, and the request pipeline resolves each request to its tenant with
+	/// <c>app.UseMultiTenancy()</c> before routing and authentication.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>
-	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-	public static IServiceCollection AddOidcServices(this IServiceCollection services, Action<OidcOptions> configureOptions)
+	/// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
+	public static IOidcServerBuilder AddOidcServices(this IServiceCollection services, Action<OidcOptions> configureOptions)
 	{
 		return services.AddOidcServices((options, _) => configureOptions(options));
 	}
@@ -55,12 +59,12 @@ public static class ServiceCollectionExtensions
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/> with the service provider.</param>
-	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-	public static IServiceCollection AddOidcServices(this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
+	/// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
+	public static IOidcServerBuilder AddOidcServices(this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
 	{
-		return services
+		return new OidcServerBuilder(services
 			.AddOidcCore(configureOptions)
-			.AddOidcMvc();
+			.AddOidcMvc());
 	}
 
 	/// <summary>
@@ -88,7 +92,7 @@ public static class ServiceCollectionExtensions
 
 		services
 			.AddOidcControllers()
-			.AddHttpContextAccessor()
+			.AddTenantResolution()
 			.AddOidcMvcInfrastructure()
 			.AddOidcProtocolFormatters()
 			.AddOidcInteractionFormatters();

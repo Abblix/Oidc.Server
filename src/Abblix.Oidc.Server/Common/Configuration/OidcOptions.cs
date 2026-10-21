@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -28,29 +29,27 @@ public record OidcOptions
 	public DiscoveryOptions Discovery { get; set; } = new();
 
 	/// <summary>
-	/// Represents the unique identifier of the OIDC server.
-	/// It is recommended to use a URL controlled by the entity operating the OIDC server, and it should be
-	/// consistent across different environments to maintain trust with client applications.
+	/// The tenants this deployment serves, each reached at its issuer and declaring what is its own: its clients, scopes
+	/// and resources, its pages, its security profile and its keys.
 	/// </summary>
 	/// <remarks>
-	/// An https URL with no query or fragment (OpenID Connect Core 1.0 section 1.2), and no user name or password,
-	/// written well formed and with no whitespace, refused at startup otherwise. A
-	/// relying party compares it with the <c>iss</c> of every token exactly (section 3.1.3.7), so it is written as
-	/// configured, through <see cref="Uri.OriginalString"/>: a bare host stays without a trailing slash, and the
-	/// case and port stay as given. With no issuer configured, the server takes it from each request; an empty value
-	/// bound from configuration reads as none, so a placeholder left empty makes the issuer follow the request.
+	/// A deployment serving one issuer declares one tenant. These are the tenants the server starts with when it reads
+	/// its tenants from these settings; a host that keeps its tenants in a store of its own leaves the list empty.
 	/// </remarks>
-	public Uri? Issuer { get; set; }
+	public List<TenantDefinition> Tenants { get; set; } = [];
+
+	/// <summary>
+	/// How often the server reads the store of tenants again, which bounds how long a tenant created, changed or
+	/// removed on another instance takes to reach this one.
+	/// </summary>
+	public TimeSpan RefreshTenantsEvery { get; set; } = TimeSpan.FromMinutes(1);
 
 	/// <summary>
 	/// Lets an http issuer through, for a server run locally for development. Off by default, so only an https issuer
-	/// is accepted, as OpenID Connect Core 1.0 section 1.2 requires. Applies to the server's issuer and to every
-	/// tenant's.
+	/// is accepted, as OpenID Connect Core 1.0 section 1.2 requires. Applies to every tenant's issuer.
 	/// </summary>
 	/// <remarks>
-	/// The endpoints are served over plain http only where the http issuer is configured, in <see cref="Issuer"/> or
-	/// in a tenant's definition. An issuer taken from the request carries the request's own scheme, so with no
-	/// issuer configured every request over http is still held to https.
+	/// The endpoints are served over plain http only at a tenant whose issuer is http.
 	/// </remarks>
 	public bool AllowHttpIssuer { get; set; }
 
@@ -64,49 +63,6 @@ public record OidcOptions
 	/// try every user code against a fingerprint.
 	/// </remarks>
 	public string? FingerprintKey { get; set; }
-
-	/// <summary>
-	/// A collection of client configurations supported by this OIDC server. Each <see cref="ClientInfo"/> object
-	/// defines the settings and capabilities of a registered client, including client ID, client secrets,
-	/// redirect URIs, and other OAuth2/OIDC parameters. Proper client configuration is essential for securing client
-	/// applications and enabling them to interact with the OIDC server according to the OAuth2 and OIDC specifications.
-	/// </summary>
-	public IEnumerable<ClientInfo> Clients { get; set; } = [];
-
-	/// <summary>
-	/// The URL to a user interface or service that allows users to select an account during the authentication process.
-	/// This is useful in scenarios where users have multiple accounts and need to choose which one to use for signing in.
-	/// </summary>
-	public Uri? AccountSelectionUri { get; set; }
-
-	/// <summary>
-	/// The URL to a user interface or service for obtaining user consent during the authentication process. Consent is
-	/// often required when the client application requests access to user data or when sharing information between
-	/// different parties. This URI should point to a page or API that can manage consent workflows and communicate
-	/// the user's decisions back to the OIDC server.
-	/// </summary>
-	public Uri? ConsentUri { get; set; }
-
-	/// <summary>
-	/// The page the end user completes a step of the host's own on, such as accepting a new version of the terms, when
-	/// <see cref="Features.UserInteraction.IUserInteractionRequirement"/> requires one before anything is issued.
-	/// </summary>
-	public Uri? InteractionUri { get; set; }
-
-	/// <summary>
-	/// The URL to initiate the login process. This URI is typically used in scenarios where the OIDC server needs to
-	/// direct users to a specific login interface or when integrating with external identity providers. Configuring
-	/// this URI allows the OIDC server to delegate the initial user authentication step to another service or UI.
-	/// </summary>
-	public Uri? LoginUri { get; set; }
-
-	/// <summary>
-	/// The URL of the account-creation (registration) UI the user is redirected to when a client requests
-	/// user registration via <c>prompt=create</c> (Initiating User Registration via OpenID Connect 1.0).
-	/// When not set, <see cref="LoginUri"/> is used instead, so hosts whose login page also offers
-	/// registration need no extra configuration.
-	/// </summary>
-	public Uri? RegistrationUri { get; set; }
 
 	/// <summary>
 	/// The name of the parameter used by the OIDC server to pass the authorization request identifier. This parameter
@@ -134,15 +90,6 @@ public record OidcOptions
 	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.Base;
 
 	/// <summary>
-	/// The collection of JSON Web Keys (JWK) used for signing tokens issued by the OIDC server.
-	/// Signing tokens is a critical security measure that ensures the integrity and authenticity of the tokens.
-	/// These keys are used to digitally sign ID tokens, access tokens, and other JWT tokens issued by the server,
-	/// allowing clients to verify that the tokens have not been tampered with and were indeed issued by this server.
-	/// It is recommended to rotate these keys periodically to maintain the security of the token signing process.
-	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = [];
-
-	/// <summary>
 	/// Options related to the check session mechanism in OIDC. This configuration controls how the OIDC server manages
 	/// session state information, allowing clients to monitor the login session's status. Properly configuring these
 	/// options ensures that clients can react to session changes (e.g., logout) in a timely and secure manner.
@@ -168,15 +115,6 @@ public record OidcOptions
 	/// values and constraints for new client registrations, facilitating dynamic and secure client onboarding processes.
 	/// </summary>
 	public NewClientOptions NewClientOptions { get; init; } = new();
-
-	/// <summary>
-	/// The collection of JSON Web Keys (JWK) used for encrypting tokens or sensitive information sent to the clients.
-	/// Encryption is essential for protecting sensitive data within tokens, especially when tokens are passed through
-	/// less secure channels or when storing tokens on the client side.
-	/// These keys are used to encrypt ID tokens and, optionally, access tokens when the OIDC server sends them to clients.
-	/// Clients use the corresponding public keys to decrypt the tokens and access the contained claims.
-	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
 
 	/// <summary>
 	/// The key-rollover propagation window: how long a newly published signing or encryption key is served at the
@@ -219,7 +157,7 @@ public record OidcOptions
 	/// <summary>
 	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,
 	/// registration access and initial access tokens). Each type signs with RS256 and, when a server
-	/// <see cref="EncryptionKeys"/> entry is configured, is encrypted to it by default, as in prior versions.
+	/// <see cref="TenantDefinition.EncryptionKeys"/> entry is configured, is encrypted to it by default, as in prior versions.
 	/// A host controls each type independently: it can pin the signing algorithm or key, choose the
 	/// key-management algorithm or encryption key, or disable encryption for a specific type by setting that
 	/// type's <see cref="ServiceTokenOptions.Encrypt"/> to <c>false</c> (for example to keep the access token
@@ -262,54 +200,6 @@ public record OidcOptions
 	public int RequestUriLength { get; set; } = 64;
 
 	/// <summary>
-	/// The supported scopes and their respective claim types, which outline the access permissions and associated data
-	/// that clients can request.
-	/// This setting determines what information and operations are available to different clients based on the scopes
-	/// they request during authorization.
-	/// </summary>
-	public ScopeDefinition[]? Scopes { get; set; }
-
-	/// <summary>
-	/// The resource definitions supported by the OIDC server. This setting outlines the resources that clients
-	/// can request access to during authorization, ensuring the OIDC server can enforce access control policies
-	/// and permissions based on these definitions.
-	/// </summary>
-	public ResourceDefinition[]? Resources { get; set; }
-
-	/// <summary>
-	/// The resource an access token is minted for when the request names none and none is inferred from its
-	/// scopes (<see cref="InferResourceFromScope"/>). Left null, the token's <c>aud</c> falls back to the issuer.
-	/// </summary>
-	/// <remarks>
-	/// RFC 9068 Section 3 requires an authorization server to "use a default resource indicator in the `aud`
-	/// claim" when a request carries no <c>resource</c> parameter, and Section 4 tells a resource server to
-	/// reject a token whose <c>aud</c> does not name it, so a deployment with one API says so here once, instead
-	/// of teaching every client to send <c>resource</c>.
-	/// This is opt-in because the value is read by every resource server in the deployment: changing it is a
-	/// change to their contract, not to this server's configuration alone. The fallback is unchanged until a
-	/// host states otherwise. Must be an absolute URI naming a registered <see cref="Resources"/> entry -
-	/// startup refuses anything else, since a token minted for a resource this server does not know is one
-	/// nobody can accept.
-	/// </remarks>
-	public Uri? DefaultResourceIndicator { get; set; }
-
-	/// <summary>
-	/// Whether a request naming no resource is taken to be for the registered resource its scopes refer to: the
-	/// one among <see cref="Resources"/> whose definition declares a requested scope.
-	/// </summary>
-	/// <remarks>
-	/// RFC 9068 section 3 says an authorization server SHOULD infer the default resource indicator from the
-	/// <c>scope</c> parameter, and SHOULD reject with <c>invalid_scope</c> a request whose scopes refer to
-	/// different resources; both happen only when this is set, because the inferred resource becomes the
-	/// <c>aud</c> every resource server reads. The audience is then the resource the request names, else the one
-	/// its scopes refer to, else <see cref="DefaultResourceIndicator"/>, else the issuer. At the token endpoint
-	/// it is inferred only for a grant the token request itself authorizes and only when the request names no
-	/// <c>audience</c>; a code, a refresh token, a device code or a back-channel request carries the audience its
-	/// authorization settled.
-	/// </remarks>
-	public bool InferResourceFromScope { get; set; }
-
-	/// <summary>
 	/// Whether an access token carries only the <c>authorization_details</c> entries whose
 	/// <c>locations</c> name one of its audiences. Off, every granted entry is emitted, which is what
 	/// prior versions did.
@@ -329,7 +219,7 @@ public record OidcOptions
 	/// multiple-resource-server case, which is what <c>locations</c> was defined for. Matching a deployment
 	/// against that description is the operator's judgement, not a recommendation made here.
 	///
-	/// With no <see cref="Resources"/> registered and no token exchange in use, the audience is the issuer
+	/// With no <see cref="TenantDefinition.Resources"/> registered and no token exchange in use, the audience is the issuer
 	/// on every token and the filter can only delete: nothing can put a resource in the audience for a
 	/// <c>locations</c> value to match. That combination is not refused at startup, because it cannot be
 	/// told apart there from a deployment whose audiences arrive through RFC 8693 token exchange, where
@@ -337,7 +227,7 @@ public record OidcOptions
 	///
 	/// Turn it on and an entry naming only other resource servers stops traveling to this one, which is
 	/// what section 9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
-	/// are opaque logical names, and a <see cref="DefaultResourceIndicator"/> names one API while
+	/// are opaque logical names, and a <see cref="TenantDefinition.DefaultResourceIndicator"/> names one API while
 	/// <c>locations</c> name others - and every located entry disappears from every token. The switch is
 	/// off until a host says the two agree, because nothing here can check that they do.
 	///
@@ -633,18 +523,6 @@ public record OidcOptions
 	/// <see cref="ProofValidator"/> behavior and related primitives.
 	/// </summary>
 	public DPoPOptions DPoP { get; set; } = new();
-
-	/// <summary>
-	/// The security profile this deployment holds EVERY client to, whatever
-	/// <see cref="ClientInfo.SecurityProfile"/> each one names for itself. A single-profile
-	/// deployment sets this once - for example to <see cref="ClientSecurityProfile.Fapi2"/> - and
-	/// every client is held to the FAPI 2.0 control bundle.
-	/// This is a floor rather than a default: a client can ask for more and no registration can take
-	/// it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/>
-	/// demands nothing, leaving each client governed by whatever it names for itself, or by its
-	/// individual metadata flags where it names nothing.
-	/// </summary>
-	public ClientSecurityProfile DefaultSecurityProfile { get; set; } = ClientSecurityProfile.None;
 
 	/// <summary>
 	/// Enables detection of a client reusing a constant PKCE <c>code_challenge</c> or OpenID Connect

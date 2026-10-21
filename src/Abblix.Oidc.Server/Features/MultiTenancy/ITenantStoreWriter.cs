@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// its scopes refuses it at startup.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantStoreWriter
 {
     /// <summary>

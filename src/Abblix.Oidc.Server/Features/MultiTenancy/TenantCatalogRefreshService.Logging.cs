@@ -8,12 +8,12 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 internal sealed partial class TenantCatalogRefreshService
 {
     [LoggerMessage(
-        EventId = LogEvents.MultiTenancy.CatalogRefreshFailed,
+        EventId = LogEvents.MultiTenancy.TenantCatalogRefreshService.RefreshFailed,
         Level = LogLevel.Error,
         Message = "Reading the store of tenants failed; the server keeps serving the tenants it last read and will " +
                   "read again in {RetryIn}. Until a reading succeeds, a tenant created, changed or removed since is " +

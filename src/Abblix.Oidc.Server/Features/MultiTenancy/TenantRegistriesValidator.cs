@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -29,13 +30,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// itself does so through <see cref="ITenantClientRegistrationStore"/>, which is told the tenant of every call.
 /// </remarks>
 /// <param name="serviceProvider">The container the registries are resolved from.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) : IValidateOptions<MultiTenancyOptions>
+public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) : IValidateOptions<OidcOptions>
 {
     private static readonly (Type Service, Type[] PerTenant)[] Registries =
     [
-        (typeof(IClientInfoProvider), [typeof(ClientInfoStorage), typeof(ReloadableClientInfoStorage)]),
-        (typeof(IClientInfoManager), [typeof(ClientInfoStorage), typeof(ReloadableClientInfoStorage)]),
+        (typeof(IClientInfoProvider), [typeof(ReloadableClientInfoStorage)]),
+        (typeof(IClientInfoManager), [typeof(ReloadableClientInfoStorage)]),
         (typeof(IScopeManager), [typeof(ScopeManager)]),
         (typeof(IResourceManager), [typeof(ResourceManager)]),
         (typeof(ISubjectTypeConverter), [typeof(IssuerSubjectTypeConverter)]),
@@ -44,7 +44,7 @@ public sealed class TenantRegistriesValidator(IServiceProvider serviceProvider) 
     ];
 
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
+    public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
         var failures = (
             from registry in Registries

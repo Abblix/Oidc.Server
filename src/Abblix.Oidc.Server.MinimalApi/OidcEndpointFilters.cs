@@ -101,11 +101,9 @@ internal static class OidcEndpointFilters
     private static async ValueTask<object?> RequireTenantAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-#pragma warning disable ABXMT001 // A deployment without multi-tenancy is never refused here.
         return TenantRequirement.IsUnmet(context.HttpContext)
             ? Results.NotFound()
             : await next(context);
-#pragma warning restore ABXMT001
     }
 
     /// <summary>

@@ -1014,6 +1014,17 @@ internal static class LogEvents
 
             public const int ChangeNotServedYet = Base;
         }
+
+        /// <summary>
+        /// <c>Features/MultiTenancy/TenantCatalogRefreshService.cs</c> - a reading of the store of tenants that failed
+        /// after startup (sub-range 10740-10759).
+        /// </summary>
+        public static class TenantCatalogRefreshService
+        {
+            private const int Base = 10740;
+
+            public const int RefreshFailed = Base;
+        }
     }
 
     /// <summary>

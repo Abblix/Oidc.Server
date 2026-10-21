@@ -7,33 +7,26 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses at startup a configured client whose offline access is none of the values the enumeration names.
+/// Refuses a tenant declaring a client whose offline access is none of the values the enumeration names.
 /// </summary>
 /// <remarks>
 /// Configuration binds a number to an enumeration whatever its value, so a mistyped one would otherwise reach the
 /// server and fail every request of that client, on the request, with an error that names neither the client nor the
 /// setting.
 /// </remarks>
-public sealed class ClientOfflineAccessOptionsValidator : IValidateOptions<OidcOptions>
+public sealed class ClientOfflineAccessCheck : ITenantsCheck
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, OidcOptions options)
-    {
-        var failures = Refusals(options.Clients).ToList();
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
-    }
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
+        => TenantRefusal.EachOf(tenants, tenant => Failures(tenant.Clients));
 
-    /// <summary>
-    /// A refusal for each client whose offline access the enumeration does not name, shared with the check of the
-    /// clients a tenant declares.
-    /// </summary>
-    public static IEnumerable<string> Refusals(IEnumerable<ClientInfo>? clients)
-        => (clients ?? [])
+    private static IEnumerable<string> Failures(IEnumerable<ClientInfo> clients)
+        => clients
             .Where(client => !Enum.IsDefined(client.OfflineAccess))
             .Select(client =>
                 $"The client '{client.ClientId}' is configured with {nameof(ClientInfo.OfflineAccess)} " +

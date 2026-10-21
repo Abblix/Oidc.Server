@@ -185,10 +185,8 @@ public class ConfigurationResponseFormatter(
             ? Rebase(endpoint, new Uri(issuer.GetLeftPart(UriPartial.Authority)))
             : endpoint;
 
-#pragma warning disable ABXMT001
     private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
         => TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
-#pragma warning restore ABXMT001
 
     /// <summary>
     /// Rebases an original URI onto a different base URI, preserving the original's path. Used to generate mTLS

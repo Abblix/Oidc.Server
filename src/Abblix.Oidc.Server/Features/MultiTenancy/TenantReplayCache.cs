@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// which work outside any tenant, and every tenant's reservation lies in its own space, so the two never meet.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantReplayCache(IReplayCache inner, ITenantAccessor tenantAccessor) : IReplayCache
 {
     /// <inheritdoc />

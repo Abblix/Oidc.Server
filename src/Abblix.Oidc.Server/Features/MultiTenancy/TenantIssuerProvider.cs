@@ -19,7 +19,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// with the host would mint tokens every tenant on it accepts. The OpenID endpoints refuse such a request before
 /// it gets this far; this is the line behind them, for any other code that asks.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantIssuerProvider(ITenantAccessor tenantAccessor) : IIssuerProvider
 {
     /// <inheritdoc />

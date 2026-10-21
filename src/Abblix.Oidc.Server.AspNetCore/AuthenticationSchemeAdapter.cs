@@ -57,7 +57,7 @@ public class AuthenticationSchemeAdapter(
 
 	/// <summary>
 	/// The claim the cookie keeps the tenant a session was signed in at under, its id and creation, as the partition
-	/// of its keys names them. A server without tenants writes none, so its sessions read as before.
+	/// of its keys names them.
 	/// </summary>
 	/// <remarks>
 	/// A browser can carry a tenant's cookie to another: a cookie domain the host shares between the tenants' hosts,
@@ -74,19 +74,16 @@ public class AuthenticationSchemeAdapter(
 		=> (typeof(AuthenticationSchemeAdapter), authenticationScheme, CurrentTenant ?? string.Empty);
 
 	/// <summary>
-	/// The tenant serving this request, as the partition of its keys names it; empty on a server without tenants, and
-	/// null on a server with tenants for a request that reached none of them, such as a page of the host's own.
+	/// The tenant serving this request, as the partition of its keys names it; null for a request that reached no
+	/// tenant, such as a page of the host's own.
 	/// </summary>
 	/// <remarks>
-	/// The tenant is looked up only where the server serves tenants, and asked first whether there is one, since the
-	/// settings of a tenant refuse to answer outside any.
+	/// Asked first whether there is a tenant, since the settings of a tenant refuse to answer outside any.
 	/// </remarks>
-#pragma warning disable ABXMT001 // read only where the host turned multi-tenancy on
 	private string? CurrentTenant
-		=> HttpContext.RequestServices.GetService<ITenantAccessor>() is { Current: null }
+		=> HttpContext.RequestServices.GetRequiredService<ITenantAccessor>().Current is null
 			? null
 			: issuerSettings.KeyPartition;
-#pragma warning restore ABXMT001
 
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
@@ -153,10 +150,10 @@ public class AuthenticationSchemeAdapter(
 
 	/// <summary>
 	/// Whether the session <paramref name="principal"/> carries was signed in at <paramref name="tenant"/>; a session
-	/// naming no tenant was signed in by a server without tenants.
+	/// naming no tenant was signed in before every session named one, and is read as no session.
 	/// </summary>
 	private static bool IsOf(string tenant, ClaimsPrincipal principal)
-		=> string.Equals(principal.FindFirstValue(TenantClaimType) ?? string.Empty, tenant, StringComparison.Ordinal);
+		=> string.Equals(principal.FindFirstValue(TenantClaimType), tenant, StringComparison.Ordinal);
 
 	/// <summary>
 	/// Reads the OIDC session a principal written by this adapter carries, or null when it carries none.
@@ -367,8 +364,7 @@ public class AuthenticationSchemeAdapter(
 		if (authSession.SignedInAt.HasValue)
 			claims.Add(new (SignedInAtClaimType, authSession.SignedInAt.Value.ToUnixTimeSeconds().ToString(InvariantCulture)));
 
-		if (tenant.Length > 0)
-			claims.Add(new (TenantClaimType, tenant));
+		claims.Add(new (TenantClaimType, tenant));
 
 		if (authSession.AdditionalClaims != null)
 			AdditionalSessionClaims.Write(claims, authSession.AdditionalClaims);

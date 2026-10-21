@@ -8,6 +8,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -50,14 +51,20 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(AlreadyRegistered.Instance);
 
-        services.TryAddSingleton<IReplayCache>(provider =>
-            provider.CreateService<DistributedReplayCache>(Dependency.Override(CacheKeyPrefix)));
+        // The store is the one registered under the shared key, which a host substitutes in any order, or one some
+        // other package registered first - a host running both this server and a Security Event Token receiver
+        // shares one replay store - which the forwarding below then leaves in place
+        services.TryAddKeyedSingleton<IReplayCache>(
+            TenantServiceKeys.Shared,
+            (provider, _) => provider.CreateService<DistributedReplayCache>(Dependency.Override(CacheKeyPrefix)));
+        services.TryAddSingleton<IReplayCache>(
+            provider => provider.GetRequiredKeyedService<IReplayCache>(TenantServiceKeys.Shared));
 
-        // Decorated rather than composed in one factory, so this server's policy also reaches a
-        // store some other package registered first - a host running both this server and a
-        // Security Event Token receiver shares one replay store, and which of them registered it
-        // must not decide whether the server's clock skew and log events apply.
+        // Decorated rather than composed in one factory, so this server's policy also reaches a store some other
+        // package registered first, and which of them registered it does not decide whether the server's clock skew
+        // and log events apply. The tenant's form is outermost, so each tenant reserves in a space of its own.
         services.Decorate<IReplayCache, ConfiguredReplayCache>();
+        services.Decorate<IReplayCache, TenantReplayCache>();
 
         return services;
     }

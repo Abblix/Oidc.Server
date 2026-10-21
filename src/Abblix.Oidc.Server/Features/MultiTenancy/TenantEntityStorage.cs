@@ -19,7 +19,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// A value issued under one tenant is then not found under another, even where its key is one the other tenant
 /// could name: a user code, a subject, a client id.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantEntityStorage(IEntityStorage inner, ITenantAccessor tenantAccessor) : IEntityStorage
 {
     /// <inheritdoc />

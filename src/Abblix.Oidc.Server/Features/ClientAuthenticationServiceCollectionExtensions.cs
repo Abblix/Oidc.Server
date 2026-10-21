@@ -72,11 +72,11 @@ public static class ClientAuthenticationServiceCollectionExtensions
         services.TryAddSingleton<AuthenticationFailureBudget>();
         services.TryAddSingleton<UnnamedSourceNotice>();
 
-        // Registered with TryAdd, so a host that put its own limiter under this key keeps it - and then the
-        // budget is live whatever the settings say, including while they say to count nothing.
-        services.TryAddKeyedSingleton<PartitionedRateLimiter<string>>(
+        // A host that registers its own limiter for one tenant's budget keeps it - and then the budget is live
+        // whatever the settings say, including while they say to count nothing.
+        services.AddTenantRateLimiter<string>(
             CallerRateLimiters.AuthenticationFailures,
-            (serviceProvider, _) => CallerRateLimiters.Create(
+            serviceProvider => CallerRateLimiters.Create(
                 serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.AuthenticationFailureLimit));
 
         services.TryAddEnumerable(

@@ -30,7 +30,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="keys">The signing keys of the tenant serving the request.</param>
 /// <param name="creator">The JWT core's token creator.</param>
 /// <param name="options">What the deployment allows to sign with.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantSecurityEventTokenSigner(
     IAuthServiceKeysProvider keys,
     IJsonWebTokenCreator creator,

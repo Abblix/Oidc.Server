@@ -16,5 +16,4 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="Tenant">The tenant's definition.</param>
 /// <param name="Version">Changes whenever the definition does, and only then: while it stays, the server keeps
 /// serving the definition it already holds and everything built from it.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed record StoredTenant(TenantDefinition Tenant, string Version);

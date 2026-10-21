@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -44,25 +45,25 @@ public class AuthorizationResponseFormatter(
         {
             case AccountSelectionRequired:
                 return await RedirectAsync(
-                    issuerSettings.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
+                    issuerSettings.AccountSelectionUri.NotNull(nameof(TenantDefinition.AccountSelectionUri)), response.Model);
 
             case ConsentRequired:
                 return await RedirectAsync(
-                    issuerSettings.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
+                    issuerSettings.ConsentUri.NotNull(nameof(TenantDefinition.ConsentUri)), response.Model);
 
             case InteractionRequired:
                 return await RedirectAsync(
-                    issuerSettings.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
+                    issuerSettings.InteractionUri.NotNull(nameof(TenantDefinition.InteractionUri)), response.Model);
 
             case LoginRequired:
                 return await RedirectAsync(
-                    issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
+                    issuerSettings.LoginUri.NotNull(nameof(TenantDefinition.LoginUri)), response.Model);
 
             // prompt=create: a dedicated registration UI when configured, otherwise the login UI - the original
             // request parameters travel in the redirect so a combined page can still branch on them.
             case RegistrationRequired:
                 return await RedirectAsync(
-                    issuerSettings.RegistrationUri ?? issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
+                    issuerSettings.RegistrationUri ?? issuerSettings.LoginUri.NotNull(nameof(TenantDefinition.LoginUri)),
                     response.Model);
 
             // JARM (*.jwt): success and error alike deliver the single packed response JWT. Matched first so any

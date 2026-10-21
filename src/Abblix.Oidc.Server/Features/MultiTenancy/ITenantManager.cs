@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// readings then leave both out and log why, as for any tenant the store holds that the checks refuse.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantManager
 {
     /// <summary>

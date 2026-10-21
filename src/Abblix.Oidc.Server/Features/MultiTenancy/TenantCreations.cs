@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="timeProvider">Tells how long a creation has been gone.</param>
 /// <param name="logger">Records a release or a closing that failed.</param>
 /// <param name="closings">What lets go of each creation released.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed partial class TenantCreations(
     TimeProvider timeProvider,
     ILogger logger,

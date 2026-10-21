@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.SharedSignals.Transmitter;
@@ -23,12 +24,11 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// to serve every tenant alike.
 /// </remarks>
 /// <param name="serviceProvider">Resolves the transmitter's parts as the server will use them.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvider)
-    : IValidateOptions<MultiTenancyOptions>
+    : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
+    public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
         // Read from their registration and answered alone: the store holding them cannot be built outside a
         // tenant once a declared stream needs a poll address, and the stream store and the delivery pass checked

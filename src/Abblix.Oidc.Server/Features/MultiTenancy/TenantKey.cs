@@ -14,7 +14,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// The key a stored value is kept under within the current tenant's space.
 /// </summary>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public static class TenantKey
 {
     private const char GenerationSeparator = '~';

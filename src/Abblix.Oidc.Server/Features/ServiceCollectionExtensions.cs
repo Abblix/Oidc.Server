@@ -32,54 +32,19 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddClientInformation(this IServiceCollection services)
     {
-        services.TryAddSingleton<ClientInfoStorage>();
         services.TryAddSingleton<ReloadableClientInfoStorage>();
         services.TryAddSingleton<IClientRegistrations>(DefaultClientRegistrations.Create);
         services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
 
         services.AddOidcOptionsValidators();
 
-        // TryAdd: a host that pre-registers its own client store must win over the default (issue #226) - same
-        // host-first contract as TryAdd* seams.
-        services.TryAddSingleton<IClientInfoProvider>(DefaultClientStore);
-        services.TryAddSingleton<IClientInfoManager>(DefaultClientStore);
-        return services;
-    }
-
-    /// <summary>
-    /// The client store the server serves clients from unless the host registers its own.
-    /// </summary>
-    /// <remarks>
-    /// Under multi-tenancy a tenant's definition changes while the server runs, read again from the store of
-    /// tenants, so the clients it declares must follow it, or one it dropped would still authenticate. A server
-    /// without tenants reads its clients once, and a host wanting them reloaded asks for
-    /// <see cref="AddReloadableClientInformation"/>. Asked when the store is first resolved, by which time every
-    /// registration is in, so the order of the calls registering clients and multi-tenancy does not matter.
-    /// </remarks>
-    private static IClientInfoStore DefaultClientStore(IServiceProvider serviceProvider)
-        => MultiTenancyDetection.IsActive(serviceProvider)
-            ? serviceProvider.GetRequiredService<ReloadableClientInfoStorage>()
-            : serviceProvider.GetRequiredService<ClientInfoStorage>();
-
-    /// <summary>
-    /// Serves clients from a store that follows a reload of the settings: the clients each issuer's settings
-    /// configure are read again once they change, while what dynamic registration added, changed or removed is
-    /// kept.
-    /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
-    /// <remarks>
-    /// It replaces the client store, whichever was registered, so it may be called before or after
-    /// <c>AddOidcServices</c>. The settings own every id they configure: the store changes nothing under one, and
-    /// a client registered in memory under an id they come to configure is dropped.
-    /// </remarks>
-    public static IServiceCollection AddReloadableClientInformation(this IServiceCollection services)
-    {
-        services.TryAddSingleton<ReloadableClientInfoStorage>();
-        services.Replace(ServiceDescriptor.Singleton<IClientInfoProvider>(
-            provider => provider.GetRequiredService<ReloadableClientInfoStorage>()));
-        services.Replace(ServiceDescriptor.Singleton<IClientInfoManager>(
-            provider => provider.GetRequiredService<ReloadableClientInfoStorage>()));
+        // A tenant's definition changes while the server runs, read again from the store of tenants, so the clients
+        // it declares follow it, or one it dropped would still authenticate. TryAdd: a host that pre-registers its
+        // own client store wins over the default (issue #226).
+        services.TryAddSingleton<IClientInfoProvider>(
+            provider => provider.GetRequiredService<ReloadableClientInfoStorage>());
+        services.TryAddSingleton<IClientInfoManager>(
+            provider => provider.GetRequiredService<ReloadableClientInfoStorage>());
         return services;
     }
 

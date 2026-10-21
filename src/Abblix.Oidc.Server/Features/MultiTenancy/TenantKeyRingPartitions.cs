@@ -15,7 +15,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The parts of the key ring kept current: one for each creation of each tenant the catalog serves now, so a tenant
 /// the store drops is no longer rotated, and one it gains is, from the reading that serves it.
 /// </summary>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantKeyRingPartitions(StoreTenantCatalog catalog) : IKeyRingPartitions
 {
     /// <inheritdoc />

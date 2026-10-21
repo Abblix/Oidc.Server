@@ -42,12 +42,10 @@ public sealed partial class ExternalKeysProvider(
     /// <summary>
     /// The refusal of a custodian placement that names no key to produce with.
     /// </summary>
-#pragma warning disable ABXMT001
     internal const string NoKeyNamed =
         "The keys are held by a custodian, and none is named to produce with: pass the custodian's key names to " +
         $"{nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian)}, or, under multi-tenancy, name " +
         $"each tenant's in {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}.";
-#pragma warning restore ABXMT001
 
     // The names of the issuer serving the request: each tenant's own under multi-tenancy
     private CustodianHeldKeys Keys => settings.CustodianKeys ?? throw new InvalidOperationException(NoKeyNamed);

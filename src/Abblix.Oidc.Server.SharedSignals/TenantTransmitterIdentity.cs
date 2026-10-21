@@ -21,7 +21,6 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </remarks>
 /// <param name="tenantAccessor">Names the tenant of the current request or scope.</param>
 /// <param name="options">The transmitter's options, read for the path of the key set address.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantTransmitterIdentity(
     ITenantAccessor tenantAccessor,
     SharedSignalsTransmitterOptions options) : ITransmitterIdentity

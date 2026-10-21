@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// Which keys the server signs with is decided where the host places them, so it is read when tenants are opened
 /// rather than at registration; keys from the settings or a custodian need no opening.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITenantOpening
 {
     // The partitions whose ring is closed when their tenant is released, each registered once however often it is

@@ -6,12 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses at startup a <see cref="OidcOptions.DefaultResourceIndicator"/> that would put an unusable value in
+/// Refuses a tenant whose <see cref="TenantDefinition.DefaultResourceIndicator"/> would put an unusable value in
 /// every access token's <c>aud</c> claim.
 /// </summary>
 /// <remarks>
@@ -19,37 +19,38 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// the resource server rejects it - somewhere else, later, and reported as an invalid token rather than as a
 /// misconfiguration here.
 /// </remarks>
-public sealed class DefaultResourceIndicatorValidator : IValidateOptions<OidcOptions>
+public sealed class DefaultResourceIndicatorCheck : ITenantsCheck
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, OidcOptions options)
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
+        => TenantRefusal.EachOf(tenants, Failures);
+
+    private static IEnumerable<string> Failures(TenantDefinition tenant)
     {
-        if (options.DefaultResourceIndicator is not { } defaultResource)
-            return ValidateOptionsResult.Success;
+        if (tenant.DefaultResourceIndicator is not { } defaultResource)
+            yield break;
 
         // RFC 8707 Section 2 requires a resource indicator to be an absolute URI, and a relative one could
         // never match a request either, so it would sit as a value nothing accepts.
         if (!defaultResource.IsAbsoluteUri)
         {
-            return ValidateOptionsResult.Fail(
-                $"{nameof(OidcOptions.DefaultResourceIndicator)} '{defaultResource}' must be an absolute URI " +
-                $"(RFC 8707 Section 2).");
+            yield return
+                $"{nameof(TenantDefinition.DefaultResourceIndicator)} '{defaultResource}' must be an absolute URI " +
+                "(RFC 8707 Section 2).";
+            yield break;
         }
 
         // A default naming a resource this server does not know produces tokens whose audience no resource
         // server recognizes, and the request that would have named it explicitly is refused as
         // invalid_target - so the two paths would disagree about the same identifier.
-        var known = options.Resources is { Length: > 0 } resources &&
+        var known = tenant.Resources is { Length: > 0 } resources &&
                     Array.Exists(resources, resource => resource.Resource == defaultResource);
-
         if (!known)
         {
-            return ValidateOptionsResult.Fail(
-                $"{nameof(OidcOptions.DefaultResourceIndicator)} '{defaultResource}' is not among the " +
-                $"configured {nameof(OidcOptions.Resources)}. Register it there, or clear the default to keep " +
-                $"the client identifier as the audience.");
+            yield return
+                $"{nameof(TenantDefinition.DefaultResourceIndicator)} '{defaultResource}' is not among the " +
+                $"declared {nameof(TenantDefinition.Resources)}. Register it there, or clear the default to keep " +
+                "the client identifier as the audience.";
         }
-
-        return ValidateOptionsResult.Success;
     }
 }

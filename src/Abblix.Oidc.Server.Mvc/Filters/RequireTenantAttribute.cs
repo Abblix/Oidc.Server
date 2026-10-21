@@ -25,10 +25,8 @@ internal sealed class RequireTenantAttribute : Attribute, IResourceFilter
     /// <inheritdoc />
     public void OnResourceExecuting(ResourceExecutingContext context)
     {
-#pragma warning disable ABXMT001 // A deployment without multi-tenancy is never refused here.
         if (TenantRequirement.IsUnmet(context.HttpContext))
             context.Result = new NotFoundResult();
-#pragma warning restore ABXMT001
     }
 
     /// <inheritdoc />

@@ -101,7 +101,7 @@ public static class ServiceCollectionExtensions
 			.AddLicenseFromOptions()
 			.AddClientAuthentication()
 			.AddClientInformation()
-			.AddIssuer()
+			.AddTenants()
 			.AddTokenServices()
 			.AddSessionManagement()
 			.AddRandomGenerators()

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Hosting;
@@ -27,9 +28,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="clock">Bounds the wait for the license.</param>
 /// <param name="loading">Tells when the license is loaded; absent where nothing loads one, and the limits of an
 /// installation with no license are the ones in force.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class TenantLicenseStartupCheck(
-    IOptions<MultiTenancyOptions> options,
+    IOptions<OidcOptions> options,
     ITenantStore store,
     TimeProvider clock,
     LicenseLoading? loading = null) : IHostedService
@@ -66,7 +66,7 @@ internal sealed class TenantLicenseStartupCheck(
         }
 
         if (failures.Count > 0)
-            throw new OptionsValidationException(Options.DefaultName, typeof(MultiTenancyOptions), failures);
+            throw new OptionsValidationException(Options.DefaultName, typeof(OidcOptions), failures);
     }
 
     /// <summary>

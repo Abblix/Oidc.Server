@@ -21,7 +21,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="tenantAccessor">Resolves the current tenant.</param>
 /// <param name="catalog">The catalog the tenants are resolved from, asked whether it still serves the definition a
 /// request holds.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantIssuerLocal<T>(ITenantAccessor tenantAccessor, ITenantCatalog catalog) : IIssuerLocal<T>
     where T : class
 {

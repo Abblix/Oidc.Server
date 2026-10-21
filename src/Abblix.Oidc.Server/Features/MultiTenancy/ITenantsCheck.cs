@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -18,16 +19,19 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// It names the tenants each refusal is about, so whoever asks can decide what a refusal costs: the settings
 /// refuse to start, while a list read from a store leaves the refused tenants out.
 /// <para>
-/// A list read from a store is judged at every reading, so a check - and every check of the server's settings,
-/// a host's own among them, which judges each tenant's - runs once a period. One that throws instead of refusing
-/// fails the whole reading, and the server keeps serving the tenants it read last.
+/// A list read from a store is judged at every reading, so a check runs once a period. One that throws instead of
+/// refusing fails the whole reading, and the server keeps serving the tenants it read last.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantsCheck
 {
     /// <summary>
-    /// What is wrong with <paramref name="tenants"/>, judged as the whole list the server would serve.
+    /// What is wrong with <paramref name="tenants"/>, judged as the whole list the server would serve with the
+    /// server's own settings <paramref name="options"/>.
     /// </summary>
-    IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants);
+    /// <remarks>
+    /// The server's settings are handed in rather than read from the options pipeline, since the list the settings
+    /// declare is judged while those very settings are being validated.
+    /// </remarks>
+    IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options);
 }

@@ -138,7 +138,7 @@ public record TokenRequest
 	/// Defined in RFC 8707 as a way to express the resource(s) the client is requesting access to.
 	/// For a grant the request itself authorizes that names neither a resource nor an audience, once validated it
 	/// holds the resource inferred from its scopes, if any
-	/// (<see cref="Common.Configuration.OidcOptions.InferResourceFromScope"/>).
+	/// (<see cref="Features.MultiTenancy.TenantDefinition.InferResourceFromScope"/>).
 	/// </remarks>
 	[JsonPropertyName(Parameters.Resource)]
 	[JsonConverter(typeof(SingleOrArrayConverter<Uri>))]

@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// The client store a host opts into with <see cref="ServiceCollectionExtensions.AddReloadableClientInformation"/>:
+/// The client store the server serves clients from unless the host registers its own:
 /// each issuer serves the clients its <see cref="IIssuerSettings"/> configure as they are after every reload, and a
 /// client registered, changed or removed later is so only at the issuer it happened at.
 /// </summary>
@@ -47,10 +47,6 @@ internal partial class ReloadableClientInfoStorage(
     IClientRegistrations registrations)
     : IClientInfoStore
 {
-    // The clients the former settings of a server without tenants configured; under tenants the catalog compares
-    // each tenant's definitions, since this store is shared by all of them
-    private IEnumerable<ClientInfo>? _formerlyConfigured;
-
     private Dictionary<string, ClientInfo> Configured
     {
         get
@@ -72,30 +68,7 @@ internal partial class ReloadableClientInfoStorage(
         foreach (var clientId in registrations.DropHeld(id => clients.ContainsKey(id) && ConfiguredInForce(id)))
             LogRegistrationEvicted(clientId, settings.Id);
 
-        if (settings is OptionsIssuerSettings)
-            ReleaseDropped(clients.Values);
-
         return clients;
-    }
-
-    /// <summary>
-    /// Takes the clients the former settings configured and <paramref name="clients"/> do not off the license's
-    /// count, as the reloaded settings are first served, unless the settings in force still configure them: a build
-    /// of former settings ending after the change would otherwise release a client still served.
-    /// </summary>
-    private void ReleaseDropped(IReadOnlyCollection<ClientInfo> clients)
-    {
-        var former = Interlocked.Exchange(ref _formerlyConfigured, clients);
-        if (former is null || LicenseChecker.ClientIssuerOf(settings) is not { } issuerId)
-            return;
-
-        LicenseChecker.ReleaseClients(
-            issuerId,
-            former
-                .Select(client => client.ClientId)
-                .Except(clients.Select(client => client.ClientId), StringComparer.Ordinal)
-                .Where(clientId => !ConfiguredInForce(clientId))
-                .ToArray());
     }
 
     private async Task EvictAsync(RegisteredClient registration)
@@ -126,9 +99,7 @@ internal partial class ReloadableClientInfoStorage(
     /// </summary>
     private bool ConfiguredInForce(string clientId)
     {
-#pragma warning disable ABXMT001
         var clients = settings is TenantIssuerSettings tenant ? tenant.ClientsInForce : settings.Clients;
-#pragma warning restore ABXMT001
         return clients.Any(client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
     }
 

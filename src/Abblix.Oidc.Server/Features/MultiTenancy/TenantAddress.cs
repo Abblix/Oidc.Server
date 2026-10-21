@@ -20,7 +20,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </remarks>
 /// <param name="Host">The issuer's host, as <see cref="TenantHost.Normalize"/> leaves it.</param>
 /// <param name="Path">The issuer's path without a trailing slash; empty for an issuer at the root of its host.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed record TenantAddress(string Host, string Path)
 {
     /// <summary>

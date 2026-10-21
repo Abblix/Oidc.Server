@@ -398,7 +398,7 @@ public record ClientInfo(string ClientId)
     /// turned on.
     ///
     /// <c>null</c> (the default) states no preference and leaves the client on
-    /// <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> alone.
+    /// <see cref="MultiTenancy.TenantDefinition.DefaultSecurityProfile"/> alone.
     /// </summary>
     public ClientSecurityProfile? SecurityProfile { get; set; }
 

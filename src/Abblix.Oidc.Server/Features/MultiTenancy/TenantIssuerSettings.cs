@@ -29,7 +29,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="tenantAccessor">Resolves the current tenant.</param>
 /// <param name="options">The server-wide settings a tenant's own are derived from.</param>
 /// <param name="catalog">The catalog the tenants are resolved from, asked which definition is in force now.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantIssuerSettings(
     ITenantAccessor tenantAccessor,
     IOptionsMonitor<OidcOptions> options,

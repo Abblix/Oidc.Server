@@ -16,7 +16,6 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// The tenant of the innermost <see cref="TenantScope"/> entered, or else the one
 /// <see cref="TenantResolutionMiddleware"/> resolved the current request to.
 /// </summary>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class HttpContextTenantAccessor(IHttpContextAccessor httpContextAccessor) : ITenantAccessor
 {
     /// <inheritdoc />

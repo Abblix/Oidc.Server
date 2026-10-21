@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
@@ -23,12 +24,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <see cref="TenantSecurityEventTokenSigner"/>. A receiver that signs nothing - no signing key configured - starts.
 /// </remarks>
 /// <param name="serviceProvider">The container the signer is resolved from.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantSecurityEventsValidator(IServiceProvider serviceProvider)
-    : IValidateOptions<MultiTenancyOptions>
+    : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
+    public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
         if (serviceProvider.GetService<IServiceProviderIsService>() is not { } services ||
             !services.IsService(typeof(ISecurityEventTokenSigner)))

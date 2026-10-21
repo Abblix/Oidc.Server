@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// closed, as <see cref="TenantKeyRingOpening"/> resolves them when it is opened.
 /// </remarks>
 /// <param name="serviceProvider">Resolves the key ring and tells whether the server mints its keys.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantKeyRingClosing(IServiceProvider serviceProvider) : ITenantClosing
 {
     /// <inheritdoc />

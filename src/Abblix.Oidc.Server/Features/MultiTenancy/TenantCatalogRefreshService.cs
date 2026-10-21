@@ -6,17 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// Reads the store of tenants before the server serves anything, and again every
-/// <see cref="MultiTenancyOptions.RefreshEvery"/>, so a tenant another instance created, changed or removed reaches
+/// <see cref="OidcOptions.RefreshTenantsEvery"/>, so a tenant another instance created, changed or removed reaches
 /// this one within that period.
 /// </summary>
 /// <remarks>
@@ -24,11 +24,10 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// reading keeps the tenants of the last one and is logged, since taking the process down would turn an outage of
 /// the store into an outage of every tenant.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed partial class TenantCatalogRefreshService(
     ILogger<TenantCatalogRefreshService> logger,
     StoreTenantCatalog catalog,
-    IOptions<MultiTenancyOptions> options,
+    IOptions<OidcOptions> options,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />
@@ -41,7 +40,7 @@ internal sealed partial class TenantCatalogRefreshService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var period = options.Value.RefreshEvery;
+        var period = options.Value.RefreshTenantsEvery;
         using var timer = new PeriodicTimer(period, timeProvider);
 
         try

@@ -19,7 +19,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// A tenant this deployment serves.
 /// </summary>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantDefinition
 {
     /// <summary>
@@ -88,63 +87,87 @@ public sealed class TenantDefinition
     public IEnumerable<ClientInfo> Clients { get; init; } = [];
 
     /// <summary>
-    /// The scopes this tenant defines beyond the standard ones, as <see cref="OidcOptions.Scopes"/> does for a
-    /// server without tenants.
+    /// The scopes this tenant defines beyond the standard ones, with the claim types each grants, which outline what
+    /// a client of this tenant can request access to.
     /// </summary>
     public ScopeDefinition[]? Scopes { get; init; }
 
     /// <summary>
-    /// The resources this tenant issues tokens for, as <see cref="OidcOptions.Resources"/> does for a server
-    /// without tenants.
+    /// The resources this tenant issues tokens for: what a client can request access to, and the audience a token
+    /// is restricted to (RFC 8707).
     /// </summary>
+    /// <remarks>
+    /// With none registered and no token exchange in use, a token's audience is the issuer.
+    /// </remarks>
     public ResourceDefinition[]? Resources { get; init; }
 
     /// <summary>
-    /// The resource a token is issued for when the request names none, as
-    /// <see cref="OidcOptions.DefaultResourceIndicator"/> does for a server without tenants; it must be one of
-    /// this tenant's <see cref="Resources"/>.
+    /// The resource an access token is minted for when the request names none and none is inferred from its scopes
+    /// (<see cref="InferResourceFromScope"/>). Left null, the token's <c>aud</c> falls back to the issuer.
     /// </summary>
+    /// <remarks>
+    /// RFC 9068 Section 3 requires an authorization server to "use a default resource indicator in the `aud`
+    /// claim" when a request carries no <c>resource</c> parameter, and Section 4 tells a resource server to reject a
+    /// token whose <c>aud</c> does not name it, so a tenant with one API says so here once, instead of teaching every
+    /// client to send <c>resource</c>. The value is read by every resource server of the tenant, so changing it is a
+    /// change to their contract. It must be an absolute URI naming one of this tenant's <see cref="Resources"/> -
+    /// the tenant is refused otherwise, since a token minted for a resource it does not know is one nobody can
+    /// accept.
+    /// </remarks>
     public Uri? DefaultResourceIndicator { get; init; }
 
     /// <summary>
     /// Whether a request naming no resource is taken to be for the one of this tenant's <see cref="Resources"/>
-    /// its scopes refer to, as <see cref="OidcOptions.InferResourceFromScope"/> does for a server without tenants.
+    /// whose definition declares a requested scope.
     /// </summary>
+    /// <remarks>
+    /// RFC 9068 section 3 says an authorization server SHOULD infer the default resource indicator from the
+    /// <c>scope</c> parameter, and SHOULD reject with <c>invalid_scope</c> a request whose scopes refer to different
+    /// resources; both happen only when this is set, because the inferred resource becomes the <c>aud</c> every
+    /// resource server reads. The audience is then the resource the request names, else the one its scopes refer
+    /// to, else <see cref="DefaultResourceIndicator"/>, else the issuer. At the token endpoint it is inferred only
+    /// for a grant the token request itself authorizes and only when the request names no <c>audience</c>; a code,
+    /// a refresh token, a device code or a back-channel request carries the audience its authorization settled.
+    /// </remarks>
     public bool InferResourceFromScope { get; init; }
 
     /// <summary>
-    /// The page a user picks an account on, as <see cref="OidcOptions.AccountSelectionUri"/> is for a server
-    /// without tenants. A relative address is a page under this tenant's issuer.
+    /// The page a user picks an account on, when they hold several and have to choose the one to sign in with. A
+    /// relative address is a page under this tenant's issuer.
     /// </summary>
     public Uri? AccountSelectionUri { get; init; }
 
     /// <summary>
-    /// The page a user gives consent on, as <see cref="OidcOptions.ConsentUri"/> is for a server without tenants.
-    /// A relative address is a page under this tenant's issuer.
+    /// The page a user gives consent on, when a client requests access to their data. A relative address is a page
+    /// under this tenant's issuer.
     /// </summary>
     public Uri? ConsentUri { get; init; }
 
     /// <summary>
-    /// The page a user completes a required interaction on, as <see cref="OidcOptions.InteractionUri"/> is for a
-    /// server without tenants. A relative address is a page under this tenant's issuer.
+    /// The page the end user completes a step of the host's own on, such as accepting a new version of the terms,
+    /// when <see cref="UserInteraction.IUserInteractionRequirement"/> requires one before anything is issued. A
+    /// relative address is a page under this tenant's issuer.
     /// </summary>
     public Uri? InteractionUri { get; init; }
 
     /// <summary>
-    /// The page a user signs in on, as <see cref="OidcOptions.LoginUri"/> is for a server without tenants. A
-    /// relative address is a page under this tenant's issuer.
+    /// The page a user signs in on. A relative address is a page under this tenant's issuer.
     /// </summary>
     public Uri? LoginUri { get; init; }
 
     /// <summary>
-    /// The page a user creates an account on, as <see cref="OidcOptions.RegistrationUri"/> is for a server without
-    /// tenants. A relative address is a page under this tenant's issuer.
+    /// The page a user creates an account on when a client requests registration with <c>prompt=create</c>
+    /// (Initiating User Registration via OpenID Connect 1.0); left unset, <see cref="LoginUri"/> is used instead,
+    /// so a login page that also offers registration needs nothing more. A relative address is a page under this
+    /// tenant's issuer.
     /// </summary>
     public Uri? RegistrationUri { get; init; }
 
     /// <summary>
-    /// The security profile every client of this tenant is held to at the least, as
-    /// <see cref="OidcOptions.DefaultSecurityProfile"/> is for a server without tenants.
+    /// The security profile this tenant holds EVERY client to, whatever <see cref="ClientInfo.SecurityProfile"/>
+    /// each one names for itself: a floor rather than a default, so a client can ask for more and no registration
+    /// can take it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/> demands
+    /// nothing, leaving each client governed by what it names for itself.
     /// </summary>
     public ClientSecurityProfile DefaultSecurityProfile { get; init; } = ClientSecurityProfile.None;
 
@@ -155,15 +178,15 @@ public sealed class TenantDefinition
     public PairwiseSubjectSettings? PairwiseSubject { get; init; }
 
     /// <summary>
-    /// The keys this tenant signs its tokens with and publishes in its JWKS, as <see cref="OidcOptions.SigningKeys"/>
-    /// are for a server without tenants. Each tenant keeps its own, so a party trusting one tenant's keys cannot
-    /// verify another tenant's tokens.
+    /// The keys this tenant signs its tokens with and publishes in its JWKS, when the keys come from each tenant's
+    /// settings. Each tenant keeps its own, so a party trusting one tenant's keys cannot verify another tenant's
+    /// tokens.
     /// </summary>
     public IReadOnlyCollection<JsonWebKey> SigningKeys { get; init; } = [];
 
     /// <summary>
-    /// The keys clients encrypt to this tenant with, as <see cref="OidcOptions.EncryptionKeys"/> are for a server
-    /// without tenants. Each tenant keeps its own, so what a client encrypts to one tenant no other can read.
+    /// The keys clients encrypt to this tenant with, when the keys come from each tenant's settings. Each tenant
+    /// keeps its own, so what a client encrypts to one tenant no other can read.
     /// </summary>
     public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; init; } = [];
 
@@ -174,9 +197,8 @@ public sealed class TenantDefinition
     public CustodianHeldKeys? CustodianKeys { get; init; }
 
     /// <summary>
-    /// The scheme, host and port this tenant's mutual-TLS endpoint aliases (RFC 8705 section 5) are served at, as
-    /// <see cref="DiscoveryOptions.MtlsBaseUri"/> is for a server without tenants. The aliases keep the tenant's
-    /// issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
+    /// The scheme, host and port this tenant's mutual-TLS endpoint aliases (RFC 8705 section 5) are served at. The
+    /// aliases keep the tenant's issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
     /// the address therefore carries no path of its own.
     /// </summary>
     public Uri? MtlsBaseUri { get; init; }

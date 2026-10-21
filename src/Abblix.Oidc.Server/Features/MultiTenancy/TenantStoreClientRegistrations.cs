@@ -16,7 +16,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </summary>
 /// <param name="store">The host's store of registrations.</param>
 /// <param name="tenantAccessor">The tenant of the request.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class TenantStoreClientRegistrations(
     ITenantClientRegistrationStore store,
     ITenantAccessor tenantAccessor) : IClientRegistrations

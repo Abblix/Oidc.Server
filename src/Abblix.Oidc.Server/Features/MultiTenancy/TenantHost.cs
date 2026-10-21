@@ -20,7 +20,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// A request can name one host several ways - with a trailing dot, in Unicode or in its ASCII form, in any
 /// case - and a tenant compared as written would be missed by all but one of them.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public static class TenantHost
 {
     private static readonly IdnMapping Idn = new();

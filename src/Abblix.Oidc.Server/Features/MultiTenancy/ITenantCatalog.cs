@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// the key ring keeping no partition for it.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantCatalog
 {
     /// <summary>

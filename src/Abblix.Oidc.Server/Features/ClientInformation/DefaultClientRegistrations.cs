@@ -20,17 +20,8 @@ internal static class DefaultClientRegistrations
     /// <summary>
     /// The registrations the server serves from.
     /// </summary>
-    /// <remarks>
-    /// A store of registrations on a server without tenants is refused at startup by
-    /// <see cref="TenantClientRegistrationStoreValidator"/>.
-    /// </remarks>
     public static IClientRegistrations Create(IServiceProvider serviceProvider)
-    {
-#pragma warning disable ABXMT001
-        return MultiTenancyDetection.IsActive(serviceProvider) &&
-               serviceProvider.GetService<ITenantClientRegistrationStore>() is { } store
+        => serviceProvider.GetService<ITenantClientRegistrationStore>() is { } store
             ? new TenantStoreClientRegistrations(store, serviceProvider.GetRequiredService<ITenantAccessor>())
             : ActivatorUtilities.CreateInstance<IssuerClientRegistrations>(serviceProvider);
-#pragma warning restore ABXMT001
-    }
 }

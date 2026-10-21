@@ -22,19 +22,14 @@ public static class HttpRequestExtensions
     public static string GetAppUrl(this HttpRequest request) => request.GetFullUrl(request.PathBase);
 
     /// <summary>
-    /// Gets the base URL of the request (scheme, host, and request path).
-    /// </summary>
-    public static string GetBaseUrl(this HttpRequest request) => request.GetFullUrl(request.Path);
-
-    /// <summary>
     /// Resolves a relative address - an interaction page (login, consent, registration), or in the MVC transport
     /// an endpoint route - to an absolute one.
     /// </summary>
     /// <remarks>
-    /// <c>~/</c> means the application base. Any other relative path resolves against the server as a browser
-    /// would - except for a request resolved to a tenant, where every relative path means the tenant's base: an
-    /// endpoint advertised off it would be unreachable, and a login page reached at the server root would run
-    /// without the tenant, its sign-in cookie, written for the root, reaching every tenant on the host.
+    /// <c>~/</c> means the application base, and so does any other relative path on the request's own host - the
+    /// base of the tenant the request is resolved to, whose issuer path it carries: an endpoint advertised off it
+    /// would be unreachable, and a login page reached at the server root would run without the tenant, its sign-in
+    /// cookie, written for the root, reaching every tenant on the host.
     /// </remarks>
     public static Uri ResolveInteractionUri(this HttpRequest request, string path)
     {
@@ -43,12 +38,8 @@ public static class HttpRequestExtensions
         if (path.StartsWith("~/", StringComparison.Ordinal))
             return new Uri(appUrl + path[1..], UriKind.Absolute);
 
-#pragma warning disable ABXMT001 // Reading whether a tenant was resolved changes nothing for a host without them.
-        var underTenant = MultiTenancy.TenantRequirement.CurrentTenant(request.HttpContext) is not null;
-#pragma warning restore ABXMT001
-
 #pragma warning disable S1075 // The separator joining the tenant's base and a path, not a location of its own.
-        if (underTenant && IsPathOnThisHost(path))
+        if (IsPathOnThisHost(path))
             return new Uri(appUrl + '/' + path.TrimStart('/'), UriKind.Absolute);
 #pragma warning restore S1075
 

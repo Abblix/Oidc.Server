@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -70,9 +71,9 @@ internal static class TokenLifecycleServiceCollectionExtensions
     /// numbers it is built from.
     /// </summary>
     /// <remarks>
-    /// Registered with <c>TryAdd</c>, so a host that put its own limiter under this key before calling this
-    /// library keeps it: the endpoint then spends whatever policy that limiter implements, and the settings here
-    /// decide nothing. The startup check on them still runs: it is one validator for the whole options type and
+    /// The endpoint spends the limiter of the tenant the request is served for, built from what is registered under
+    /// <see cref="TenantServiceKeys.PerTenant"/> of this key. A host registers its own limiter there, in any order:
+    /// the endpoint then spends whatever policy that limiter implements, and the settings here decide nothing. The startup check on them still runs: it is one validator for the whole options type and
     /// cannot see which keys a host pre-empted, so a deployment that has finished with these numbers takes them
     /// out of its configuration rather than leaving a value nothing reads.
     /// </remarks>
@@ -83,9 +84,9 @@ internal static class TokenLifecycleServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, CallerRateLimitOptionsValidator>());
 
-        services.TryAddKeyedSingleton<PartitionedRateLimiter<(string ClientId, string? Source)>>(
+        services.AddTenantRateLimiter<(string ClientId, string? Source)>(
             key,
-            (serviceProvider, _) => CallerRateLimiters.Create(
+            serviceProvider => CallerRateLimiters.Create(
                 serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.CallerRateLimit));
     }
 }

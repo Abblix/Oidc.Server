@@ -8,13 +8,13 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Fails loudly at startup when a configured client cannot authenticate with the secret it appears
-/// to carry, instead of answering <c>invalid_client</c> to every request it ever makes.
+/// Refuses a tenant declaring a client that cannot authenticate with the secret it appears to carry, instead of
+/// answering <c>invalid_client</c> to every request it ever makes.
 /// </summary>
 /// <remarks>
 /// A registry kept in configuration makes a mistyped hash easy and its consequences invisible. The
@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// one step later - a digest pasted into the wrong notation decodes without error and compares
 /// against nothing.
 /// </remarks>
-public class ClientSecretsOptionsValidator : IValidateOptions<OidcOptions>
+public sealed class ClientSecretsCheck : ITenantsCheck
 {
     /// <summary>Length in bytes of a SHA-256 digest.</summary>
     private const int Sha256HashLength = 256 / 8;
@@ -34,14 +34,14 @@ public class ClientSecretsOptionsValidator : IValidateOptions<OidcOptions>
     private const int Sha512HashLength = 512 / 8;
 
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, OidcOptions options)
-    {
-        if (options.Clients == null)
-            return ValidateOptionsResult.Success;
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
+        => TenantRefusal.EachOf(tenants, tenant => Failures(tenant.Clients));
 
+    private static List<string> Failures(IEnumerable<ClientInfo> clients)
+    {
         var failures = new List<string>();
 
-        foreach (var client in options.Clients)
+        foreach (var client in clients)
         {
             CheckSecretsArePresent(failures, client);
 
@@ -52,9 +52,7 @@ public class ClientSecretsOptionsValidator : IValidateOptions<OidcOptions>
             }
         }
 
-        return failures.Count == 0
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(failures);
+        return failures;
     }
 
     /// <summary>

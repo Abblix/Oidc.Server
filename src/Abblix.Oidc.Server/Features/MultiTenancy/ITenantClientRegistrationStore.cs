@@ -39,7 +39,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <see cref="StoreTenantCatalog.Released"/> for each tenant an <see cref="ITenantOpening"/> of its own readies.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantClientRegistrationStore
 {
     /// <summary>
