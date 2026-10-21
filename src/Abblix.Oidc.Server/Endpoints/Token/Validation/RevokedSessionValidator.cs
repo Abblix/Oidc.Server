@@ -8,12 +8,14 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
-/// Refuses a grant whose authentication session a revocation cutoff has caught.
+/// Refuses a grant whose authentication session a revocation cutoff has caught, or which the end user approved
+/// before a cutoff recorded against them at the grant's client.
 /// </summary>
 /// <remarks>
 /// The third place a revocation has to be read, and the only one that sees this case. The token side compares
@@ -36,7 +38,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// client identifier, and under the assertion grants it belongs to a federated issuer.
 /// </para>
 /// </remarks>
-/// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant.</param>
+/// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself
+/// at its client.</param>
 public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : ITokenContextValidator
 {
     /// <summary>
@@ -63,7 +66,7 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : I
         if (context.Request.GrantType is not { } grantType || !RedeemsAnEarlierSession.Contains(grantType))
             return null;
 
-        if (!await cutoffChecker.IsSessionRefusedAsync(context.AuthorizedGrant.AuthSession))
+        if (!await IsRefusedAsync(context.AuthorizedGrant, grantType))
             return null;
 
         // RFC 6749 Section 5.2 names this case in the definition of the code: the grant is "invalid,
@@ -72,5 +75,32 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : I
         return new OidcError(
             ErrorCodes.InvalidGrant,
             "The session this grant was authorized from has been revoked.");
+    }
+
+    /// <summary>
+    /// Whether a cutoff refuses the grant: one recorded against its session or its subject, or, for a grant the end
+    /// user authorized at its client, one recorded against them at that client.
+    /// </summary>
+    /// <remarks>
+    /// A refresh token is left to its own issue time at the client: the token side already refuses one issued
+    /// before such a cutoff, while its grant carries no authorization moment and would be measured against its
+    /// session, refusing a family founded after the end user consented again in that same session.
+    /// </remarks>
+    private async Task<bool> IsRefusedAsync(AuthorizedGrant grant, string grantType)
+    {
+        if (await cutoffChecker.IsSessionRefusedAsync(grant.AuthSession))
+            return true;
+
+        switch (grantType)
+        {
+            case GrantTypes.RefreshToken:
+                return false;
+
+            case GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba:
+                return await cutoffChecker.IsGrantRefusedAtItsClientAsync(grant);
+
+            default:
+                throw new InvalidOperationException($"No revocation check is defined for the grant type {grantType}");
+        }
     }
 }

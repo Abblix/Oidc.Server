@@ -577,8 +577,9 @@ public record OidcOptions
 	/// deployment that knows its clocks are worse, and price the lockout when doing so.
 	/// </para>
 	/// <para>
-	/// It applies to tokens alone. An authentication session is judged with no tolerance at all, because
-	/// there the same widening would refuse the fresh sign-in a user answers the refusal with, and that
+	/// It applies to tokens, and to a grant redeemed against a revocation of the end user at its client, whose
+	/// tokens the same window would refuse anyway. An authentication session is judged with no tolerance at all,
+	/// because there the same widening would refuse the fresh sign-in a user answers the refusal with, and that
 	/// retry lands in the same window - a loop rather than a wait.
 	/// </para>
 	/// <para>

@@ -37,6 +37,18 @@ public partial class TokenRevoker(
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
         => RevokeAsync(RevocationScope.Session, sessionId, before, cancellationToken);
 
+    /// <inheritdoc />
+    public Task RevokeSubjectAtClientAsync(
+        string subject,
+        string clientId,
+        DateTimeOffset? before = null,
+        CancellationToken cancellationToken = default)
+        => RevokeAsync(
+            RevocationScope.ClientSubject,
+            RevocationPrincipal.ClientSubject(clientId, subject),
+            before,
+            cancellationToken);
+
     private Task RevokeAsync(
         RevocationScope scope, string principal, DateTimeOffset? before, CancellationToken cancellationToken)
     {

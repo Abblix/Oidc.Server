@@ -50,6 +50,7 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     {
         RevocationScope.Subject => "subject",
         RevocationScope.Session => "session",
+        RevocationScope.ClientSubject => "client-subject",
         _ => throw new ArgumentOutOfRangeException(
             nameof(scope), scope, $"No storage key is defined for this {nameof(RevocationScope)}."),
     };

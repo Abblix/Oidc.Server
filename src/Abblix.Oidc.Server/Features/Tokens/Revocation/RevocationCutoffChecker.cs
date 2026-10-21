@@ -9,6 +9,8 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -52,7 +54,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// seconds, so a token minted in the same second as a revocation reads as older than it and is refused. That
 /// errs towards refusing a token the revocation did not mean to catch, which is the direction to err in.
 /// Clock differences between instances run the other way and are not bounded by the token, which is what
-/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers - on this side only. The session side takes no
+/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers - on this side and on a grant redeemed against a cutoff
+/// at its client, whose tokens the window refuses anyway. The session side takes no
 /// tolerance, because there the same widening would refuse the fresh sign-in a user answers the refusal
 /// with, and the retry lands in the same window.
 /// </para>
@@ -91,17 +94,27 @@ public partial class RevocationCutoffChecker(
             // The subject could not be recovered, so whether a cutoff covers this token is unknown - and a
             // revocation control that cannot evaluate its input must not answer "not revoked". The sibling
             // call sites of ConvertBack refuse on the same input for the same reason.
-            LogSubjectCouldNotBeResolved(payload.ClientId);
+            LogSubjectCouldNotBeResolved(payload.NamedClientId());
             return new JwtValidationError(
                 JwtError.TokenRevoked,
                 "The subject of this token could not be resolved, so a revocation recorded against it "
                 + "cannot be ruled out");
         }
 
-        if (!await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt, Skew))
+        if (await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt, Skew))
+        {
+            LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
+            return RevokedByCutoff;
+        }
+
+        if (subject is not { Length: > 0 } || payload.NamedClientId() is not { Length: > 0 } clientId)
             return null;
 
-        LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
+        if (!await IsBeforeCutoffAsync(
+                RevocationScope.ClientSubject, RevocationPrincipal.ClientSubject(clientId, subject), issuedAt, Skew))
+            return null;
+
+        LogTokenRefusedByCutoff(RevocationScope.ClientSubject, issuedAt);
         return RevokedByCutoff;
     }
 
@@ -111,6 +124,8 @@ public partial class RevocationCutoffChecker(
         // The subject here is the one a host would revoke, with no pseudonym to open: pairwise conversion
         // happens later, in the token services, against the client the token is being minted for. So this
         // side needs neither the client lookup nor ConvertBack, and has none of their failure modes.
+        // A cutoff at one client is not asked here: the session serves the end user's other clients too, and
+        // the client itself is reached again only through a new authorization, which asks for consent anew.
         // Session first, then subject, matching the order the token side asks in. The boolean is the same
         // either way, but the scope is what the log line names, so a principal caught by both would
         // otherwise be reported differently depending on which door it came through.
@@ -126,6 +141,21 @@ public partial class RevocationCutoffChecker(
             return false;
 
         LogSessionRefusedByCutoff(session.SessionId, session.AuthenticationTime, RevocationScope.Subject);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsGrantRefusedAtItsClientAsync(AuthorizedGrant grant)
+    {
+        // The token side's tolerance, unlike the session side: a grant approved on a node whose clock runs ahead
+        // of the one that wrote the cutoff would otherwise pass and found a refresh family outliving it, while the
+        // tokens a grant approved inside the window mints are refused by the token side all the same
+        var authorizedAt = grant.AuthorizedAt ?? grant.AuthSession.AuthenticationTime;
+        var principal = RevocationPrincipal.ClientSubject(grant.Context.ClientId, grant.AuthSession.Subject);
+        if (!await IsBeforeCutoffAsync(RevocationScope.ClientSubject, principal, authorizedAt, Skew))
+            return false;
+
+        LogGrantRefusedByCutoff(grant.Context.ClientId, authorizedAt, RevocationScope.ClientSubject);
         return true;
     }
 
@@ -162,12 +192,15 @@ public partial class RevocationCutoffChecker(
     /// </remarks>
     private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(JsonWebTokenPayload payload)
     {
-        if (payload.Subject is not { Length: > 0 } subject || payload.ClientId is not { Length: > 0 } clientId)
+        if (payload.Subject is not { Length: > 0 } subject || payload.NamedClientId() is not { Length: > 0 } clientId)
             return (true, payload.Subject);
 
+        // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
+        // on an ID token but may be a resource or this server's own address on another token, so one that names no
+        // existing client leaves the subject as it is.
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo is null)
-            return (false, null);
+            return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
 
         if (clientInfo.SubjectType != SubjectTypes.Pairwise)
             return (true, subject);

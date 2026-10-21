@@ -63,4 +63,31 @@ public interface ITokenRevoker
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSessionAsync(
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cuts one end user off at one client at <paramref name="before"/>, leaving their sessions and their other
+    /// clients alone.
+    /// </summary>
+    /// <remarks>
+    /// What withdrawing consent from a client acts on: every token that client holds for them, its refresh tokens
+    /// included, is refused on its next use, so the client stops reaching their data at once rather than when its
+    /// tokens run out. Their browser sessions stay usable, since they serve the other clients too; the client gets
+    /// new tokens only through a new authorization, which asks for consent again once the host has deleted the
+    /// stored one: a code, a device authorization or a CIBA request the end user approved before the revocation is
+    /// refused at redemption too. Deleting the stored consent stays with the host, whose consent provider keeps it.
+    /// <para>
+    /// A token another client obtained by exchanging one of this client's tokens before the revocation belongs to
+    /// that other client and is left alone; revoking the end user there takes a call naming that client.
+    /// </para>
+    /// </remarks>
+    /// <param name="subject">The subject identifier the host knows the end user by, not a pairwise pseudonym.</param>
+    /// <param name="clientId">The client whose tokens stop.</param>
+    /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes once the revocation is recorded.</returns>
+    Task RevokeSubjectAtClientAsync(
+        string subject,
+        string clientId,
+        DateTimeOffset? before = null,
+        CancellationToken cancellationToken = default);
 }

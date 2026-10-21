@@ -280,6 +280,10 @@ public class UserCodeVerificationServiceTests
         Assert.Same(fromDeviceCode, written);
         Assert.Equal(DeviceAuthorizationStatus.Authorized, fromDeviceCode.Status);
 
+        // The approval is stamped with its moment, which a revocation at the client is measured against when the
+        // device redeems it; without it the grant would be measured against the session it came from.
+        Assert.Equal(Now, fromDeviceCode.AuthorizedGrant?.AuthorizedAt);
+
         // And the stale one was left alone, which is what a caller reading it back would rely on.
         Assert.Equal(DeviceAuthorizationStatus.Pending, fromUserCode.Status);
     }

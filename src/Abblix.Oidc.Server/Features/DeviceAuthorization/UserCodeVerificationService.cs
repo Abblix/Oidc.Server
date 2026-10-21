@@ -128,7 +128,7 @@ public partial class UserCodeVerificationService(
                 current =>
                 {
                     current.Status = DeviceAuthorizationStatus.Authorized;
-                    current.AuthorizedGrant = authorizedGrant;
+                    current.AuthorizedGrant = authorizedGrant with { AuthorizedAt = timeProvider.GetUtcNow() };
                 }))
         {
             return false;

@@ -28,6 +28,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, DateTimeOffset ExpiresAt)
 {
     /// <summary>
+    /// The authorized grant associated with this authentication request. Settable, as <see cref="Status"/> is, so
+    /// completing the request records when the end user approved it on the grant the request already holds.
+    /// </summary>
+    public AuthorizedGrant AuthorizedGrant { get; set; } = AuthorizedGrant;
+
+    /// <summary>
     /// Indicates the current status of the backchannel authentication request.
     /// Defaults to Pending, reflecting that the request has not yet been resolved.
     /// </summary>

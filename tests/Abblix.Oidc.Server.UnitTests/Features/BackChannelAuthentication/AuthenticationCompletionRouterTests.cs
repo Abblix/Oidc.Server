@@ -62,7 +62,8 @@ public class AuthenticationCompletionRouterTests
         services.AddKeyedSingleton<AuthenticationCompletionHandler>(
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
-                NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
+                NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(),
+                TimeProvider.System, null));
 
         var router = new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
@@ -178,7 +179,8 @@ public class AuthenticationCompletionRouterTests
         services.AddKeyedSingleton<AuthenticationCompletionHandler>(
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
-                NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(), null));
+                NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(),
+                TimeProvider.System, null));
 
         return new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,

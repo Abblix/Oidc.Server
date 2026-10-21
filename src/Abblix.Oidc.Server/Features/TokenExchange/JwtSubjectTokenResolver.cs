@@ -94,7 +94,7 @@ public sealed class JwtSubjectTokenResolver(
 
         // The client the subject_token names (client_id, else azp, else the sole audience): used both to open a
         // pairwise 'sub' back to the real subject and as the confused-deputy origin below.
-        var originalClientId = jwt.Payload.ClientId ?? jwt.Payload.AuthorizedParty ?? SingleAudience(jwt);
+        var originalClientId = jwt.Payload.NamedClientId();
 
         // When the subject_token was issued to a pairwise client, 'sub' is that client's per-sector pseudonym; open
         // it against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject
@@ -152,22 +152,4 @@ public sealed class JwtSubjectTokenResolver(
     private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode
         => jwt.Payload.Json[name] is T node ? (T?)node.DeepClone() : null;
 
-    /// <summary>
-    /// Returns the sole audience of the token, or null when there is none or more than one. A
-    /// single-audience own-issued token (id_token, logout_token) puts the client there; multiple
-    /// audiences are ambiguous, so origin is determined from azp instead (handled by the caller).
-    /// </summary>
-    private static string? SingleAudience(JsonWebToken jwt)
-    {
-        string? single = null;
-        foreach (var audience in jwt.Payload.Audiences)
-        {
-            if (single is not null)
-                return null;
-
-            single = audience;
-        }
-
-        return single;
-    }
 }
