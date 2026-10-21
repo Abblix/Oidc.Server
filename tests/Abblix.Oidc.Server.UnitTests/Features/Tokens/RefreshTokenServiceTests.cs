@@ -73,11 +73,11 @@ public class RefreshTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
-            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
+            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
             new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(Options.Create(new OidcOptions()))),
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())));
+            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>

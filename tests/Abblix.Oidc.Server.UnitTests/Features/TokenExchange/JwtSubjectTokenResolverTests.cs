@@ -20,6 +20,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using System;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 
@@ -48,11 +49,11 @@ public class JwtSubjectTokenResolverTests
         // resolver never opens 'sub'. Returning no client from the lookup drives that pass-through path (a converter
         // with no pairwise settings would pass through anyway), keeping these tests decoupled from licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
             .ReturnsAsync((ClientInfo?)null);
 
         _resolver = new JwtSubjectTokenResolver(
-            _jwtValidator.Object, new SubjectTypeConverter(), _clientInfoProvider.Object);
+            _jwtValidator.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     [Fact]

@@ -101,11 +101,11 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     clock,
                     tokenIds,
                     serviceFormatter.Object,
-                    new SubjectTypeConverter(),
+                    new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
                     settings,
-                    new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
-                    ScopeClaims.Of());
+                    new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>(), tenantAccessor: SingleIssuer.Accessor),
+                    ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
                 return clientId => access.CreateAccessTokenAsync(session, Context(clientId), client, grantId: null, null);
 
             case IdentityToken:
@@ -133,11 +133,11 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     tokenIds,
                     serviceFormatter.Object,
                     Mock.Of<ITokenRegistry>(),
-                    new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>()),
+                    new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
                     new RefreshTokenRotationPolicy(settings),
-                    new SubjectTypeConverter(),
+                    new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
-                    settings);
+                    settings, tenantAccessor: SingleIssuer.Accessor);
                 return clientId => refresh.CreateRefreshTokenAsync(session, Context(clientId), client, null, "grant");
 
             default:

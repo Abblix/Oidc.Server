@@ -22,6 +22,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
 
@@ -53,7 +54,7 @@ public class AuthenticationCompletionRouterTests
             .Returns(Task.CompletedTask);
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(c => c.TryFindClientAsync(RequestingClient)).ReturnsAsync(new ClientInfo(RequestingClient)
+        clients.Setup(c => c.TryFindClientAsync(It.IsAny<TenantDefinition>(), RequestingClient)).ReturnsAsync(new ClientInfo(RequestingClient)
         {
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
         });
@@ -63,21 +64,21 @@ public class AuthenticationCompletionRouterTests
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
                 NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(),
-                TimeProvider.System, null));
+                TimeProvider.System, null, tenantAccessor: SingleIssuer.Accessor));
 
         var router = new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
             TestFingerprints.Instance,
             clients.Object,
             services.BuildServiceProvider(),
-            storage.Object);
+            storage.Object, tenantAccessor: SingleIssuer.Accessor);
 
         await router.CompleteAsync(AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5));
 
         Assert.NotNull(written);
         Assert.Equal(BackChannelAuthenticationStatus.Denied, written.Status);
         Assert.Equal(RequestingClient, written.AuthorizedGrant.Context.ClientId);
-        clients.Verify(c => c.TryFindClientAsync(AnotherClient), Times.Never);
+        clients.Verify(c => c.TryFindClientAsync(It.IsAny<TenantDefinition>(), AnotherClient), Times.Never);
     }
 
     /// <summary>
@@ -170,7 +171,7 @@ public class AuthenticationCompletionRouterTests
     private static AuthenticationCompletionRouter RouterOver(Mock<IBackChannelRequestStorage> storage, string mode)
     {
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(c => c.TryFindClientAsync(RequestingClient)).ReturnsAsync(new ClientInfo(RequestingClient)
+        clients.Setup(c => c.TryFindClientAsync(It.IsAny<TenantDefinition>(), RequestingClient)).ReturnsAsync(new ClientInfo(RequestingClient)
         {
             BackChannelTokenDeliveryMode = mode,
         });
@@ -180,14 +181,14 @@ public class AuthenticationCompletionRouterTests
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
                 NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(),
-                TimeProvider.System, null));
+                TimeProvider.System, null, tenantAccessor: SingleIssuer.Accessor));
 
         return new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
             TestFingerprints.Instance,
             clients.Object,
             services.BuildServiceProvider(),
-            storage.Object);
+            storage.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static BackChannelAuthenticationRequest RequestFor(string clientId) =>

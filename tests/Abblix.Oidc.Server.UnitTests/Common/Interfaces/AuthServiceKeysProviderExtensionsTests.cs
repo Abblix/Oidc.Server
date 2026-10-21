@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Interfaces;
 
@@ -44,11 +45,11 @@ public class AuthServiceKeysProviderExtensionsTests
         var symmetricKey = new OctetJsonWebKey { KeyId = "sym-enc" };
 
         var provider = new Mock<IAuthServiceKeysProvider>();
-        provider.Setup(p => p.GetSigningKeys()).Returns(new[] { signingKey }.ToAsyncEnumerable());
-        provider.Setup(p => p.GetEncryptionKeys())
+        provider.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>())).Returns(new[] { signingKey }.ToAsyncEnumerable());
+        provider.Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(new JsonWebKey[] { encryptionKey, symmetricKey }.ToAsyncEnumerable());
 
-        var published = await provider.Object.GetPublishedKeysAsync(NullLogger<IAuthServiceKeysProvider>.Instance);
+        var published = await provider.Object.GetPublishedKeysAsync(SingleIssuer.Tenant, NullLogger<IAuthServiceKeysProvider>.Instance);
 
         // The signing key is published and marked use=sig.
         Assert.Contains(published, k => k.KeyId == signingKey.KeyId && k.Usage == PublicKeyUsages.Signature);
@@ -75,13 +76,13 @@ public class AuthServiceKeysProviderExtensionsTests
         Assert.True(secretBearingSymmetricKey.HasPrivateKey); // precondition: the secret is present on the way in
 
         var provider = new Mock<IAuthServiceKeysProvider>();
-        provider.Setup(p => p.GetSigningKeys()).Returns(Array.Empty<JsonWebKey>().ToAsyncEnumerable());
-        provider.Setup(p => p.GetEncryptionKeys())
+        provider.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>())).Returns(Array.Empty<JsonWebKey>().ToAsyncEnumerable());
+        provider.Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(new JsonWebKey[] { secretBearingSymmetricKey }.ToAsyncEnumerable());
 
         var logger = new CapturingLogger<IAuthServiceKeysProvider>();
 
-        var published = await provider.Object.GetPublishedKeysAsync(logger);
+        var published = await provider.Object.GetPublishedKeysAsync(SingleIssuer.Tenant, logger);
 
         // The symmetric key is fully omitted: nothing reaches the set, by kid or by type.
         Assert.DoesNotContain(published, k => k.KeyId == "sym-enc");
@@ -105,10 +106,10 @@ public class AuthServiceKeysProviderExtensionsTests
             .Sanitize(includePrivateKeys: false);
 
         var provider = new Mock<IAuthServiceKeysProvider>();
-        provider.Setup(p => p.GetSigningKeys()).Returns(new[] { dualUseKey }.ToAsyncEnumerable());
-        provider.Setup(p => p.GetEncryptionKeys()).Returns(new[] { dualUseKey }.ToAsyncEnumerable());
+        provider.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>())).Returns(new[] { dualUseKey }.ToAsyncEnumerable());
+        provider.Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>())).Returns(new[] { dualUseKey }.ToAsyncEnumerable());
 
-        var published = await provider.Object.GetPublishedKeysAsync(NullLogger<IAuthServiceKeysProvider>.Instance);
+        var published = await provider.Object.GetPublishedKeysAsync(SingleIssuer.Tenant, NullLogger<IAuthServiceKeysProvider>.Instance);
 
         // Both roles are represented, each public-only, sharing the kid and distinguished by use.
         var entries = published.Where(k => k.KeyId == dualUseKey.KeyId).ToArray();
@@ -126,12 +127,12 @@ public class AuthServiceKeysProviderExtensionsTests
         Assert.True(privateBearingKey.HasPrivateKey); // precondition: private material is present on the way in
 
         var provider = new Mock<IAuthServiceKeysProvider>();
-        provider.Setup(p => p.GetSigningKeys()).Returns(new[] { privateBearingKey }.ToAsyncEnumerable());
-        provider.Setup(p => p.GetEncryptionKeys()).Returns(Array.Empty<JsonWebKey>().ToAsyncEnumerable());
+        provider.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>())).Returns(new[] { privateBearingKey }.ToAsyncEnumerable());
+        provider.Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>())).Returns(Array.Empty<JsonWebKey>().ToAsyncEnumerable());
 
         var logger = new CapturingLogger<IAuthServiceKeysProvider>();
 
-        var published = await provider.Object.GetPublishedKeysAsync(logger);
+        var published = await provider.Object.GetPublishedKeysAsync(SingleIssuer.Tenant, logger);
 
         // The key keeps its identity but is stripped to its public half before publication.
         var publishedKey = Assert.Single(published);

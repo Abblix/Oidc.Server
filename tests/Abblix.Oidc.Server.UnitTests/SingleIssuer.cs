@@ -13,8 +13,10 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -26,6 +28,15 @@ namespace Abblix.Oidc.Server.UnitTests;
 /// </summary>
 internal static class SingleIssuer
 {
+    /// <summary>The settings a test describes nothing of.</summary>
+    private static readonly TestIssuer Default = new();
+
+    /// <summary>The tenant a test describes nothing of.</summary>
+    public static TenantDefinition Tenant => Default.ToTenant();
+
+    /// <summary>A request of the tenant a test describes nothing of.</summary>
+    public static ITenantAccessor Accessor => AccessorOf(() => Default);
+
     public static IIssuerSettings Settings => SettingsOf(new TestIssuer());
 
     public static IIssuerSettings SettingsOf(TestIssuer issuer) => SettingsOf(() => issuer);
@@ -67,13 +78,27 @@ internal static class SingleIssuer
             Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == server),
             Catalog);
 
-    public static ScopeManager ScopeManager(IOptions<TestIssuer> issuer)
-        => new(SettingsOf(issuer), new TenantIssuerLocal<Dictionary<string, ScopeDefinition>>(
-            AccessorOf(() => issuer.Value), Catalog));
+    /// <summary>
+    /// The settings of the tenant <paramref name="current"/> describes, resolved by a catalog of the host's own: the
+    /// license cannot vouch for such a tenant, and counts it by the issuer each token names.
+    /// </summary>
+    public static IIssuerSettings HostCatalogSettingsOf(Func<TestIssuer> current)
+        => new TenantIssuerSettings(
+            AccessorOf(current),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
+            Mock.Of<ITenantCatalog>());
 
-    public static ResourceManager ResourceManager(IOptions<TestIssuer> issuer)
-        => new(SettingsOf(issuer), new TenantIssuerLocal<Dictionary<Uri, ResourceDefinition>>(
-            AccessorOf(() => issuer.Value), Catalog));
+    /// <summary>The settings of a bare tenant a catalog of the host's own resolved.</summary>
+    public static IIssuerSettings HostCatalogSettings => HostCatalogSettingsOf(() => new TestIssuer());
+
+    public static ScopeManager ScopeManager() => new(LocalOf<Dictionary<string, ScopeDefinition>>());
+
+    public static ResourceManager ResourceManager() => new(LocalOf<Dictionary<Uri, ResourceDefinition>>());
+
+    /// <summary>
+    /// The server's own subject type converter, issuing each tenant's subjects with the pairwise key it declares.
+    /// </summary>
+    public static ISubjectTypeConverter SubjectTypes() => new IssuerSubjectTypeConverter(LocalOf<SubjectTypeConverter>());
 
     /// <summary>
     /// A request of the tenant <paramref name="current"/> describes, its definition built again from the settings
@@ -82,14 +107,15 @@ internal static class SingleIssuer
     public static ITenantAccessor AccessorOf(Func<TestIssuer> current) => new CurrentTenant(current);
 
     /// <summary>
-    /// A value kept for the tenant <paramref name="current"/> describes, built again once its settings hand out other
-    /// objects.
+    /// A value kept for each tenant, built again once the tenant's definition hands out other objects.
     /// </summary>
-    public static IIssuerLocal<T> LocalOf<T>(Func<TestIssuer> current) where T : class
-        => new TenantIssuerLocal<T>(AccessorOf(current), Catalog);
+    public static IIssuerLocal<T> LocalOf<T>() where T : class => new TenantIssuerLocal<T>(Catalog);
 
-    /// <summary>A catalog of the host's own, which keeps nothing a test would have to arrange.</summary>
-    private static ITenantCatalog Catalog => Mock.Of<ITenantCatalog>();
+    /// <summary>
+    /// The server's own catalog, over a store listing no tenant: the license counts a tenant it vouches for by the
+    /// tenant's id, as it counts every server a test builds, so the tests of a run take one place between them.
+    /// </summary>
+    public static ITenantCatalog Catalog { get; } = new ServedTenants().Catalog;
 
     private sealed class CurrentTenant(Func<TestIssuer> current) : ITenantAccessor
     {

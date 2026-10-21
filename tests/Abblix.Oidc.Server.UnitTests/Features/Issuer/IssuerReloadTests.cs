@@ -25,6 +25,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Issuer;
 
@@ -42,28 +43,24 @@ public class IssuerReloadTests
     public void AResourceAReloadAdds_IsKnown()
     {
         var options = new ReloadableOptions(new TestIssuer { Resources = [new ResourceDefinition(Api)] });
-        var resources = new ResourceManager(
-            SingleIssuer.SettingsOf(options),
-            SingleIssuer.LocalOf<Dictionary<Uri, ResourceDefinition>>(() => new TestIssuer()));
-        Assert.False(resources.TryGet(Files, out _));
+        var resources = SingleIssuer.ResourceManager();
+        Assert.False(resources.TryGet(options.CurrentValue.ToTenant(), Files, out _));
 
         options.Reload(new TestIssuer { Resources = [new ResourceDefinition(Api), new ResourceDefinition(Files)] });
 
-        Assert.True(resources.TryGet(Files, out _));
+        Assert.True(resources.TryGet(options.CurrentValue.ToTenant(), Files, out _));
     }
 
     [Fact]
     public void AScopeAReloadAdds_IsKnown()
     {
         var options = new ReloadableOptions(new TestIssuer());
-        var scopes = new ScopeManager(
-            SingleIssuer.SettingsOf(options),
-            SingleIssuer.LocalOf<Dictionary<string, ScopeDefinition>>(() => new TestIssuer()));
-        Assert.False(scopes.TryGet("files:read", out _));
+        var scopes = SingleIssuer.ScopeManager();
+        Assert.False(scopes.TryGet(options.CurrentValue.ToTenant(), "files:read", out _));
 
         options.Reload(new TestIssuer { Scopes = [new ScopeDefinition("files:read")] });
 
-        Assert.True(scopes.TryGet("files:read", out _));
+        Assert.True(scopes.TryGet(options.CurrentValue.ToTenant(), "files:read", out _));
     }
 
     [Fact]
@@ -92,68 +89,15 @@ public class IssuerReloadTests
         Assert.Null(await clients.TryFindClientAsync("configured"));
     }
 
-    private static ReloadableClientInfoStorage ClientsOf(
+    private static ReloadedTenantClients ClientsOf(
         IOptionsMonitor<TestIssuer> options,
         ILogger<ReloadableClientInfoStorage>? logger = null) => new(
-        logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
-        SingleIssuer.SettingsOf(options),
-        SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(() => options.CurrentValue),
-        new IssuerClientRegistrations(
-            SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>(() => options.CurrentValue)));
-
-    /// <summary>
-    /// Clients the settings configure, whose reading, once armed, stops until the test lets it go on: it holds the
-    /// store mid-way through building them.
-    /// </summary>
-    private sealed class HeldClients(params ClientInfo[] clients) : IEnumerable<ClientInfo>
-    {
-        // How long a test waits for the other side of a held build before failing rather than hanging
-        public static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
-
-        public bool Armed { get; set; }
-        public SemaphoreSlim Reached { get; } = new(0);
-        public SemaphoreSlim Released { get; } = new(0);
-
-        public IEnumerator<ClientInfo> GetEnumerator()
-        {
-            if (Armed)
-            {
-                Armed = false;
-                Reached.Release();
-                if (!Released.Wait(Patience))
-                    throw new TimeoutException("The test never let the held build go on.");
-            }
-
-            return ((IEnumerable<ClientInfo>)clients).GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    }
-
-    /// <summary>
-    /// A build of the clients a former reload configured, begun before the next reload and ending after, does not
-    /// drop a registration made meanwhile under an id the next reload freed.
-    /// </summary>
-    [Fact]
-    public async Task BuildOfFormerSettingsEndingLate_KeepsRegistrationMadeMeanwhile()
-    {
-        var held = new HeldClients(new ClientInfo("freed"));
-        var options = new ReloadableOptions(new TestIssuer());
-        var clients = ClientsOf(options);
-        Assert.Null(await clients.TryFindClientAsync("other"));
-        options.Reload(new TestIssuer { Clients = held });
-        held.Armed = true;
-        var building = Task.Run(() => clients.TryFindClientAsync("other"));
-        Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
-
-        options.Reload(new TestIssuer());
-        Assert.True(await clients.TryAddClientAsync(Registration("freed")));
-        held.Released.Release();
-        await building.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
-
-        Assert.NotNull(await clients.TryFindRegisteredClientAsync("freed"));
-    }
-
+        new ReloadableClientInfoStorage(
+            logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
+            SingleIssuer.Catalog,
+            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(),
+            new IssuerClientRegistrations(SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>())),
+        options);
     private static RegisteredClient Registration(string clientId, string? name = null, string tokenId = "jti-1")
         => new(new ClientInfo(clientId) { ClientName = name }, tokenId);
 
@@ -273,7 +217,7 @@ public class IssuerReloadTests
         Assert.Null(await clients.TryFindRegisteredClientAsync("app"));
         Assert.False(await clients.TryUpdateClientAsync(Registration("app"), Registration("app", "updated", "jti-2")));
         Assert.False(await clients.TryRemoveClientAsync(Registration("app")));
-        Assert.Equal("configured", (await ((IClientInfoProvider)clients).TryFindClientAsync("app"))?.ClientName);
+        Assert.Equal("configured", (await clients.TryFindClientAsync("app"))?.ClientName);
     }
 
     [Fact]
@@ -393,5 +337,26 @@ public class IssuerReloadTests
             LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
             => Entries.Add((logLevel, eventId));
+    }
+
+    /// <summary>
+    /// The store asked as a request of the tenant the settings describe at the moment of each call would ask it, so a
+    /// reload of the settings is a change of the tenant's definition.
+    /// </summary>
+    private sealed class ReloadedTenantClients(ReloadableClientInfoStorage store, IOptionsMonitor<TestIssuer> options)
+    {
+        private TenantDefinition Tenant => options.CurrentValue.ToTenant();
+
+        public Task<ClientInfo?> TryFindClientAsync(string clientId) => store.TryFindClientAsync(Tenant, clientId);
+
+        public Task<bool> TryAddClientAsync(RegisteredClient client) => store.TryAddClientAsync(Tenant, client);
+
+        public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
+            => store.TryFindRegisteredClientAsync(Tenant, clientId);
+
+        public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
+            => store.TryUpdateClientAsync(Tenant, current, updated);
+
+        public Task<bool> TryRemoveClientAsync(RegisteredClient current) => store.TryRemoveClientAsync(Tenant, current);
     }
 }

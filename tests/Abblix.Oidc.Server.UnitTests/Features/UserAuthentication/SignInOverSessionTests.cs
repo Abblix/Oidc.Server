@@ -293,8 +293,8 @@ public class SignInOverSessionTests
 
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
-            .ReturnsAsync((string clientId) => Client(clientId));
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string clientId) => Client(clientId));
         services.Replace(ServiceDescriptor.Singleton(clients.Object));
 
         var notifier = new Mock<ILogoutNotifier>();

@@ -241,8 +241,8 @@ public partial class MultiTenancyRegistrationTests
                 {
                     TokenTypes = TokenTypePolicy.CheckedByCaller,
                     Options = ValidationOptions.RequireValidSignedTokens,
-                    ResolveIssuerSigningKeys = _ => keys.GetSigningKeys(),
-                    ResolveTokenDecryptionKeys = _ => keys.GetEncryptionKeys(true),
+                    ResolveIssuerSigningKeys = _ => keys.GetSigningKeys(Entered(provider)),
+                    ResolveTokenDecryptionKeys = _ => keys.GetEncryptionKeys(Entered(provider), true),
                 });
         }
     }
@@ -277,10 +277,10 @@ public partial class MultiTenancyRegistrationTests
         var ct = TestContext.Current.CancellationToken;
 
         EnterTenant(provider, acme);
-        var acmeDecrypts = await keys.GetEncryptionKeys(includePrivateKeys: true).ToArrayAsync(ct);
-        var acmeSigns = await keys.GetSigningKeys(includePrivateKeys: true).ToArrayAsync(ct);
+        var acmeDecrypts = await keys.GetEncryptionKeys(Entered(provider), includePrivateKeys: true).ToArrayAsync(ct);
+        var acmeSigns = await keys.GetSigningKeys(Entered(provider), includePrivateKeys: true).ToArrayAsync(ct);
         EnterTenant(provider, globex);
-        var globexDecrypts = await keys.GetEncryptionKeys(includePrivateKeys: true).ToArrayAsync(ct);
+        var globexDecrypts = await keys.GetEncryptionKeys(Entered(provider), includePrivateKeys: true).ToArrayAsync(ct);
 
         Assert.Equal("acme-enc", Assert.Single(acmeDecrypts).KeyId);
         Assert.Equal("acme-sig", Assert.Single(acmeSigns).KeyId);
@@ -363,9 +363,9 @@ public partial class MultiTenancyRegistrationTests
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         EnterTenant(provider, acme);
-        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
         EnterTenant(provider, globex);
-        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("acme-sign", Assert.Single(atAcme).KeyId);
         Assert.Equal("globex-sign", Assert.Single(atGlobex).KeyId);
@@ -568,9 +568,9 @@ public partial class MultiTenancyRegistrationTests
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         EnterTenant(provider, Acme);
-        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
         EnterTenant(provider, globex);
-        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("acme", Assert.Single(atAcme).KeyId);
         Assert.Equal("globex~2", Assert.Single(atGlobex).KeyId);

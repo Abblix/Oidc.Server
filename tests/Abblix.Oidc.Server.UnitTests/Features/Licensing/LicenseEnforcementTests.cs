@@ -64,7 +64,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void The_issuer_the_licence_names_is_accepted()
     {
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // The whitelist is what ties a license to the deployment it was issued for. Without it, a license file
         // works wherever it is copied.
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
         Assert.Equal(LicenseRefusalReasons.IssuerNotAllowed, refusal.Reason);
     }
 
@@ -90,7 +90,7 @@ public sealed class LicenseEnforcementTests : IDisposable
             TelemetryEndpoints.UserInfo,
             new OidcInstruments(NullLoggerFactory.Instance, meters),
             NoTenant.Accessor,
-            () => Task.FromResult(LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings)),
+            () => Task.FromResult(LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings)),
             EndpointObservation.NoError));
 
         var refusal = Assert.Single(measured.Of(OidcMetrics.LicenseRefusals));
@@ -106,7 +106,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var attempt = 0; attempt < 5; attempt++)
         {
             Assert.Throws<LicenseViolationException>(
-                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
         }
     }
 
@@ -119,14 +119,14 @@ public sealed class LicenseEnforcementTests : IDisposable
         // assembly's license, turned out to exercise the whitelist while claiming to test the count.
         ArrangeLicenceThatCountsIssuers();
 
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
 
         // Every call, not only the first. A limit that stops applying once it has been reported is not a
         // limit: the caller only has to ask again, and a retry policy does that without anyone deciding to.
         for (var attempt = 0; attempt < 5; attempt++)
         {
             var refusal = Assert.Throws<LicenseViolationException>(
-                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
             Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
         }
     }
@@ -139,12 +139,12 @@ public sealed class LicenseEnforcementTests : IDisposable
     public void An_issuer_within_the_licensed_count_is_still_served_after_one_beyond_it_asked()
     {
         ArrangeLicenceThatCountsIssuers();
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
 
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
 
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // anything except a change of license terms.
         var client = new ClientInfo("some-client");
 
-        Assert.True(Issues(client, SingleIssuer.Settings));
+        Assert.True(Issues(client, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -170,13 +170,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         // of one issuer may take its issuer from the address of each request, so there the address is what counts.
         ArrangeInstallationWithNoLicence();
 
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
 
         // Every time, not only the first: a limit that stops applying once reported is not a limit.
         for (var attempt = 0; attempt < 3; attempt++)
         {
             Assert.Throws<LicenseViolationException>(
-                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
         }
     }
 
@@ -199,9 +199,9 @@ public sealed class LicenseEnforcementTests : IDisposable
         LicenseLogger.Instance.Init(records);
         try
         {
-            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
             Assert.Throws<LicenseViolationException>(
-                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
         }
         finally
         {
@@ -455,7 +455,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 20; index++)
         {
             var client = new ClientInfo($"unlicensed-client-{index}");
-            Assert.True(Issues(client, SingleIssuer.Settings));
+            Assert.True(Issues(client, SingleIssuer.HostCatalogSettings));
         }
     }
 
@@ -477,13 +477,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         for (var index = 0; index < 3; index++)
         {
             var tolerated = new ClientInfo($"client-{index}");
-            Assert.True(Issues(tolerated, SingleIssuer.Settings));
+            Assert.True(Issues(tolerated, SingleIssuer.HostCatalogSettings));
         }
 
         // Past it: a client never seen before is refused, every time it asks.
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            Assert.False(Issues(new ClientInfo("one-client-too-many"), SingleIssuer.Settings));
+            Assert.False(Issues(new ClientInfo("one-client-too-many"), SingleIssuer.HostCatalogSettings));
         }
     }
 
@@ -498,10 +498,10 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, gone));
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
 
         released.Cancel();
-        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     /// <summary>
@@ -512,15 +512,15 @@ public sealed class LicenseEnforcementTests : IDisposable
     public void Issuers_served_under_a_license_that_narrows_beneath_them_are_all_refused()
     {
         TestLicense.InstallWithIssuerLimit(2);
-        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
-        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
 
         TestLicense.ReplaceWithIssuerLimit(1);
 
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(TestLicense.Issuer, SingleIssuer.HostCatalogSettings));
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     /// <summary>
@@ -541,7 +541,7 @@ public sealed class LicenseEnforcementTests : IDisposable
                 start.SignalAndWait(TestContext.Current.CancellationToken);
                 try
                 {
-                    LicenseChecker.CheckIssuer($"https://issuer-{index}.example.com", SingleIssuer.Settings);
+                    LicenseChecker.CheckIssuer($"https://issuer-{index}.example.com", SingleIssuer.HostCatalogSettings);
                     Interlocked.Increment(ref served);
                 }
                 catch (LicenseViolationException)
@@ -566,11 +566,11 @@ public sealed class LicenseEnforcementTests : IDisposable
         using var released = new CancellationTokenSource();
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", released.Token)));
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
 
         released.Cancel();
 
-        Assert.Equal(ThirdIssuer, LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.Settings));
+        Assert.Equal(ThirdIssuer, LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -615,7 +615,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         earlier.Cancel();
 
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -633,7 +633,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         earlier.Cancel();
 
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -648,11 +648,11 @@ public sealed class LicenseEnforcementTests : IDisposable
         LicenseChecker.CheckIssuer(TestLicense.Issuer, Creation("acme", new CancellationToken(true)));
 
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
 
         // Nor does it hold the place once the live creation goes
         later.Cancel();
-        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -690,11 +690,11 @@ public sealed class LicenseEnforcementTests : IDisposable
         listed.Clear();
         await catalog.RefreshAsync(ct);
         Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
 
         time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
-        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -800,8 +800,8 @@ public sealed class LicenseEnforcementTests : IDisposable
     private static async Task RemoveThroughRegistrationAsync(RegisteredClient removed, IIssuerSettings issuer)
     {
         var clients = new Mock<IClientInfoManager>();
-        clients.Setup(manager => manager.TryRemoveClientAsync(removed)).ReturnsAsync(true);
-        var result = await new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, issuer)
+        clients.Setup(manager => manager.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), removed)).ReturnsAsync(true);
+        var result = await new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, issuer, tenantAccessor: SingleIssuer.Accessor)
             .ProcessAsync(new ValidClientRequest(new ClientRequest(), removed));
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -974,13 +974,13 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         for (var index = 0; index < 3; index++)
         {
-            _ = Issues(new ClientInfo($"established-{index}"), SingleIssuer.Settings);
+            _ = Issues(new ClientInfo($"established-{index}"), SingleIssuer.HostCatalogSettings);
         }
 
-        Assert.False(Issues(new ClientInfo("newcomer"), SingleIssuer.Settings));
+        Assert.False(Issues(new ClientInfo("newcomer"), SingleIssuer.HostCatalogSettings));
 
         var established = new ClientInfo("established-0");
-        Assert.True(Issues(established, SingleIssuer.Settings));
+        Assert.True(Issues(established, SingleIssuer.HostCatalogSettings));
     }
 
     [Fact]
@@ -1056,7 +1056,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         try
         {
             Assert.Throws<LicenseViolationException>(
-                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Settings));
+                () => LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
         }
         finally
         {

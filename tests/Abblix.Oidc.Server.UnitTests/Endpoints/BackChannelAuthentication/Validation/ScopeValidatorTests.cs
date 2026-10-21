@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Validation;
 
@@ -31,7 +32,7 @@ public class ScopeValidatorTests
     public ScopeValidatorTests()
     {
         _scopeManager = new Mock<IScopeManager>(MockBehavior.Strict);
-        _validator = new ScopeValidator(_scopeManager.Object);
+        _validator = new ScopeValidator(_scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(
@@ -56,7 +57,7 @@ public class ScopeValidatorTests
         };
     }
 
-    private delegate bool TryGetCallback(string scope, out ScopeDefinition? definition);
+    private delegate bool TryGetCallback(TenantDefinition tenant, string scope, out ScopeDefinition? definition);
 
     /// <summary>
     /// Verifies validation succeeds with valid openid scope.
@@ -69,8 +70,8 @@ public class ScopeValidatorTests
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
@@ -120,16 +121,16 @@ public class ScopeValidatorTests
         var offlineAccessDefinition = new ScopeDefinition("offline_access", Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("offline_access", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "offline_access", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = offlineAccessDefinition;
                 return true;
@@ -157,8 +158,8 @@ public class ScopeValidatorTests
     {
         // Arrange
         _scopeManager
-            .Setup(sm => sm.TryGet("unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
                 return false;
@@ -188,24 +189,24 @@ public class ScopeValidatorTests
         var emailDef = new ScopeDefinition("email", Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("profile", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "profile", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = profileDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("email", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "email", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = emailDef;
                 return true;
@@ -238,16 +239,16 @@ public class ScopeValidatorTests
             resourceScopeDef);
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("api:read", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "api:read", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
                 return false;
@@ -277,8 +278,8 @@ public class ScopeValidatorTests
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
@@ -306,16 +307,16 @@ public class ScopeValidatorTests
         var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "unknown", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
                 return false;

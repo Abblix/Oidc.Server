@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
@@ -28,7 +29,7 @@ public class ScopeValidatorTests
 
     public ScopeValidatorTests()
     {
-        _validator = new ScopeValidator(_scopeManager.Object);
+        _validator = new ScopeValidator(_scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ClientRegistrationValidationContext CreateContext(string[]? scope)
@@ -61,12 +62,12 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet("openid", out def))
+            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "openid", out def))
             .Returns(true);
 
         ScopeDefinition? def2 = new(Scopes.Profile);
         _scopeManager
-            .Setup(m => m.TryGet("profile", out def2))
+            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "profile", out def2))
             .Returns(true);
 
         var result = await _validator.ValidateAsync(CreateContext(["openid", "profile"]));
@@ -78,7 +79,7 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet("openid", out def))
+            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "openid", out def))
             .Returns(true);
 
         var result = await _validator.ValidateAsync(CreateContext(["openid", "unknown_scope"]));

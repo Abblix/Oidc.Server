@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ScopeManagement;
 
@@ -24,6 +25,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ScopeManagement;
 public class ScopeManagerExtensionsTests
 {
     private readonly IScopeManager _scopeManager;
+    private readonly TenantDefinition _tenant;
 
     public ScopeManagerExtensionsTests()
     {
@@ -34,7 +36,8 @@ public class ScopeManagerExtensionsTests
         };
 
         var options = Options.Create(new TestIssuer { Scopes = customScopes });
-        _scopeManager = SingleIssuer.ScopeManager(options);
+        _scopeManager = SingleIssuer.ScopeManager();
+        _tenant = options.Value.ToTenant();
     }
 
     /// <summary>
@@ -48,7 +51,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -71,7 +74,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { "custom:read", "custom:write" };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -93,7 +96,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, "unknown-scope" };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -119,7 +122,7 @@ public class ScopeManagerExtensionsTests
         };
 
         // Act
-        var result = _scopeManager.Validate(scopes, resources, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, resources, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -145,7 +148,7 @@ public class ScopeManagerExtensionsTests
         };
 
         // Act
-        var result = _scopeManager.Validate(scopes, resources, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, resources, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -167,7 +170,7 @@ public class ScopeManagerExtensionsTests
         var scopes = Enumerable.Empty<string>();
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -187,7 +190,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, "custom:read" };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -208,7 +211,7 @@ public class ScopeManagerExtensionsTests
         var resources = Array.Empty<ResourceDefinition>();
 
         // Act
-        var result = _scopeManager.Validate(scopes, resources, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, resources, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -233,7 +236,7 @@ public class ScopeManagerExtensionsTests
         };
 
         // Act
-        var result = _scopeManager.Validate(scopes, resources, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, resources, null, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -253,7 +256,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { "custom:read" };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out _);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -275,7 +278,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { "OPENID" }; // Wrong case
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -294,7 +297,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, Scopes.OpenId }; // Duplicate
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out _);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -321,7 +324,7 @@ public class ScopeManagerExtensionsTests
         };
 
         // Act
-        var result = _scopeManager.Validate(scopes, resources, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, resources, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -348,7 +351,7 @@ public class ScopeManagerExtensionsTests
         };
 
         // Act
-        var result = _scopeManager.Validate(scopes, resources, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, resources, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -368,7 +371,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { "invalid", Scopes.OpenId };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -388,7 +391,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -413,7 +416,7 @@ public class ScopeManagerExtensionsTests
         };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out var error);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -433,7 +436,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.Email, Scopes.Profile, Scopes.OpenId };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, null, out var definitions, out _);
+        var result = _scopeManager.Validate(_tenant, scopes, null, null, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -457,7 +460,7 @@ public class ScopeManagerExtensionsTests
         var allowedClientScopes = new[] { Scopes.OpenId };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, allowedClientScopes, out var definitions, out _);
+        var result = _scopeManager.Validate(_tenant, scopes, null, allowedClientScopes, out var definitions, out _);
 
         // Assert
         Assert.False(result);
@@ -475,7 +478,7 @@ public class ScopeManagerExtensionsTests
         var allowedClientScopes = new[] { Scopes.OpenId, Scopes.Profile };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, allowedClientScopes, out var definitions, out _);
+        var result = _scopeManager.Validate(_tenant, scopes, null, allowedClientScopes, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -493,7 +496,7 @@ public class ScopeManagerExtensionsTests
         var scopes = new[] { Scopes.OpenId, Scopes.Profile };
 
         // Act
-        var result = _scopeManager.Validate(scopes, null, [], out var definitions, out _);
+        var result = _scopeManager.Validate(_tenant, scopes, null, [], out var definitions, out _);
 
         // Assert
         Assert.True(result);

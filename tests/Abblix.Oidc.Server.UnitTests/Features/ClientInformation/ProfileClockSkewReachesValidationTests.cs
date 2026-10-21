@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System.Linq;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
@@ -53,7 +54,7 @@ public class ProfileClockSkewReachesValidationTests
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
             .ReturnsAsync((ClientInfo?)null);
 
         var authenticator = new ClientSecretJwtAuthenticator(
@@ -64,7 +65,7 @@ public class ProfileClockSkewReachesValidationTests
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
             new Mock<IIssuerProvider>().Object,
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })));
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })), tenantAccessor: SingleIssuer.Accessor);
 
         await authenticator.TryAuthenticateClientAsync(new ClientRequest
         {
@@ -155,7 +156,7 @@ public class ProfileClockSkewReachesValidationTests
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
-            .Setup(p => p.GetEncryptionKeys(It.IsAny<bool>()))
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         var validator = new ClientJwtValidator(
@@ -167,7 +168,7 @@ public class ProfileClockSkewReachesValidationTests
             issuerProvider.Object,
             serviceKeys.Object,
             SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })),
-            TimeProvider.System);
+            TimeProvider.System, tenantAccessor: SingleIssuer.Accessor);
 
         await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller);
 

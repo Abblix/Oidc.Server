@@ -26,6 +26,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 
@@ -68,7 +69,7 @@ public class EndSessionRequestProcessorTests
                     _issuerProvider.Object,
                     _clientInfoProvider.Object,
                     _logoutNotifier.Object,
-                    SingleIssuer.Settings),
+                    SingleIssuer.Settings, tenantAccessor: SingleIssuer.Accessor),
                 Options.Create(_options)),
             _confirmationStore.Object);
     }
@@ -346,11 +347,11 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_2"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_2"))
             .ReturnsAsync(client2);
 
         _logoutNotifier
@@ -392,11 +393,11 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_missing"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_missing"))
             .ReturnsAsync((ClientInfo?)null);
 
         _logoutNotifier
@@ -441,7 +442,7 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -485,7 +486,7 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -534,7 +535,7 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -577,7 +578,7 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -645,7 +646,7 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -688,7 +689,7 @@ public class EndSessionRequestProcessorTests
             .Returns(new Uri(Issuer));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier

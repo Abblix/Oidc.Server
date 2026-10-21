@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -54,7 +55,7 @@ public class RegisterClientRequestProcessorTests
 
         return new RegisterClientRequestProcessor(
             _logger,
-            credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object);
+            credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ValidClientRegistrationRequest Request() => new(
@@ -69,7 +70,7 @@ public class RegisterClientRequestProcessorTests
     public async Task ARegistrationTheStoreKeeps_IsAnsweredWithItsToken()
     {
         _clients
-            .Setup(c => c.TryAddClientAsync(It.Is<RegisteredClient>(r =>
+            .Setup(c => c.TryAddClientAsync(It.IsAny<TenantDefinition>(), It.Is<RegisteredClient>(r =>
                 r.ClientInfo.ClientId == "client-1" && r.RegistrationAccessTokenId == "jti-1")))
             .ReturnsAsync(true);
 
@@ -85,7 +86,7 @@ public class RegisterClientRequestProcessorTests
     [Fact]
     public async Task ARegistrationTheStoreDoesNotKeep_IsRefused()
     {
-        _clients.Setup(c => c.TryAddClientAsync(It.IsAny<RegisteredClient>())).ReturnsAsync(false);
+        _clients.Setup(c => c.TryAddClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>())).ReturnsAsync(false);
 
         var result = await Processor().ProcessAsync(Request());
 
@@ -121,16 +122,16 @@ public class RegisterClientRequestProcessorTests
     {
         var store = new ReloadableClientInfoStorage(
             NullLogger<ReloadableClientInfoStorage>.Instance,
-            SingleIssuer.Settings,
-            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(() => new TestIssuer()),
+            SingleIssuer.Catalog,
+            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(),
             new IssuerClientRegistrations(
-                SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>(() => new TestIssuer())));
+                SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>()));
         var processor = Processor(store);
 
         Assert.True((await processor.ProcessAsync(Request())).TryGetSuccess(out _));
         Assert.True((await processor.ProcessAsync(Request())).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
-        Assert.NotNull(await store.TryFindRegisteredClientAsync("client-1"));
+        Assert.NotNull(await store.TryFindRegisteredClientAsync(SingleIssuer.Tenant, "client-1"));
     }
 
     /// <summary>

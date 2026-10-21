@@ -36,7 +36,7 @@ public class SubjectTypeValidatorTests
     {
         _secureHttpFetcher = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
         _logger = new Mock<ILogger<SubjectTypeValidator>>();
-        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, PairwiseKeyed);
+        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(PairwiseKeyed), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ public class SubjectTypeValidatorTests
     [Fact]
     public async Task APairwiseRegistration_WithoutAKey_IsRefused()
     {
-        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new SubjectTypeConverter());
+        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor);
         var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
         {
             SubjectType = SubjectTypes.Pairwise,

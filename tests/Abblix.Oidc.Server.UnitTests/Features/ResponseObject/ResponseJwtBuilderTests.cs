@@ -23,6 +23,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ResponseObject;
 
@@ -54,24 +55,24 @@ public class ResponseJwtBuilderTests
 
     public ResponseJwtBuilderTests()
     {
-        _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
+        _clientInfoProvider.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(_client);
         _issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
         _timeProvider = new FakeTimeProvider(_now);
-        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
+        _serviceKeys.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeys.Object,
-            _serviceKeys.Object);
+            _serviceKeys.Object, tenantAccessor: SingleIssuer.Accessor);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             clientJwtFormatter,
             _issuerProvider.Object,
             _timeProvider,
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -204,10 +205,10 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
-                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object),
+                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, tenantAccessor: SingleIssuer.Accessor),
             _issuerProvider.Object,
             _timeProvider,
-            options);
+            options, tenantAccessor: SingleIssuer.Accessor);
 
         await builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
@@ -248,7 +249,7 @@ public class ResponseJwtBuilderTests
         var signingKeyRs384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
 
         _serviceKeys
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRs256, signingKeyRs384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();

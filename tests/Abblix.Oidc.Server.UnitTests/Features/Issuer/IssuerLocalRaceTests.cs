@@ -25,12 +25,12 @@ public class IssuerLocalRaceTests
     [Fact]
     public async Task UnderATenant_TwoFirstCallers_ShareOneValue()
     {
-        var local = new TenantIssuerLocal<object>(new OneTenant(), new NoCatalog());
+        var local = new TenantIssuerLocal<object>(new NoCatalog());
 
         var (first, second) = await BuildAtOnceAsync(local);
 
         Assert.Same(first, second);
-        Assert.Same(first, local.GetOrCreate(null, () => new object()));
+        Assert.Same(first, local.GetOrCreate(Acme, null, () => new object()));
     }
 
     /// <summary>
@@ -46,8 +46,8 @@ public class IssuerLocalRaceTests
             return new object();
         }
 
-        var first = Task.Run(() => local.GetOrCreate(null, Build));
-        var second = Task.Run(() => local.GetOrCreate(null, Build));
+        var first = Task.Run(() => local.GetOrCreate(Acme, null, Build));
+        var second = Task.Run(() => local.GetOrCreate(Acme, null, Build));
         return (await first, await second);
     }
 
@@ -63,11 +63,6 @@ public class IssuerLocalRaceTests
             => ValueTask.FromResult<TenantDefinition?>(null);
     }
 
-    private sealed class OneTenant : ITenantAccessor
-    {
-        public TenantContext? Current { get; } = new()
-        {
-            Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") },
-        };
-    }
+    private static readonly TenantDefinition Acme =
+        new() { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") };
 }

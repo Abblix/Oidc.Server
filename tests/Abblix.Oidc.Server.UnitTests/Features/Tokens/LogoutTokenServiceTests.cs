@@ -23,6 +23,7 @@ using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 
@@ -68,7 +69,7 @@ public class LogoutTokenServiceTests
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
             _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -85,7 +86,7 @@ public class LogoutTokenServiceTests
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
             _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
         var clientInfo = CreateClientInfo();
         var logoutContext = CreateLogoutContext();
         SetupMocks(clientInfo, logoutContext, _ => { });
@@ -361,7 +362,7 @@ public class LogoutTokenServiceTests
         Assert.NotNull(capturedToken);
         Assert.Equal(SubjectId, capturedToken!.Payload.Subject);
 
-        _subjectTypeConverter.Verify(c => c.Convert(SubjectId, clientInfo), Times.Once);
+        _subjectTypeConverter.Verify(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo), Times.Once);
     }
 
     /// <summary>
@@ -465,7 +466,7 @@ public class LogoutTokenServiceTests
         var logoutContext = new LogoutContext(string.Empty, SubjectId, Issuer);  // Empty SessionId
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(SubjectId, clientInfo))
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
             .Returns(SubjectId);
 
         // Act & Assert
@@ -490,7 +491,7 @@ public class LogoutTokenServiceTests
         var logoutContext = new LogoutContext(string.Empty, SubjectId, Issuer);  // Empty SessionId
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(SubjectId, clientInfo))
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
             .Returns(string.Empty);  // Convert returns empty
 
         // Act & Assert
@@ -540,7 +541,7 @@ public class LogoutTokenServiceTests
         JsonWebToken? capturedToken = null;
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(string.Empty, clientInfo))
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), string.Empty, clientInfo))
             .Returns(string.Empty);
 
         _jwtFormatter
@@ -597,7 +598,7 @@ public class LogoutTokenServiceTests
         ClientInfo? formattedClient = null;
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(SubjectId, clientInfo))
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
             .Returns(SubjectId);
 
         _jwtFormatter
@@ -652,7 +653,7 @@ public class LogoutTokenServiceTests
         Action<JsonWebToken> captureToken)
     {
         _subjectTypeConverter
-            .Setup(c => c.Convert(logoutContext.SubjectId, clientInfo))
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), logoutContext.SubjectId, clientInfo))
             .Returns(logoutContext.SubjectId);
 
         _jwtFormatter

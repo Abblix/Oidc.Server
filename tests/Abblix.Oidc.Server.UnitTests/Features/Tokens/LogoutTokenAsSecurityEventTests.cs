@@ -24,6 +24,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 
@@ -67,7 +68,7 @@ public class LogoutTokenAsSecurityEventTests
         var logoutContext = new LogoutContext(SessionId, SubjectId, Issuer);
 
         subjectTypeConverter
-            .Setup(converter => converter.Convert(SubjectId, clientInfo))
+            .Setup(converter => converter.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
             .Returns(SubjectId);
 
         JsonWebToken? produced = null;
@@ -83,7 +84,7 @@ public class LogoutTokenAsSecurityEventTests
             subjectTypeConverter.Object,
             jwtFormatter.Object,
             tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
 
         await service.CreateLogoutTokenAsync(clientInfo, logoutContext);
 

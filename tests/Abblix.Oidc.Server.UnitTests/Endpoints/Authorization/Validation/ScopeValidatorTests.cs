@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
@@ -39,7 +40,7 @@ public class ScopeValidatorTests
     public ScopeValidatorTests()
     {
         _scopeManager = new Mock<IScopeManager>();
-        _validator = new ScopeValidator(_scopeManager.Object);
+        _validator = new ScopeValidator(_scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
 
         // Setup standard scope definitions
         _openIdScope = new ScopeDefinition(Scopes.OpenId);
@@ -56,29 +57,29 @@ public class ScopeValidatorTests
     /// </summary>
     private void SetupScopeManager()
     {
-        _scopeManager.Setup(m => m.TryGet(Scopes.OpenId, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Scopes.OpenId, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _openIdScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _profileScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _emailScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _offlineAccessScope;
                 return true;
@@ -86,7 +87,7 @@ public class ScopeValidatorTests
     }
 
     // Delegate for Moq out parameter support
-    private delegate bool ScopeManagerTryGetCallback(string scope, out ScopeDefinition? definition);
+    private delegate bool ScopeManagerTryGetCallback(TenantDefinition tenant, string scope, out ScopeDefinition? definition);
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -254,8 +255,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithUnknownScope_ShouldReturnError()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -445,15 +446,15 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone]);
 
         // Setup additional scopes
-        _scopeManager.Setup(m => m.TryGet(Scopes.Address, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Scopes.Address, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(Scopes.Address);
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Phone, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Scopes.Phone, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(Scopes.Phone);
                 return true;
@@ -515,8 +516,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithOfflineAccessAndUnknownScope_ShouldFailOnOfflineAccess()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "unknown", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -533,7 +534,7 @@ public class ScopeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        _scopeManager.Verify(m => m.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny), Times.Never);
+        _scopeManager.Verify(m => m.TryGet(It.IsAny<TenantDefinition>(), "unknown", out It.Ref<ScopeDefinition?>.IsAny), Times.Never);
     }
 
     /// <summary>
@@ -596,8 +597,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithScopeInNeitherManagerNorResources_ShouldReturnError()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("custom_scope", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "custom_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;

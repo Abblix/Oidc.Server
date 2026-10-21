@@ -236,7 +236,7 @@ public class RegisterClientHandlerIntegrationTests
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
         Assert.True(success.Metadata.DpopBoundAccessTokens);
 
-        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
         Assert.NotNull(stored);
         Assert.True(stored.RequireDPoP);
     }
@@ -257,7 +257,7 @@ public class RegisterClientHandlerIntegrationTests
         Assert.True(result.TryGetSuccess(out var success));
         Assert.False(success.Metadata.DpopBoundAccessTokens);
 
-        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
         Assert.NotNull(stored);
         Assert.False(stored.RequireDPoP);
     }
@@ -281,7 +281,7 @@ public class RegisterClientHandlerIntegrationTests
 
         Assert.True(result.TryGetSuccess(out var success));
 
-        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
         Assert.NotNull(stored);
         Assert.True(stored.PkceRequired is null or true);
     }
@@ -306,7 +306,7 @@ public class RegisterClientHandlerIntegrationTests
 
         Assert.True(result.TryGetSuccess(out var success));
 
-        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
         Assert.NotNull(stored);
         Assert.False(stored.PkceRequired);
     }
@@ -380,7 +380,7 @@ public class RegisterClientHandlerIntegrationTests
         Assert.True(success.Metadata.RequireSignedRequestObject);
         Assert.True(success.Metadata.TlsClientCertificateBoundAccessTokens);
 
-        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
         Assert.NotNull(stored);
         Assert.True(stored.RequirePushedAuthorizationRequests);
         Assert.True(stored.RequireSignedRequestObject);

@@ -33,11 +33,12 @@ public class ResourceManagerTests
         var options = Options.Create(new TestIssuer());
 
         // Act
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
         var testUri = new Uri("https://api.example.com");
-        Assert.False(manager.TryGet(testUri, out var definition));
+        Assert.False(manager.TryGet(tenant, testUri, out var definition));
         Assert.Null(definition);
     }
 
@@ -60,10 +61,11 @@ public class ResourceManagerTests
         });
 
         // Act
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet(resourceUri, out var retrieved));
+        Assert.True(manager.TryGet(tenant, resourceUri, out var retrieved));
         Assert.NotNull(retrieved);
         Assert.Equal(resourceUri, retrieved.Resource);
         Assert.Equal(2, retrieved.Scopes.Length);
@@ -95,12 +97,13 @@ public class ResourceManagerTests
         });
 
         // Act
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet(new Uri("https://api1.example.com"), out _));
-        Assert.True(manager.TryGet(new Uri("https://api2.example.com"), out _));
-        Assert.True(manager.TryGet(new Uri("https://api3.example.com"), out _));
+        Assert.True(manager.TryGet(tenant, new Uri("https://api1.example.com"), out _));
+        Assert.True(manager.TryGet(tenant, new Uri("https://api2.example.com"), out _));
+        Assert.True(manager.TryGet(tenant, new Uri("https://api3.example.com"), out _));
     }
 
     /// <summary>
@@ -118,10 +121,11 @@ public class ResourceManagerTests
             new ScopeDefinition("read"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var result = manager.TryGet(unregisteredUri, out var definition);
+        var result = manager.TryGet(tenant, unregisteredUri, out var definition);
 
         // Assert
         Assert.False(result);
@@ -140,13 +144,14 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceUri, new ScopeDefinition("read"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert - Scheme and host are case-insensitive
-        Assert.True(manager.TryGet(new Uri("HTTPS://API.EXAMPLE.COM/v1"), out _));
+        Assert.True(manager.TryGet(tenant, new Uri("HTTPS://API.EXAMPLE.COM/v1"), out _));
 
         // Act & Assert - Path is case-sensitive
-        Assert.False(manager.TryGet(new Uri("https://api.example.com/V1"), out _));
+        Assert.False(manager.TryGet(tenant, new Uri("https://api.example.com/V1"), out _));
     }
 
     /// <summary>
@@ -164,10 +169,11 @@ public class ResourceManagerTests
             new ScopeDefinition("delete", "delete_claim"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var result = manager.TryGet(resourceUri, out var definition);
+        var result = manager.TryGet(tenant, resourceUri, out var definition);
 
         // Assert
         Assert.True(result);
@@ -192,11 +198,12 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceWithQuery, new ScopeDefinition("read"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert - Must match exactly including query
-        Assert.True(manager.TryGet(resourceWithQuery, out _));
-        Assert.False(manager.TryGet(resourceWithoutQuery, out _));
+        Assert.True(manager.TryGet(tenant, resourceWithQuery, out _));
+        Assert.False(manager.TryGet(tenant, resourceWithoutQuery, out _));
     }
 
     /// <summary>
@@ -213,11 +220,12 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceWithPort, new ScopeDefinition("read"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert
-        Assert.True(manager.TryGet(resourceWithPort, out _));
-        Assert.False(manager.TryGet(resourceDefaultPort, out _));
+        Assert.True(manager.TryGet(tenant, resourceWithPort, out _));
+        Assert.False(manager.TryGet(tenant, resourceDefaultPort, out _));
     }
 
     /// <summary>
@@ -231,10 +239,11 @@ public class ResourceManagerTests
         var options = Options.Create(new TestIssuer { Resources = null });
 
         // Act
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.False(manager.TryGet(new Uri("https://api.example.com"), out _));
+        Assert.False(manager.TryGet(tenant, new Uri("https://api.example.com"), out _));
     }
 
     /// <summary>
@@ -248,10 +257,11 @@ public class ResourceManagerTests
         var options = Options.Create(new TestIssuer { Resources = [] });
 
         // Act
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.False(manager.TryGet(new Uri("https://api.example.com"), out _));
+        Assert.False(manager.TryGet(tenant, new Uri("https://api.example.com"), out _));
     }
 
     /// <summary>
@@ -269,11 +279,12 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceWithSlash, new ScopeDefinition("read"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert
-        Assert.True(manager.TryGet(resourceWithSlash, out _));
-        Assert.False(manager.TryGet(resourceWithoutSlash, out _));
+        Assert.True(manager.TryGet(tenant, resourceWithSlash, out _));
+        Assert.False(manager.TryGet(tenant, resourceWithoutSlash, out _));
     }
 
     /// <summary>
@@ -293,11 +304,12 @@ public class ResourceManagerTests
             new ScopeDefinition("read"));
 
         var options = Options.Create(new TestIssuer { Resources = [resource1, resource2] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert
-        Assert.True(manager.TryGet(new Uri("https://api.example.com/v1"), out var def1));
-        Assert.True(manager.TryGet(new Uri("https://api.example.com/v2"), out var def2));
+        Assert.True(manager.TryGet(tenant, new Uri("https://api.example.com/v1"), out var def1));
+        Assert.True(manager.TryGet(tenant, new Uri("https://api.example.com/v2"), out var def2));
         Assert.NotSame(def1, def2);
     }
 
@@ -319,10 +331,11 @@ public class ResourceManagerTests
         var resource = new ResourceDefinition(resourceUri, scopes);
 
         var options = Options.Create(new TestIssuer { Resources = [resource] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var result = manager.TryGet(resourceUri, out var definition);
+        var result = manager.TryGet(tenant, resourceUri, out var definition);
 
         // Assert
         Assert.True(result);
@@ -352,7 +365,7 @@ public class ResourceManagerTests
         var options = Options.Create(new TestIssuer { Resources = [resource] });
 
         Assert.Throws<ArgumentException>(
-            () => SingleIssuer.ResourceManager(options).TryGet(new Uri("https://api.example.com"), out _));
+            () => SingleIssuer.ResourceManager().TryGet(options.Value.ToTenant(), new Uri("https://api.example.com"), out _));
     }
 
     /// <summary>
@@ -373,6 +386,6 @@ public class ResourceManagerTests
         });
 
         Assert.Throws<ArgumentException>(
-            () => SingleIssuer.ResourceManager(options).TryGet(new Uri("https://api.example.com"), out _));
+            () => SingleIssuer.ResourceManager().TryGet(options.Value.ToTenant(), new Uri("https://api.example.com"), out _));
     }
 }

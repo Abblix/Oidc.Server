@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 
@@ -59,7 +60,7 @@ public class UserInfoRequestValidatorTests
             _accessTokenService.Object,
             _clientInfoProvider.Object,
             _dpopValidator.Object,
-            _mtlsValidator.Object);
+            _mtlsValidator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static UserInfoRequest CreateUserInfoRequest(string? accessToken = null)
@@ -136,7 +137,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -177,7 +178,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -351,7 +352,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("unknown_client"))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "unknown_client"))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -395,7 +396,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act

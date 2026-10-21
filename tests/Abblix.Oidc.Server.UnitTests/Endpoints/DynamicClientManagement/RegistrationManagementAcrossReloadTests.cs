@@ -24,6 +24,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -38,20 +39,21 @@ public class RegistrationManagementAcrossReloadTests
 
     private readonly Reloadable _options = new(new TestIssuer());
 
-    private ReloadableClientInfoStorage ReloadableStore() => new(
+    private static ReloadableClientInfoStorage ReloadableStore() => new(
         NullLogger<ReloadableClientInfoStorage>.Instance,
-        SingleIssuer.SettingsOf(_options),
-        SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(() => _options.CurrentValue),
+        SingleIssuer.Catalog,
+        SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(),
         new IssuerClientRegistrations(
-            SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>(() => _options.CurrentValue)));
+            SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>()));
 
-    private static async Task RegisterAsync(IClientInfoManager clients, string tokenId)
+    private async Task RegisterAsync(IClientInfoManager clients, string tokenId)
         => Assert.True(await clients.TryAddClientAsync(
+            _options.CurrentValue.ToTenant(),
             new RegisteredClient(new ClientInfo(ClientId) { ClientName = "registered" }, tokenId)));
 
     private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {
-        var result = await new ClientRequestValidator(clients, new TokenIsItsJti()).ValidateAsync(
+        var result = await new ClientRequestValidator(clients, new TokenIsItsJti(), tenantAccessor: SingleIssuer.AccessorOf(() => _options.CurrentValue)).ValidateAsync(
             new ClientRequest
             {
                 ClientId = ClientId,
@@ -75,7 +77,7 @@ public class RegistrationManagementAcrossReloadTests
         _options.Reload(Configuring());
 
         Assert.Null(await ManagesAsync(clients, "first"));
-        Assert.Equal("configured", (await clients.TryFindClientAsync(ClientId))?.ClientName);
+        Assert.Equal("configured", (await clients.TryFindClientAsync(_options.CurrentValue.ToTenant(), ClientId))?.ClientName);
     }
 
     [Fact]
@@ -87,7 +89,7 @@ public class RegistrationManagementAcrossReloadTests
         Assert.Null(await ManagesAsync(clients, "first"));
 
         _options.Reload(new TestIssuer());
-        Assert.Null(await clients.TryFindClientAsync(ClientId));
+        Assert.Null(await clients.TryFindClientAsync(_options.CurrentValue.ToTenant(), ClientId));
         Assert.Null(await ManagesAsync(clients, "first"));
 
         await RegisterAsync(clients, "second");

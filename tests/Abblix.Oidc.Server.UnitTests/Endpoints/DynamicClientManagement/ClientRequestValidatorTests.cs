@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -38,7 +39,7 @@ public class ClientRequestValidatorTests
 
     public ClientRequestValidatorTests()
     {
-        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object);
+        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ClientRequest Request() => new()
@@ -53,7 +54,7 @@ public class ClientRequestValidatorTests
             .ReturnsAsync(tokenId);
 
     private void Holds(RegisteredClient? client)
-        => _clients.Setup(c => c.TryFindRegisteredClientAsync(ClientId)).ReturnsAsync(client);
+        => _clients.Setup(c => c.TryFindRegisteredClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(client);
 
     [Fact]
     public async Task ValidateAsync_TokenTheRegistrationHolds_ReturnsValidRequest()

@@ -140,9 +140,9 @@ public partial class MultiTenancyRegistrationTests
 
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
         EnterTenant(provider, await catalog.FindByIdAsync("acme", TestContext.Current.CancellationToken));
-        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
         EnterTenant(provider, await catalog.FindByIdAsync("globex", TestContext.Current.CancellationToken));
-        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.NotEqual(Assert.Single(atAcme).KeyId, Assert.Single(atGlobex).KeyId);
     }
@@ -169,7 +169,7 @@ public partial class MultiTenancyRegistrationTests
         Assert.Equal(["acme"], partitions.Kept);
 
         EnterTenant(provider, globex);
-        var stillHeld = await provider.GetRequiredService<IAuthServiceKeysProvider>().GetSigningKeys()
+        var stillHeld = await provider.GetRequiredService<IAuthServiceKeysProvider>().GetSigningKeys(Entered(provider))
             .ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Single(stillHeld);
     }

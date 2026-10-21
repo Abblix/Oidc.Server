@@ -61,6 +61,12 @@ public partial class MultiTenancyRegistrationTests
         return services.BuildServiceProvider();
     }
 
+    /// <summary>
+    /// The tenant the last <see cref="EnterTenant"/> made the request of.
+    /// </summary>
+    private static TenantDefinition Entered(IServiceProvider provider)
+        => provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+
     private static void EnterTenant(IServiceProvider provider, TenantDefinition? tenant)
     {
         var context = new DefaultHttpContext();
@@ -239,50 +245,20 @@ public partial class MultiTenancyRegistrationTests
     };
 
     /// <summary>
-    /// A registry the host brings itself keeps one set of clients, scopes, resources or pairwise keys for every
-    /// tenant, since nothing tells it which tenant a request is for, so startup refuses it, naming the service.
+    /// A registry the host brings itself is told the tenant of every call, so it can keep each tenant's clients,
+    /// scopes, resources and keys apart, and the server starts with it.
     /// </summary>
     [Theory]
     [MemberData(nameof(HostsOwnRegistries))]
-    public void AHostsOwnRegistry_IsRefusedAtStartup(Type service, object registry)
+    public void AHostsOwnRegistry_StartsTheServer(Type service, object registry)
     {
         var services = new ServiceCollection();
         services.AddSingleton(service, registry);
         services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{service.Name} is the host's own", refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A registry the host scopes to a request cannot be resolved at startup, and that failure is reported as the
-    /// refusal, naming the service, rather than replacing every refusal of the tenant list with a container error.
-    /// </summary>
-    [Fact]
-    public void AHostsRegistryScopedToARequest_IsRefusedAtStartup()
-    {
-        var services = new ServiceCollection();
-        services.AddScoped(_ => Moq.Mock.Of<IClientInfoProvider>());
-        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{nameof(IClientInfoProvider)} is the host's own", refusal.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheServersOwnRegistries_PassTheStartupCheck()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>();
-        services.AddClientInformation().AddUserInfo();
-        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
-        using var provider = services.BuildServiceProvider();
-
         Assert.Single(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
+        Assert.Same(registry, provider.GetRequiredService(service));
     }
 
     [Fact]
@@ -374,14 +350,14 @@ public partial class MultiTenancyRegistrationTests
         var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
 
         EnterTenant(provider, Acme);
-        var acmeValue = local.GetOrCreate(null, () => new object());
-        Assert.Same(acmeValue, local.GetOrCreate(null, () => new object()));
+        var acmeValue = local.GetOrCreate(Entered(provider), null, () => new object());
+        Assert.Same(acmeValue, local.GetOrCreate(Entered(provider), null, () => new object()));
 
         EnterTenant(provider, globex);
-        Assert.NotSame(acmeValue, local.GetOrCreate(null, () => new object()));
+        Assert.NotSame(acmeValue, local.GetOrCreate(Entered(provider), null, () => new object()));
 
         EnterTenant(provider, null);
-        var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(null, () => new object()));
+        var refusal = Assert.Throws<InvalidOperationException>(() => local.GetOrCreate(Entered(provider), null, () => new object()));
         Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -398,10 +374,10 @@ public partial class MultiTenancyRegistrationTests
             => new() { Id = "acme", Issuer = new Uri(AcmeIssuer), Generation = generation };
 
         EnterTenant(provider, Acme("1"));
-        var former = local.GetOrCreate(null, () => new object());
+        var former = local.GetOrCreate(Entered(provider), null, () => new object());
 
         EnterTenant(provider, Acme("2"));
-        Assert.NotSame(former, local.GetOrCreate(null, () => new object()));
+        Assert.NotSame(former, local.GetOrCreate(Entered(provider), null, () => new object()));
     }
 
     /// <summary>

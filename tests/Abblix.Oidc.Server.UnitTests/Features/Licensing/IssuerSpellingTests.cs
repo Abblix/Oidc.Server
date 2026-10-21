@@ -70,11 +70,11 @@ public sealed class IssuerSpellingTests : IDisposable
             new FakeTimeProvider(),
             Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "token-id"),
             formatter.Object,
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.SettingsOf(options),
-            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
-            ScopeClaims.Of());
+            SingleIssuer.HostCatalogSettingsOf(() => options.Value),
+            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>(), tenantAccessor: SingleIssuer.Accessor),
+            ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
 
         await service.CreateAccessTokenAsync(
             new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -88,7 +88,7 @@ public sealed class IssuerSpellingTests : IDisposable
 
         // The license already counts the issuer as configured, so another spelling of it is a second issuer
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(new Uri(configured).ToString(), SingleIssuer.SettingsOf(options)));
+            () => LicenseChecker.CheckIssuer(new Uri(configured).ToString(), SingleIssuer.HostCatalogSettingsOf(() => options.Value)));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 }

@@ -25,6 +25,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -112,7 +113,7 @@ public class TokenStatusCoverageTests
 
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo("client_1") { SubjectType = SubjectTypes.Public });
 
         var inner = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
@@ -139,8 +140,8 @@ public class TokenStatusCoverageTests
                 issuers.Object,
                 Options.Create(new OidcOptions()),
                 clients.Object,
-                new SubjectTypeConverter()),
-            new GrantRevocation(registry.Object, clients.Object),
+                new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor),
+            new GrantRevocation(registry.Object, clients.Object, tenantAccessor: SingleIssuer.Accessor),
             inner.Object);
 
         var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });

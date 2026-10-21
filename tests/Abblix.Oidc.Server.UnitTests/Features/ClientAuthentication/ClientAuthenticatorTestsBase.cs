@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -97,7 +98,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
 
         var clientInfo = CreateClientInfo(ClientSecret);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -160,7 +161,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var clientInfo = CreateClientInfo(ClientSecret);
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, wrongSecret);
@@ -183,7 +184,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var authenticator = CreateAuthenticator(clientInfoProvider);
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -209,7 +210,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         clientInfo.TokenEndpointAuthMethod = GetWrongAuthenticationMethod();
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -238,7 +239,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -277,7 +278,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -304,7 +305,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
 
         var clientInfo = CreateClientInfo(specialSecret, specialClientId);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(specialClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), specialClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(specialClientId, specialSecret);
@@ -349,7 +350,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -392,7 +393,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
 
         var clientInfo = CreateClientInfo(ClientSecret);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareEmptyClientSecretRequest();

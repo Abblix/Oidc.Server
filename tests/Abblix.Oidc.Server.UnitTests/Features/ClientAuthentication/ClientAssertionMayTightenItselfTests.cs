@@ -25,6 +25,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -213,7 +214,7 @@ public class ClientAssertionMayTightenItselfTests
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(clientInfo);
 
         var token = CreateAssertion(issuedAt, expiresAt, notBefore);
@@ -246,7 +247,7 @@ public class ClientAssertionMayTightenItselfTests
             new FakeTimeProvider(Now),
             replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri(Issuer)),
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.None })));
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.None })), tenantAccessor: SingleIssuer.Accessor);
 
         return await authenticator.TryAuthenticateClientAsync(new ClientRequest
         {

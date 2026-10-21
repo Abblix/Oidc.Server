@@ -23,6 +23,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -46,8 +47,8 @@ public class TokenStatusValidatorDecoratorTests
     // issued. Every payload in this class therefore has to say who issued it.
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
-    private static readonly ISubjectTypeConverter SubjectConverter =
-        new SubjectTypeConverter(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+    private static readonly ISubjectTypeConverter SubjectConverter = new FixedSubjectTypeConverter(
+        new SubjectTypeConverter(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) }));
     private static readonly DateTimeOffset Expiry = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset IssuedAt = new(2024, 1, 15, 11, 0, 0, TimeSpan.Zero);
 
@@ -67,7 +68,7 @@ public class TokenStatusValidatorDecoratorTests
         _decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
-            new GrantRevocation(_registry.Object, _clients.Object),
+            new GrantRevocation(_registry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor),
             _inner.Object);
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
@@ -79,7 +80,7 @@ public class TokenStatusValidatorDecoratorTests
         // A public client is what every test but the pairwise one carries, and for it the subject in the
         // token is already the subject a host would revoke.
         _clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo(ClientId) { SubjectType = SubjectTypes.Public });
     }
 
@@ -287,9 +288,9 @@ public class TokenStatusValidatorDecoratorTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(pairwiseClient);
 
-        var pseudonym = SubjectConverter.Convert(Subject, pairwiseClient);
+        var pseudonym = SubjectConverter.Convert(SingleIssuer.Tenant, Subject, pairwiseClient);
         Assert.NotEqual(Subject, pseudonym); // the fixture is only meaningful if the two actually differ
 
         SetupInnerReturns(new JsonWebToken
@@ -369,7 +370,7 @@ public class TokenStatusValidatorDecoratorTests
         _issuers.Object,
         Options.Create(new OidcOptions { RevocationCutoffSkew = skew }),
         _clients.Object,
-        SubjectConverter);
+        SubjectConverter, tenantAccessor: SingleIssuer.Accessor);
 
     private static JsonWebToken RefreshToken(string? grantId) => new()
     {
@@ -442,7 +443,7 @@ public class TokenStatusValidatorDecoratorTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(pairwiseClient);
 
         SetupInnerReturns(new JsonWebToken
         {
@@ -477,7 +478,7 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenNamingAClientThatIsGone_IsRefused()
     {
-        _clients.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync((ClientInfo?)null);
+        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync((ClientInfo?)null);
 
         SetupInnerReturns(new JsonWebToken
         {
@@ -513,7 +514,7 @@ public class TokenStatusValidatorDecoratorTests
         var decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
-            new GrantRevocation(_registry.Object, _clients.Object),
+            new GrantRevocation(_registry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor),
             _inner.Object);
 
         SetupInnerReturns(new JsonWebToken

@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -33,8 +34,8 @@ public class UpdateClientRequestProcessorTests
     {
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
-            .Setup(m => m.TryUpdateClientAsync(It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
-            .Callback((RegisteredClient _, RegisteredClient updated) => onSave(updated))
+            .Setup(m => m.TryUpdateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient _, RegisteredClient updated) => onSave(updated))
             .ReturnsAsync(registrationHeld);
 
         var tokenService = new Mock<IRegistrationAccessTokenService>(MockBehavior.Loose);
@@ -46,7 +47,7 @@ public class UpdateClientRequestProcessorTests
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System);
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System, tenantAccessor: SingleIssuer.Accessor);
 
         return (processor, clientInfoManager, tokenService, idGenerator);
     }
@@ -196,7 +197,7 @@ public class UpdateClientRequestProcessorTests
 
         // Assert
         manager.Verify(
-            m => m.TryUpdateClientAsync(It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
+            m => m.TryUpdateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
             Times.Never);
     }
 

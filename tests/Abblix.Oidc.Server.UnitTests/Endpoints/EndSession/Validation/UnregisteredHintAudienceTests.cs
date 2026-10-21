@@ -21,6 +21,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession.Validation;
 
@@ -51,7 +52,7 @@ public class UnregisteredHintAudienceTests
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(Unregistered))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), Unregistered))
             .ReturnsAsync((ClientInfo?)null);
 
         var services = new ServiceCollection();
@@ -64,6 +65,7 @@ public class UnregisteredHintAudienceTests
         services.AddSingleton(Mock.Of<ISubjectTypeConverter>());
         services.AddSingleton(Mock.Of<ILogoutConfirmationStore>());
         services.AddSingleton(SingleIssuer.Settings);
+        services.AddSingleton(SingleIssuer.Accessor);
         services.AddEndSessionContextValidators();
 
         await using var provider = services.BuildServiceProvider();
@@ -76,6 +78,6 @@ public class UnregisteredHintAudienceTests
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
         Assert.Equal(Unregistered, context.ClientId);
-        clientInfoProvider.Verify(p => p.TryFindClientAsync(Unregistered), Times.Once);
+        clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), Unregistered), Times.Once);
     }
 }

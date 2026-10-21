@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -46,7 +47,7 @@ public class NoneClientAuthenticatorTests
 
         var clientInfo = CreatePublicClientInfo(PublicClientId);
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(PublicClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), PublicClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -134,7 +135,7 @@ public class NoneClientAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator();
 
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(PublicClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), PublicClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var request = new ClientRequest
@@ -164,7 +165,7 @@ public class NoneClientAuthenticatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost
         };
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ConfidentialClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ConfidentialClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -191,7 +192,7 @@ public class NoneClientAuthenticatorTests
 
         var clientInfo = CreatePublicClientInfo(PublicClientId);
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(PublicClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), PublicClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -236,7 +237,7 @@ public class NoneClientAuthenticatorTests
 
         var authenticator = new NoneClientAuthenticator(
             logger.Object,
-            clientInfoProvider.Object);
+            clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
 
         var mocks = new Mocks
         {

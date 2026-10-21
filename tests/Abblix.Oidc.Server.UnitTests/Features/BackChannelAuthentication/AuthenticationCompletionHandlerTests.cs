@@ -34,6 +34,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
 
@@ -96,11 +97,11 @@ public partial class AuthenticationCompletionHandlerTests
 
     private PollModeCompletionHandler CreatePollModeHandler() =>
         new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            new FakeTimeProvider(ApprovedAt), null);
+            new FakeTimeProvider(ApprovedAt), null, tenantAccessor: SingleIssuer.Accessor);
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            _notificationService.Object, new FakeTimeProvider(ApprovedAt));
+            _notificationService.Object, new FakeTimeProvider(ApprovedAt), tenantAccessor: SingleIssuer.Accessor);
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
@@ -109,7 +110,7 @@ public partial class AuthenticationCompletionHandlerTests
         new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             _notificationService.Object, _tokenRequestProcessor.Object,
             policy ?? StubAuthorizationDetailsPolicy.Accepting, new FakeTimeProvider(ApprovedAt),
-            cutoffs ?? Cutoffs(sessionRefused: false, grantRefused: false));
+            cutoffs ?? Cutoffs(sessionRefused: false, grantRefused: false), tenantAccessor: SingleIssuer.Accessor);
 
     /// <summary>
     /// A revocation checker answering as told: whether the session behind a grant is refused, and whether the grant
@@ -133,8 +134,8 @@ public partial class AuthenticationCompletionHandlerTests
     {
         var converter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         converter
-            .Setup(c => c.Convert(It.IsAny<string>(), It.IsAny<ClientInfo>()))
-            .Returns((string subject, ClientInfo _) => subject);
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         return converter.Object;
     }
@@ -793,7 +794,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         var handler = new PollModeCompletionHandler(
             Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            TimeProvider.System, notifier.Object);
+            TimeProvider.System, notifier.Object, tenantAccessor: SingleIssuer.Accessor);
 
         await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
 
@@ -845,10 +846,10 @@ public partial class AuthenticationCompletionHandlerTests
         AuthenticationCompletionHandler handler = isPing
             ? new PingModeCompletionHandler(
                 Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-                _notificationService.Object, TimeProvider.System, notifier.Object)
+                _notificationService.Object, TimeProvider.System, SingleIssuer.Accessor, notifier.Object)
             : new PollModeCompletionHandler(
                 Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-                TimeProvider.System, notifier.Object);
+                TimeProvider.System, notifier.Object, tenantAccessor: SingleIssuer.Accessor);
 
         await handler.CompleteAuthenticationAsync(
             AuthReqId, request, isPing ? PingClient() : PollClient(), _expiresIn);

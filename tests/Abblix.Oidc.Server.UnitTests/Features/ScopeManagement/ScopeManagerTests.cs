@@ -33,25 +33,26 @@ public class ScopeManagerTests
         var options = Options.Create(new TestIssuer());
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert - Standard OIDC scopes
-        Assert.True(manager.TryGet(Scopes.OpenId, out var openId));
+        Assert.True(manager.TryGet(tenant, Scopes.OpenId, out var openId));
         Assert.Equal(Scopes.OpenId, openId.Scope);
 
-        Assert.True(manager.TryGet(Scopes.Profile, out var profile));
+        Assert.True(manager.TryGet(tenant, Scopes.Profile, out var profile));
         Assert.Equal(Scopes.Profile, profile.Scope);
 
-        Assert.True(manager.TryGet(Scopes.Email, out var email));
+        Assert.True(manager.TryGet(tenant, Scopes.Email, out var email));
         Assert.Equal(Scopes.Email, email.Scope);
 
-        Assert.True(manager.TryGet(Scopes.Address, out var address));
+        Assert.True(manager.TryGet(tenant, Scopes.Address, out var address));
         Assert.Equal(Scopes.Address, address.Scope);
 
-        Assert.True(manager.TryGet(Scopes.Phone, out var phone));
+        Assert.True(manager.TryGet(tenant, Scopes.Phone, out var phone));
         Assert.Equal(Scopes.Phone, phone.Scope);
 
-        Assert.True(manager.TryGet(Scopes.OfflineAccess, out var offlineAccess));
+        Assert.True(manager.TryGet(tenant, Scopes.OfflineAccess, out var offlineAccess));
         Assert.Equal(Scopes.OfflineAccess, offlineAccess.Scope);
     }
 
@@ -71,10 +72,11 @@ public class ScopeManagerTests
         });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet("custom:read", out var retrieved));
+        Assert.True(manager.TryGet(tenant, "custom:read", out var retrieved));
         Assert.Equal("custom:read", retrieved.Scope);
         Assert.Equal(2, retrieved.ClaimTypes.Length);
         Assert.Contains("claim1", retrieved.ClaimTypes);
@@ -99,12 +101,13 @@ public class ScopeManagerTests
         var options = Options.Create(new TestIssuer { Scopes = scopes });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet("api:read", out _));
-        Assert.True(manager.TryGet("api:write", out _));
-        Assert.True(manager.TryGet("admin", out _));
+        Assert.True(manager.TryGet(tenant, "api:read", out _));
+        Assert.True(manager.TryGet(tenant, "api:write", out _));
+        Assert.True(manager.TryGet(tenant, "admin", out _));
     }
 
     /// <summary>
@@ -116,10 +119,11 @@ public class ScopeManagerTests
     {
         // Arrange
         var options = Options.Create(new TestIssuer());
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var result = manager.TryGet("unknown-scope", out var definition);
+        var result = manager.TryGet(tenant, "unknown-scope", out var definition);
 
         // Assert
         Assert.False(result);
@@ -135,12 +139,13 @@ public class ScopeManagerTests
     {
         // Arrange
         var options = Options.Create(new TestIssuer());
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert
-        Assert.True(manager.TryGet(Scopes.OpenId, out _)); // "openid" - correct case
-        Assert.False(manager.TryGet("OpenId", out _)); // Wrong case
-        Assert.False(manager.TryGet("OPENID", out _)); // Wrong case
+        Assert.True(manager.TryGet(tenant, Scopes.OpenId, out _)); // "openid" - correct case
+        Assert.False(manager.TryGet(tenant, "OpenId", out _)); // Wrong case
+        Assert.False(manager.TryGet(tenant, "OPENID", out _)); // Wrong case
     }
 
     /// <summary>
@@ -160,10 +165,11 @@ public class ScopeManagerTests
         });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet(Scopes.Profile, out var retrieved));
+        Assert.True(manager.TryGet(tenant, Scopes.Profile, out var retrieved));
         foreach (var standardClaim in StandardScopes.Profile.ClaimTypes)
             Assert.Contains(standardClaim, retrieved.ClaimTypes);
         Assert.Contains("custom_claim", retrieved.ClaimTypes);
@@ -184,10 +190,11 @@ public class ScopeManagerTests
         });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet(Scopes.Email, out var retrieved));
+        Assert.True(manager.TryGet(tenant, Scopes.Email, out var retrieved));
         Assert.Single(retrieved.ClaimTypes, claim => claim == restated);
     }
 
@@ -201,10 +208,11 @@ public class ScopeManagerTests
         // Arrange
         var customScope = new ScopeDefinition("custom");
         var options = Options.Create(new TestIssuer { Scopes = [customScope] });
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var scopes = manager.ToArray();
+        var scopes = manager.ScopesOf(tenant).ToArray();
 
         // Assert
         // 6 standard scopes + 1 custom
@@ -229,8 +237,9 @@ public class ScopeManagerTests
         var options = Options.Create(new TestIssuer { Scopes = [] });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
-        var scopes = manager.ToArray();
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
+        var scopes = manager.ScopesOf(tenant).ToArray();
 
         // Assert
         Assert.Equal(6, scopes.Length); // Only standard scopes
@@ -252,8 +261,9 @@ public class ScopeManagerTests
         var options = Options.Create(new TestIssuer { Scopes = null });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
-        var scopes = manager.ToArray();
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
+        var scopes = manager.ScopesOf(tenant).ToArray();
 
         // Assert
         Assert.Equal(6, scopes.Length); // Only standard scopes
@@ -270,10 +280,11 @@ public class ScopeManagerTests
         var customScope = new ScopeDefinition("api:full", "claim1", "claim2", "claim3");
 
         var options = Options.Create(new TestIssuer { Scopes = [customScope] });
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var result = manager.TryGet("api:full", out var definition);
+        var result = manager.TryGet(tenant, "api:full", out var definition);
 
         // Assert
         Assert.True(result);
@@ -293,16 +304,17 @@ public class ScopeManagerTests
     {
         // Arrange
         var options = Options.Create(new TestIssuer());
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Act & Assert - openid scope
-        Assert.True(manager.TryGet(Scopes.OpenId, out var openId));
+        Assert.True(manager.TryGet(tenant, Scopes.OpenId, out var openId));
         Assert.NotNull(openId.ClaimTypes);
         Assert.NotEmpty(openId.ClaimTypes);
         Assert.Contains("sub", openId.ClaimTypes);
 
         // Act & Assert - profile scope
-        Assert.True(manager.TryGet(Scopes.Profile, out var profile));
+        Assert.True(manager.TryGet(tenant, Scopes.Profile, out var profile));
         Assert.NotNull(profile.ClaimTypes);
         Assert.NotEmpty(profile.ClaimTypes);
         Assert.Contains("name", profile.ClaimTypes);
@@ -326,10 +338,11 @@ public class ScopeManagerTests
         var options = Options.Create(new TestIssuer { Scopes = scopes });
 
         // Act
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Assert
-        Assert.True(manager.TryGet("duplicate", out var definition));
+        Assert.True(manager.TryGet(tenant, "duplicate", out var definition));
         Assert.Equal(["claim1", "claim2"], definition.ClaimTypes);
     }
 
@@ -348,10 +361,11 @@ public class ScopeManagerTests
         };
 
         var options = Options.Create(new TestIssuer { Scopes = scopes });
-        var manager = SingleIssuer.ScopeManager(options);
+        var manager = SingleIssuer.ScopeManager();
+        var tenant = options.Value.ToTenant();
 
         // Act
-        var allScopes = manager.ToArray();
+        var allScopes = manager.ScopesOf(tenant).ToArray();
         var apiScopes = allScopes.Where(s => s.Scope == "api").ToArray();
 
         // Assert

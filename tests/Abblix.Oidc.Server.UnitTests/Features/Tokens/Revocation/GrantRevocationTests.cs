@@ -31,6 +31,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -103,14 +104,14 @@ public class GrantRevocationTests
             });
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(provider => provider.TryFindClientAsync(ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
-        var grants = new GrantRevocation(_registry, clients.Object);
+        clients.Setup(provider => provider.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
+        var grants = new GrantRevocation(_registry, clients.Object, tenantAccessor: SingleIssuer.Accessor);
 
         var options = Options.Create(new OidcOptions());
         _service = new RefreshTokenService(
             issuer.Object, _clock, ids.Object, formatter.Object, _registry, grants,
-            new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(options)), new SubjectTypeConverter(),
-            options, SingleIssuer.SettingsOf(options));
+            new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(options)), new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            options, SingleIssuer.SettingsOf(options), tenantAccessor: SingleIssuer.Accessor);
         _processor = new RevocationRequestProcessor(_registry, grants, _clock);
 
         var inner = new Mock<IJsonWebTokenValidator>();
