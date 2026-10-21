@@ -66,6 +66,7 @@ public sealed class MeasuredEntityStorageTests : IDisposable
         await _storage.SetAsync("key", "value", options, token);
         await _storage.GetAsync<string>("key", removeOnRetrieval: false, token);
         await _storage.TrySetIfAbsentAsync("key", "value", options, token);
+        await _storage.TryReplaceAsync("key", "value", "other", options, token);
         await _storage.TryExtendAsync("key", options, token);
         await _storage.RemoveAsync("key", token);
 
@@ -74,6 +75,7 @@ public sealed class MeasuredEntityStorageTests : IDisposable
                 TelemetryStorageOperations.Set,
                 TelemetryStorageOperations.Get,
                 TelemetryStorageOperations.SetIfAbsent,
+                TelemetryStorageOperations.Replace,
                 TelemetryStorageOperations.Extend,
                 TelemetryStorageOperations.Remove,
             ],

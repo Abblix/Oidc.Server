@@ -39,8 +39,13 @@ public interface IRevocationCutoffRegistry
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Records a cutoff for a principal.
+    /// Records a cutoff for a principal, keeping the later of the one already recorded and this one.
     /// </summary>
+    /// <remarks>
+    /// A cutoff only ever moves forward: one earlier than the recorded cutoff changes nothing, however late it
+    /// arrives, since moving it back would let the tokens issued between the two be used again. Implementations
+    /// must decide this between concurrent callers, so of two racing writes the later cutoff stays.
+    /// </remarks>
     /// <param name="scope">Whether the principal is an end user or a single session.</param>
     /// <param name="principal">The subject identifier or the session identifier.</param>
     /// <param name="cutoff">The moment before which tokens for this principal are revoked.</param>

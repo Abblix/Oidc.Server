@@ -217,6 +217,48 @@ public static class DistributedCacheExtensions
 	}
 
 	/// <summary>
+	/// Writes a value at a key only when the key still holds the bytes the caller read.
+	/// </summary>
+	/// <remarks>
+	/// The read, the comparison and the write happen under one hold of the per-key gate
+	/// <see cref="TrySetIfAbsentAsync"/> takes, so within this process exactly one of several callers that read
+	/// the same bytes is told it replaced them. A second process sees neither the gate nor the hold, and neither
+	/// does a plain <c>SetAsync</c>; a deployment spread over several nodes supplies its own <c>IEntityStorage</c>
+	/// that uses its store's own comparison, such as a transaction watching the key in Redis.
+	/// </remarks>
+	/// <param name="cache">The distributed cache instance.</param>
+	/// <param name="key">The key whose value is replaced.</param>
+	/// <param name="expected">The bytes the caller read.</param>
+	/// <param name="value">The bytes to write in their place.</param>
+	/// <param name="options">Expiration policy for the entry, when one is written.</param>
+	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+	/// <returns>True when the key held <paramref name="expected"/> and this caller replaced it; false when it held
+	/// nothing or other bytes, in which case nothing is written.</returns>
+	public static Task<bool> TryReplaceAsync(
+		this IDistributedCache cache,
+		string key,
+		byte[] expected,
+		byte[] value,
+		DistributedCacheEntryOptions options,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cache);
+		ArgumentNullException.ThrowIfNull(key);
+		ArgumentNullException.ThrowIfNull(expected);
+		ArgumentNullException.ThrowIfNull(value);
+
+		return UnderGateAsync(key, cancellationToken, async () =>
+		{
+			var current = await cache.GetAsync(key, cancellationToken);
+			if (current == null || !current.AsSpan().SequenceEqual(expected))
+				return false;
+
+			await cache.SetAsync(key, value, options, cancellationToken);
+			return true;
+		});
+	}
+
+	/// <summary>
 	/// Gives the value at a key a new expiration policy, keeping the value, when the key holds one.
 	/// </summary>
 	/// <remarks>

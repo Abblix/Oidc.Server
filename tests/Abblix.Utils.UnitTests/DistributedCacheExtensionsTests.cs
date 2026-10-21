@@ -375,6 +375,61 @@ public class DistributedCacheExtensionsTests
 		Assert.Same(longer, cache.Options);
 	}
 
+	[Fact]
+	public async Task TryReplaceAsync_KeyHoldingTheExpectedBytes_IsReplaced()
+	{
+		var cache = new RecordsWrites();
+		await cache.SetAsync("cutoff", Encoding.UTF8.GetBytes("earlier"), new (), TestContext.Current.CancellationToken);
+		var options = new DistributedCacheEntryOptions { AbsoluteExpiration = DateTimeOffset.UnixEpoch.AddYears(60) };
+
+		var replaced = await cache.TryReplaceAsync(
+			"cutoff",
+			Encoding.UTF8.GetBytes("earlier"),
+			Encoding.UTF8.GetBytes("later"),
+			options,
+			TestContext.Current.CancellationToken);
+
+		Assert.True(replaced);
+		Assert.Equal("later", Encoding.UTF8.GetString(cache.Value.NotNull(nameof(cache.Value))));
+		Assert.Same(options, cache.Options);
+	}
+
+	[Fact]
+	public async Task TryReplaceAsync_KeyHoldingOtherBytes_IsLeftAsItIs()
+	{
+		var cache = CreateCache();
+		var key = "cutoff-" + Guid.NewGuid().ToString("N");
+		await cache.SetAsync(key, Encoding.UTF8.GetBytes("written since"), new (), TestContext.Current.CancellationToken);
+
+		var replaced = await cache.TryReplaceAsync(
+			key,
+			Encoding.UTF8.GetBytes("read before"),
+			Encoding.UTF8.GetBytes("decided on the old read"),
+			new (),
+			TestContext.Current.CancellationToken);
+
+		Assert.False(replaced);
+		Assert.Equal("written since", Encoding.UTF8.GetString(
+			(await cache.GetAsync(key, TestContext.Current.CancellationToken)).NotNull(key)));
+	}
+
+	[Fact]
+	public async Task TryReplaceAsync_EmptyKey_WritesNothingAndSaysSo()
+	{
+		var cache = CreateCache();
+		var key = "cutoff-" + Guid.NewGuid().ToString("N");
+
+		var replaced = await cache.TryReplaceAsync(
+			key,
+			Encoding.UTF8.GetBytes("read before it expired"),
+			Encoding.UTF8.GetBytes("later"),
+			new (),
+			TestContext.Current.CancellationToken);
+
+		Assert.False(replaced);
+		Assert.Null(await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
 	/// <summary>
 	/// A claim of the key made while an extension is between its read and its write waits for the extension, and
 	/// then finds the value the extension wrote, rather than writing one the extension then writes over.

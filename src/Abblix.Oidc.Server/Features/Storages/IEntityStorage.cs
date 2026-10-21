@@ -68,6 +68,31 @@ public interface IEntityStorage
         string key, T value, StorageOptions options, CancellationToken? token = null);
 
     /// <summary>
+    /// Writes an entity only when <paramref name="key"/> still carries <paramref name="expected"/>, and reports
+    /// whether this caller is the one that wrote it.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must decide this between concurrent callers: of several that read the same value and race
+    /// to replace it, at most one may be told it wrote, and a key that holds nothing, or a value another caller has
+    /// written since, is left as it is. This is what lets a record only ever move one way, such as a revocation
+    /// cutoff that must never be moved back: the caller reads it, decides, and replaces it only if nobody changed it
+    /// in between, or reads it again. Values are compared as the storage holds them, so the expected value is the
+    /// one the caller read.
+    /// </remarks>
+    /// <typeparam name="T">The type of the entity to store.</typeparam>
+    /// <param name="key">The key whose value is replaced.</param>
+    /// <param name="expected">The value the caller read and decided on.</param>
+    /// <param name="value">The entity to store in its place.</param>
+    /// <param name="options">Expiration policy for the entry, when one is written.</param>
+    /// <param name="token">An optional cancellation token.</param>
+    /// <returns>
+    /// True when the key held <paramref name="expected"/> and this caller replaced it; false when it held nothing
+    /// or another value.
+    /// </returns>
+    Task<bool> TryReplaceAsync<T>(
+        string key, T expected, T value, StorageOptions options, CancellationToken? token = null);
+
+    /// <summary>
     /// Gives the entry under <paramref name="key"/> a new expiration policy, keeping its value, when there is
     /// one, and reports whether there was.
     /// </summary>

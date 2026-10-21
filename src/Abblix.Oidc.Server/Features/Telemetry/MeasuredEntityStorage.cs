@@ -40,6 +40,13 @@ internal sealed class MeasuredEntityStorage(IEntityStorage inner, OidcInstrument
             () => inner.TrySetIfAbsentAsync(key, value, options, token));
 
     /// <inheritdoc />
+    public Task<bool> TryReplaceAsync<T>(
+        string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+        => MeasureAsync(
+            TelemetryStorageOperations.Replace,
+            () => inner.TryReplaceAsync(key, expected, value, options, token));
+
+    /// <inheritdoc />
     public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         => MeasureAsync(TelemetryStorageOperations.Extend, () => inner.TryExtendAsync(key, options, token));
 

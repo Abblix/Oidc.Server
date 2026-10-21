@@ -64,6 +64,10 @@ public class TenantEntityStorageTests
         public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
             => Task.FromResult(Entries.TryAdd(key, value));
 
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(Entries.TryUpdate(key, value, expected));
+
         public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
             => Task.FromResult(Entries.ContainsKey(key));
 

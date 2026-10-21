@@ -27,6 +27,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// and the expiry, never reaches this server at all and stays usable until it expires - which is what short
 /// access-token lifetimes are for.
 /// </para>
+/// <para>
+/// A cutoff only moves forward. A call naming an earlier moment than one already recorded for the same end
+/// user, session or client changes nothing, whenever it arrives, so a retry of an older revocation cannot let
+/// the tokens issued since that moment be used again.
+/// </para>
 /// </remarks>
 public interface ITokenRevoker
 {

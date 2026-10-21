@@ -36,15 +36,38 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
     }
 
     /// <inheritdoc />
-    public Task SetCutoffAsync(
+    /// <remarks>
+    /// Read, compare, and write only if nobody wrote in between, or read again: a write of its own would let a
+    /// call with an earlier cutoff that lands later, a retry or a slower concurrent call, move the record back.
+    /// The record's expiry follows the cutoff it holds, so a cutoff left in place keeps its own.
+    /// </remarks>
+    public async Task SetCutoffAsync(
         RevocationScope scope,
         string principal,
         DateTimeOffset cutoff,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
-        => storage.SetAsync(
-            keyFactory.RevocationCutoffKey(scope, principal),
-            new Proto.RevocationCutoff { Cutoff = Timestamp.FromDateTimeOffset(cutoff) },
-            new StorageOptions { AbsoluteExpiration = expiresAt },
-            cancellationToken);
+    {
+        var key = keyFactory.RevocationCutoffKey(scope, principal);
+        var record = new Proto.RevocationCutoff { Cutoff = Timestamp.FromDateTimeOffset(cutoff) };
+        var options = new StorageOptions { AbsoluteExpiration = expiresAt };
+
+        while (true)
+        {
+            var stored = await storage.GetAsync<Proto.RevocationCutoff>(key, false, cancellationToken);
+            if (stored is null)
+            {
+                if (await storage.TrySetIfAbsentAsync(key, record, options, cancellationToken))
+                    return;
+
+                continue;
+            }
+
+            if (stored.Cutoff is { } recorded && cutoff <= recorded.ToDateTimeOffset())
+                return;
+
+            if (await storage.TryReplaceAsync(key, stored, record, options, cancellationToken))
+                return;
+        }
+    }
 }

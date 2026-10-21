@@ -91,6 +91,11 @@ public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : 
     }
 
     /// <inheritdoc />
+    public Task<bool> TryReplaceAsync<T>(
+        string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+        => inner.TryReplaceAsync(key, expected, value, options, token);
+
+    /// <inheritdoc />
     public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
         => inner.TryExtendAsync(key, options, token);
 
