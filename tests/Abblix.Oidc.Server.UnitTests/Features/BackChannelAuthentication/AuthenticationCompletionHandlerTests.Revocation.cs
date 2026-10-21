@@ -61,4 +61,71 @@ public partial class AuthenticationCompletionHandlerTests
         _notificationService.VerifyNoOtherCalls();
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
     }
+
+    /// <summary>
+    /// The grant the revocation check is asked about carries the moment the end user approved the request, so an end
+    /// user consenting again after withdrawing consent from the client is not refused for a session older than the
+    /// withdrawal; a moment the host set itself reaches the check unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompleteAuthenticationAsync_PushMode_AsksTheRevocationCheckWithTheApprovalMoment(bool hostSetIt)
+    {
+        var hostMoment = ApprovedAt.AddMinutes(-3);
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
+        request.AuthorizedGrant = request.AuthorizedGrant with { AuthorizedAt = hostSetIt ? hostMoment : null };
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+
+        AuthorizedGrant? asked = null;
+        var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(false);
+        cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(It.IsAny<AuthorizedGrant>()))
+            .Callback((AuthorizedGrant grant) => asked = grant)
+            .ReturnsAsync(true);
+
+        await CreatePushModeHandler(cutoffs: cutoffs.Object).CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
+        Assert.Equal(hostSetIt ? hostMoment : ApprovedAt, asked?.AuthorizedAt);
+    }
+
+    /// <summary>
+    /// A revocation check that throws, the store of cutoffs failing, leaves the push client told the transaction
+    /// failed, since the request is already taken and it never polls, and the fault still reaches the host.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheRevocationCheckThrows_SendsTransactionFailedAndRethrows()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+
+        var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>()))
+            .ThrowsAsync(new InvalidOperationException("the cutoff store is unavailable"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(cutoffs: cutoffs.Object)
+            .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+        _notificationService.Verify(
+            n => n.SendAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<string>(),
+                It.Is<IBackChannelNotificationRequest>(payload =>
+                    payload is BackChannelPushErrorNotificationRequest
+                    && ((BackChannelPushErrorNotificationRequest)payload).Error == ErrorCodes.TransactionFailed),
+                BackchannelTokenDeliveryModes.Push),
+            Times.Once);
+    }
 }
