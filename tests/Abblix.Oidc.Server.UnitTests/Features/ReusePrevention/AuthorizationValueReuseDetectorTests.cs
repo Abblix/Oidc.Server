@@ -11,8 +11,11 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Storages;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -30,7 +33,9 @@ public class AuthorizationValueReuseDetectorTests
 
     private static AuthorizationValueReuseDetector CreateDetector(TimeSpan? interval)
         => new(
-            new InMemoryEntityStorage(),
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new JsonBinarySerializer()),
             new EntityStorageKeyFactory(),
             Options.Create(new OidcOptions { PkceAndNonceReuseDetectionInterval = interval }));
 
@@ -61,46 +66,4 @@ public class AuthorizationValueReuseDetectorTests
         Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
     }
 
-    private sealed class InMemoryEntityStorage : IEntityStorage
-    {
-        private readonly Dictionary<string, object?> _store = new();
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            _store[key] = value;
-            return Task.CompletedTask;
-        }
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            var found = _store.TryGetValue(key, out var value);
-            if (found && removeOnRetrieval)
-                _store.Remove(key);
-
-            return Task.FromResult(found ? (T?)value : default);
-        }
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            // One thread, so the check and the write are already indivisible here.
-            if (!_store.TryAdd(key, value))
-                return Task.FromResult(false);
-
-            return Task.FromResult(true);
-        }
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(_store.ContainsKey(key));
-
-        public Task RemoveAsync(string key, CancellationToken? token = null)
-        {
-            _store.Remove(key);
-            return Task.CompletedTask;
-        }
-    }
 }

@@ -20,6 +20,7 @@ using Google.Protobuf;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 
 using Xunit;
 
@@ -219,35 +220,30 @@ public class RollingHmacNonceServiceTests
     /// A storage where another instance claims the bucket's secret between this instance's miss and its own
     /// claim: the first read finds nothing, the claim loses, and every read after it finds the winner's secret.
     /// </summary>
-    private sealed class LostRaceStorage(NonceSecret winner) : IEntityStorage
+    private static IEntityStorage LostRaceStorage(NonceSecret winner)
     {
-        private bool _missed;
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new InvalidOperationException("The secret is claimed, never overwritten.");
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            if (!_missed)
+        var missed = false;
+        var storage = new Mock<IEntityStorage>(MockBehavior.Strict);
+        storage
+            .Setup(s => s.GetAsync<NonceSecret>(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(() =>
             {
-                _missed = true;
-                return Task.FromResult<T?>(default);
-            }
+                if (missed)
+                    return winner;
 
-            return Task.FromResult((T?)(object)winner);
-        }
+                missed = true;
+                return null;
+            });
+        storage
+            .Setup(s => s.TrySetIfAbsentAsync(
+                It.IsAny<string>(), It.IsAny<NonceSecret>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(false);
+        storage
+            .Setup(s => s.SetAsync(
+                It.IsAny<string>(), It.IsAny<NonceSecret>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .ThrowsAsync(new InvalidOperationException("The secret is claimed, never overwritten."));
 
-        public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(false);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(false);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
+        return storage.Object;
     }
 
     /// <summary>
@@ -269,10 +265,10 @@ public class RollingHmacNonceServiceTests
             return services.BuildServiceProvider().GetRequiredService<INonceService>();
         }
 
-        var loser = Build(new LostRaceStorage(winner));
+        var loser = Build(LostRaceStorage(winner));
         var nonce = await loser.IssueAsync(Ct);
 
-        var verifier = Build(new LostRaceStorage(winner));
+        var verifier = Build(LostRaceStorage(winner));
         await verifier.IssueAsync(Ct);
         Assert.Null(await verifier.ValidateAsync(nonce, Ct));
     }

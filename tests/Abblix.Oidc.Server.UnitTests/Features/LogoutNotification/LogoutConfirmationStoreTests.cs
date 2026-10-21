@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.Storages.Proto;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.LogoutNotification;
@@ -114,7 +115,7 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AnEmptyValue_AnswersNothing()
     {
-        var storage = new HoldingOneRecord(new LogoutConfirmation { Confirmation = string.Empty });
+        var storage = HoldingOneRecord(new LogoutConfirmation { Confirmation = string.Empty });
         var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
 
         Assert.False(await store.RedeemLogoutConfirmationAsync(SessionId, string.Empty));
@@ -174,7 +175,7 @@ public class LogoutConfirmationStoreTests
         // says so directly rather than through the clock: a storage that refuses writes answers the standing
         // record, and a hand-back that wrote would fault instead of handing it back. Waiting for an expiry would
         // test the same property by arithmetic on a machine whose delays overrun.
-        var storage = new HoldingOneRecord(new LogoutConfirmation { Confirmation = "the-standing-question" });
+        var storage = HoldingOneRecord(new LogoutConfirmation { Confirmation = "the-standing-question" });
         var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
 
         Assert.Equal("the-standing-question", await store.IssueAsync(SessionId));
@@ -223,25 +224,16 @@ public class LogoutConfirmationStoreTests
     /// a read answers nothing, which this storage never takes. Removal is left open rather than refused: no row
     /// here reaches it, and refusing it would refuse the path that answers a question.
     /// </summary>
-    private sealed class HoldingOneRecord(LogoutConfirmation held) : IEntityStorage
+    private static IEntityStorage HoldingOneRecord(LogoutConfirmation held)
     {
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => Task.FromResult((T?)(object)held);
+        var storage = new Mock<IEntityStorage>(MockBehavior.Strict);
+        storage
+            .Setup(s => s.GetAsync<LogoutConfirmation>(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(held);
+        storage
+            .Setup(s => s.RemoveAsync(It.IsAny<string>(), It.IsAny<CancellationToken?>()))
+            .Returns(Task.CompletedTask);
 
-        public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
+        return storage.Object;
     }
 }

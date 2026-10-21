@@ -628,7 +628,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(authReqId);
         var watched = new LetsAnotherCallerIn(RealStorage(cache), requestKey);
-        var requests = CibaStorageOver(watched);
+        var requests = CibaStorageOver(watched.Storage);
 
         // What the user completing authentication elsewhere does, timed to land inside the handler's read.
         watched.OnNextReadOf(async () =>

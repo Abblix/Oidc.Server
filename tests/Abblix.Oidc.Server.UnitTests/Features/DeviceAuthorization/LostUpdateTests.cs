@@ -79,7 +79,7 @@ public class LostUpdateTests
     {
         var cache = RealCache();
         var storage = new LetsAnotherCallerIn(RealStorage(cache), RequestKey);
-        var devices = DeviceStorageOver(storage);
+        var devices = DeviceStorageOver(storage.Storage);
 
         await devices.StoreAsync(DeviceCode, NewRequest(), TimeSpan.FromMinutes(5));
 
@@ -142,7 +142,7 @@ public class LostUpdateTests
         storage.OnNextClaimOf(() => LimiterOver(RealStorage(cache))
             .RecordFailureAsync(UserCode, ClientIdentifier));
 
-        await LimiterOver(storage).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(storage.Storage).RecordFailureAsync(UserCode, ClientIdentifier);
 
         // With the pause starting at the second failure, being told to wait is the whole claim: one
         // failure on record would let the next attempt straight through.
@@ -184,7 +184,7 @@ public class LostUpdateTests
         storage.OnNextRemovalOf(() => LimiterOver(RealStorage(cache))
             .RecordFailureAsync(UserCode, ClientIdentifier));
 
-        await LimiterOver(storage).RecordSuccessAsync(UserCode, ClientIdentifier);
+        await LimiterOver(storage.Storage).RecordSuccessAsync(UserCode, ClientIdentifier);
 
         // Two failures since the code was verified, and the pause starts at the third: the next attempt
         // must be let through. A rung stranded above the cleared run makes these two count as three.
@@ -245,7 +245,7 @@ public class LostUpdateTests
         storage.OnNextReadOf(() => LimiterOver(RealStorage(cache))
             .RecordSuccessAsync(UserCode, ClientIdentifier));
 
-        await LimiterOver(storage).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(storage.Storage).RecordFailureAsync(UserCode, ClientIdentifier);
 
         // Two failures since the code was verified, at most, and the pause starts at the third.
         var after = LimiterOver(RealStorage(cache), failuresBeforeBackoff: 3);

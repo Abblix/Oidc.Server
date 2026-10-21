@@ -10,6 +10,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Tests.Shared;
+using Moq;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -37,13 +39,44 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 /// not recurse.
 /// </para>
 /// </remarks>
-/// <param name="inner">The storage every call is forwarded to.</param>
-/// <param name="watched">The key whose operations let the other caller in.</param>
-public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : IEntityStorage
+public sealed class LetsAnotherCallerIn
 {
+    private readonly string _watched;
     private Func<Task>? _onRead;
     private Func<Task>? _onClaim;
     private Func<Task>? _onRemoval;
+
+    /// <summary>
+    /// A storage forwarding every call to <paramref name="inner"/>, with the hooks below armed on
+    /// <paramref name="watched"/>.
+    /// </summary>
+    /// <param name="inner">The storage every call is forwarded to.</param>
+    /// <param name="watched">The key whose operations let the other caller in.</param>
+    public LetsAnotherCallerIn(IEntityStorage inner, string watched)
+    {
+        _watched = watched;
+        var mock = EntityStorageMock.Over(inner);
+
+        mock.Setup(s => s.GetAsync<It.IsAnyType>(_watched, It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.After(inner, (_, _) => RunOnce(ref _onRead)));
+
+        mock.Setup(s => s.TrySetIfAbsentAsync(
+                _watched,
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<StorageOptions>(),
+                It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.After(inner, (_, _) => RunOnce(ref _onClaim)));
+
+        mock.Setup(s => s.RemoveAsync(_watched, It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.Before(inner, _ => RunOnce(ref _onRemoval)));
+
+        Storage = mock.Object;
+    }
+
+    /// <summary>
+    /// The storage to hand the code under test.
+    /// </summary>
+    public IEntityStorage Storage { get; }
 
     /// <summary>
     /// Arms the interleaving for a read-modify-write: the next read of the watched key runs this, once,
@@ -63,48 +96,6 @@ public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : 
     /// </summary>
     public void OnNextRemovalOf(Func<Task> other) => _onRemoval = other;
 
-    /// <inheritdoc />
-    public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-        => inner.SetAsync(key, value, options, token);
-
-    /// <inheritdoc />
-    public async Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-    {
-        var read = await inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        if (key == watched && Interlocked.Exchange(ref _onRead, null) is { } other)
-            await other();
-
-        return read;
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> TrySetIfAbsentAsync<T>(
-        string key, T value, StorageOptions options, CancellationToken? token = null)
-    {
-        var wrote = await inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        if (key == watched && Interlocked.Exchange(ref _onClaim, null) is { } other)
-            await other();
-
-        return wrote;
-    }
-
-    /// <inheritdoc />
-    public Task<bool> TryReplaceAsync<T>(
-        string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-        => inner.TryReplaceAsync(key, expected, value, options, token);
-
-    /// <inheritdoc />
-    public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-        => inner.TryExtendAsync(key, options, token);
-
-    /// <inheritdoc />
-    public async Task RemoveAsync(string key, CancellationToken? token = null)
-    {
-        if (key == watched && Interlocked.Exchange(ref _onRemoval, null) is { } other)
-            await other();
-
-        await inner.RemoveAsync(key, token);
-    }
+    private static Task RunOnce(ref Func<Task>? hook)
+        => Interlocked.Exchange(ref hook, null) is { } other ? other() : Task.CompletedTask;
 }

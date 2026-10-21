@@ -13,12 +13,14 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Tests.Shared;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 using Xunit;
 using StoredSessionClient = Abblix.Oidc.Server.Features.Storages.Proto.SessionClient;
 using StoredGeneration = Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration;
@@ -103,7 +105,7 @@ public class SessionClientRegistryTests
     public async Task A_client_losing_a_position_to_another_client_takes_the_next_one()
     {
         await Registry().AddClientAsync(SessionId, "zero", Ct);
-        var racing = new ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
+        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
 
         await Registry(racing).AddClientAsync(SessionId, "second", Ct);
 
@@ -114,7 +116,7 @@ public class SessionClientRegistryTests
     public async Task A_client_losing_a_position_to_itself_takes_no_other_one()
     {
         await Registry().AddClientAsync(SessionId, "zero", Ct);
-        var racing = new ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
+        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
 
         await Registry(racing).AddClientAsync(SessionId, "first", Ct);
 
@@ -215,11 +217,11 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "first", Ct);
         await Registry().AddClientAsync(SessionId, "second", Ct);
         _time.Advance(Retention - TimeSpan.FromSeconds(1));
-        var counting = new CountsOperations(_storage);
+        var counting = EntityStorageMock.Over(_storage);
 
-        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+        await Registry(counting.Object).AddClientAsync(SessionId, "first", Ct);
 
-        Assert.Equal(0, counting.Writes);
+        Assert.Equal(0, Writes(counting));
     }
 
     /// <summary>
@@ -229,11 +231,11 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task The_authorization_starting_a_list_renews_nothing()
     {
-        var counting = new CountsOperations(_storage);
+        var counting = EntityStorageMock.Over(_storage);
 
-        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+        await Registry(counting.Object).AddClientAsync(SessionId, "first", Ct);
 
-        Assert.Equal(0, counting.Extensions);
+        Assert.Equal(0, Extensions(counting));
     }
 
     /// <summary>
@@ -247,42 +249,13 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "second", Ct);
         _time.Advance(Retention + TimeSpan.FromSeconds(1));
         var renewedAt = _time.GetUtcNow();
-        await Registry(new ClockMovesOnEachExtension(_storage, _time)).AddClientAsync(SessionId, "first", Ct);
+        await Registry(ClockMovesOnEachExtension(_storage, _time)).AddClientAsync(SessionId, "first", Ct);
 
         _time.SetUtcNow(renewedAt + Retention + TimeSpan.FromSeconds(1));
-        var counting = new CountsOperations(_storage);
-        await Registry(counting).AddClientAsync(SessionId, "first", Ct);
+        var counting = EntityStorageMock.Over(_storage);
+        await Registry(counting.Object).AddClientAsync(SessionId, "first", Ct);
 
-        Assert.NotEqual(0, counting.Extensions);
-    }
-
-    /// <summary>
-    /// Moves the clock a minute at every extension made through it, as a renewal of a long list over a slow store
-    /// takes time.
-    /// </summary>
-    private sealed class ClockMovesOnEachExtension(IEntityStorage inner, FakeTimeProvider time) : IEntityStorage
-    {
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-        {
-            time.Advance(TimeSpan.FromMinutes(1));
-            return inner.TryExtendAsync(key, options, token);
-        }
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+        Assert.NotEqual(0, Extensions(counting));
     }
 
     /// <summary>
@@ -296,42 +269,13 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "second", Ct);
         _time.Advance(Retention + TimeSpan.FromSeconds(1));
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Registry(new FailsTheThirdExtension(_storage)).AddClientAsync(SessionId, "first", Ct));
+            () => Registry(FailsTheThirdExtension(_storage)).AddClientAsync(SessionId, "first", Ct));
 
         _time.Advance(Retention / 2);
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(Retention - TimeSpan.FromSeconds(1));
 
         Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
-    }
-
-    /// <summary>
-    /// Fails the third extension made through it, part way through a renewal of a list of two clients.
-    /// </summary>
-    private sealed class FailsTheThirdExtension(IEntityStorage inner) : IEntityStorage
-    {
-        private int _extensions;
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => Interlocked.Increment(ref _extensions) == 3
-                ? throw new InvalidOperationException("The store refused the write.")
-                : inner.TryExtendAsync(key, options, token);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
     }
 
     /// <summary>
@@ -343,7 +287,7 @@ public class SessionClientRegistryTests
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
-        var ending = new ClockMovesAtTheFirstExtension(_storage, () =>
+        var ending = ClockMovesAtTheFirstExtension(_storage, () =>
         {
             _time.Advance(TimeSpan.FromMilliseconds(2));
             return Task.CompletedTask;
@@ -365,7 +309,7 @@ public class SessionClientRegistryTests
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
-        var replacing = new ClockMovesAtTheFirstExtension(_storage, async () =>
+        var replacing = ClockMovesAtTheFirstExtension(_storage, async () =>
         {
             _time.Advance(TimeSpan.FromMilliseconds(2));
             await Registry().AddClientAsync(SessionId, "elsewhere", Ct);
@@ -428,7 +372,7 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
-        var expiring = new ClockMovesAtTheFirstClaim(_storage, () =>
+        var expiring = ClockMovesAtTheFirstClaim(_storage, () =>
         {
             _time.Advance(TimeSpan.FromMilliseconds(2));
             return Task.CompletedTask;
@@ -467,7 +411,7 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
-        var expiring = new ClockMovesAtTheFirstClaim(new RefusesAnExpiryInThePast(_storage, _time), () =>
+        var expiring = ClockMovesAtTheFirstClaim(RefusesAnExpiryInThePast(_storage, _time), () =>
         {
             _time.Advance(TimeSpan.FromMilliseconds(2));
             return Task.CompletedTask;
@@ -475,48 +419,6 @@ public class SessionClientRegistryTests
         await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
 
         Assert.Contains("second", await Registry().GetClientsAsync(SessionId, Ct));
-    }
-
-    /// <summary>
-    /// Refuses a write whose absolute expiry is not after the current moment, which is what the Redis cache does
-    /// where the in-memory one drops the write silently.
-    /// </summary>
-    private sealed class RefusesAnExpiryInThePast(IEntityStorage inner, TimeProvider time) : IEntityStorage
-    {
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            Refuse(options);
-            return inner.SetAsync(key, value, options, token);
-        }
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            Refuse(options);
-            return inner.TrySetIfAbsentAsync(key, value, options, token);
-        }
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-        {
-            Refuse(options);
-            return inner.TryExtendAsync(key, options, token);
-        }
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
-
-        private void Refuse(StorageOptions options)
-        {
-            if (options.AbsoluteExpiration <= time.GetUtcNow())
-                throw new ArgumentOutOfRangeException(
-                    nameof(options), options.AbsoluteExpiration, "The absolute expiration value must be in the future.");
-        }
     }
 
     /// <summary>
@@ -528,7 +430,7 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
-        var racing = new ClockMovesAtTheFirstClaim(_storage, async () =>
+        var racing = ClockMovesAtTheFirstClaim(_storage, async () =>
         {
             await Registry().AddClientAsync(SessionId, "winner", Ct);
             _time.Advance(TimeSpan.FromMilliseconds(2));
@@ -547,7 +449,7 @@ public class SessionClientRegistryTests
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
-        var expiring = new ClockMovesAfterTheFirstRecordRead(_storage, () => _time.Advance(TimeSpan.FromMilliseconds(2)));
+        var expiring = ClockMovesAfterTheFirstRecordRead(_storage, () => _time.Advance(TimeSpan.FromMilliseconds(2)));
         await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
 
         _time.Advance(TimeSpan.FromMinutes(1));
@@ -563,7 +465,7 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_holding_two_positions_is_listed_once()
     {
-        var failing = new FailsTheFirstClientWrite(_storage);
+        var failing = FailsTheFirstClientWrite(_storage);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => Registry(failing).AddClientAsync(SessionId, "first", Ct));
 
@@ -582,12 +484,12 @@ public class SessionClientRegistryTests
     {
         await Registry().AddClientAsync(SessionId, "first", Ct);
         await Registry().AddClientAsync(SessionId, "second", Ct);
-        var counting = new CountsOperations(_storage);
+        var counting = EntityStorageMock.Over(_storage);
 
-        await Registry(counting).GetClientsAsync(SessionId, Ct);
+        await Registry(counting.Object).GetClientsAsync(SessionId, Ct);
 
         // The generation, both positions, and the free position that ends the list.
-        Assert.Equal(4, counting.Reads);
+        Assert.Equal(4, Reads(counting));
     }
 
     /// <summary>
@@ -600,7 +502,7 @@ public class SessionClientRegistryTests
         const string composed = "caf\u00e9-client";
         const string decomposed = "cafe\u0301-client";
         await Registry().AddClientAsync(SessionId, "zero", Ct);
-        var racing = new ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, composed, Ct));
+        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, composed, Ct));
 
         await Registry(racing).AddClientAsync(SessionId, decomposed, Ct);
 
@@ -614,86 +516,13 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task Two_authorizations_starting_a_session_together_record_each_client_once()
     {
-        var counting = new CountsOperations(_storage);
-        var racing = new ClockMovesAtTheFirstClaim(counting, () => Registry().AddClientAsync(SessionId, "first", Ct));
+        var counting = EntityStorageMock.Over(_storage);
+        var racing = ClockMovesAtTheFirstClaim(counting.Object, () => Registry().AddClientAsync(SessionId, "first", Ct));
 
         await Registry(racing).AddClientAsync(SessionId, "second", Ct);
 
         Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
-        Assert.Equal(1, counting.Writes);
-    }
-
-    /// <summary>
-    /// Counts the reads and the writes made through it, a plain write or one keeping an entry longer.
-    /// </summary>
-    private sealed class CountsOperations(IEntityStorage inner) : IEntityStorage
-    {
-        private int _reads;
-        private int _writes;
-        private int _extensions;
-
-        public int Reads => _reads;
-        public int Writes => _writes;
-        public int Extensions => _extensions;
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-        {
-            Interlocked.Increment(ref _writes);
-            Interlocked.Increment(ref _extensions);
-            return inner.TryExtendAsync(key, options, token);
-        }
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            Interlocked.Increment(ref _writes);
-            return inner.SetAsync(key, value, options, token);
-        }
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            Interlocked.Increment(ref _reads);
-            return inner.GetAsync<T>(key, removeOnRetrieval, token);
-        }
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
-    }
-
-    /// <summary>
-    /// Fails the first plain write of a client through it, which is the one that records a client already
-    /// holding a position.
-    /// </summary>
-    private sealed class FailsTheFirstClientWrite(IEntityStorage inner) : IEntityStorage
-    {
-        private int _writes;
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => value is StoredSessionClient && Interlocked.Increment(ref _writes) == 1
-                ? throw new InvalidOperationException("The store refused the write.")
-                : inner.SetAsync(key, value, options, token);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => inner.TryExtendAsync(key, options, token);
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+        Assert.Equal(1, Writes(counting));
     }
 
     /// <summary>
@@ -714,102 +543,156 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
+    /// Moves the clock a minute at every extension made through it, as a renewal of a long list over a slow store
+    /// takes time.
+    /// </summary>
+    private static IEntityStorage ClockMovesOnEachExtension(IEntityStorage inner, FakeTimeProvider time)
+    {
+        var storage = EntityStorageMock.Over(inner);
+        storage.Setup(s => s.TryExtendAsync(It.IsAny<string>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns((string key, StorageOptions options, CancellationToken? token) =>
+            {
+                time.Advance(TimeSpan.FromMinutes(1));
+                return inner.TryExtendAsync(key, options, token);
+            });
+
+        return storage.Object;
+    }
+
+    /// <summary>
+    /// Fails the third extension made through it, part way through a renewal of a list of two clients.
+    /// </summary>
+    private static IEntityStorage FailsTheThirdExtension(IEntityStorage inner)
+    {
+        var extensions = 0;
+        var storage = EntityStorageMock.Over(inner);
+        storage.Setup(s => s.TryExtendAsync(It.IsAny<string>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns((string key, StorageOptions options, CancellationToken? token) =>
+                Interlocked.Increment(ref extensions) == 3
+                    ? throw new InvalidOperationException("The store refused the write.")
+                    : inner.TryExtendAsync(key, options, token));
+
+        return storage.Object;
+    }
+
+    /// <summary>
+    /// Refuses a write whose absolute expiry is not after the current moment, which is what the Redis cache does
+    /// where the in-memory one drops the write silently.
+    /// </summary>
+    private static IEntityStorage RefusesAnExpiryInThePast(IEntityStorage inner, TimeProvider time)
+    {
+        var storage = EntityStorageMock.Over(inner);
+        var refusing = EntityStorageMock.Before(inner, invocation =>
+        {
+            Refuse(invocation.Arguments.OfType<StorageOptions>().Single());
+            return Task.CompletedTask;
+        });
+
+        storage.Setup(s => s.SetAsync(
+                It.IsAny<string>(), It.IsAny<It.IsAnyType>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns(refusing);
+        storage.Setup(s => s.TrySetIfAbsentAsync(
+                It.IsAny<string>(), It.IsAny<It.IsAnyType>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns(refusing);
+        storage.Setup(s => s.TryExtendAsync(It.IsAny<string>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns(refusing);
+
+        return storage.Object;
+
+        void Refuse(StorageOptions options)
+        {
+            if (options.AbsoluteExpiration <= time.GetUtcNow())
+                throw new ArgumentOutOfRangeException(
+                    nameof(options), options.AbsoluteExpiration, "The absolute expiration value must be in the future.");
+        }
+    }
+
+    /// <summary>
+    /// Fails the first plain write of a client through it, which is the one that records a client already
+    /// holding a position.
+    /// </summary>
+    private static IEntityStorage FailsTheFirstClientWrite(IEntityStorage inner)
+    {
+        var writes = 0;
+        var storage = EntityStorageMock.Over(inner);
+        storage.Setup(s => s.SetAsync(
+                It.IsAny<string>(), It.IsAny<It.IsAnyType>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.Before(inner, invocation =>
+                invocation.Arguments[1] is StoredSessionClient && Interlocked.Increment(ref writes) == 1
+                    ? throw new InvalidOperationException("The store refused the write.")
+                    : Task.CompletedTask));
+
+        return storage.Object;
+    }
+
+    /// <summary>
     /// Runs a step once, just after the first read through it that found a record: the moment a caller has
     /// seen the session's records alive and has not yet acted on it.
     /// </summary>
-    private sealed class ClockMovesAfterTheFirstRecordRead(IEntityStorage inner, Action step) : IEntityStorage
+    private static IEntityStorage ClockMovesAfterTheFirstRecordRead(IEntityStorage inner, Action step)
     {
-        private Action? _step = step;
+        Action? pending = step;
+        var storage = EntityStorageMock.Over(inner);
+        storage.Setup(s => s.GetAsync<It.IsAnyType>(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.After(inner, (_, read) =>
+            {
+                if (read is not null && Interlocked.Exchange(ref pending, null) is { } once)
+                    once();
 
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
+                return Task.CompletedTask;
+            }));
 
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => inner.TryExtendAsync(key, options, token);
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public async Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            var read = await inner.GetAsync<T>(key, removeOnRetrieval, token);
-            if (read is not null && Interlocked.Exchange(ref _step, null) is { } once)
-                once();
-
-            return read;
-        }
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+        return storage.Object;
     }
 
     /// <summary>
     /// Runs a step once, just before the first extension made through it: the moment a renewal has seen the
     /// session's records alive and has not yet kept any of them longer.
     /// </summary>
-    private sealed class ClockMovesAtTheFirstExtension(IEntityStorage inner, Func<Task> step) : IEntityStorage
+    private static IEntityStorage ClockMovesAtTheFirstExtension(IEntityStorage inner, Func<Task> step)
     {
-        private Func<Task>? _step = step;
+        Func<Task>? pending = step;
+        var storage = EntityStorageMock.Over(inner);
+        storage.Setup(s => s.TryExtendAsync(It.IsAny<string>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.Before(inner, _ =>
+                Interlocked.Exchange(ref pending, null) is { } once ? once() : Task.CompletedTask));
 
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public async Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-        {
-            if (Interlocked.Exchange(ref _step, null) is { } once)
-                await once();
-
-            return await inner.TryExtendAsync(key, options, token);
-        }
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+        return storage.Object;
     }
 
     /// <summary>
     /// Runs a step once, just before the first claim made through it: the moment a caller has decided where to
     /// write and has not yet written.
     /// </summary>
-    private sealed class ClockMovesAtTheFirstClaim(IEntityStorage inner, Func<Task> step) : IEntityStorage
+    private static IEntityStorage ClockMovesAtTheFirstClaim(IEntityStorage inner, Func<Task> step)
     {
-        private Func<Task>? _step = step;
+        Func<Task>? pending = step;
+        var storage = EntityStorageMock.Over(inner);
+        storage.Setup(s => s.TrySetIfAbsentAsync(
+                It.IsAny<string>(), It.IsAny<It.IsAnyType>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .Returns(EntityStorageMock.Before(inner, _ =>
+                Interlocked.Exchange(ref pending, null) is { } once ? once() : Task.CompletedTask));
 
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => inner.TryExtendAsync(key, options, token);
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public async Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            if (Interlocked.Exchange(ref _step, null) is { } once)
-                await once();
-
-            return await inner.TrySetIfAbsentAsync(key, value, options, token);
-        }
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+        return storage.Object;
     }
+
+    /// <summary>
+    /// How many reads the code under test made through <paramref name="storage"/>.
+    /// </summary>
+    private static int Reads(Mock<IEntityStorage> storage) => Calls(storage, nameof(IEntityStorage.GetAsync));
+
+    /// <summary>
+    /// How many plain writes and extensions the code under test made through <paramref name="storage"/>; a claim of
+    /// a free key is not one, since it is the write every first record makes.
+    /// </summary>
+    private static int Writes(Mock<IEntityStorage> storage)
+        => Calls(storage, nameof(IEntityStorage.SetAsync), nameof(IEntityStorage.TryExtendAsync));
+
+    /// <summary>
+    /// How many extensions the code under test made through <paramref name="storage"/>.
+    /// </summary>
+    private static int Extensions(Mock<IEntityStorage> storage) => Calls(storage, nameof(IEntityStorage.TryExtendAsync));
+
+    private static int Calls(Mock<IEntityStorage> storage, params string[] members)
+        => storage.Invocations.Count(invocation => members.Contains(invocation.Method.Name));
 }

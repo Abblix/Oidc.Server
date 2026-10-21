@@ -59,7 +59,7 @@ public class RefreshTokenSpendRaceTests
                     Options.Create(new MemoryDistributedCacheOptions { Clock = new StoreClock(_time) })),
                 new ProtobufSerializer()),
             keyFactory.JsonWebTokenStatusKey(PresentedTokenId));
-        var registry = new TokenRegistry(storage, keyFactory);
+        var registry = new TokenRegistry(storage.Storage, keyFactory);
         var service = CreateService(registry, _time);
         var presented = PresentedToken();
 

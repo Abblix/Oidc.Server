@@ -17,6 +17,9 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -39,66 +42,15 @@ public class BackChannelRequestStorageTests
     // needed because nothing here evaluates expiry.
     private static readonly DateTimeOffset Instant = new(2026, 7, 2, 0, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// A faithful in-memory <see cref="IEntityStorage"/> that honours the <c>removeOnRetrieval</c>
-    /// contract exactly as <see cref="DistributedCacheStorage"/> does: a read with the flag set consumes
-    /// the entry, a read without it leaves the entry in place. Using this rather than a mock of
-    /// <see cref="IBackChannelRequestStorage"/> is deliberate - the defect lives in which flag
-    /// <see cref="BackChannelRequestStorage"/> passes to the underlying storage, so the test must exercise
-    /// that flag against a store that actually acts on it.
-    /// </summary>
-    private sealed class FakeEntityStorage : IEntityStorage
-    {
-        private readonly Dictionary<string, object?> _entries = new(StringComparer.Ordinal);
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            _entries[key] = value;
-            return Task.CompletedTask;
-        }
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            if (!_entries.TryGetValue(key, out var value))
-                return Task.FromResult<T?>(default);
-
-            if (removeOnRetrieval)
-                _entries.Remove(key);
-
-            return Task.FromResult((T?)value);
-        }
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            // One thread, so the check and the write are already indivisible here.
-            if (!_entries.TryAdd(key, value))
-                return Task.FromResult(false);
-
-            return Task.FromResult(true);
-        }
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => throw new NotSupportedException();
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(_entries.ContainsKey(key));
-
-        public Task RemoveAsync(string key, CancellationToken? token = null)
-        {
-            _entries.Remove(key);
-            return Task.CompletedTask;
-        }
-    }
-
     private static (BackChannelRequestStorage sut, BackChannelAuthenticationRequest request) CreateSut()
     {
         var idGenerator = new Mock<IAuthenticationRequestIdGenerator>(MockBehavior.Strict);
         idGenerator.Setup(g => g.GenerateAuthenticationRequestId()).Returns(RequestId);
 
         var sut = new BackChannelRequestStorage(
-            new FakeEntityStorage(),
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new ProtobufSerializer()),
             idGenerator.Object,
             new EntityStorageKeyFactory());
 

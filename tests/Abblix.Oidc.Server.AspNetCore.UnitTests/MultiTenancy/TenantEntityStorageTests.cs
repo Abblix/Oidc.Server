@@ -7,11 +7,16 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
-using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Tests.Shared;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Moq;
 using Xunit;
 
 // The feature is marked experimental for its consumers; these tests are where it is built.
@@ -44,44 +49,21 @@ public class TenantEntityStorageTests
             };
     }
 
-    /// <summary>An inner storage that remembers every key it was handed, as the distributed cache would.</summary>
-    private sealed class DictionaryStorage : IEntityStorage
-    {
-        public ConcurrentDictionary<string, object?> Entries { get; } = new();
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-        {
-            Entries[key] = value;
-            return Task.CompletedTask;
-        }
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            var found = removeOnRetrieval ? Entries.TryRemove(key, out var value) : Entries.TryGetValue(key, out value);
-            return Task.FromResult(found ? (T?)value : default);
-        }
-
-        public Task<bool> TrySetIfAbsentAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(Entries.TryAdd(key, value));
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(Entries.TryUpdate(key, value, expected));
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(Entries.ContainsKey(key));
-
-        public Task RemoveAsync(string key, CancellationToken? token = null)
-        {
-            Entries.TryRemove(key, out _);
-            return Task.CompletedTask;
-        }
-    }
-
     private readonly SwitchableTenantAccessor _tenant = new();
-    private readonly DictionaryStorage _inner = new();
+    private readonly Mock<IEntityStorage> _inner = EntityStorageMock.Over(new DistributedCacheStorage(
+        new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions())),
+        new JsonBinarySerializer()));
 
-    private TenantEntityStorage Storage => new(_inner, _tenant);
+    private TenantEntityStorage Storage => new(_inner.Object, _tenant);
+
+    /// <summary>
+    /// The keys written to the storage underneath, which is where a tenant's key form is seen.
+    /// </summary>
+    private string[] WrittenKeys() => _inner.Invocations
+        .Where(invocation => invocation.Method.Name == nameof(IEntityStorage.SetAsync))
+        .Select(invocation => (string)invocation.Arguments[0])
+        .Distinct()
+        .ToArray();
 
     [Fact]
     public async Task AnEntityWrittenUnderOneTenant_IsNotReadUnderAnother()
@@ -160,7 +142,7 @@ public class TenantEntityStorageTests
 
         _tenant.Enter("a:b");
         Assert.Null(await Storage.GetAsync<string>("x", removeOnRetrieval: false));
-        Assert.Single(_inner.Entries);
+        Assert.Single(WrittenKeys());
     }
 
     /// <summary>
@@ -187,7 +169,7 @@ public class TenantEntityStorageTests
         _tenant.Enter("acme");
         await Storage.SetAsync("code", "acme's", Options);
 
-        Assert.Equal("tenant:4:acme:code", Assert.Single(_inner.Entries).Key);
+        Assert.Equal("tenant:4:acme:code", Assert.Single(WrittenKeys()));
     }
 
     /// <summary>
@@ -219,6 +201,6 @@ public class TenantEntityStorageTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TryReplaceAsync("k", 1, 2, Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.TryExtendAsync("k", Options));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Storage.RemoveAsync("k"));
-        Assert.Empty(_inner.Entries);
+        Assert.Empty(_inner.Invocations);
     }
 }

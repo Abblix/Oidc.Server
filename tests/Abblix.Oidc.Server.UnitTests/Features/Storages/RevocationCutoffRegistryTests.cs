@@ -96,7 +96,7 @@ public class RevocationCutoffRegistryTests
         var racing = new LetsAnotherCallerIn(_storage, Key);
         racing.OnNextReadOf(() => Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
 
-        await Registry(racing).SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry(racing.Storage).SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -112,7 +112,7 @@ public class RevocationCutoffRegistryTests
         var racing = new LetsAnotherCallerIn(_storage, Key);
         racing.OnNextReadOf(() => Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
 
-        await Registry(racing).SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry(racing.Storage).SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -128,7 +128,7 @@ public class RevocationCutoffRegistryTests
         var racing = new LetsAnotherCallerIn(_storage, Key);
         racing.OnNextReadOf(() => Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct));
 
-        await Registry(racing).SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
+        await Registry(racing.Storage).SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }

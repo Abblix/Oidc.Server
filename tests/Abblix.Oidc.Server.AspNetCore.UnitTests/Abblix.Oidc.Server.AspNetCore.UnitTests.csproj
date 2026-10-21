@@ -35,6 +35,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Compile Include="../Shared/EntityStorageMock.cs" Link="Shared/EntityStorageMock.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
 	</ItemGroup>
 
