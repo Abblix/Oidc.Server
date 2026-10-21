@@ -53,7 +53,7 @@ public interface IRevocationCutoffChecker
 
     /// <summary>
     /// Whether a cutoff recorded against the end user at the grant's client refuses a grant authorized before it,
-    /// so a code or a device authorization approved before the end user withdrew consent from that client cannot
+    /// so a code, a device authorization or a CIBA request approved before the end user withdrew consent from that client cannot
     /// found a refresh token family after it.
     /// </summary>
     /// <remarks>

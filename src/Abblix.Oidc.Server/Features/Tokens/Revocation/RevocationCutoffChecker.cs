@@ -54,7 +54,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// seconds, so a token minted in the same second as a revocation reads as older than it and is refused. That
 /// errs towards refusing a token the revocation did not mean to catch, which is the direction to err in.
 /// Clock differences between instances run the other way and are not bounded by the token, which is what
-/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers - on this side only. The session side takes no
+/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers - on this side and on a grant redeemed against a cutoff
+/// at its client, whose tokens the window refuses anyway. The session side takes no
 /// tolerance, because there the same widening would refuse the fresh sign-in a user answers the refusal
 /// with, and the retry lands in the same window.
 /// </para>

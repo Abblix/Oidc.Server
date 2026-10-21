@@ -169,10 +169,40 @@ public partial class AuthenticationCompletionHandlerTests
         Assert.Equal(2, callOrder.Count);
         Assert.Equal("update", callOrder[0]);
         Assert.Equal("notify", callOrder[1]);
+    }
 
-        // The approval is stamped with its moment, which a revocation at the client is measured against when the
-        // client redeems it; without it the grant would be measured against the session the host handed over
-        Assert.Equal(ApprovedAt, request.AuthorizedGrant.AuthorizedAt);
+    /// <summary>
+    /// The request is stored with the moment the end user approved it, which a revocation at the client is measured
+    /// against when the client redeems it; without it the grant would be measured against the session the host
+    /// handed over. A moment the host set itself is kept. Read from what reaches the storage, at the moment it does,
+    /// since a stamp set only after the write would leave the stored record without it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompleteAuthenticationAsync_StoresTheMomentTheEndUserApproved(bool hostSetIt)
+    {
+        var hostMoment = ApprovedAt.AddMinutes(-3);
+        var authSession = new AuthSession(UserId, "session_123", ApprovedAt.AddHours(-1), "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, context) { AuthorizedAt = hostSetIt ? hostMoment : null },
+            TimeProvider.System.GetUtcNow().AddMinutes(5));
+        StoredRecordIs(request);
+
+        DateTimeOffset? stored = null;
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
+            .Callback((string _, BackChannelAuthenticationRequest written, TimeSpan _) =>
+                stored = written.AuthorizedGrant.AuthorizedAt)
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId,
+            request,
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            _expiresIn);
+
+        Assert.Equal(hostSetIt ? hostMoment : ApprovedAt, stored);
     }
 
     /// <summary>
