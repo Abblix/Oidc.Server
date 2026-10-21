@@ -47,4 +47,17 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     /// </summary>
     [NotStored("Set only by a token exchange, whose grant is never stored")]
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }
+
+    /// <summary>
+    /// When the end user authorized this grant: when the authorization code was issued, or when the device
+    /// authorization was approved. <c>null</c> for a grant built elsewhere, such as one a host writes for a CIBA
+    /// request, which is then taken to be authorized when its session was authenticated.
+    /// </summary>
+    /// <remarks>
+    /// A revocation of the end user at one client is measured against it at redemption, so a code issued before
+    /// the revocation cannot found a refresh token family after it. The session's authentication cannot stand in
+    /// for it in general: an end user consenting again in the same session would be refused for a consent they
+    /// gave after the revocation.
+    /// </remarks>
+    public DateTimeOffset? AuthorizedAt { get; init; }
 }

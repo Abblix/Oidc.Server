@@ -882,6 +882,7 @@ internal static class LogEvents
             public const int TokenRefusedByCutoff = Base + 1;
             public const int SubjectCouldNotBeResolved = Base + 2;
             public const int SessionRefusedByCutoff = Base + 3;
+            public const int GrantRefusedByCutoff = Base + 4;
         }
     }
 

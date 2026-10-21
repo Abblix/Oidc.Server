@@ -2,6 +2,7 @@ syntax = "proto3";
 
 option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 
+import "google/protobuf/timestamp.proto";
 import "Features/Storages/Proto/AuthSession.proto";
 import "Features/Storages/Proto/AuthorizationContext.proto";
 import "Features/Storages/Proto/TokenInfo.proto";
@@ -19,4 +20,7 @@ message AuthorizedGrant {
 
   // The refresh token family this grant exercises the authority of, empty when it exercises none
   string grant_id = 4;
+
+  // When the end user authorized this grant, absent when it was built where that moment is not known
+  optional google.protobuf.Timestamp authorized_at = 5;
 }

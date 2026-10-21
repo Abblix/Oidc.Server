@@ -9,6 +9,8 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -91,7 +93,7 @@ public partial class RevocationCutoffChecker(
             // The subject could not be recovered, so whether a cutoff covers this token is unknown - and a
             // revocation control that cannot evaluate its input must not answer "not revoked". The sibling
             // call sites of ConvertBack refuse on the same input for the same reason.
-            LogSubjectCouldNotBeResolved(payload.ClientId);
+            LogSubjectCouldNotBeResolved(payload.NamedClientId());
             return new JwtValidationError(
                 JwtError.TokenRevoked,
                 "The subject of this token could not be resolved, so a revocation recorded against it "
@@ -104,7 +106,7 @@ public partial class RevocationCutoffChecker(
             return RevokedByCutoff;
         }
 
-        if (subject is not { Length: > 0 } || payload.ClientId is not { Length: > 0 } clientId)
+        if (subject is not { Length: > 0 } || payload.NamedClientId() is not { Length: > 0 } clientId)
             return null;
 
         if (!await IsBeforeCutoffAsync(
@@ -141,6 +143,20 @@ public partial class RevocationCutoffChecker(
         return true;
     }
 
+    /// <inheritdoc />
+    public async Task<bool> IsGrantRefusedAtItsClientAsync(AuthorizedGrant grant)
+    {
+        // No tolerance, as on the session side: widening would refuse the grant an end user approves again
+        // right after the revocation, and approving again lands in the same window
+        var authorizedAt = grant.AuthorizedAt ?? grant.AuthSession.AuthenticationTime;
+        var principal = RevocationPrincipal.ClientSubject(grant.Context.ClientId, grant.AuthSession.Subject);
+        if (!await IsBeforeCutoffAsync(RevocationScope.ClientSubject, principal, authorizedAt, TimeSpan.Zero))
+            return false;
+
+        LogGrantRefusedByCutoff(grant.Context.ClientId, authorizedAt, RevocationScope.ClientSubject);
+        return true;
+    }
+
     private TimeSpan Skew => options.Value.RevocationCutoffSkew;
 
     private static JwtValidationError RevokedByCutoff => new(
@@ -174,12 +190,15 @@ public partial class RevocationCutoffChecker(
     /// </remarks>
     private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(JsonWebTokenPayload payload)
     {
-        if (payload.Subject is not { Length: > 0 } subject || payload.ClientId is not { Length: > 0 } clientId)
+        if (payload.Subject is not { Length: > 0 } subject || payload.NamedClientId() is not { Length: > 0 } clientId)
             return (true, payload.Subject);
 
+        // A client_id names a client, so a token whose client is gone is refused. An azp or an audience names one
+        // only on an ID token: elsewhere it may be a resource or an endpoint, and a token naming no client this way
+        // carries its subject as it is.
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo is null)
-            return (false, null);
+            return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
 
         if (clientInfo.SubjectType != SubjectTypes.Pairwise)
             return (true, subject);

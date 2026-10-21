@@ -200,7 +200,7 @@ public class AuthorizationRequestProcessor(
 			SessionPersistence = authSession.Persistence,
 		};
 
-		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
+		var authorizedGrant = new AuthorizedGrant(authSession, authContext) { AuthorizedAt = clock.GetUtcNow() };
 
 		// Dispatch each requested response-type part to its registered builder. The DI
 		// registration order - AuthorizationCodeBuilder in the core registration, then

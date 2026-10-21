@@ -564,6 +564,29 @@ public class MappersTests
         Assert.Equal(grantId, result.GrantId);
     }
 
+    /// <summary>
+    /// When the end user authorized a grant survives storage, and a grant carrying none reads back as none. A stored
+    /// code that lost the moment would be measured against its session at redemption, refusing a consent given
+    /// again in that session after a revocation at its client.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AuthorizedGrantMapper_RoundTrips_WhenItWasAuthorized(bool authorized)
+    {
+        DateTimeOffset? authorizedAt = authorized ? new DateTimeOffset(2024, 1, 15, 11, 0, 0, 125, TimeSpan.Zero) : null;
+        var grant = new AuthorizedGrant(
+            new AuthSession("user-123", "session-456", DateTimeOffset.UnixEpoch, "local"),
+            new AuthorizationContext("client-123", [TestConstants.DefaultScope], null))
+        {
+            AuthorizedAt = authorizedAt,
+        };
+
+        var result = grant.ToProto().FromProto();
+
+        Assert.Equal(authorizedAt, result.AuthorizedAt);
+    }
+
     [Fact]
     public void AuthorizationRequestMapper_ToProto_HandlesCultureInfo()
     {

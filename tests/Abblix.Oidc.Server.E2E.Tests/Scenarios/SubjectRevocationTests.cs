@@ -358,6 +358,74 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A code the end user approved before withdrawing consent from the client cannot be redeemed after it, so it
+    /// cannot found a refresh token family that outlives the revocation, while a code they approve again afterwards,
+    /// in the same session, is redeemed.
+    /// </summary>
+    [Fact]
+    public async Task A_code_approved_before_a_revocation_at_its_client_cannot_be_redeemed_and_one_approved_after_can()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var (verifierBefore, codeBefore) = await TakeCodeAsync(client, discovery);
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            SubjectOf(tokens),
+            TestConstants.ConfidentialClientId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await AssertInvalidGrantAsync(await RedeemAsync(client, discovery, codeBefore, verifierBefore));
+
+        var (verifierAfter, codeAfter) = await TakeCodeAsync(client, discovery);
+        var redeemedAfter = await RedeemAsync(client, discovery, codeAfter, verifierAfter);
+        Assert.True(
+            redeemedAfter.IsSuccessStatusCode,
+            $"a code approved after the revocation should be redeemed, got {(int)redeemedAfter.StatusCode}");
+    }
+
+    /// <summary>
+    /// An ID token the client received before the revocation cannot be exchanged for a new access token after it.
+    /// An ID token names its client only as its audience, so a check reading client_id alone would let it through.
+    /// </summary>
+    [Fact]
+    public async Task An_id_token_issued_before_a_revocation_at_its_client_cannot_be_exchanged()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+
+        var beforeRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the ID token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            SubjectOf(tokens),
+            TestConstants.ConfidentialClientId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+    }
+
+    private static Task<HttpResponseMessage> ExchangeIdTokenAsync(
+        HttpClient client, DiscoveryDocument discovery, string idToken)
+        => FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = idToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.IdToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+    /// <summary>
     /// Takes an authorization code from the session this client already holds, and the verifier that
     /// redeems it.
     /// </summary>

@@ -73,7 +73,12 @@ public interface ITokenRevoker
     /// included, is refused on its next use, so the client stops reaching their data at once rather than when its
     /// tokens run out. Their browser sessions stay usable, since they serve the other clients too; the client gets
     /// new tokens only through a new authorization, which asks for consent again once the host has deleted the
-    /// stored one. Deleting it stays with the host, whose consent provider keeps it.
+    /// stored one: a code or a device authorization the end user approved before the revocation is refused at
+    /// redemption too. Deleting the stored consent stays with the host, whose consent provider keeps it.
+    /// <para>
+    /// A token another client obtained by exchanging one of this client's tokens before the revocation belongs to
+    /// that other client and is left alone; revoking the end user there takes a call naming that client.
+    /// </para>
     /// </remarks>
     /// <param name="subject">The subject identifier the host knows the end user by, not a pairwise pseudonym.</param>
     /// <param name="clientId">The client whose tokens stop.</param>

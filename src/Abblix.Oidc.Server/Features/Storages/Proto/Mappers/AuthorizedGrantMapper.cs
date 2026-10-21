@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Utils;
+using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
@@ -32,6 +33,9 @@ internal static class AuthorizedGrantMapper
 
         proto.IssuedTokens.AddIfNotNull(source.IssuedTokens, TokenInfoMapper.ToProto);
 
+        if (source.AuthorizedAt.HasValue)
+            proto.AuthorizedAt = source.AuthorizedAt.Value.ToTimestamp();
+
         return proto;
     }
 
@@ -46,6 +50,7 @@ internal static class AuthorizedGrantMapper
         {
             IssuedTokens = source.IssuedTokens.GetArray(TokenInfoMapper.FromProto),
             GrantId = source.GrantId.HasValue() ? source.GrantId : null,
+            AuthorizedAt = source.AuthorizedAt?.ToDateTimeOffset(),
         };
     }
 }

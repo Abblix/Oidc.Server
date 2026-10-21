@@ -85,10 +85,33 @@ public class RevokedSessionValidatorTests
     public async Task AGrantWhoseSessionSurvives_IsAccepted(string grantType)
     {
         _cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(false);
+        _cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(It.IsAny<AuthorizedGrant>())).ReturnsAsync(false);
 
         var error = await _validator.ValidateAsync(Context(grantType), CancellationToken.None);
 
         Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A code, a device authorization or a CIBA request the end user approved before withdrawing consent from the
+    /// client is refused though its session survives, so it cannot found a refresh token family after the
+    /// revocation. A refresh token is not asked: its own issue time already answers at the token side, and its
+    /// grant, carrying no approval moment, would be measured against its session and refuse a family founded after
+    /// the end user consented again in that session.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.AuthorizationCode, true)]
+    [InlineData(GrantTypes.DeviceAuthorization, true)]
+    [InlineData(GrantTypes.Ciba, true)]
+    [InlineData(GrantTypes.RefreshToken, false)]
+    public async Task AGrantApprovedBeforeARevocationAtItsClient_IsRefused(string grantType, bool refused)
+    {
+        _cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(false);
+        _cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(It.IsAny<AuthorizedGrant>())).ReturnsAsync(true);
+
+        var error = await _validator.ValidateAsync(Context(grantType), CancellationToken.None);
+
+        Assert.Equal(refused ? ErrorCodes.InvalidGrant : null, error?.Error);
     }
 
     /// <summary>

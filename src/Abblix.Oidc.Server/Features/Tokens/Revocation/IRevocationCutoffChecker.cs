@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -49,4 +50,18 @@ public interface IRevocationCutoffChecker
     /// reusing, or the one a grant presented at the token endpoint was authorized from.</param>
     /// <returns><c>true</c> when the session must not be used.</returns>
     Task<bool> IsSessionRefusedAsync(AuthSession session);
+
+    /// <summary>
+    /// Whether a cutoff recorded against the end user at the grant's client refuses a grant authorized before it,
+    /// so a code or a device authorization approved before the end user withdrew consent from that client cannot
+    /// found a refresh token family after it.
+    /// </summary>
+    /// <remarks>
+    /// Measured against <see cref="AuthorizedGrant.AuthorizedAt"/> rather than against the session, which serves
+    /// the end user's other clients and in which they may consent to this client again. A grant carrying no such
+    /// moment is measured against its session's authentication, which errs towards refusing it.
+    /// </remarks>
+    /// <param name="grant">The grant a token request presents for redemption.</param>
+    /// <returns><c>true</c> when the grant must not be redeemed.</returns>
+    Task<bool> IsGrantRefusedAtItsClientAsync(AuthorizedGrant grant);
 }
