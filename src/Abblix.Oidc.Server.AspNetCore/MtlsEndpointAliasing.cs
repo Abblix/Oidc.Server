@@ -60,16 +60,20 @@ internal static class MtlsEndpointAliasing
     /// <param name="mtlsBaseUri">The issuer's mutual-TLS host, or null without one.</param>
     public static Uri? OnIssuersHost(Uri? endpoint, Uri issuer, Uri? mtlsBaseUri)
         => endpoint is not null && mtlsBaseUri is not null && SameHost(endpoint, mtlsBaseUri)
-            ? Rebase(endpoint, new Uri(issuer.GetLeftPart(UriPartial.Authority)))
+            ? Rebase(endpoint, issuer)
             : endpoint;
 
     private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
         => TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
 
     /// <summary>
-    /// <paramref name="original"/>'s path on the scheme, host and port of <paramref name="host"/>, which carries no
-    /// path of its own: a mutual-TLS host is refused with one, and an issuer's host is taken without its path.
+    /// <paramref name="original"/>'s path, exactly as resolved and still escaped, on the scheme, host and port of
+    /// <paramref name="host"/>, whose own path is not used.
     /// </summary>
+    /// <remarks>
+    /// Joined as text rather than resolved as a reference: a path opening with an empty segment, as one under an
+    /// issuer whose path does, is a network-path reference to RFC 3986 section 4.2 and would name a host.
+    /// </remarks>
     private static Uri? Rebase(Uri? original, Uri host)
-        => original is null ? null : new Uri(host, original.AbsolutePath);
+        => original is null ? null : new Uri(host.GetLeftPart(UriPartial.Authority) + original.AbsolutePath);
 }

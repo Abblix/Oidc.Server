@@ -115,6 +115,32 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
+    /// An endpoint's path is kept exactly as resolved on whichever host it is moved to: a path opening with an empty
+    /// segment stays a path rather than naming a host, and an escaped character stays escaped, so the alias and the
+    /// ordinary endpoint reach the address the tenant is resolved at.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com//t1/token", "https://mtls.example.com//t1/token", "https://example.com//t1/token")]
+    [InlineData("https://mtls.example.com//t1/token", "https://mtls.example.com//t1/token", "https://example.com//t1/token")]
+    [InlineData("https://example.com/t%2Fa/token", "https://mtls.example.com/t%2Fa/token", "https://example.com/t%2Fa/token")]
+    public async Task AnEndpointsPath_IsKeptAsResolved_OnTheHostItIsMovedTo(
+        string resolved,
+        string alias,
+        string ordinary)
+    {
+        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
+        _endpointResolverMock
+            .Setup(x => x.Resolve(OidcEndpoints.Token))
+            .Returns(new Uri(resolved));
+
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
+
+        Assert.NotNull(result.Value);
+        Assert.Equal(alias, result.Value.MtlsEndpointAliases?.TokenEndpoint?.OriginalString);
+        Assert.Equal(ordinary, result.Value.TokenEndpoint?.OriginalString);
+    }
+
+    /// <summary>
     /// Verifies mTLS aliases are auto-computed when only MtlsBaseUri is configured.
     /// Tests RFC 8705 auto-computation feature.
     /// </summary>
