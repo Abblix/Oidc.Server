@@ -10,12 +10,13 @@ using System.Collections.Concurrent;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.SharedSignals.Transmitter;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.SharedSignals;
 
 /// <summary>
 /// Serves the streams a tenant declares in configuration as a <see cref="ConfigurationStreamStore"/> of that tenant,
-/// reconciled into the tenant's own part of the store; a tenant declaring none is served the store as it is.
+/// reconciled into the tenant's own part of the store; a tenant declaring none is served its part of the store.
 /// </summary>
 /// <remarks>
 /// The declared streams are the tenant's stream set, as they are the server's in a store of declared streams: they
@@ -26,23 +27,41 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// which has no definition in force, the store is built from the first definition that asks and kept.
 /// <para>
 /// Every part of the store served for a tenant deletes a stream it creates after the tenant's creation is released
-/// (<see cref="ReleaseCheckingStreamStore"/>), so a write still under way at the release leaves nothing behind.
+/// (<see cref="ReleaseCheckingStreamStore"/>), so a write still under way at the release leaves nothing behind. A
+/// store of declared streams that another has replaced writes nothing more
+/// (<see cref="SupersededWritesRefusedStreamStore"/>), so its reconcile cannot bring back the issuer the tenant left.
 /// </para>
 /// </remarks>
+/// <param name="logger">Records a stream written after its tenant's release that could not be deleted.</param>
 /// <param name="inner">The store each tenant's part of is kept apart in.</param>
 /// <param name="declared">The streams each tenant declares.</param>
 /// <param name="tenantAccessor">Names the tenant of the current request or scope.</param>
 /// <param name="catalog">Tells when a creation of a tenant is released.</param>
 /// <param name="serviceProvider">Builds a tenant's store of declared streams.</param>
 internal sealed class TenantConfiguredStreamStore(
+    ILogger<TenantConfiguredStreamStore> logger,
     IStreamStore inner,
     TenantConfiguredStreams declared,
     ITenantAccessor tenantAccessor,
     ITenantCatalog catalog,
     IServiceProvider serviceProvider) : IStreamStore
 {
-    /// <summary>A creation's store of declared streams, and the issuer it was built for.</summary>
-    private sealed record Built(string Issuer, Lazy<IStreamStore> Store);
+    /// <summary>
+    /// A creation's store of declared streams and the issuer it was built for, told apart from another by reference,
+    /// as its backing store asks whether it is still the one installed.
+    /// </summary>
+    private sealed class Built
+    {
+        public Built(string issuer, Func<Built, IStreamStore> build)
+        {
+            Issuer = issuer;
+            Store = new Lazy<IStreamStore>(() => build(this));
+        }
+
+        public string Issuer { get; }
+
+        public Lazy<IStreamStore> Store { get; }
+    }
 
     private readonly ConcurrentDictionary<string, Built> _stores = new(StringComparer.Ordinal);
 
@@ -83,10 +102,11 @@ internal sealed class TenantConfiguredStreamStore(
         {
             var tenant = tenantAccessor.CurrentTenant();
             var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
-            var own = new ReleaseCheckingStreamStore(inner, released);
+            var own = new ReleaseCheckingStreamStore(logger, inner, released, TenantKey.IdOf(tenant));
 
-            // A released creation's declared streams are deleted as the streams it kept, and declaring them again
-            // for a request still holding it would leave them with nobody to delete them
+            // A released creation is served its part of the store alone: building its declared store again would
+            // reconcile, writing the declared streams its release is deleting, and would do so on every call of the
+            // release's own cleanup, which goes through here
             if (declared.Of(tenant.Id) is not { } streams || released.IsCancellationRequested)
                 return own;
 
@@ -116,7 +136,12 @@ internal sealed class TenantConfiguredStreamStore(
             if (built is not null && (!inForce || built.Issuer == issuer))
                 return built.Store.Value;
 
-            var created = new Built(issuer, new Lazy<IStreamStore>(() => Build(builtFrom, streams, own)));
+            var created = new Built(
+                issuer,
+                installed => Build(
+                    builtFrom,
+                    streams,
+                    new SupersededWritesRefusedStreamStore(own, () => IsCurrent(space, installed))));
             if (Installed(space, built, created, released))
                 return created.Store.Value;
         }
@@ -137,6 +162,13 @@ internal sealed class TenantConfiguredStreamStore(
         released.Register(() => _stores.TryRemove(space, out _));
         return true;
     }
+
+    /// <summary>
+    /// Whether <paramref name="built"/> is still the store of declared streams the creation <paramref name="space"/> is
+    /// served.
+    /// </summary>
+    private bool IsCurrent(string space, Built built)
+        => _stores.TryGetValue(space, out var current) && ReferenceEquals(current, built);
 
     /// <summary>
     /// The store of the streams <paramref name="tenant"/> declares, naming its issuer and poll address.

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.SharedSignals.Transmitter;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.SharedSignals;
 
@@ -19,39 +20,34 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// before the cancel is in that listing, and one acknowledged after it is removed here; no lock is held across the
 /// store's calls. This holds for a store whose listing returns every write it has acknowledged.
 /// </remarks>
+/// <param name="logger">Records a stream left behind because its deletion failed.</param>
 /// <param name="inner">The tenant's part of the store.</param>
 /// <param name="released">Canceled once the creation of the tenant is released.</param>
-internal sealed class ReleaseCheckingStreamStore(IStreamStore inner, CancellationToken released) : IStreamStore
+/// <param name="tenantId">The tenant and creation the part belongs to, as a stream left behind is logged with.</param>
+internal sealed partial class ReleaseCheckingStreamStore(
+    ILogger logger,
+    IStreamStore inner,
+    CancellationToken released,
+    string tenantId) : ForwardingStreamStore(inner)
 {
     /// <inheritdoc />
-    public async Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
+    public override async Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
     {
-        var created = await inner.TryCreateAsync(stream, cancellationToken);
+        var created = await Inner.TryCreateAsync(stream, cancellationToken);
+        if (!created || !released.IsCancellationRequested)
+            return created;
 
         // Deleted whatever the caller's token says: a caller giving up must not leave the stream for nobody to delete
-        if (created && released.IsCancellationRequested)
-            await inner.DeleteAsync(stream.ReceiverId, stream.Configuration.StreamId, CancellationToken.None);
+        try
+        {
+            await Inner.DeleteAsync(stream.ReceiverId, stream.Configuration.StreamId, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            LogReleasedStreamNotDeleted(exception, stream.ReceiverId, stream.Configuration.StreamId, tenantId);
+            throw;
+        }
 
         return created;
     }
-
-    /// <inheritdoc />
-    public Task<StreamState?> FindAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
-        => inner.FindAsync(receiverId, streamId, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<IReadOnlyList<StreamState>> ListAsync(string receiverId, CancellationToken cancellationToken = default)
-        => inner.ListAsync(receiverId, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
-        => inner.ListAllAsync(cancellationToken);
-
-    /// <inheritdoc />
-    public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
-        => inner.UpdateAsync(stream, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<bool> DeleteAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
-        => inner.DeleteAsync(receiverId, streamId, cancellationToken);
 }

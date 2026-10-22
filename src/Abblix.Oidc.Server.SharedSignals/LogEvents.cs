@@ -29,5 +29,8 @@ internal static class LogEvents
 
         /// <summary>One stream of a released tenant could not be deleted; its other streams were.</summary>
         public const int StreamNotDeleted = Base + 1;
+
+        /// <summary>A stream written after its tenant was released could not be deleted by its writer.</summary>
+        public const int ReleasedStreamNotDeleted = Base + 2;
     }
 }
