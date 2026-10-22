@@ -740,6 +740,91 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
+    public async Task An_address_a_tenant_left_counts_as_the_tenant_for_one_refresh_period()
+    {
+        // A request resolved before the move is counted as the tenant while the catalog's next readings still let it
+        // finish; past one refresh period the address it carries is counted as an issuer of its own
+        ArrangeInstallationWithNoLicence();
+        var ct = TestContext.Current.CancellationToken;
+        var (catalog, time, listed) = await ServedAtAsync(TestLicense.Issuer, ct);
+        var before = (await catalog.FindByIdAsync("acme", ct))!;
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+
+        listed[0] = AcmeAt(UnlicensedIssuer, "2");
+        await catalog.RefreshAsync(ct);
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before)));
+
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+        var refusal = Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before)));
+        Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
+    }
+
+    [Fact]
+    public async Task An_address_a_tenant_moved_back_to_counts_as_the_tenant_past_the_period()
+    {
+        ArrangeInstallationWithNoLicence();
+        var ct = TestContext.Current.CancellationToken;
+        var (catalog, time, listed) = await ServedAtAsync(TestLicense.Issuer, ct);
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!));
+
+        listed[0] = AcmeAt(UnlicensedIssuer, "2");
+        await catalog.RefreshAsync(ct);
+        listed[0] = AcmeAt(TestLicense.Issuer, "3");
+        await catalog.RefreshAsync(ct);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+
+        var back = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, back)));
+    }
+
+    [Fact]
+    public async Task An_address_a_tenant_left_long_ago_frees_its_place_with_the_tenant()
+    {
+        // Counted by its issuer once past the period, the address the tenant left still belongs to that creation, so
+        // the place it takes is freed when the catalog releases the tenant rather than held for the life of the process
+        TestLicense.InstallWithIssuerLimit(2);
+        var ct = TestContext.Current.CancellationToken;
+        var (catalog, time, listed) = await ServedAtAsync(TestLicense.Issuer, ct);
+        var before = (await catalog.FindByIdAsync("acme", ct))!;
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+
+        listed[0] = AcmeAt(UnlicensedIssuer, "2");
+        await catalog.RefreshAsync(ct);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.HostCatalogSettings));
+
+        listed.Clear();
+        await catalog.RefreshAsync(ct);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+
+        // Both places are free again: the tenant's and the one its former address took
+        Assert.Equal(ThirdIssuer, LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.HostCatalogSettings));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
+    }
+
+    private static StoredTenant AcmeAt(string issuer, string version)
+        => new(new TenantDefinition { Id = "acme", Issuer = new Uri(issuer), Generation = "g1" }, version);
+
+    private static async Task<(StoreTenantCatalog Catalog, FakeTimeProvider Time, List<StoredTenant> Listed)>
+        ServedAtAsync(string issuer, CancellationToken ct)
+    {
+        var listed = new List<StoredTenant> { AcmeAt(issuer, "1") };
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed.ToArray());
+        var time = new FakeTimeProvider();
+        var catalog = Catalog(store.Object, time);
+        await catalog.RefreshAsync(ct);
+        return (catalog, time, listed);
+    }
+
+    [Fact]
     public async Task A_late_request_of_a_tenant_the_catalog_released_takes_back_no_place()
     {
         // Through the server's own catalog: a request still holding a released tenant is the same creation, so it is
