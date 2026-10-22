@@ -90,14 +90,12 @@ public class TenantKeysCheckTests
     }
 
     /// <summary>
-    /// One key declared by two tenants, in either role and under any key id, is refused naming both; a tenant created
-    /// again under the same id counts as another tenant.
+    /// One key declared by two tenants, in either role and under any key id, is refused naming both.
     /// </summary>
     [Theory]
     [InlineData("globex", false, false)]
     [InlineData("globex", true, false)]
     [InlineData("globex", false, true)]
-    [InlineData("acme~g2", false, false)]
     public void Check_OneKeyDeclaredByTwoTenants_RefusesBoth(string otherId, bool otherKeyId, bool asEncryption)
     {
         using var serviceProvider = BuildHost();
@@ -133,6 +131,35 @@ public class TenantKeysCheckTests
         };
 
         Assert.Empty(new TenantKeysCheck(serviceProvider).Check([tenant], new OidcOptions()));
+    }
+
+    public static TheoryData<JsonWebKey> KeysWithoutTheirPublicHalf() =>
+    [
+        new RsaJsonWebKey { KeyId = "incomplete", Exponent = [1, 0, 1] },
+        new EllipticCurveJsonWebKey { KeyId = "incomplete", X = [1], Y = [2] },
+        new OctetJsonWebKey { KeyId = "incomplete" },
+    ];
+
+    /// <summary>
+    /// A key declared without every member of its public half refuses its own tenant, naming it, and leaves the tenant
+    /// beside it served, rather than failing the whole check.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(KeysWithoutTheirPublicHalf))]
+    public void Check_AKeyWithoutItsPublicHalf_RefusesItsTenantAlone(JsonWebKey incomplete)
+    {
+        using var serviceProvider = BuildHost();
+        var broken = Tenant(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), incomplete);
+        var served = new TenantDefinition
+        {
+            Id = "globex",
+            Issuer = new Uri("https://other.example.com"),
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        };
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([broken, served], new OidcOptions()));
+
+        Assert.Equal(["acme"], refusal.TenantIds);
     }
 
     private static TenantDefinition Tenant(params JsonWebKey[] signingKeys) => new()

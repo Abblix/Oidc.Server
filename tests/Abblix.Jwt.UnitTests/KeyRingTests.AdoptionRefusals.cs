@@ -102,6 +102,27 @@ public sealed partial class KeyRingTests
     }
 
     /// <summary>
+    /// A key adopted into a partition the ring never keeps and into one it keeps is refused for the partition never
+    /// kept, which names the one edit that fixes both, rather than as a key two partitions share.
+    /// </summary>
+    [Fact]
+    public void OneKeyAdoptedIntoAKeptAndAnUnkeptPartition_IsRefusedForTheUnkeptOne()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var adoptedKeys = new Dictionary<string, IReadOnlyList<JsonWebKey>>
+        {
+            ["acme"] = [adopted],
+            ["initech"] = [adopted],
+        };
+
+        var (parts, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adoptedKeys, "acme");
+
+        var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
+        Assert.Contains("'initech'", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("'acme'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// One key adopted twice into the same partition is a repeat, not sharing, so the ring starts.
     /// </summary>
     [Fact]

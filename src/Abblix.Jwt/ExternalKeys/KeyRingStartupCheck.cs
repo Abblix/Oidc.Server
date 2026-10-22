@@ -8,10 +8,10 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// Refuses, before anything is served, what would leave a partition opened later unable to serve: keys adopted into
-/// a partition the ring never keeps, or into the unnamed partition while the partitions come and go, which no issuer
-/// is served from, and a key-encryption key the custodian cannot show, which a ring keeping no partition yet would
-/// otherwise first meet on its first tenant.
+/// Refuses, before anything is served, what would leave a partition opened later unable to serve or serving another's
+/// keys: keys adopted into a partition the ring never keeps, or into the unnamed partition while the partitions come
+/// and go, which no issuer is served from; one key adopted into two partitions; and a key-encryption key the
+/// custodian cannot show, which a ring keeping no partition yet would otherwise first meet on its first tenant.
 /// </summary>
 /// <param name="setup">The policy and the partitions the ring is set up with.</param>
 /// <param name="custodian">Holds the key-encryption key.</param>
@@ -30,25 +30,6 @@ internal sealed class KeyRingStartupCheck(KeyRingSetup setup, IKeyCustodian cust
     public void CheckAdoption()
     {
         var policy = setup.Policy;
-
-        // A key adopted into two partitions signs for both, so a party trusting one issuer's keys would verify the
-        // other's tokens, which keys of their own exist to prevent. The key is compared by its thumbprint, so a copy
-        // under another key id is the same key, and a repeat into one partition is no sharing
-        var shared = (
-            from adopted in policy.AdoptedKeys
-            from key in adopted.Value
-            group adopted.Key by key.ComputeJwkThumbprintBase64Url() into partitions
-            let named = partitions.Distinct(StringComparer.Ordinal).ToArray()
-            where named.Length > 1
-            select named).FirstOrDefault();
-
-        if (shared is not null)
-        {
-            throw new InvalidOperationException(
-                $"One existing key is adopted into the partitions {string.Join(", ", shared.Select(id => $"'{id}'"))}. " +
-                "Each partition signs with keys of its own, so adopt a key into the partition of the one issuer that " +
-                "signs with it.");
-        }
 
         // A fixed set names every partition the ring will meet; partitions added while it runs are not known yet
         if (setup.PartitionsKept.Fixed is { } fixedPartitions)
@@ -71,6 +52,27 @@ internal sealed class KeyRingStartupCheck(KeyRingSetup setup, IKeyCustodian cust
                 "Existing keys are adopted into the unnamed partition of a key ring whose partitions come and go " +
                 "while it runs, and no issuer is served from that partition. Adopt them into the partition of the " +
                 "issuer that signs with them.");
+        }
+
+        // A key adopted into two partitions signs for both, so a party trusting one issuer's keys would verify the
+        // other's tokens, which keys of their own exist to prevent. Judged after the partitions never kept, whose
+        // refusal names the one edit that fixes it, while this one would leave the host to pick which partition keeps
+        // the key. The key is compared by its thumbprint, so a copy under another key id is the same key, and a
+        // repeat into one partition is no sharing
+        var shared = (
+            from adopted in policy.AdoptedKeys
+            from key in adopted.Value
+            group adopted.Key by key.ComputeJwkThumbprintBase64Url() into partitions
+            let named = partitions.Distinct(StringComparer.Ordinal).ToArray()
+            where named.Length > 1
+            select (Thumbprint: partitions.Key, Partitions: named)).FirstOrDefault();
+
+        if (shared.Partitions is not null)
+        {
+            throw new InvalidOperationException(
+                $"The existing key with the thumbprint '{shared.Thumbprint}' is adopted into the partitions " +
+                $"{string.Join(", ", shared.Partitions.Select(id => $"'{id}'"))}. Each partition signs with keys of its " +
+                "own, so adopt a key into the partition of the one issuer that signs with it.");
         }
     }
 
