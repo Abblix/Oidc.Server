@@ -43,10 +43,8 @@ public sealed class TenantIssuerSettings(
 
     /// <inheritdoc />
     string? ILicensedIssuer.VouchedId(string issuer)
-        => catalog is StoreTenantCatalog own &&
-           own.InForce(Tenant) is { } served &&
-           string.Equals(served.Issuer.OriginalString, issuer, StringComparison.Ordinal)
-            ? served.Id
+        => catalog is StoreTenantCatalog own && Tenant is var tenant && own.HasServedAt(tenant, issuer)
+            ? tenant.Id
             : null;
 
     /// <inheritdoc />

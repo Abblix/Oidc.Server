@@ -656,16 +656,32 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
-    public void A_tenant_moved_to_another_address_keeps_one_place()
+    public async Task A_tenant_moved_to_another_address_keeps_one_place()
     {
-        // The issuers of a deployment of tenants are counted by tenant, so the address a tenant left does not stay
-        // on the count beside the one it serves now
+        // Through the server's own catalog: the issuers of a deployment of tenants are counted by tenant, so the
+        // address a tenant left does not take a place beside the one it serves now, and a request resolved before
+        // the move, still carrying the address it left, is counted as the same tenant
         ArrangeInstallationWithNoLicence();
-        var acme = Creation("acme", CancellationToken.None);
+        var ct = TestContext.Current.CancellationToken;
+        StoredTenant[] listed = [Acme("1")];
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed);
+        var catalog = Catalog(store.Object);
+        await catalog.RefreshAsync(ct);
+        var before = (await catalog.FindByIdAsync("acme", ct))!;
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
 
-        LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
+        listed =
+        [
+            new StoredTenant(
+                new TenantDefinition { Id = before.Id, Issuer = new Uri(UnlicensedIssuer), Generation = before.Generation },
+                "2"),
+        ];
+        await catalog.RefreshAsync(ct);
+        var after = (await catalog.FindByIdAsync("acme", ct))!;
 
-        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, acme));
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, Settings(catalog, after)));
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, before)));
     }
 
     [Fact]
@@ -689,8 +705,9 @@ public sealed class LicenseEnforcementTests : IDisposable
             Generation = served.Generation,
         };
 
-        Assert.Throws<LicenseViolationException>(
+        var refusal = Assert.Throws<LicenseViolationException>(
             () => LicenseChecker.CheckIssuer(UnlicensedIssuer, Settings(catalog, entered)));
+        Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 
     [Fact]
@@ -719,6 +736,34 @@ public sealed class LicenseEnforcementTests : IDisposable
 
         time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
+        Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
+    }
+
+    [Fact]
+    public async Task A_late_request_of_a_tenant_the_catalog_released_takes_back_no_place()
+    {
+        // Through the server's own catalog: a request still holding a released tenant is the same creation, so it is
+        // neither counted again nor counted by its issuer, and the place the release freed stays free
+        ArrangeInstallationWithNoLicence();
+        var ct = TestContext.Current.CancellationToken;
+        var listed = new List<StoredTenant>
+        {
+            new(new TenantDefinition { Id = "acme", Issuer = new Uri(TestLicense.Issuer), Generation = "g1" }, "1"),
+        };
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed.ToArray());
+        var time = new FakeTimeProvider();
+        var catalog = Catalog(store.Object, time);
+        await catalog.RefreshAsync(ct);
+        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
+
+        listed.Clear();
+        await catalog.RefreshAsync(ct);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, acme);
+
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.HostCatalogSettings));
     }
 

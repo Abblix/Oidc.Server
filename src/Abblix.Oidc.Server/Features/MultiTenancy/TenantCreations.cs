@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Logging;
@@ -31,10 +32,15 @@ internal sealed partial class TenantCreations(
     ILogger logger,
     IEnumerable<ITenantClosing> closings)
 {
-    /// <summary>A creation, the definition last served for it, and when a reading first found it gone.</summary>
+    /// <summary>
+    /// A creation, the definition last served for it, the issuers it has been served at, and when a reading first
+    /// found it gone.
+    /// </summary>
     private sealed class Creation(TenantDefinition tenant)
     {
         public TenantDefinition Tenant { get; set; } = tenant;
+
+        public ImmutableHashSet<string> Issuers { get; set; } = ImmutableHashSet.Create<string>(StringComparer.Ordinal);
 
         // Never disposed: a request may still ask for its token after the release, and a source without a timer
         // holds nothing a collection does not free
@@ -47,10 +53,13 @@ internal sealed partial class TenantCreations(
 
     private readonly ConcurrentDictionary<string, Creation> _creations = new(StringComparer.Ordinal);
 
-    // The creations released lately, each with when, for a request still holding one: each is kept for one pause,
-    // however often the store is read, so the record does not grow with every tenant ever released
-    private IReadOnlyDictionary<string, DateTimeOffset> _releasedLately =
-        new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+    /// <summary>A creation released lately: when, and the issuers it was served at.</summary>
+    private sealed record ReleasedCreation(DateTimeOffset At, ImmutableHashSet<string> Issuers);
+
+    // The creations released lately, for a request still holding one: each is kept for one pause, however often the
+    // store is read, so the record does not grow with every tenant ever released
+    private IReadOnlyDictionary<string, ReleasedCreation> _releasedLately =
+        new Dictionary<string, ReleasedCreation>(StringComparer.Ordinal);
 
     // The last definition served under each id, kept once the tenant is refused or dropped: a request still holding
     // one of its definitions is judged by the last one in force rather than by none, until its creation is released
@@ -63,9 +72,13 @@ internal sealed partial class TenantCreations(
     /// </returns>
     public IReadOnlyCollection<string> Served(TenantDefinition tenant)
     {
-        // A change within the creation, as to another issuer, is what its closing will be handed
+        // A change within the creation, as to another issuer, is what its closing will be handed, and a request
+        // resolved at the issuer it left is still this creation's
         if (_creations.TryGetValue(TenantKey.SpaceOf(tenant), out var creation))
+        {
             creation.Tenant = tenant;
+            creation.Issuers = creation.Issuers.Add(tenant.Issuer.OriginalString);
+        }
 
         var former = _lastServed.GetValueOrDefault(tenant.Id);
         _lastServed[tenant.Id] = tenant;
@@ -88,6 +101,20 @@ internal sealed partial class TenantCreations(
     /// The definition last served under <paramref name="tenantId"/>, unless its creation is released.
     /// </summary>
     public TenantDefinition? LastServed(string tenantId) => _lastServed.GetValueOrDefault(tenantId);
+
+    /// <summary>
+    /// Whether the creation of <paramref name="tenant"/> has been served at <paramref name="issuer"/>, while it is kept
+    /// or for one pause after its release.
+    /// </summary>
+    public bool HasServedAt(TenantDefinition tenant, string issuer)
+    {
+        var space = TenantKey.SpaceOf(tenant);
+        var issuers = _creations.TryGetValue(space, out var creation)
+            ? creation.Issuers
+            : Volatile.Read(ref _releasedLately).GetValueOrDefault(space)?.Issuers;
+
+        return issuers?.Contains(issuer) == true;
+    }
 
     /// <summary>
     /// The token canceled when the creation of <paramref name="tenant"/> is released; canceled already for one the
@@ -132,13 +159,13 @@ internal sealed partial class TenantCreations(
         // Published before any creation is taken out, so a request asking meanwhile gets either the live token,
         // canceled with the rest, or one canceled already, and never one that is not canceled at all
         var releasedLately = Volatile.Read(ref _releasedLately)
-            .Where(released => now - released.Value < pause)
+            .Where(released => now - released.Value.At < pause)
             .ToDictionary(StringComparer.Ordinal);
 
         // A creation released again while its last release is remembered, as after the clock was set back, takes
         // the time of this release
-        foreach (var space in due.Keys)
-            releasedLately[space] = now;
+        foreach (var (space, creation) in due)
+            releasedLately[space] = new ReleasedCreation(now, creation.Issuers);
 
         Volatile.Write(ref _releasedLately, releasedLately);
         foreach (var (space, creation) in due)

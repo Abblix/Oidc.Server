@@ -82,9 +82,10 @@ public static partial class LicenseChecker
     /// its client limit by more than the margin.</exception>
     public static string CheckLicense(string issuer, IIssuerSettings settings, string clientId)
     {
-        CheckIssuer(issuer, settings);
-        var (counted, released) = CountedAs(issuer, settings);
-        CheckClient((counted, clientId), released);
+        // One answer for the issuer and its client, so a catalog refreshed between the two counts both alike
+        var counted = CountedAs(issuer, settings);
+        CheckCountedIssuer(issuer, counted);
+        CheckClient((counted.Key, clientId), counted.Released);
         return issuer;
     }
 
@@ -283,10 +284,10 @@ public static partial class LicenseChecker
     private static bool TryAdmitIssuer(
         ConcurrentDictionary<string, Counted> knownIssuers,
         string issuer,
-        IIssuerSettings settings,
+        (string Key, CancellationToken Released) counted,
         int issuerLimit)
     {
-        var (key, released) = CountedAs(issuer, settings);
+        var (key, released) = counted;
         lock (IssuerAdmission)
         {
             if (issuerLimit < knownIssuers.Count || !knownIssuers.ContainsKey(key) && issuerLimit <= knownIssuers.Count)
@@ -321,6 +322,9 @@ public static partial class LicenseChecker
     /// those of a tenant the server's own catalog serves are counted by the issuer string and never released.</param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer, IIssuerSettings settings)
+        => CheckCountedIssuer(issuer, CountedAs(issuer, settings));
+
+    private static string CheckCountedIssuer(string issuer, (string Key, CancellationToken Released) counted)
     {
         var utcNow = TimeProvider.System.GetUtcNow();
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
@@ -345,7 +349,7 @@ public static partial class LicenseChecker
             var knownIssuers = LazyInitializer.EnsureInitialized(
                 ref _knownIssuers,
                 () => new ConcurrentDictionary<string, Counted>(StringComparer.Ordinal));
-            if (!TryAdmitIssuer(knownIssuers, issuer, settings, issuerLimit))
+            if (!TryAdmitIssuer(knownIssuers, issuer, counted, issuerLimit))
             {
                 // The decision is taken first and stands on its own; only the record of it is throttled. This
                 // mirrors the client-limit block above, where the refusal sits outside the logging guard and

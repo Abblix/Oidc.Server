@@ -229,6 +229,12 @@ public sealed partial class StoreTenantCatalog(
         => catalog is StoreTenantCatalog own ? own.Released(tenant) : CancellationToken.None;
 
     /// <summary>
+    /// Whether this catalog has served the creation of <paramref name="tenant"/> at <paramref name="issuer"/>, while it
+    /// is served or not yet long released.
+    /// </summary>
+    internal bool HasServedAt(TenantDefinition tenant, string issuer) => _creations.HasServedAt(tenant, issuer);
+
+    /// <summary>
     /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the
     /// last one served when the tenant is refused or dropped since and not yet released; null when this catalog never
     /// served this creation of the tenant, has served another creation of it since, or has released it.

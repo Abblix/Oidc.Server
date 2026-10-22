@@ -17,8 +17,8 @@ internal interface ILicensedIssuer
 {
     /// <summary>
     /// The tenant serving <paramref name="issuer"/>, counted as one place wherever its address moves; null when the
-    /// server cannot vouch for it: a catalog of the host's own resolved the tenant, the server's own catalog does not
-    /// serve it, or <paramref name="issuer"/> is not the one the definition it serves declares.
+    /// server cannot vouch for it: a catalog of the host's own resolved the tenant, or the server's own catalog has not
+    /// served this creation of the tenant at <paramref name="issuer"/>.
     /// </summary>
     /// <param name="issuer">The issuer a token names.</param>
     string? VouchedId(string issuer);
