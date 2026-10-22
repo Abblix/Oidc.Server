@@ -207,6 +207,35 @@ public sealed class TenantAddressCountTests : IDisposable
         Assert.Equal(A, LicenseChecker.CheckIssuer(A, Settings(catalog, g1)));
     }
 
+    [Fact]
+    public async Task A_late_request_at_an_address_a_released_tenant_left_long_ago_takes_no_place()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var listed = new List<StoredTenant> { At("acme", A, "1") };
+        var time = new FakeTimeProvider();
+        var catalog = Catalog(listed, time);
+        await catalog.RefreshAsync(ct);
+        var atA = (await catalog.FindByIdAsync("acme", ct))!;
+        LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+
+        listed[0] = At("acme", B, "2");
+        await catalog.RefreshAsync(ct);
+        time.Advance(Pause);
+        listed.Clear();
+        await catalog.RefreshAsync(ct);
+        time.Advance(Pause);
+        await catalog.RefreshAsync(ct);
+
+        LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+
+        time.Advance(Pause);
+        listed.Add(At("globex", G, "1"));
+        await catalog.RefreshAsync(ct);
+        var globex = (await catalog.FindByIdAsync("globex", ct))!;
+
+        Assert.Equal(G, LicenseChecker.CheckIssuer(G, Settings(catalog, globex)));
+    }
+
     private static StoredTenant At(string id, string issuer, string version, string generation = "g1")
         => new(new TenantDefinition { Id = id, Issuer = new Uri(issuer), Generation = generation }, version);
 

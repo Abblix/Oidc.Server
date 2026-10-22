@@ -240,8 +240,9 @@ public static partial class LicenseChecker
         if (own.VouchedId(issuer) is { } tenantId)
             return (tenantId, own.Released);
 
-        // An issuer the server does not vouch for is let go with its tenant, but one first seen after that tenant was
-        // released would be let go before it was ever counted, so it counts for the life of the process
+        // An issuer the server does not vouch for is let go with its tenant, but one the tenant was never served at and
+        // first seen after its release would be let go before it was ever counted, so it counts for the life of the
+        // process
         var released = own.Released;
         return (issuer, released.IsCancellationRequested ? CancellationToken.None : released);
     }
