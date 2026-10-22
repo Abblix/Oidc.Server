@@ -395,6 +395,27 @@ public sealed partial class KeyRingTests : IDisposable
     }
 
     /// <summary>
+    /// Keys adopted into a partition the settings do not keep are served by no partition, so the ring refuses to start
+    /// with them; adopted into one they keep, it starts.
+    /// </summary>
+    [Theory]
+    [InlineData("initech")]
+    [InlineData(KeyRingOptions.DefaultPartition)]
+    public async Task KeysAdoptedIntoAPartitionTheSettingsDoNotKeep_RefuseTheStart(string partition)
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (kept, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted]), "acme", "globex");
+        await kept.Check.CheckAsync(TestContext.Current.CancellationToken);
+
+        var (unkept, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted(partition, [adopted]), "acme", "globex");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => unkept.Check.CheckAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// A ring keeping no partition yet meets its key-encryption key only when the first one is opened, so it asks
     /// the custodian for it at the start and refuses to start without it.
     /// </summary>

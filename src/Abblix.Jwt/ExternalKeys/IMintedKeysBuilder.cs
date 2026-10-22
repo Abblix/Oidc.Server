@@ -43,7 +43,8 @@ public interface IMintedKeysBuilder
     /// serves them.
     /// </summary>
     /// <param name="partition">The partition the keys are taken into: under a server keeping one partition for each
-    /// tenant, the tenant's id, followed by its generation when it declares one.</param>
+    /// tenant, the tenant's id, followed by '~' and its generation when it declares one. When every partition is known
+    /// at startup, keys adopted into another refuse the start.</param>
     /// <param name="keys">The keys to take, private halves included.</param>
     /// <returns>The same builder, so the <c>PersistRingTo...</c> call follows.</returns>
     IMintedKeysBuilder AdoptExistingKeys(string partition, params JsonWebKey[] keys);

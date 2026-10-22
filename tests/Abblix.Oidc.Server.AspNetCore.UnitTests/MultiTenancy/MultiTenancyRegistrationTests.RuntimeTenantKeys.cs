@@ -78,8 +78,9 @@ public partial class MultiTenancyRegistrationTests
     /// holds, and keeps it in a store in memory.
     /// </summary>
     private static ServiceProvider MintingRealKeys(
-        ChangingTenantStore store,
-        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null)
+        ChangingTenantStore? store,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null,
+        Action<OidcOptions>? settings = null)
     {
         var keyEncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "kek-1" };
         var custodian = new Moq.Mock<IKeyCustodian>();
@@ -101,7 +102,9 @@ public partial class MultiTenancyRegistrationTests
         services.AddSingleton<TimeProvider>(new FakeTimeProvider());
         services.AddSingleton(custodian.Object);
         services.AddSingleton<IKeyRingStore>(new MemoryKeyRingStore());
-        services.AddSingleton<ITenantStore>(store);
+        if (store is not null)
+            services.AddSingleton<ITenantStore>(store);
+
         services.AddJsonWebTokens();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement()
@@ -110,7 +113,7 @@ public partial class MultiTenancyRegistrationTests
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
                 AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
             });
-        services.AddServerStorage().ServeTenants(_ => { });
+        services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
         return services.BuildServiceProvider();
     }
 
@@ -389,5 +392,33 @@ public partial class MultiTenancyRegistrationTests
             foreach (var service in provider.GetServices<IHostedService>())
                 await service.StartAsync(TestContext.Current.CancellationToken);
         });
+    }
+
+    /// <summary>
+    /// Keys adopted into a partition no tenant of the server's settings is kept in would be served by no tenant, so the
+    /// server refuses to start with them when its tenants are only those; adopted into a declared tenant's partition,
+    /// it starts.
+    /// </summary>
+    [Theory]
+    [InlineData("initech")]
+    [InlineData("acme~1")]
+    public async Task KeysAdoptedIntoAPartitionNoDeclaredTenantIsKeptIn_RefuseTheStart(string partition)
+    {
+        using var kept = MintingRealKeys(store: null, AdoptedInto(TenantKey.PartitionOf(Acme)), Declaring);
+        await StartAllAsync(kept);
+
+        using var unkept = MintingRealKeys(store: null, AdoptedInto(partition), Declaring);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartAllAsync(unkept));
+    }
+
+    private static void Declaring(OidcOptions options) => options.Tenants.Add(Acme);
+
+    private static Dictionary<string, IReadOnlyList<JsonWebKey>> AdoptedInto(string partition)
+        => new() { [partition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] };
+
+    private static async Task StartAllAsync(IServiceProvider provider)
+    {
+        foreach (var service in provider.GetServices<IHostedService>())
+            await service.StartAsync(TestContext.Current.CancellationToken);
     }
 }

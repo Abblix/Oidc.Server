@@ -17,4 +17,7 @@ internal sealed class OptionsKeyRingPartitions(IOptions<KeyRingOptions> options)
 {
     /// <inheritdoc />
     public IReadOnlyCollection<string> Kept => options.Value.Partitions;
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<string> Fixed => Kept;
 }
