@@ -29,7 +29,9 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// request would build them, so a declaration no request could be served from stops the host rather than waiting for
 /// that request. Not before: a host that maps its endpoints while it starts declares the poll address only then, and
 /// the catalog's first reading stays where the host's own services expect it. A tenant the catalog does not hold yet
-/// is left to its first request, unless the server's settings are its only tenants.
+/// is left to its first request, unless the server's settings are its only tenants. The refusal therefore comes once
+/// the server listens, from the host's start, so a host that catches that exception and runs on serves the refused
+/// declarations.
 /// </para>
 /// </remarks>
 /// <param name="serviceProvider">Resolves the transmitter's parts as the server will use them.</param>
