@@ -9,7 +9,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,7 +33,7 @@ public sealed class TenantKeyRingOpening(IServiceProvider serviceProvider) : ITe
         IReadOnlyCollection<TenantDefinition> tenants,
         CancellationToken cancellationToken)
     {
-        if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
+        if (serviceProvider.GetService<KeyProviderRegistration>() is not { Mints: true })
             return new Dictionary<string, Exception>();
 
         // A tenant's id holds no separator of its generation, so each creation of each tenant names a partition
