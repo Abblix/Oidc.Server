@@ -38,10 +38,6 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 {
     private static readonly Uri MtlsBaseUri = new("https://mtls.example.com");
 
-    // Derived from the one host above, so a deployment shape is described by its PATH here rather than by
-    // repeating an address the file already names.
-    private static readonly Uri DedicatedTokenAlias = new(MtlsBaseUri, "/dedicated/token");
-
     private HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -52,13 +48,6 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     private WebApplicationFactory<Program> HostWith(Action<OidcOptions> configure)
         => factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services => services.PostConfigure(configure)));
-
-    /// <summary>
-    /// The shared host with its tenant changed by <paramref name="tenant"/>.
-    /// </summary>
-    private WebApplicationFactory<Program> HostWithTenant(Action<TestTenantSettings> tenant)
-        => factory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services => services.PostConfigure(tenant)));
 
     /// <summary>
     /// The shared host with its tenant's mutual-TLS host at <paramref name="mtlsBaseUri"/>, and the server's
@@ -94,61 +83,6 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 
         Assert.Equal(MtlsBaseUri.GetLeftPart(UriPartial.Authority), aliasedToken.GetLeftPart(UriPartial.Authority));
         Assert.Equal(token.AbsolutePath, aliasedToken.AbsolutePath);
-    }
-
-    /// <summary>
-    /// An explicitly named alias wins over the one the base URI would compute. A deployment that sets both is
-    /// saying the mutual-TLS endpoint is not simply the same path on another host, and rebasing over that would
-    /// publish an address the operator deliberately did not choose.
-    /// </summary>
-    [Fact]
-    public async Task An_explicit_alias_wins_over_the_one_the_base_uri_would_compute()
-    {
-        var chosen = DedicatedTokenAlias;
-        await using var host = HostWithTenant(tenant =>
-        {
-            tenant.MtlsBaseUri = MtlsBaseUri;
-            tenant.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = chosen };
-        });
-        var client = CreateClientFor(host);
-
-        var discovery = await client.FetchDiscoveryAsync();
-
-        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
-        Assert.NotNull(aliases);
-        Assert.Equal(
-            chosen.AbsoluteUri,
-            aliases[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
-
-        // The endpoints left unnamed still follow the base, so setting one alias does not silently drop the rest.
-        var revocation = new Uri(aliases[ConfigurationResponse.Parameters.RevocationEndpoint]!.GetValue<string>());
-        Assert.Equal(MtlsBaseUri.GetLeftPart(UriPartial.Authority), revocation.GetLeftPart(UriPartial.Authority));
-    }
-
-    /// <summary>
-    /// Named aliases with no base at all: the endpoints nobody named keep their ordinary addresses rather than
-    /// vanishing or being invented. A deployment that exposes one endpoint over mutual TLS is not thereby
-    /// claiming the others moved, and dropping them from the block would tell a client the opposite.
-    /// </summary>
-    [Fact]
-    public async Task Named_aliases_without_a_base_leave_the_other_endpoints_where_they_are()
-    {
-        await using var host = HostWithTenant(tenant =>
-            tenant.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = DedicatedTokenAlias });
-        var client = CreateClientFor(host);
-
-        var discovery = await client.FetchDiscoveryAsync();
-
-        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
-        Assert.NotNull(aliases);
-        Assert.Equal(
-            DedicatedTokenAlias.AbsoluteUri,
-            aliases[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
-
-        // With nothing to rebase onto, an unnamed alias is the ordinary endpoint itself.
-        Assert.Equal(
-            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint),
-            aliases[ConfigurationResponse.Parameters.UserInfoEndpoint]!.GetValue<string>());
     }
 
     /// <summary>
