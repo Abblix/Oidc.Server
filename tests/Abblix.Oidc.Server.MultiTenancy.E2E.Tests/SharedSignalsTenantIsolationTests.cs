@@ -37,6 +37,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.Consents;
@@ -322,6 +323,64 @@ public sealed class SharedSignalsTenantIsolationTests
                 ])));
 
         Assert.Contains("acme", Assert.Single(refusal.Failures));
+    }
+
+    /// <summary>
+    /// A host that maps its endpoints while it starts, as one configuring its pipeline in <c>Configure</c>, has a poll
+    /// address only from then on, and a tenant's stream delivered by polling is judged after that: the host starts and
+    /// the stream is served with the tenant's poll address.
+    /// </summary>
+    [Fact]
+    public async Task ADeclaredPollStream_OfAHostMappingItsEndpointsWhileItStarts_IsServed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await TestLicense.Loaded;
+        using var host = new HostBuilder()
+            .ConfigureWebHost(web => web
+                .UseTestServer()
+                .ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    services.AddDistributedMemoryCache();
+                    services.AddMemoryCache();
+                    services.AddAuthentication().AddCookie();
+                    services.AddAuthorization();
+                    services.AddConsentGrantedForEveryClient();
+                    var server = services.AddOidcServices(options => options.Tenants.Add(TenantAt("acme", Acme)));
+                    services.AddSecurityEvents();
+                    services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
+                    {
+                        Issuer = Host,
+                        JwksUri = new Uri(Host + JwksPath),
+                        EventsSupported = [MembershipChanged],
+                        DefaultSubjectsMode = StreamSubjectsMode.All,
+                    });
+                    server.AddSharedSignals();
+                    server.AddConfiguredStreams("acme", [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]);
+                })
+                .Configure(app =>
+                {
+                    app.UseMultiTenancy();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapOidcEndpoints();
+                        endpoints.MapSharedSignalsTransmitterEndpoints();
+                    });
+                }))
+            .Build();
+
+        await host.StartAsync(ct);
+
+        var tenant = (await host.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync("acme", ct))!;
+        using (TenantScope.Enter(tenant))
+        {
+            var stream = Assert.Single(await host.Services.GetRequiredService<IStreamStore>().ListAllAsync(ct));
+            var poll = Assert.IsType<PollDeliveryMethod>(stream.Configuration.Delivery);
+            Assert.StartsWith(Host + Acme, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
+        }
+
+        await host.StopAsync(ct);
     }
 
     /// <summary>

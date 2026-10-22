@@ -25,33 +25,41 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// judges, and a part that reads the settings while it is built would wait on itself inside their check. Streams
 /// declared for the whole server are refused before it runs, by <see cref="ServerWideStreamsValidator"/>.
 /// <para>
-/// The streams a tenant declares are built into its store here, inside the tenant, as its first request would build
-/// them, so a declaration no request could be served from stops the start rather than that request. A tenant the
-/// catalog does not hold yet is left to its first request, unless the server's settings are its only tenants.
+/// The streams a tenant declares are built into its store once the host has started, inside the tenant, as its first
+/// request would build them, so a declaration no request could be served from stops the host rather than waiting for
+/// that request. Not before: a host that maps its endpoints while it starts declares the poll address only then, and
+/// the catalog's first reading stays where the host's own services expect it. A tenant the catalog does not hold yet
+/// is left to its first request, unless the server's settings are its only tenants.
 /// </para>
 /// </remarks>
 /// <param name="serviceProvider">Resolves the transmitter's parts as the server will use them.</param>
 internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider serviceProvider) : IHostedLifecycleService
 {
     /// <inheritdoc />
-    public async Task StartingAsync(CancellationToken cancellationToken)
+    public Task StartingAsync(CancellationToken cancellationToken)
     {
-        var failures = Failures();
-        if (serviceProvider.GetRequiredService<IStreamStore>() is TenantConfiguredStreamStore store &&
-            serviceProvider.GetService<TenantConfiguredStreams>() is { } declared)
-        {
-            failures.AddRange(await DeclarationFailuresAsync(store, declared, cancellationToken));
-        }
-
-        if (failures.Count > 0)
-            throw new OptionsValidationException(Options.DefaultName, typeof(OidcOptions), failures);
+        Refuse(Failures());
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <inheritdoc />
-    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task StartedAsync(CancellationToken cancellationToken)
+    {
+        if (serviceProvider.GetRequiredService<IStreamStore>() is TenantConfiguredStreamStore store &&
+            serviceProvider.GetService<TenantConfiguredStreams>() is { } declared)
+        {
+            Refuse(await DeclarationFailuresAsync(store, declared, cancellationToken));
+        }
+    }
+
+    private static void Refuse(List<string> failures)
+    {
+        if (failures.Count > 0)
+            throw new OptionsValidationException(Options.DefaultName, typeof(OidcOptions), failures);
+    }
 
     /// <inheritdoc />
     public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
