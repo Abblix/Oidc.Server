@@ -9,6 +9,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
@@ -45,6 +46,7 @@ public static class AuthSessionExtensions
         IanaClaimTypes.Scope,
         IanaClaimTypes.ClientId,
         OidcClaimTypes.GrantId,
+        RefreshTokenTenant.ClaimType,
         IanaClaimTypes.Nonce,
         OidcClaimTypes.RequestedClaims,
         IanaClaimTypes.Cnf,

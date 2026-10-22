@@ -156,8 +156,6 @@ public class RefreshTokenService(
 		// overwritten here.
 		authContext.ApplyTo(newToken.Payload);
 
-		RefreshTokenTenant.NameCurrent(newToken.Payload, tenantAccessor);
-
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
 		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.

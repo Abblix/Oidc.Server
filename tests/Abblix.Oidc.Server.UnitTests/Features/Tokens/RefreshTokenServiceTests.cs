@@ -624,9 +624,6 @@ public class RefreshTokenServiceTests
         Assert.NotNull(result);
         Assert.Same(capturedToken, result.Token);
         Assert.Equal(EncodedToken, result.EncodedJwt);
-        Assert.Equal(
-            TestIssuer.TenantId,
-            result.Token.Payload.Json.GetProperty<string>(RefreshTokenTenant.ClaimType));
     }
 
     /// <summary>
@@ -654,7 +651,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, TestIssuer.TenantId), CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -690,7 +687,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, TestIssuer.TenantId), CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -723,18 +720,12 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, TestIssuer.TenantId), CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         var refreshGrant = Assert.IsType<Abblix.Oidc.Server.Endpoints.Token.Interfaces.RefreshTokenAuthorizedGrant>(grant);
         Assert.Same(refreshToken, refreshGrant.RefreshToken);
-    }
-
-    private static JsonWebToken IssuedAt(JsonWebToken refreshToken, string tenant)
-    {
-        refreshToken.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
-        return refreshToken;
     }
 
     /// <summary>

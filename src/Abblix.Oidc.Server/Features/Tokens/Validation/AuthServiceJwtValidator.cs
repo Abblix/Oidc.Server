@@ -71,10 +71,10 @@ public class AuthServiceJwtValidator(
 		// was issued at, so one of another creation of this tenant, or of a version before 3.0, which names none,
 		// would be judged against no records at all, at every endpoint that reads it
 		if (result.TryGetSuccess(out var token) &&
-		    token.Header.Type == JwtTypes.RefreshToken &&
-		    !RefreshTokenTenant.NamesCurrent(token.Payload, tenantAccessor))
+		    JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
+		    !RefreshTokenTenant.Names(token.Payload, issuerSettings.KeyPartition))
 		{
-			return new JwtValidationError(JwtError.InvalidToken, "The refresh token was not issued at this tenant");
+			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
 		}
 
 		return result;

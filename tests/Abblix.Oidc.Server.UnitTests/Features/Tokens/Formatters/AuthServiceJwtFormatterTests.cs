@@ -11,7 +11,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -47,7 +50,7 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, tenantAccessor: SingleIssuer.Accessor, SingleIssuer.Settings);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
@@ -83,6 +86,37 @@ public class AuthServiceJwtFormatterTests
         Header = { Algorithm = algorithm, KeyId = keyId },
         Payload = { Subject = "user123" },
     };
+
+    /// <summary>
+    /// A refresh token is named, as it is signed, for the tenant and creation whose keys sign it, whatever spelling
+    /// of its type the issuing service wrote, so a service of the host's own that signs through this formatter
+    /// issues refresh tokens the server accepts; any other token is left as it is.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtTypes.RefreshToken, "acme~g2")]
+    [InlineData("application/" + JwtTypes.RefreshToken, "acme~g2")]
+    [InlineData(JwtTypes.RegistrationAccessToken, null)]
+    public async Task FormatAsync_NamesTheTenantAndCreation_InARefreshTokenOnly(string type, string? named)
+    {
+        var settings = new Mock<IIssuerSettings>();
+        settings.SetupGet(s => s.KeyPartition).Returns("acme~g2");
+        var formatter = new AuthServiceJwtFormatter(
+            _jwtCreator.Object,
+            _keysProvider.Object,
+            SingleIssuer.Accessor,
+            settings.Object);
+
+        var token = TokenWith();
+        token.Header.Type = type;
+        SetupSigningKeys(_signingKeyRS256);
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), null, It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(EncodedJwt);
+
+        await formatter.FormatAsync(token, SignedOnly);
+
+        Assert.Equal(named, token.Payload.Json.GetProperty<string>(RefreshTokenTenant.ClaimType));
+    }
 
     // Signing key selection
 

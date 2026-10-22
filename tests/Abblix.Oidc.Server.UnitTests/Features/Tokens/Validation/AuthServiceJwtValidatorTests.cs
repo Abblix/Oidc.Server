@@ -682,6 +682,43 @@ public class AuthServiceJwtValidatorTests
     }
 
     /// <summary>
+    /// At a tenant created again, the creation is part of what a refresh token names: one naming the tenant alone or
+    /// an earlier creation is refused, one naming this creation is accepted, whatever spelling of the type it
+    /// carries.
+    /// </summary>
+    [Theory]
+    [InlineData(null, JwtTypes.RefreshToken, false)]
+    [InlineData("acme", JwtTypes.RefreshToken, false)]
+    [InlineData("acme~g1", JwtTypes.RefreshToken, false)]
+    [InlineData("acme~g1", "application/" + JwtTypes.RefreshToken, false)]
+    [InlineData("acme~g2", JwtTypes.RefreshToken, true)]
+    public async Task ValidateAsync_ARefreshToken_AtATenantCreatedAgain_IsAcceptedOnlyNamingThisCreation(
+        string? tenant,
+        string type,
+        bool accepted)
+    {
+        var settings = new Mock<IIssuerSettings>();
+        settings.SetupGet(s => s.KeyPartition).Returns("acme~g2");
+        var validator = new AuthServiceJwtValidator(
+            _jwtValidator.Object,
+            Mock.Of<IIssuerProvider>(),
+            settings.Object,
+            _serviceKeysProvider.Object,
+            SingleIssuer.Accessor);
+
+        var token = CreateValidToken();
+        token.Header.Type = type;
+        if (tenant is not null)
+            token.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
+
+        _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
+
+        var result = await validator.ValidateAsync(ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// Only a refresh token names its tenant: another token this server reads back is accepted without one.
     /// </summary>
     [Fact]
