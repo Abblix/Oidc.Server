@@ -731,42 +731,9 @@ public class RefreshTokenServiceTests
         Assert.Same(refreshToken, refreshGrant.RefreshToken);
     }
 
-    /// <summary>
-    /// A refresh token names the tenant and creation it was issued at, as one of this tenant's is renewed only here: one
-    /// naming no tenant, as every refresh token before 3.0 does, or another creation of it, has its records kept where
-    /// this tenant reads none, so it is refused rather than renewed.
-    /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData(TestIssuer.TenantId + "~1")]
-    [InlineData("other")]
-    public async Task AuthorizeByRefreshToken_IssuedAtNoneOrAnotherTenant_IsRefused(string? tenant)
+    private static JsonWebToken IssuedAt(JsonWebToken refreshToken, string tenant)
     {
-        var refreshToken = new JsonWebToken
-        {
-            Payload =
-            {
-                Subject = UserId,
-                SessionId = SessionId,
-                AuthenticationTime = _currentTime.AddMinutes(-30),
-                IdentityProvider = "local",
-                ClientId = ClientId,
-                Scope = [Scopes.OpenId],
-                GrantId = GrantId,
-            }
-        };
-
-        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, tenant), CreateClientInfo());
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-    }
-
-    private static JsonWebToken IssuedAt(JsonWebToken refreshToken, string? tenant)
-    {
-        if (tenant is not null)
-            refreshToken.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
-
+        refreshToken.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
         return refreshToken;
     }
 

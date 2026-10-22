@@ -13,8 +13,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
 /// The tenant and creation a refresh token was issued at, named in it as the key ring's partition of that tenant is
-/// named. What is recorded about a refresh token is kept for that tenant and creation, so a token is renewed only at
-/// the one it names.
+/// named. What is recorded about a refresh token is kept for that tenant and creation, so a token is accepted only at
+/// the one it names (<see cref="Validation.AuthServiceJwtValidator"/>).
 /// </summary>
 internal static class RefreshTokenTenant
 {

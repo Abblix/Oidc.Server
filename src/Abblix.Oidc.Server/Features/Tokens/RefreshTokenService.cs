@@ -204,15 +204,6 @@ public class RefreshTokenService(
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
 		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
-		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
-		// was issued at, so a token of another creation, or of a version before 3.0, which names none, would be read
-		// against no records at all and renewed whatever was recorded about it
-		if (!RefreshTokenTenant.NamesCurrent(refreshToken.Payload, tenantAccessor))
-		{
-			return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
-				new OidcError(ErrorCodes.InvalidGrant, "The refresh token was not issued at this tenant"));
-		}
-
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 
