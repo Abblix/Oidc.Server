@@ -228,6 +228,37 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.Contains("does not refer", error.ErrorDescription);
     }
 
+    /// <summary>
+    /// Through the server's own reading of a refresh token, one that names no tenant, as every refresh token before 3.0,
+    /// is an invalid subject token and buys nothing: its grant is never looked up.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenNamingNoTenant_IsAnInvalidSubjectToken()
+    {
+        var inner = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
+        inner
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(NewRefreshJwt());
+        var issuerProvider = Mock.Of<Abblix.Oidc.Server.Features.Issuer.IIssuerProvider>(
+            provider => provider.GetIssuer() == TestConstants.DefaultIssuer);
+        var resolver = new RefreshTokenSubjectTokenResolver(
+            new AuthServiceJwtValidator(
+                inner.Object,
+                issuerProvider,
+                SingleIssuer.Settings,
+                Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
+                SingleIssuer.Accessor),
+            _refreshTokenService.Object,
+            _clientInfoProvider.Object,
+            tenantAccessor: SingleIssuer.Accessor);
+
+        var result = await resolver.ResolveAsync(
+            TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
     private JsonWebToken NewRefreshJwt()
     {
         var now = _timeProvider.GetUtcNow();

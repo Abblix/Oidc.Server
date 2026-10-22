@@ -10,9 +10,11 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -653,6 +655,82 @@ public class AuthServiceJwtValidatorTests
                 NotBefore = TimeProvider.System.GetUtcNow(),
             }
         };
+    }
+
+    /// <summary>
+    /// What is recorded about a refresh token is kept for the tenant and creation it was issued at, so a refresh token
+    /// naming no tenant, as every one before 3.0, or another creation of this tenant, or another tenant, is refused
+    /// wherever this server reads it back, and one naming this tenant and creation is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(TestIssuer.TenantId + "~1", false)]
+    [InlineData("other", false)]
+    [InlineData(TestIssuer.TenantId, true)]
+    public async Task ValidateAsync_ARefreshToken_IsAcceptedOnlyAtTheTenantItNames(string? tenant, bool accepted)
+    {
+        var token = CreateValidToken();
+        token.Header.Type = JwtTypes.RefreshToken;
+        if (tenant is not null)
+            token.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
+
+        _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
+
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// At a tenant created again, the creation is part of what a refresh token names: one naming the tenant alone or
+    /// an earlier creation is refused, one naming this creation is accepted, whatever spelling of the type it
+    /// carries.
+    /// </summary>
+    [Theory]
+    [InlineData(null, JwtTypes.RefreshToken, false)]
+    [InlineData("acme", JwtTypes.RefreshToken, false)]
+    [InlineData("acme~g1", JwtTypes.RefreshToken, false)]
+    [InlineData("acme~g1", "application/" + JwtTypes.RefreshToken, false)]
+    [InlineData("acme~g2", JwtTypes.RefreshToken, true)]
+    public async Task ValidateAsync_ARefreshToken_AtATenantCreatedAgain_IsAcceptedOnlyNamingThisCreation(
+        string? tenant,
+        string type,
+        bool accepted)
+    {
+        var settings = new Mock<IIssuerSettings>();
+        settings.SetupGet(s => s.KeyPartition).Returns("acme~g2");
+        var validator = new AuthServiceJwtValidator(
+            _jwtValidator.Object,
+            Mock.Of<IIssuerProvider>(),
+            settings.Object,
+            _serviceKeysProvider.Object,
+            SingleIssuer.Accessor);
+
+        var token = CreateValidToken();
+        token.Header.Type = type;
+        if (tenant is not null)
+            token.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
+
+        _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
+
+        var result = await validator.ValidateAsync(ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Only a refresh token names its tenant: another token this server reads back is accepted without one.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ATokenOtherThanARefreshToken_NeedsNoTenant()
+    {
+        var token = CreateValidToken();
+        token.Header.Type = JwtTypes.RegistrationAccessToken;
+        _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
+
+        var result = await _validator.ValidateAsync(ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
+
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     private static ClientInfo CreateClientInfo(string clientId)

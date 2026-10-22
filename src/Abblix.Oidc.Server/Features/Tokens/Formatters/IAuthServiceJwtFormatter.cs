@@ -16,6 +16,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// server's signing keys, and - per an explicit <see cref="ServiceJwtEncryption"/> policy - optionally wraps
 /// the result in a JWE (RFC 7516) encrypted to the server's own encryption key.
 /// </summary>
+/// <remarks>
+/// <see cref="AuthServiceJwtFormatter"/> names, in every refresh token it signs, the tenant and creation the token is
+/// issued at, and the server refuses a refresh token naming none. An implementation of the host's own therefore
+/// hands refresh tokens to <see cref="AuthServiceJwtFormatter"/> to sign, or every refresh token it issues is refused.
+/// </remarks>
 public interface IAuthServiceJwtFormatter
 {
     /// <summary>

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
@@ -43,12 +44,12 @@ public class AuthServiceJwtValidator(
 	/// <returns>
 	/// A task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.
 	/// </returns>
-	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
+	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
-		return validator.ValidateAsync(
+		var result = await validator.ValidateAsync(
 			jwt,
 			new ValidationParameters
 			{
@@ -65,6 +66,18 @@ public class AuthServiceJwtValidator(
 				// ahead of another into a refusal of this server's own refresh token, which is an
 				// operational hazard rather than the requirement.
 			});
+
+		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
+		// was issued at, so one of another creation of this tenant, or of a version before 3.0, which names none,
+		// would be judged against no records at all, at every endpoint that reads it
+		if (result.TryGetSuccess(out var token) &&
+		    JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
+		    !RefreshTokenTenant.Names(token.Payload, issuerSettings.KeyPartition))
+		{
+			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
+		}
+
+		return result;
 	}
 
 	/// <summary>

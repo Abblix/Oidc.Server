@@ -646,6 +646,7 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "okta",
                 ClientId = ClientId,  // Required for ToAuthorizationContext
                 Scope = [Scopes.OpenId],  // Required for ToAuthorizationContext
+                GrantId = GrantId,
             }
         };
 
@@ -681,6 +682,7 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = scopes,
+                GrantId = GrantId,
             }
         };
 
@@ -713,6 +715,7 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = [Scopes.OpenId],
+                GrantId = GrantId,
             }
         };
 
