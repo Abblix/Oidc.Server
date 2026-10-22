@@ -201,12 +201,10 @@ public sealed class TenantDefinition
     /// aliases keep the tenant's issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
     /// the address therefore carries no path of its own.
     /// </summary>
+    /// <remarks>
+    /// The server publishes an alias at this address for each mutual-TLS endpoint it serves, and names no alias of
+    /// any other kind: a request reaches a tenant only at its issuer and at this address, so an alias anywhere else
+    /// would send a client where no request reaches the tenant.
+    /// </remarks>
     public Uri? MtlsBaseUri { get; init; }
-
-    /// <summary>
-    /// The mutual-TLS endpoint aliases (RFC 8705 section 5) this tenant names itself, each an absolute address served
-    /// over mutual TLS; an alias it leaves out is the endpoint moved onto <see cref="MtlsBaseUri"/>, when it declares
-    /// one.
-    /// </summary>
-    public MtlsAliasesOptions? MtlsEndpointAliases { get; init; }
 }
