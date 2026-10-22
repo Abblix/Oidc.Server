@@ -100,7 +100,35 @@ public partial class AuthorizationRequestProcessorTests
 
         var result = await _processor.ProcessAsync(request);
 
-        Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Equal(request.Model.Scope, Assert.IsType<SuccessfullyAuthenticated>(result).GrantedScopes);
+    }
+
+    /// <summary>
+    /// Consent given without the end user answers a request already sent to its consent page as well, as a provider
+    /// of the host's own giving it reports when the end user comes back.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_PromptConsentAlreadyOnItsPage_IsAnsweredByConsentGivenWithoutTheEndUser()
+    {
+        var request = CreateRequest(
+            prompt: [Prompts.Consent],
+            scope: [Scopes.OpenId, Scopes.Email],
+            promptedAt: _timeProvider.GetUtcNow().AddSeconds(-30));
+        var session = CreateAuthSession();
+        var granted = CreateConsents(grantedScopes: [.. request.Scope]) with { GivenWithoutEndUser = true };
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(granted);
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
+            .ReturnsAsync("code");
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.Equal(request.Model.Scope, Assert.IsType<SuccessfullyAuthenticated>(result).GrantedScopes);
     }
 
     /// <summary>
