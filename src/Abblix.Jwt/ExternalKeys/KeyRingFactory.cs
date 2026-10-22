@@ -24,7 +24,8 @@ internal sealed class KeyRingFactory
     /// <param name="serviceProvider">Resolves the services a ring and its steps take from the container.</param>
     /// <param name="policy">The rotation policy of every ring this factory builds.</param>
     /// <param name="store">The store whose partitions the rings are kept in.</param>
-    /// <param name="check">Judges where the host adopted its keys before any ring built here mints.</param>
+    /// <param name="check">Judges where the host adopted its keys before a ring built here is refreshed by host code.
+    /// </param>
     public KeyRingFactory(
         IServiceProvider serviceProvider,
         MintedKeys policy,
