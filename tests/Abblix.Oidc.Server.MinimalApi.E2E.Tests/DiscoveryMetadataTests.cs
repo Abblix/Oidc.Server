@@ -125,6 +125,7 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 
         Assert.Null(discovery[ConfigurationResponse.Parameters.TokenEndpoint]);
         Assert.Null(discovery[ConfigurationResponse.Parameters.UserInfoEndpoint]);
+        Assert.Null(discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]);
 
         // The issuer stays: it identifies the provider rather than locating an endpoint, and a client that
         // cannot read it cannot validate a token from this server at all.
