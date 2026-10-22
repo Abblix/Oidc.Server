@@ -86,8 +86,5 @@ public sealed class TenantIssuerSettings(
     /// <inheritdoc />
     public Uri? MtlsBaseUri => Tenant.MtlsBaseUri;
 
-    /// <inheritdoc />
-    public MtlsAliasesOptions? MtlsEndpointAliases => Tenant.MtlsEndpointAliases;
-
     private TenantDefinition Tenant => tenantAccessor.CurrentTenant();
 }

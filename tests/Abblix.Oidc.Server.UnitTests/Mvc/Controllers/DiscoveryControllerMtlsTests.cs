@@ -72,7 +72,7 @@ public class DiscoveryControllerMtlsTests
     };
 
     /// <summary>
-    /// Verifies no mTLS aliases when neither MtlsEndpointAliases nor MtlsBaseUri configured.
+    /// Verifies no mTLS aliases when no MtlsBaseUri is configured.
     /// </summary>
     [Fact]
     public async Task ConfigurationAsync_WithNoMtlsConfiguration_ShouldNotIncludeMtlsAliases()
@@ -138,61 +138,6 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
-    /// Verifies explicit mTLS aliases are used when configured.
-    /// </summary>
-    [Fact]
-    public async Task ConfigurationAsync_WithExplicitMtlsAliases_ShouldUseExplicitValues()
-    {
-        // Arrange
-        _issuer.MtlsEndpointAliases = new MtlsAliasesOptions
-        {
-            TokenEndpoint = new Uri("https://mtls.example.com/custom-token"),
-            RevocationEndpoint = new Uri("https://mtls.example.com/custom-revocation"),
-            IntrospectionEndpoint = new Uri("https://mtls.example.com/custom-introspection"),
-            UserInfoEndpoint = new Uri("https://mtls.example.com/custom-userinfo"),
-        };
-        var baseResponse = MinimalResponse();
-
-        // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
-
-        // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://mtls.example.com/custom-token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/custom-revocation"), result.Value.MtlsEndpointAliases.RevocationEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/custom-introspection"), result.Value.MtlsEndpointAliases.IntrospectionEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/custom-userinfo"), result.Value.MtlsEndpointAliases.UserInfoEndpoint);
-    }
-
-    /// <summary>
-    /// Verifies explicit aliases take precedence over auto-computed ones.
-    /// </summary>
-    [Fact]
-    public async Task ConfigurationAsync_WithBothExplicitAndBaseUri_ShouldPreferExplicit()
-    {
-        // Arrange
-        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
-        _issuer.MtlsEndpointAliases = new MtlsAliasesOptions
-        {
-            TokenEndpoint = new Uri("https://custom.example.com/token"),
-            // Others not set - should be auto-computed
-        };
-        var baseResponse = MinimalResponse();
-
-        // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
-
-        // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://custom.example.com/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/revocation"), result.Value.MtlsEndpointAliases.RevocationEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/introspection"), result.Value.MtlsEndpointAliases.IntrospectionEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/userinfo"), result.Value.MtlsEndpointAliases.UserInfoEndpoint);
-    }
-
-    /// <summary>
     /// Verifies mTLS aliases are null when standard endpoints are disabled.
     /// </summary>
     [Fact]
@@ -231,34 +176,6 @@ public class DiscoveryControllerMtlsTests
         Assert.NotNull(result.Value.MtlsEndpointAliases);
         Assert.Equal(new Uri("https://mtls.example.com:8443/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
         Assert.Equal(8443, result.Value.MtlsEndpointAliases.TokenEndpoint!.Port);
-    }
-
-    /// <summary>
-    /// Verifies partial explicit configuration works with auto-computation.
-    /// </summary>
-    [Fact]
-    public async Task ConfigurationAsync_WithPartialExplicitAliases_ShouldMixExplicitAndAutoComputed()
-    {
-        // Arrange
-        _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
-        _issuer.MtlsEndpointAliases = new MtlsAliasesOptions
-        {
-            TokenEndpoint = new Uri("https://custom1.example.com/token"),
-            IntrospectionEndpoint = new Uri("https://custom2.example.com/introspect"),
-            // RevocationEndpoint and UserInfoEndpoint will be auto-computed
-        };
-        var baseResponse = MinimalResponse();
-
-        // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
-
-        // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://custom1.example.com/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-        Assert.Equal(new Uri("https://custom2.example.com/introspect"), result.Value.MtlsEndpointAliases.IntrospectionEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/revocation"), result.Value.MtlsEndpointAliases.RevocationEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/userinfo"), result.Value.MtlsEndpointAliases.UserInfoEndpoint);
     }
 
     /// <summary>

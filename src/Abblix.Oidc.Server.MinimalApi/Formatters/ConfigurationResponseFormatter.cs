@@ -126,28 +126,22 @@ public class ConfigurationResponseFormatter(
     }
 
     /// <summary>
-    /// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, when either the issuer
-    /// names them or the issuer has a mutual-TLS host to rebase them onto. An alias the issuer names wins.
+    /// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, each the endpoint moved onto the
+    /// issuer's mutual-TLS host, when it has one.
     /// </summary>
     private ModelResponse WithMtlsAliases(ModelResponse document)
     {
-        var configured = issuerSettings.MtlsEndpointAliases;
-        var mtlsBaseUri = issuerSettings.MtlsBaseUri;
-
-        if (configured == null && mtlsBaseUri == null)
+        if (issuerSettings.MtlsBaseUri is not { } mtlsBaseUri)
             return document;
 
-        // Read through an empty set when nothing is configured, so each alias falls back to the rebased endpoint.
-        configured ??= new MtlsAliasesOptions();
         return document with
         {
             MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
             {
-                TokenEndpoint = configured.TokenEndpoint ?? Rebase(document.TokenEndpoint, mtlsBaseUri),
-                RevocationEndpoint = configured.RevocationEndpoint ?? Rebase(document.RevocationEndpoint, mtlsBaseUri),
-                IntrospectionEndpoint =
-                    configured.IntrospectionEndpoint ?? Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
-                UserInfoEndpoint = configured.UserInfoEndpoint ?? Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+                TokenEndpoint = Rebase(document.TokenEndpoint, mtlsBaseUri),
+                RevocationEndpoint = Rebase(document.RevocationEndpoint, mtlsBaseUri),
+                IntrospectionEndpoint = Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
+                UserInfoEndpoint = Rebase(document.UserInfoEndpoint, mtlsBaseUri),
             },
         };
     }

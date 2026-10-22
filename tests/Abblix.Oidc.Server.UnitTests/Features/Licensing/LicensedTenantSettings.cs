@@ -58,5 +58,4 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
 
     public Uri? MtlsBaseUri => Rest.MtlsBaseUri;
 
-    public MtlsAliasesOptions? MtlsEndpointAliases => Rest.MtlsEndpointAliases;
 }
