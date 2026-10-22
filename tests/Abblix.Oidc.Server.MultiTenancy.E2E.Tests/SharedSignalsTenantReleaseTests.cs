@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// A tenant removed from the store of tenants while the server runs: once it is released, the streams its
 /// receivers created and the events queued on them are deleted, and another tenant's are kept.
 /// </summary>
-public sealed class SharedSignalsTenantReleaseTests
+public sealed partial class SharedSignalsTenantReleaseTests
 {
     private const string Host = "https://auth.example.com";
     private const string StreamPath = "/ssf/stream";
