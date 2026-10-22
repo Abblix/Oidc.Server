@@ -83,7 +83,8 @@ public static partial class LicenseChecker
     public static string CheckLicense(string issuer, IIssuerSettings settings, string clientId)
     {
         CheckIssuer(issuer, settings);
-        CheckClient((VouchedId(settings) ?? issuer, clientId), ReleasedOf(settings));
+        var (counted, released) = CountedAs(issuer, settings);
+        CheckClient((counted, clientId), released);
         return issuer;
     }
 
@@ -222,28 +223,27 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// The tenant the server's own settings vouch for, and null for settings a host registers or a tenant a catalog
-    /// of the host's own resolved, which are counted by the issuer they serve.
+    /// What <paramref name="issuer"/> and its clients are counted under, and what lets them go: the tenant the
+    /// server's own settings vouch for, until the server releases it; for any other, the issuer itself, counted for
+    /// the life of the process.
     /// </summary>
     /// <remarks>
     /// Settings a host registers answer for themselves, and taking their word would let one answer count every
     /// issuer, or every client of an id, as one.
     /// </remarks>
-    private static string? VouchedId(IIssuerSettings settings) => (settings as ILicensedIssuer)?.VouchedId;
+    private static (string Key, CancellationToken Released) CountedAs(string issuer, IIssuerSettings settings)
+        => settings is ILicensedIssuer own && own.VouchedId(issuer) is { } tenantId
+            ? (tenantId, own.Released)
+            : (issuer, CancellationToken.None);
 
     /// <summary>
-    /// What lets an issuer and its clients go: the release the server's own settings tell, and none for any other,
-    /// whose issuers count for the life of the process.
+    /// The tenant the clients of <paramref name="issuer"/> are counted with, when the server's own settings vouch
+    /// for it. Null for any other settings, whose clients are counted with the issuer and are not taken off the count.
     /// </summary>
-    private static CancellationToken ReleasedOf(IIssuerSettings settings)
-        => settings is ILicensedIssuer own ? own.Released : CancellationToken.None;
-
-    /// <summary>
-    /// The issuer the clients of <paramref name="settings"/> are counted with, when the server can tell it without a
-    /// token: the tenant its own settings vouch for. Null for any other
-    /// settings, whose clients are counted with the issuer each token names and are not taken off the count.
-    /// </summary>
-    internal static string? ClientIssuerOf(IIssuerSettings settings) => VouchedId(settings);
+    /// <param name="issuer">The issuer the tokens of those clients name.</param>
+    /// <param name="settings">The settings of that issuer.</param>
+    internal static string? ClientIssuerOf(string issuer, IIssuerSettings settings)
+        => (settings as ILicensedIssuer)?.VouchedId(issuer);
 
     /// <summary>
     /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
@@ -264,10 +264,10 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// A counted client as a log names it: its id, after the issuer's when the deployment serves several.
+    /// A counted client as a log names it: its id after the tenant or issuer it is counted under.
     /// </summary>
     private static string Named((string IssuerId, string ClientId) client)
-        => client.IssuerId.Length == 0 ? client.ClientId : $"{client.IssuerId}/{client.ClientId}";
+        => $"{client.IssuerId}/{client.ClientId}";
 
     /// <summary>
     /// Counts <paramref name="issuer"/> when it is counted already or still fits under <paramref name="issuerLimit"/>,
@@ -286,13 +286,13 @@ public static partial class LicenseChecker
         IIssuerSettings settings,
         int issuerLimit)
     {
-        var key = VouchedId(settings) is { Length: > 0 } tenantId ? tenantId : issuer;
+        var (key, released) = CountedAs(issuer, settings);
         lock (IssuerAdmission)
         {
             if (issuerLimit < knownIssuers.Count || !knownIssuers.ContainsKey(key) && issuerLimit <= knownIssuers.Count)
                 return false;
 
-            Count(knownIssuers, key, issuer, ReleasedOf(settings));
+            Count(knownIssuers, key, issuer, released);
             return true;
         }
     }

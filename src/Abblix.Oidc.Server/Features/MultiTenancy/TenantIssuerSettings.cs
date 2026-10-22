@@ -42,7 +42,12 @@ public sealed class TenantIssuerSettings(
     public CancellationToken Released => StoreTenantCatalog.ReleasedOf(catalog, Tenant);
 
     /// <inheritdoc />
-    string? ILicensedIssuer.VouchedId => catalog is StoreTenantCatalog ? Tenant.Id : null;
+    string? ILicensedIssuer.VouchedId(string issuer)
+        => catalog is StoreTenantCatalog own &&
+           own.InForce(Tenant) is { } served &&
+           string.Equals(served.Issuer.OriginalString, issuer, StringComparison.Ordinal)
+            ? served.Id
+            : null;
 
     /// <inheritdoc />
     public ResourceDefinition[]? Resources => Tenant.Resources;

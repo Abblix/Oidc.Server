@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -76,7 +77,7 @@ internal static class SingleIssuer
         => new TenantIssuerSettings(
             AccessorOf(current),
             Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == server),
-            Catalog);
+            Licensed);
 
     /// <summary>
     /// The settings of the tenant <paramref name="current"/> describes, resolved by a catalog of the host's own: the
@@ -112,10 +113,24 @@ internal static class SingleIssuer
     public static IIssuerLocal<T> LocalOf<T>() where T : class => new TenantIssuerLocal<T>(Catalog);
 
     /// <summary>
-    /// The server's own catalog, over a store listing no tenant: the license counts a tenant it vouches for by the
-    /// tenant's id, as it counts every server a test builds, so the tests of a run take one place between them.
+    /// The server's own catalog, over a store listing no tenant, so what is built from a tenant is built from the
+    /// definition a test holds.
     /// </summary>
     public static ITenantCatalog Catalog { get; } = new ServedTenants().Catalog;
+
+    /// <summary>
+    /// The server's own catalog, serving the tenant a test describes nothing of, for the settings the license reads:
+    /// it counts a tenant it serves by the tenant's id, as it counts every server a test builds, so the tests of a run
+    /// take one place between them.
+    /// </summary>
+    private static readonly ITenantCatalog Licensed = ServingTheTenant();
+
+    private static StoreTenantCatalog ServingTheTenant()
+    {
+        var tenants = new ServedTenants();
+        tenants.ServeAsync(Default.ToTenant(), CancellationToken.None).GetAwaiter().GetResult();
+        return tenants.Catalog;
+    }
 
     private sealed class CurrentTenant(Func<TestIssuer> current) : ITenantAccessor
     {

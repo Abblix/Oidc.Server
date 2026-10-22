@@ -16,10 +16,12 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 internal interface ILicensedIssuer
 {
     /// <summary>
-    /// The tenant the issuer serves, counted as one place wherever its address moves; null when the server cannot
-    /// vouch for the tenant because a catalog of the host's own resolved it.
+    /// The tenant serving <paramref name="issuer"/>, counted as one place wherever its address moves; null when the
+    /// server cannot vouch for it: a catalog of the host's own resolved the tenant, the server's own catalog does not
+    /// serve it, or <paramref name="issuer"/> is not the one the definition it serves declares.
     /// </summary>
-    string? VouchedId { get; }
+    /// <param name="issuer">The issuer a token names.</param>
+    string? VouchedId(string issuer);
 
     /// <summary>
     /// Canceled once the server lets the tenant go, when the issuer and its clients stop counting.

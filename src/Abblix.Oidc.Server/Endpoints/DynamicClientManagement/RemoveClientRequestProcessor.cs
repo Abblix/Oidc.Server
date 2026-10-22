@@ -26,11 +26,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="issuerSettings">The settings of the issuer the client is removed from, whose license count it leaves.
 /// </param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+/// <param name="issuerProvider">The issuer the tokens of the client named, which its license count is kept under.
+/// </param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
     IIssuerSettings issuerSettings,
-    ITenantAccessor tenantAccessor) : IRemoveClientRequestProcessor
+    ITenantAccessor tenantAccessor,
+    IIssuerProvider issuerProvider) : IRemoveClientRequestProcessor
 {
     /// <summary>
     /// Deletes the addressed client and returns the recorded removal timestamp.
@@ -45,7 +48,7 @@ public class RemoveClientRequestProcessor(
         if (!await clientInfoManager.TryRemoveClientAsync(tenantAccessor.CurrentTenant(), request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
-        if (LicenseChecker.ClientIssuerOf(issuerSettings) is { } issuerId)
+        if (LicenseChecker.ClientIssuerOf(issuerProvider.GetIssuer().OriginalString, issuerSettings) is { } issuerId)
             LicenseChecker.ReleaseClients(issuerId, [clientId]);
 
         return new RemoveClientSuccessfulResponse(

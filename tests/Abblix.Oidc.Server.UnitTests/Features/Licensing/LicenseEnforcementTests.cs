@@ -669,6 +669,31 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
+    public async Task A_tenant_entered_under_a_served_id_at_another_issuer_takes_a_place_of_its_own()
+    {
+        // The server vouches only for the definition its catalog serves: a tenant a host enters under the id of a
+        // served one, at an issuer that one does not declare, is counted by its issuer like any other
+        ArrangeInstallationWithNoLicence();
+        var ct = TestContext.Current.CancellationToken;
+        var store = new Mock<ITenantStore>();
+        store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync([Acme("1")]);
+        var catalog = Catalog(store.Object);
+        await catalog.RefreshAsync(ct);
+        var served = (await catalog.FindByIdAsync("acme", ct))!;
+        LicenseChecker.CheckIssuer(TestLicense.Issuer, Settings(catalog, served));
+
+        var entered = new TenantDefinition
+        {
+            Id = served.Id,
+            Issuer = new Uri(UnlicensedIssuer),
+            Generation = served.Generation,
+        };
+
+        Assert.Throws<LicenseViolationException>(
+            () => LicenseChecker.CheckIssuer(UnlicensedIssuer, Settings(catalog, entered)));
+    }
+
+    [Fact]
     public async Task A_tenant_dropped_from_the_store_frees_its_place_once_the_catalog_releases_it()
     {
         // Through the server's own catalog: the place stays taken through the pause after the store drops the
@@ -801,7 +826,12 @@ public sealed class LicenseEnforcementTests : IDisposable
     {
         var clients = new Mock<IClientInfoManager>();
         clients.Setup(manager => manager.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), removed)).ReturnsAsync(true);
-        var result = await new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, issuer, tenantAccessor: SingleIssuer.Accessor)
+        var result = await new RemoveClientRequestProcessor(
+                clients.Object,
+                TimeProvider.System,
+                issuer,
+                tenantAccessor: SingleIssuer.Accessor,
+                issuerProvider: Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == new Uri(TestLicense.Issuer)))
             .ProcessAsync(new ValidClientRequest(new ClientRequest(), removed));
         Assert.True(result.TryGetSuccess(out _));
     }

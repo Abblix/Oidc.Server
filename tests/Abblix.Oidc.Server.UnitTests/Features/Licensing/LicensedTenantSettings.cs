@@ -30,7 +30,7 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
 
     public string Id => id;
 
-    public string? VouchedId => id;
+    public string? VouchedId(string issuer) => id;
 
     public CancellationToken Released => released;
 

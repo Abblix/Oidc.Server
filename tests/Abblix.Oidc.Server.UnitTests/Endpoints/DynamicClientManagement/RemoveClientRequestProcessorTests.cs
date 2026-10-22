@@ -13,9 +13,11 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.Issuer;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -31,7 +33,8 @@ public class RemoveClientRequestProcessorTests
     {
         var clients = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clients.Setup(c => c.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), Client)).ReturnsAsync(registrationHeld);
-        return new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, SingleIssuer.Settings, tenantAccessor: SingleIssuer.Accessor);
+        return new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, SingleIssuer.Settings, tenantAccessor: SingleIssuer.Accessor,
+            issuerProvider: Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == TestConstants.DefaultIssuer));
     }
 
     [Fact]
