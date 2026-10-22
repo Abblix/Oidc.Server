@@ -12,13 +12,21 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </summary>
 /// <param name="opening">Readies the ring of each partition.</param>
 /// <param name="setup">The partitions kept and the store they share.</param>
-internal sealed class KeyRingPartitionsOpening(KeyRingPartitionOpening opening, KeyRingSetup setup)
+/// <param name="check">Judges the adopted keys before any partition opens.</param>
+internal sealed class KeyRingPartitionsOpening(
+    KeyRingPartitionOpening opening,
+    KeyRingSetup setup,
+    KeyRingStartupCheck check)
 {
     /// <inheritdoc cref="IKeyRings.OpenAsync"/>
     public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken)
     {
+        // A partition takes adopted keys only until it mints one, so an opening before the host starts, as a host
+        // reading the catalog ahead of it does, is judged as the start is, before anything mints
+        check.CheckAdoption();
+
         // Read once for the whole opening: a host's own partitions may be read from a database
         var kept = setup.PartitionsKept.Kept;
         var due = partitions.Where(partition => !opening.IsCurrent(partition, kept)).ToArray();

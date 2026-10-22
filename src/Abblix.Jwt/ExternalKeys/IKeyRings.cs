@@ -30,6 +30,8 @@ public interface IKeyRings
     /// <param name="cancellationToken">Cancels the opening of those not opened yet.</param>
     /// <returns>Why each partition that could not be opened was not, by its name: a name that cannot name a
     /// partition, or the store or the custodian failing. The others are ready.</returns>
+    /// <exception cref="InvalidOperationException">Keys are adopted where no partition will take them, judged before
+    /// any partition opens, so none of them is opened.</exception>
     Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
         IReadOnlyCollection<string> partitions,
         CancellationToken cancellationToken);
