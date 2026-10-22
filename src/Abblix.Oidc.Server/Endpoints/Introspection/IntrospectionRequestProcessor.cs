@@ -115,12 +115,13 @@ public class IntrospectionRequestProcessor(
 
 		// The subject in the token is what its own client sees, so it has to be opened against that client
 		// before it can be re-sealed for anybody else.
-		var owner = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), ownerId);
+		var tenant = tenantAccessor.CurrentTenant();
+		var owner = await clientInfoProvider.TryFindClientAsync(tenant, ownerId);
 		if (owner == null)
 			return null;
 
-		var realSubject = subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), subject, owner);
-		return realSubject == null ? null : subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), realSubject, request.ClientInfo);
+		var realSubject = subjectTypeConverter.ConvertBack(tenant, subject, owner);
+		return realSubject == null ? null : subjectTypeConverter.Convert(tenant, realSubject, request.ClientInfo);
 	}
 
 	/// <summary>

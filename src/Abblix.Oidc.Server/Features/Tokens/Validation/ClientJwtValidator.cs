@@ -78,7 +78,8 @@ public partial class ClientJwtValidator(
         TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenantAccessor.CurrentTenant());
+        var tenant = tenantAccessor.CurrentTenant();
+        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
 
         var result = await tokenValidator.ValidateAsync(
             jwt,
@@ -93,7 +94,7 @@ public partial class ClientJwtValidator(
                 // the server's own private keys; the inner JWS is then verified with the client's key
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
                 // only runs for an actual JWE token).
-                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenantAccessor.CurrentTenant(), true),
+                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
                 // The tolerance belongs to the profile this deployment is held to, ceiling
                 // included.
                 ClockSkew = Profile.ClockSkewOrDefault(),
@@ -113,7 +114,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientIdFromJwt);
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientIdFromJwt);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {

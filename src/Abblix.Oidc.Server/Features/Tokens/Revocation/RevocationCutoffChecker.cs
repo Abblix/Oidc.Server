@@ -201,7 +201,8 @@ public partial class RevocationCutoffChecker(
         // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
         // on an ID token but may be a resource or this server's own address on another token, so one that names no
         // existing client leaves the subject as it is.
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var tenant = tenantAccessor.CurrentTenant();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (clientInfo is null)
             return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
 
@@ -213,7 +214,7 @@ public partial class RevocationCutoffChecker(
             // Throws rather than answering null when pairwise identifiers are not configured at all, which a
             // client registered as pairwise can still reach by presenting an assertion it never received a
             // token for. Same unknown, same answer.
-            return subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), subject, clientInfo) is { } realSubject
+            return subjectTypeConverter.ConvertBack(tenant, subject, clientInfo) is { } realSubject
                 ? (true, realSubject)
                 : (false, null);
         }
