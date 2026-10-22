@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 using Xunit;
 
 
@@ -215,6 +216,81 @@ public sealed class TenantManagerTests : IDisposable
 
         Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(claimingTheSameAddress));
         Assert.Single(_store.Tenants);
+    }
+
+    /// <summary>
+    /// A change refused for a conflict with another tenant tells the caller what is wrong without naming that tenant,
+    /// and the host's log names both.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/tenants/x", "https://auth.example.com/tenants/x")]
+    [InlineData("https://auth.example.com/tenants/x", "https://auth.example.com/tenants/x/eu")]
+    [InlineData("https://auth.example.com/tenants/x/eu", "https://auth.example.com/tenants/x")]
+    public async Task AChangeConflictingWithAnotherTenant_IsRefusedWithoutNamingIt(string existing, string changed)
+    {
+        var logger = new RecordingLogger();
+        var manager = ManagerLoggingTo(logger);
+        Stored(await manager.CreateAsync(Tenant("globex", existing), Ct));
+
+        var refused = await manager.CreateAsync(Tenant("acme", changed), Ct);
+
+        Assert.True(refused.TryGetFailure(out var refusal));
+        Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
+        Assert.DoesNotContain("globex", refusal.Message, StringComparison.Ordinal);
+        var logged = Assert.Single(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
+        Assert.Contains("globex", logged.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A conflict a host's own check finds, which says nothing for one party alone, is told to the caller without the
+    /// other tenant either.
+    /// </summary>
+    [Fact]
+    public async Task AConflictAHostsCheckFinds_IsRefusedWithoutNamingTheOtherTenant()
+    {
+        var hostsCheck = new Mock<ITenantsCheck>();
+        hostsCheck
+            .Setup(check => check.Check(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<OidcOptions>()))
+            .Returns((IReadOnlyCollection<TenantDefinition> tenants, OidcOptions _) => tenants.Count > 1
+                ? [new TenantRefusal([..tenants.Select(tenant => tenant.Id)], "acme and globex share a billing account.")]
+                : []);
+        var manager = ManagerLoggingTo(new RecordingLogger(), hostsCheck.Object);
+        Stored(await manager.CreateAsync(Tenant("globex", "https://globex.example.com"), Ct));
+
+        var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
+
+        Assert.True(refused.TryGetFailure(out var refusal));
+        Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
+        Assert.DoesNotContain("globex", refusal.Message, StringComparison.Ordinal);
+    }
+
+    // The event a refusal told without the other tenants of a conflict is logged under
+    private const int ConflictToldWithoutTheOthers = 10721;
+
+    private TenantManager ManagerLoggingTo(RecordingLogger logger, params ITenantsCheck[] hostsChecks)
+        => new(
+            logger,
+            _store,
+            [new TenantDefinitionsCheck(), ..hostsChecks],
+            _catalog,
+            Options.Create(new OidcOptions()),
+            _store);
+
+    /// <summary>
+    /// Keeps the event id and the text of every entry logged.
+    /// </summary>
+    private sealed class RecordingLogger : ILogger<TenantManager>
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<(int EventId, string Text)> Entries { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Enqueue((eventId.Id, formatter(state, exception)));
     }
 
     /// <summary>

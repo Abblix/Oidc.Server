@@ -112,6 +112,7 @@ public class TenantKeysCheckTests
         var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([Tenant(key), other], new OidcOptions()));
 
         Assert.Equal(["acme", otherId], refusal.TenantIds);
+        Assert.DoesNotContain(otherId, Assert.IsType<string>(refusal.PartyMessage), StringComparison.Ordinal);
     }
 
     /// <summary>
