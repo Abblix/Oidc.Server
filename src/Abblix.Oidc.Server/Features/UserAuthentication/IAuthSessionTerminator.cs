@@ -16,6 +16,11 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// <remarks>
 /// A session ends on logout and when a sign-in replaces it, and both go through here so the two cannot drift
 /// apart. Removing the session from the user agent is the caller's part.
+/// <para>
+/// It acts for the tenant of the request it is called in. Called outside one, as from a job or a message handler, it
+/// acts for the tenant of the <see cref="Abblix.Oidc.Server.Features.MultiTenancy.TenantScope"/> the caller enters
+/// with the definition the tenant catalog returns, and refuses to act with no tenant at all.
+/// </para>
 /// </remarks>
 public interface IAuthSessionTerminator
 {

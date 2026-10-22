@@ -79,6 +79,7 @@ builder.Services.AddConsentGrantedForEveryClient();
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
+    // The address the app is served on: a request to any other reaches no tenant and is answered 404
     Issuer = new Uri("https://auth.example.com"),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],

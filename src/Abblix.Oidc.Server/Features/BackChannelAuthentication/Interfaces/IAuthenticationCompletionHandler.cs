@@ -12,6 +12,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// Handles CIBA authentication completion by routing to the appropriate delivery mode handler
 /// (poll, ping, or push) based on the client's configured backchannel_token_delivery_mode.
 /// </summary>
+/// <remarks>
+/// <para>
+/// It acts for the tenant of the request it is called in. Called outside one, as from a job or a message handler, it
+/// acts for the tenant of the <see cref="Abblix.Oidc.Server.Features.MultiTenancy.TenantScope"/> the caller enters
+/// with the definition the tenant catalog returns, and refuses to act with no tenant at all.
+/// </para>
+/// </remarks>
 public interface IAuthenticationCompletionHandler
 {
     /// <summary>
