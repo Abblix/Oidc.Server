@@ -17,8 +17,9 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </summary>
 /// <remarks>
 /// The first refresh runs in <c>StartAsync</c>, so a ring that cannot be read or opened stops the process rather
-/// than letting it serve without keys; the adopted keys are judged before that, by <see cref="KeyRingAdoptionCheck"/>. Later refreshes tick on the propagation window rather than the rotation
-/// interval: a pod must notice a key another pod minted while that key is still announced, because once it goes
+/// than letting it serve without keys; the adopted keys are judged before that, by <see cref="KeyRingAdoptionCheck"/>
+/// while the host starts and by every opening of partitions. Later refreshes tick on the propagation window rather
+/// than the rotation interval: a pod must notice a key another pod minted while that key is still announced, because once it goes
 /// active every pod has to be able to verify it.
 /// <para>
 /// The two differ deliberately in what a failure means. At startup there is nothing to serve, so failing is the
