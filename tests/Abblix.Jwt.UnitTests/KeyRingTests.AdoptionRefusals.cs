@@ -69,4 +69,49 @@ public sealed partial class KeyRingTests
 
         Assert.Empty(store.Entries);
     }
+
+    /// <summary>
+    /// One key adopted into two partitions, under any key id and whether the partitions are known at the start or come
+    /// and go, refuses the start naming both; a tenant created again under the same id is another partition.
+    /// </summary>
+    [Theory]
+    [InlineData("globex", false, true)]
+    [InlineData("globex", true, true)]
+    [InlineData("acme~g2", false, true)]
+    [InlineData("globex", false, false)]
+    public void OneKeyAdoptedIntoTwoPartitions_RefusesTheStart_NamingBoth(
+        string other,
+        bool otherKeyId,
+        bool partitionsFixed)
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var copy = otherKeyId ? adopted with { KeyId = "another" } : adopted;
+        var adoptedKeys = new Dictionary<string, IReadOnlyList<JsonWebKey>>
+        {
+            ["acme"] = [adopted],
+            [other] = [copy],
+        };
+
+        var parts = partitionsFixed
+            ? CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adoptedKeys, "acme", other).Item1
+            : RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), adoptedKeys).Item1;
+
+        var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
+        Assert.Contains("'acme'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{other}'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One key adopted twice into the same partition is a repeat, not sharing, so the ring starts.
+    /// </summary>
+    [Fact]
+    public void OneKeyAdoptedTwiceIntoOnePartition_Starts()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (parts, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted, adopted]), "acme", "globex");
+
+        parts.CheckAdoption();
+    }
 }

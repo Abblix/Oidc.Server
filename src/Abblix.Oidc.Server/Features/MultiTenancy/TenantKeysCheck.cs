@@ -28,7 +28,8 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
         {
             KeyProviderKind.Settings => Unread(tenants, "the keys come from each tenant's settings",
                     nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
-                .Concat(UnsignedOf(tenants)),
+                .Concat(UnsignedOf(tenants))
+                .Concat(SharedSettingsKeysOf(tenants)),
 
             KeyProviderKind.Custodian => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
@@ -67,6 +68,27 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 $"publishes an empty JWKS. Supply at least one JWK with a private part in " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a " +
                 "custodian or minted by the server.");
+
+    /// <summary>
+    /// No key, compared by its thumbprint, is declared by two tenants: sharing one would let a party trusting one
+    /// tenant's keys verify the other's tokens, or open what was encrypted to it, which keys of their own exist to
+    /// prevent.
+    /// </summary>
+    /// <remarks>
+    /// A tenant may declare one key in both roles or twice, so each tenant counts once per key.
+    /// </remarks>
+    private static IEnumerable<TenantRefusal> SharedSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
+        =>
+            from tenant in tenants
+            from thumbprint in tenant.SigningKeys.Concat(tenant.EncryptionKeys)
+                .Select(key => key.ComputeJwkThumbprintBase64Url())
+                .Distinct(StringComparer.Ordinal)
+            group tenant.Id by thumbprint into declarers
+            where declarers.Count() > 1
+            select new TenantRefusal(
+                [..declarers],
+                $"One key is declared by the tenants {string.Join(", ", declarers.Select(id => $"'{id}'"))}; " +
+                "each tenant signs and decrypts with keys of its own.");
 
     /// <summary>
     /// The key settings a tenant declares that the placement never reads: declared, they read as the keys the

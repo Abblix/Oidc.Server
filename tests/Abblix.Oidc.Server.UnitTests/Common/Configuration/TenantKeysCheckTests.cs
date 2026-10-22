@@ -89,6 +89,52 @@ public class TenantKeysCheckTests
         Assert.Empty(new TenantKeysCheck(serviceProvider).Check([Tenant()], new OidcOptions()));
     }
 
+    /// <summary>
+    /// One key declared by two tenants, in either role and under any key id, is refused naming both; a tenant created
+    /// again under the same id counts as another tenant.
+    /// </summary>
+    [Theory]
+    [InlineData("globex", false, false)]
+    [InlineData("globex", true, false)]
+    [InlineData("globex", false, true)]
+    [InlineData("acme~g2", false, false)]
+    public void Check_OneKeyDeclaredByTwoTenants_RefusesBoth(string otherId, bool otherKeyId, bool asEncryption)
+    {
+        using var serviceProvider = BuildHost();
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var copy = otherKeyId ? key with { KeyId = "another" } : key;
+        var other = new TenantDefinition
+        {
+            Id = otherId,
+            Issuer = new Uri("https://other.example.com"),
+            SigningKeys = asEncryption ? [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)] : [copy],
+            EncryptionKeys = asEncryption ? [copy] : [],
+        };
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([Tenant(key), other], new OidcOptions()));
+
+        Assert.Equal(["acme", otherId], refusal.TenantIds);
+    }
+
+    /// <summary>
+    /// A tenant declaring one key twice, or in both roles, shares it with nobody.
+    /// </summary>
+    [Fact]
+    public void Check_OneKeyDeclaredTwiceByOneTenant_Passes()
+    {
+        using var serviceProvider = BuildHost();
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var tenant = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri("https://auth.example.com"),
+            SigningKeys = [key, key],
+            EncryptionKeys = [key],
+        };
+
+        Assert.Empty(new TenantKeysCheck(serviceProvider).Check([tenant], new OidcOptions()));
+    }
+
     private static TenantDefinition Tenant(params JsonWebKey[] signingKeys) => new()
     {
         Id = "acme",

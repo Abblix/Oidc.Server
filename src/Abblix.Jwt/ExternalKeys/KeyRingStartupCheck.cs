@@ -18,17 +18,37 @@ namespace Abblix.Jwt.ExternalKeys;
 internal sealed class KeyRingStartupCheck(KeyRingSetup setup, IKeyCustodian custodian)
 {
     /// <summary>
-    /// Throws when keys are adopted where no partition will take them.
+    /// Throws when keys are adopted where no partition will take them, or one key into two partitions.
     /// </summary>
     /// <remarks>
     /// Judged before any partition opens: a partition takes adopted keys only until it holds a key it minted, so one
     /// opened before the refusal would mint, and the host correcting the adoption would never have its keys taken.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">Keys are adopted into a partition the ring never keeps, or into the
-    /// unnamed partition of a ring whose partitions come and go.</exception>
+    /// <exception cref="InvalidOperationException">One key is adopted into two partitions, keys are adopted into a
+    /// partition the ring never keeps, or into the unnamed partition of a ring whose partitions come and go.
+    /// </exception>
     public void CheckAdoption()
     {
         var policy = setup.Policy;
+
+        // A key adopted into two partitions signs for both, so a party trusting one issuer's keys would verify the
+        // other's tokens, which keys of their own exist to prevent. The key is compared by its thumbprint, so a copy
+        // under another key id is the same key, and a repeat into one partition is no sharing
+        var shared = (
+            from adopted in policy.AdoptedKeys
+            from key in adopted.Value
+            group adopted.Key by key.ComputeJwkThumbprintBase64Url() into partitions
+            let named = partitions.Distinct(StringComparer.Ordinal).ToArray()
+            where named.Length > 1
+            select named).FirstOrDefault();
+
+        if (shared is not null)
+        {
+            throw new InvalidOperationException(
+                $"One existing key is adopted into the partitions {string.Join(", ", shared.Select(id => $"'{id}'"))}. " +
+                "Each partition signs with keys of its own, so adopt a key into the partition of the one issuer that " +
+                "signs with it.");
+        }
 
         // A fixed set names every partition the ring will meet; partitions added while it runs are not known yet
         if (setup.PartitionsKept.Fixed is { } fixedPartitions)
