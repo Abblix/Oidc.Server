@@ -49,6 +49,11 @@ public sealed class TenantScope : IDisposable
     /// <summary>
     /// Makes <paramref name="tenant"/> the current tenant until the returned scope is disposed.
     /// </summary>
+    /// <remarks>
+    /// Call it where the work runs, not inside an async method that returns the scope: the current tenant flows into
+    /// the work awaited after the call, never back out of an async method to its caller, so a helper that awaits
+    /// something, enters the scope and returns it leaves its caller with no tenant.
+    /// </remarks>
     public static TenantScope Enter(TenantDefinition tenant)
     {
         var scope = new TenantScope(new TenantContext { Tenant = tenant }, Ambient.Value);
