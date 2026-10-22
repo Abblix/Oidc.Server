@@ -131,6 +131,45 @@ public sealed class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// A tenant moved to another address within its creation is served its declared streams under the issuer it moved
+    /// to, as its security event tokens are signed.
+    /// </summary>
+    [Fact]
+    public async Task ATenantMovedToAnotherAddress_IsServedItsDeclaredStreamsUnderItsNewIssuer()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(
+            store,
+            new FakeTimeProvider(),
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }]));
+
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var before = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(
+            before.Issuer.OriginalString,
+            Assert.Single(await StreamsOfAsync(app, before, ct)).Configuration.Issuer);
+
+        var stored = Assert.Single(await store.ListAsync(ct));
+        var moved = new TenantDefinition
+        {
+            Id = before.Id,
+            Issuer = new Uri($"{Host}/tenants/acme-moved"),
+            SigningKeys = before.SigningKeys,
+        };
+        Assert.NotNull(await store.UpdateAsync(moved, stored.Version, ct));
+        await catalog.RefreshAsync(ct);
+        var after = (await catalog.FindByIdAsync("acme", ct))!;
+
+        Assert.Equal(
+            $"{Host}/tenants/acme-moved",
+            Assert.Single(await StreamsOfAsync(app, after, ct)).Configuration.Issuer);
+    }
+
+    /// <summary>
     /// A server whose tenants come from a store starts with streams declared for a tenant the store does not hold yet,
     /// and the tenant is served them once it is added.
     /// </summary>
