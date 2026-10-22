@@ -9,8 +9,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,26 +19,31 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// settings, a tenant declaring no signing key; and, with the keys held by a custodian, a tenant naming no key there
 /// or one another tenant names.
 /// </summary>
-/// <param name="serviceProvider">The container the key provider is resolved from, once the settings are built.</param>
+/// <param name="serviceProvider">Tells which key provider serves the keys, and resolves the custodian.</param>
 public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenantsCheck
 {
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
-        => serviceProvider.GetService<IAuthServiceKeysProvider>() switch
+        => serviceProvider.GetService<KeyProviderRegistration>()?.Kind switch
         {
-            OidcOptionsKeysProvider => Unread(tenants, "the keys come from each tenant's settings",
+            KeyProviderKind.Settings => Unread(tenants, "the keys come from each tenant's settings",
                     nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
                 .Concat(UnsignedOf(tenants)),
 
-            ExternalKeysProvider => Unread(tenants, "the keys are held by a custodian",
+            KeyProviderKind.Custodian => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
                 .Concat(CustodianKeysOf(tenants))
                 .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>())),
 
-            MintedKeysProvider => Unread(tenants, "the server mints the keys"),
+            KeyProviderKind.Minted => Unread(tenants, "the server mints the keys"),
 
             // A key provider of the host's own answers for each tenant's keys itself, so nothing here judges them
-            _ => [],
+            KeyProviderKind.Host => [],
+
+            // No key provider is registered, so no tenant's keys are read
+            null => [],
+
+            var unknown => throw new InvalidOperationException($"Unexpected {nameof(KeyProviderKind)} '{unknown}'."),
         };
 
     /// <summary>

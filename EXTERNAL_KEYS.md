@@ -18,12 +18,12 @@ Wiring is two steps for `UseKeysInCustodian`, three for `UseKeysInProcess` (the 
 ```csharp
 builder.Services
     .AddVaultCustodian(vault => { /* which custodian, and how to reach it */ })
-    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    .UseKeysInCustodian();
 ```
 
-The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site.
+The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site. An OpenID Provider names the keys themselves for each tenant, in `TenantDefinition.CustodianKeys` (`new CustodianHeldKeys { SigningKeyName = "oidc-sign" }`), so no two tenants sign with one key, and it refuses to start with keys named for the whole server. A host without the OIDC server names them in the placement call instead: `UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "sign" })`.
 
-The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from `OidcOptions`, so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
+The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from each tenant's settings (`TenantDefinition.SigningKeys`), so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
 
 ## You do not need the OIDC server for this
 
@@ -86,7 +86,7 @@ With `UseKeysInProcess`, the guarantee moves from the process to the store. At r
 `UseKeysInCustodian` puts a network call on the path of every token, because the private half stays outside:
 
 - Every issued token costs at least two round-trips: at least one to discover the signing key's versions (some backends read each version separately), and one to sign. Decrypting inbound encrypted material, an encrypted request object or client assertion, adds an unwrap; issuing an encrypted token adds nothing, because it is wrapped to the recipient's public key locally. Signature verification is local and free, because it runs on the published public halves.
-- The provider does not cache: it lists key versions on every call, so without a short-lived cache in front of it, every `/jwks` hit and every token issuance reaches the custodian. `/jwks` is public and unauthenticated, so an uncached provider lets any client or scraper amplify load and cost onto the custodian and trip its rate limits, which then stops token issuance too. Wrap the registered `IAuthServiceKeysProvider` in a short-lived cache in production; versions change on human timescales, so the cache does not hide a rotation.
+- The provider does not cache: it lists key versions on every call, so without a short-lived cache in front of it, every `/jwks` hit and every token issuance reaches the custodian. `/jwks` is public and unauthenticated, so an uncached provider lets any client or scraper amplify load and cost onto the custodian and trip its rate limits, which then stops token issuance too. Wrap the registered `IAuthServiceKeysProvider` in a short-lived cache in production; versions change on human timescales, so the cache does not hide a rotation. Register the wrapper on the `IServiceCollection` the server is added to, not only through a third-party container's own API: that registration is how the server tells a provider of yours from its own without building it.
 - Availability is coupled. A custodian that is unreachable, sealed or throttling means no tokens issued and no `/jwks` served. Size it for your peak token rate and set an explicit HTTP timeout.
 - The latency lands on the token endpoint, not at startup.
 
@@ -131,7 +131,7 @@ The seam is public. If your keys live somewhere these packages do not cover, imp
 ```csharp
 builder.Services
     .AddCustodian<MyCustodian>()
-    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    .UseKeysInCustodian();
 ```
 
 `AddCustodian<T>` builds your custodian through the container, so it may depend on your own services. If you registered it yourself instead - as a typed `HttpClient`, or as an instance you built - call `RequireKeyPlacement()` in its place: it registers nothing and only opens the placement choice, which is the step that must not be skipped. Either way the custodian must be a singleton, because the signing and decryption backends that reach it are; a shorter lifetime is refused at the placement call rather than left to pin one scope's custodian for the life of the process.
