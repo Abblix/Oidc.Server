@@ -25,8 +25,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
 /// <summary>
 /// How the license counts the addresses of a tenant the server's own catalog serves: the address it is served at now,
-/// and one it left no longer than one refresh period ago measured at the catalog's readings, count as the tenant;
-/// any other address a definition of it names counts as an issuer of its own.
+/// and one it left no longer than one refresh period ago measured at the catalog's readings, count as the tenant, and
+/// so does, for one refresh period after the tenant's release, any address it was ever served at; any other address a
+/// definition of it names counts as an issuer of its own.
 /// </summary>
 [Collection(nameof(LicenseEnforcementTests))]
 public sealed class TenantAddressCountTests : IDisposable
@@ -227,6 +228,38 @@ public sealed class TenantAddressCountTests : IDisposable
         await catalog.RefreshAsync(ct);
 
         LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+
+        time.Advance(Pause);
+        listed.Add(At("globex", G, "1"));
+        await catalog.RefreshAsync(ct);
+        var globex = (await catalog.FindByIdAsync("globex", ct))!;
+
+        Assert.Equal(G, LicenseChecker.CheckIssuer(G, Settings(catalog, globex)));
+    }
+
+    [Fact]
+    public async Task A_late_request_at_an_address_a_released_tenant_moved_into_takes_no_place()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var listed = new List<StoredTenant> { At("acme", A, "1") };
+        var time = new FakeTimeProvider();
+        var catalog = Catalog(listed, time);
+        await catalog.RefreshAsync(ct);
+
+        listed[0] = At("acme", B, "2");
+        await catalog.RefreshAsync(ct);
+        var atB = (await catalog.FindByIdAsync("acme", ct))!;
+        LicenseChecker.CheckIssuer(B, Settings(catalog, atB));
+
+        listed[0] = At("acme", C, "3");
+        await catalog.RefreshAsync(ct);
+        time.Advance(Pause);
+        listed.Clear();
+        await catalog.RefreshAsync(ct);
+        time.Advance(Pause);
+        await catalog.RefreshAsync(ct);
+
+        LicenseChecker.CheckIssuer(B, Settings(catalog, atB));
 
         time.Advance(Pause);
         listed.Add(At("globex", G, "1"));
