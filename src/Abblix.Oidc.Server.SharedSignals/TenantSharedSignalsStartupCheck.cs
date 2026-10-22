@@ -6,11 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common.Configuration;
-using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.SharedSignals;
@@ -21,26 +21,40 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <remarks>
 /// Each part the transmitter keeps per tenant is checked as resolved, so a registration made after
 /// <see cref="SharedSignalsMultiTenancyExtensions.AddSharedSignals"/> that replaced one is named rather than left
-/// to serve every tenant alike.
+/// to serve every tenant alike. A started service rather than a check of the settings: it builds the parts it
+/// judges, and a part that reads the settings while it is built would wait on itself inside their check. Streams
+/// declared for the whole server are refused before it runs, by <see cref="ServerWideStreamsValidator"/>.
 /// </remarks>
 /// <param name="serviceProvider">Resolves the transmitter's parts as the server will use them.</param>
-public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvider)
-    : IValidateOptions<OidcOptions>
+internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider serviceProvider) : IHostedLifecycleService
 {
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, OidcOptions options)
+    public Task StartingAsync(CancellationToken cancellationToken)
     {
-        // Read from their registration and answered alone: the store holding them cannot be built outside a
-        // tenant once a declared stream needs a poll address, and the stream store and the delivery pass checked
-        // below are built on it.
-        if (serviceProvider.GetService<IReadOnlyList<ConfiguredStream>>() is not null)
-        {
-            return ValidateOptionsResult.Fail(
-                "Streams declared for the whole server belong to no tenant's receivers; declare each tenant's with "
-                + $"{nameof(SharedSignalsMultiTenancyExtensions.AddConfiguredStreams)}() on what AddOidcServices() "
-                + "returns.");
-        }
+        var failures = Failures();
+        if (failures.Count > 0)
+            throw new OptionsValidationException(Options.DefaultName, typeof(OidcOptions), failures);
 
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private List<string> Failures()
+    {
         var failures = new List<string>();
         Require<IStreamStore, TenantConfiguredStreamStore>(failures);
 
@@ -69,7 +83,7 @@ public sealed class TenantSharedSignalsValidator(IServiceProvider serviceProvide
                 + "each tenant's key set is served at that path under the tenant's own issuer.");
         }
 
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+        return failures;
     }
 
     private void Require<TService, TPerTenant>(List<string> failures)

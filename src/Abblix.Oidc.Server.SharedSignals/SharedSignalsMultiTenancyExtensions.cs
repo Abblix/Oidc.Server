@@ -13,6 +13,7 @@ using Abblix.SecurityEvents.Abstractions;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.SharedSignals;
@@ -44,7 +45,7 @@ public static class SharedSignalsMultiTenancyExtensions
         var services = builder.Services;
 
         // A second call would wrap the stores again, and every stream would move to a different key.
-        if (services.Any(descriptor => descriptor.ImplementationType == typeof(TenantSharedSignalsValidator)))
+        if (services.Any(descriptor => descriptor.ImplementationType == typeof(TenantSharedSignalsStartupCheck)))
         {
             throw new InvalidOperationException(
                 $"{nameof(AddSharedSignals)}() has already been called on this server.");
@@ -64,8 +65,9 @@ public static class SharedSignalsMultiTenancyExtensions
         services.Replace(ServiceDescriptor.Singleton<ITransmitterIdentity, TenantTransmitterIdentity>());
         services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantClosing, TenantStreamsClosing>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantSharedSignalsStartupCheck>());
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantSharedSignalsValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServerWideStreamsValidator>());
 
         return builder;
     }
@@ -93,7 +95,7 @@ public static class SharedSignalsMultiTenancyExtensions
         ArgumentException.ThrowIfNullOrEmpty(tenantId);
         ArgumentNullException.ThrowIfNull(streams);
 
-        if (builder.Services.All(descriptor => descriptor.ImplementationType != typeof(TenantSharedSignalsValidator)))
+        if (builder.Services.All(descriptor => descriptor.ImplementationType != typeof(TenantSharedSignalsStartupCheck)))
         {
             throw new InvalidOperationException(
                 $"{nameof(AddConfiguredStreams)}() declares streams of a transmitter made per tenant; call "

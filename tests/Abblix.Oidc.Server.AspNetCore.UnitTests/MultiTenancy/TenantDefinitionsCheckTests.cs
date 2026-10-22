@@ -35,12 +35,9 @@ public class TenantDefinitionsCheckTests
     }
 
     /// <summary>
-    /// The startup check of the tenant list with <paramref name="checks"/>, the tenants coming from the settings.
+    /// The startup check of the tenant list with <paramref name="checks"/>.
     /// </summary>
-    private static TenantListValidator ValidatorOf(params ITenantsCheck[] checks)
-        => new(checks, new ServiceCollection()
-            .AddSingleton<ITenantStore>(new OptionsTenantStore(Options.Create(new OidcOptions())))
-            .BuildServiceProvider());
+    private static TenantListValidator ValidatorOf(params ITenantsCheck[] checks) => new(checks);
 
     private static TenantDefinition Tenant(string id, string issuer)
         => new() { Id = id, Issuer = new Uri(issuer, UriKind.RelativeOrAbsolute) };

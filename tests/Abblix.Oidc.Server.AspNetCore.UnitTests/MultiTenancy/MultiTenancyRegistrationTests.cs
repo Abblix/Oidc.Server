@@ -90,16 +90,14 @@ public partial class MultiTenancyRegistrationTests
     /// where its own storage goes instead.
     /// </summary>
     [Fact]
-    public void AStorageDecoratedAfterTheServer_IsRefused_NamingTheSharedKey()
+    public async Task AStorageDecoratedAfterTheServer_IsRefused_NamingTheSharedKey()
     {
         var services = new ServiceCollection().AddServerStorage();
         services.ServeTenants(options => options.Tenants.Add(Acme));
         services.Decorate<IEntityStorage, PassThroughStorage>();
         using var provider = services.BuildServiceProvider();
 
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains(nameof(TenantServiceKeys.Shared), refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantServiceKeys.Shared), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>A host's own storage wrapper, adding nothing.</summary>
@@ -274,23 +272,24 @@ public partial class MultiTenancyRegistrationTests
     /// then read the others' data - so startup refuses it, naming the service.
     /// </summary>
     [Fact]
-    public void AStorageReplacedAfterTheServer_IsRefusedAtStartup()
+    public async Task AStorageReplacedAfterTheServer_IsRefusedAtStartup()
     {
         var services = new ServiceCollection().AddServerStorage();
         services.ServeTenants(options => options.Tenants.Add(Acme));
         services.Replace(ServiceDescriptor.Singleton<IEntityStorage, DistributedCacheStorage>());
         using var provider = services.BuildServiceProvider();
 
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"{nameof(IEntityStorage)} resolves to {nameof(DistributedCacheStorage)}", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            $"{nameof(IEntityStorage)} resolves to {nameof(DistributedCacheStorage)}",
+            await HostStartup.RefusalAsync(provider),
+            StringComparison.Ordinal);
     }
 
     /// <summary>
     /// A budget of an enabled endpoint is checked as well, named with its key.
     /// </summary>
     [Fact]
-    public void AnEndpointBudgetReplacedAfterTheServer_IsRefusedAtStartup()
+    public async Task AnEndpointBudgetReplacedAfterTheServer_IsRefusedAtStartup()
     {
         var services = new ServiceCollection().AddServerStorage().AddIntrospection();
         services.ServeTenants(options => options.Tenants.Add(Acme));
@@ -300,9 +299,53 @@ public partial class MultiTenancyRegistrationTests
                 resource => RateLimitPartition.GetNoLimiter(resource.ClientId)));
         using var provider = services.BuildServiceProvider();
 
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains(CallerRateLimiters.Introspection, refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(CallerRateLimiters.Introspection, await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A limiter registered for one tenant's budget as a single instance would hand every tenant that instance, so
+    /// every tenant would spend one budget - startup refuses it before any tenant does.
+    /// </summary>
+    [Fact]
+    public async Task ALimiterForOneTenantsBudgetThatIsOneInstance_IsRefusedAtStartup()
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.ServeTenants(options => options.Tenants.Add(Acme));
+        services.AddKeyedSingleton(
+            TenantServiceKeys.PerTenant(CallerRateLimiters.AuthenticationFailures),
+            PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(
+            CallerRateLimiters.AuthenticationFailures,
+            await HostStartup.RefusalAsync(provider),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// With the tenants coming from the settings alone, a server declaring none could serve no request, so it does
+    /// not start.
+    /// </summary>
+    [Fact]
+    public async Task NoTenantDeclared_AndNoStoreToAddOneTo_RefusesTheStart()
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.ServeTenants(_ => { });
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(nameof(OidcOptions.Tenants), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A server whose tenants are kept in a store of the host's own starts with none, since they arrive while it
+    /// runs.
+    /// </summary>
+    [Fact]
+    public async Task NoTenantDeclared_WithAStoreToAddThemTo_Starts()
+    {
+        using var provider = new ServiceCollection().AddServerStorage().ServeTenants().BuildServiceProvider();
+
+        await HostStartup.StartingAsync(provider);
     }
 
     [Fact]

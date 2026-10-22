@@ -60,15 +60,11 @@ public partial class MultiTenancyRegistrationTests
     private static void UseTenantSigner(IServiceCollection services)
         => services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
 
-    private static string StartupRefusal(ServiceProvider provider)
-        => Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value).Message;
-
     /// <summary>
     /// One signing key configured for security events signs every tenant's events alike, so it refuses the start.
     /// </summary>
     [Fact]
-    public void ASigningKeyForTheWholeServer_IsRefusedAtStartup()
+    public async Task ASigningKeyForTheWholeServer_IsRefusedAtStartup()
     {
         using var provider = SigningEvents(options =>
             options.SigningKeySource =
@@ -76,7 +72,7 @@ public partial class MultiTenancyRegistrationTests
 
         Assert.Contains(
             nameof(SecurityEventsOptions.SigningKeySource),
-            StartupRefusal(provider),
+            await HostStartup.RefusalAsync(provider),
             StringComparison.Ordinal);
     }
 
@@ -84,12 +80,12 @@ public partial class MultiTenancyRegistrationTests
     /// A host's own signer signs every tenant's events alike, so it refuses the start.
     /// </summary>
     [Fact]
-    public void AHostsOwnSigner_IsRefusedAtStartup()
+    public async Task AHostsOwnSigner_IsRefusedAtStartup()
     {
         using var provider = SigningEvents(null, services =>
             services.Replace(ServiceDescriptor.Singleton(Mock.Of<ISecurityEventTokenSigner>())));
 
-        Assert.Contains(nameof(TenantSecurityEventTokenSigner), StartupRefusal(provider), StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -97,12 +93,12 @@ public partial class MultiTenancyRegistrationTests
     /// from the root where scopes are validated.
     /// </summary>
     [Fact]
-    public void AHostsOwnSignerForEachRequest_IsRefusedAtStartup()
+    public async Task AHostsOwnSignerForEachRequest_IsRefusedAtStartup()
     {
         using var provider = SigningEvents(null, services =>
             services.Replace(ServiceDescriptor.Scoped(_ => Mock.Of<ISecurityEventTokenSigner>())));
 
-        Assert.Contains(nameof(TenantSecurityEventTokenSigner), StartupRefusal(provider), StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
