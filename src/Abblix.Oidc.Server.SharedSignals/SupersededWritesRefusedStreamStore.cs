@@ -16,10 +16,9 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// replacement wrote the new one.
 /// </summary>
 /// <remarks>
-/// A refused write answers as one the store did not take, which the store of declared streams retries and gives up
-/// on, and a caller writing through the replaced store at the moment of the move retries. A write that passed the
-/// check before the replacement either loses to the replacement's write on the stream's version or is written over
-/// by it.
+/// A refused write answers as one the store did not take: the store of declared streams retries it and gives up,
+/// and a receiver's write that went through the replaced store is sent once more through the store the tenant is
+/// served now (<see cref="TenantConfiguredStreamStore"/>).
 /// </remarks>
 /// <param name="inner">The tenant's part of the store.</param>
 /// <param name="installed">Whether the store this backs is still the one the tenant is served.</param>

@@ -16,7 +16,7 @@ partial class ReleaseCheckingStreamStore
         EventId = LogEvents.Transmitter.ReleasedStreamNotDeleted,
         Level = LogLevel.Error,
         Message = "The stream {StreamId} of receiver {ReceiverId} was written after its tenant {TenantId} was released "
-                  + "and could not be deleted; nothing else will delete it")]
+                  + "and could not be deleted; it stays in the store until it is deleted by hand")]
     private partial void LogReleasedStreamNotDeleted(
         Exception exception,
         string ReceiverId,

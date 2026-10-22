@@ -23,7 +23,8 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <param name="logger">Records a stream left behind because its deletion failed.</param>
 /// <param name="inner">The tenant's part of the store.</param>
 /// <param name="released">Canceled once the creation of the tenant is released.</param>
-/// <param name="tenantId">The tenant and creation the part belongs to, as a stream left behind is logged with.</param>
+/// <param name="tenantId">The tenant and creation the part belongs to, as a stream left behind is logged with: the
+/// tenant's id, followed by '~' and its generation when it declares one.</param>
 internal sealed partial class ReleaseCheckingStreamStore(
     ILogger logger,
     IStreamStore inner,

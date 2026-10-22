@@ -266,7 +266,8 @@ public sealed partial class SharedSignalsTenantReleaseTests
         FakeTimeProvider time,
         IStreamStore? streams = null,
         ILoggerProvider? logs = null,
-        Action<IOidcServerBuilder>? declare = null)
+        Action<IOidcServerBuilder>? declare = null,
+        bool multipleStreamsPerReceiver = false)
     {
         await TestLicense.Loaded;
 
@@ -287,6 +288,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
             Issuer = Host,
             EventsSupported = [MembershipChanged],
             DefaultSubjectsMode = StreamSubjectsMode.All,
+            AllowMultipleStreamsPerReceiver = multipleStreamsPerReceiver,
         });
         if (streams is not null)
             builder.Services.Replace(ServiceDescriptor.Singleton(streams));
@@ -359,20 +361,27 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// Keeps the event id of every entry logged, so a test can tell which records were written.
+    /// Keeps the event id and the named values of every entry logged, so a test can tell which records were written
+    /// and what they name.
     /// </summary>
     private sealed class RecordingLoggerProvider : ILoggerProvider
     {
-        public System.Collections.Concurrent.ConcurrentBag<int> EventIds { get; } = [];
+        private readonly System.Collections.Concurrent.ConcurrentBag<Entry> _entries = [];
 
-        public ILogger CreateLogger(string categoryName) => new Recording(EventIds);
+        public IEnumerable<int> EventIds => _entries.Select(entry => entry.EventId);
+
+        public IEnumerable<Entry> Entries => _entries;
+
+        public ILogger CreateLogger(string categoryName) => new Recording(_entries);
 
         public void Dispose()
         {
             // Nothing is held
         }
 
-        private sealed class Recording(System.Collections.Concurrent.ConcurrentBag<int> eventIds) : ILogger
+        public sealed record Entry(int EventId, IReadOnlyDictionary<string, object?> Values);
+
+        private sealed class Recording(System.Collections.Concurrent.ConcurrentBag<Entry> entries) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -381,7 +390,11 @@ public sealed partial class SharedSignalsTenantReleaseTests
             public void Log<TState>(
                 LogLevel logLevel, EventId eventId, TState state, Exception? exception,
                 Func<TState, Exception?, string> formatter)
-                => eventIds.Add(eventId.Id);
+                => entries.Add(new Entry(
+                    eventId.Id,
+                    state is IEnumerable<KeyValuePair<string, object?>> values
+                        ? values.ToDictionary(StringComparer.Ordinal)
+                        : new Dictionary<string, object?>(StringComparer.Ordinal)));
         }
     }
 }

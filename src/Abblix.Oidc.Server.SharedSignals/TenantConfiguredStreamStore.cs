@@ -27,7 +27,8 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// which has no definition in force, the store is built from the first definition that asks and kept.
 /// <para>
 /// Every part of the store served for a tenant deletes a stream it creates after the tenant's creation is released
-/// (<see cref="ReleaseCheckingStreamStore"/>), so a write still under way at the release leaves nothing behind. A
+/// (<see cref="ReleaseCheckingStreamStore"/>), so a write still under way at the release leaves nothing behind
+/// unless that deletion fails, which is logged. A
 /// store of declared streams that another has replaced writes nothing more
 /// (<see cref="SupersededWritesRefusedStreamStore"/>), so its reconcile cannot bring back the issuer the tenant left.
 /// </para>
@@ -52,67 +53,92 @@ internal sealed class TenantConfiguredStreamStore(
     /// </summary>
     private sealed class Built
     {
-        public Built(string issuer, Func<Built, IStreamStore> build)
+        public Built(string space, string issuer, Func<Built, IStreamStore> build)
         {
+            Space = space;
             Issuer = issuer;
             Store = new Lazy<IStreamStore>(() => build(this));
         }
+
+        public string Space { get; }
 
         public string Issuer { get; }
 
         public Lazy<IStreamStore> Store { get; }
     }
 
+    /// <summary>The store a call is served, and the store of declared streams it is, when it is one.</summary>
+    private readonly record struct Serving(IStreamStore Store, Built? Declared);
+
     private readonly ConcurrentDictionary<string, Built> _stores = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
-        => Current.TryCreateAsync(stream, cancellationToken);
+        => WrittenAsync(store => store.TryCreateAsync(stream, cancellationToken));
 
     /// <inheritdoc />
     public Task<StreamState?> FindAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
-        => Current.FindAsync(receiverId, streamId, cancellationToken);
+        => Current.Store.FindAsync(receiverId, streamId, cancellationToken);
 
     /// <inheritdoc />
     public Task<IReadOnlyList<StreamState>> ListAsync(string receiverId, CancellationToken cancellationToken = default)
-        => Current.ListAsync(receiverId, cancellationToken);
+        => Current.Store.ListAsync(receiverId, cancellationToken);
 
     /// <inheritdoc />
     public Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
-        => Current.ListAllAsync(cancellationToken);
+        => Current.Store.ListAllAsync(cancellationToken);
 
     /// <inheritdoc />
     public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
-        => Current.UpdateAsync(stream, cancellationToken);
+        => WrittenAsync(store => store.UpdateAsync(stream, cancellationToken));
 
     /// <inheritdoc />
     public Task<bool> DeleteAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
-        => Current.DeleteAsync(receiverId, streamId, cancellationToken);
+        => WrittenAsync(store => store.DeleteAsync(receiverId, streamId, cancellationToken));
+
+    /// <summary>
+    /// Writes through the store the tenant is served, and once more through the one it is served then when the write
+    /// is refused by a store of declared streams a move replaced meanwhile, as a receiver's write queued behind that
+    /// store's reconcile is (<see cref="SupersededWritesRefusedStreamStore"/>).
+    /// </summary>
+    private async Task<bool> WrittenAsync(Func<IStreamStore, Task<bool>> write)
+    {
+        var serving = Current;
+        if (await write(serving.Store))
+            return true;
+
+        if (serving.Declared is null || IsCurrent(serving.Declared))
+            return false;
+
+        return await write(Current.Store);
+    }
 
     /// <summary>
     /// The store the current tenant is served, built as its first request would build it.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// The tenant declares a stream no request could be served from.</exception>
-    internal IStreamStore ForCurrentTenant() => Current;
+    internal IStreamStore ForCurrentTenant() => Current.Store;
 
-    private IStreamStore Current
+    private Serving Current
     {
         get
         {
             var tenant = tenantAccessor.CurrentTenant();
             var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
-            var own = new ReleaseCheckingStreamStore(logger, inner, released, TenantKey.IdOf(tenant));
+            var own = new ReleaseCheckingStreamStore(logger, inner, released, TenantKey.PartitionOf(tenant));
 
             // A released creation is served its part of the store alone: building its declared store again would
             // reconcile, writing the declared streams its release is deleting, and would do so on every call of the
             // release's own cleanup, which goes through here
             if (declared.Of(tenant.Id) is not { } streams || released.IsCancellationRequested)
-                return own;
+                return new Serving(own, null);
 
-            return catalog is StoreTenantCatalog served && served.InForce(tenant) is { } inForce
+            var built = catalog is StoreTenantCatalog served && served.InForce(tenant) is { } inForce
                 ? DeclaredStore(TenantKey.SpaceOf(tenant), inForce, true, streams, own, released)
                 : DeclaredStore(TenantKey.SpaceOf(tenant), tenant, false, streams, own, released);
+
+            return new Serving(built.Store.Value, built);
         }
     }
 
@@ -121,7 +147,7 @@ internal sealed class TenantConfiguredStreamStore(
     /// when it has none, or when <paramref name="inForce"/> says that definition is the one in force and the store
     /// was built for another issuer.
     /// </summary>
-    private IStreamStore DeclaredStore(
+    private Built DeclaredStore(
         string space,
         TenantDefinition builtFrom,
         bool inForce,
@@ -134,16 +160,17 @@ internal sealed class TenantConfiguredStreamStore(
         {
             var built = _stores.GetValueOrDefault(space);
             if (built is not null && (!inForce || built.Issuer == issuer))
-                return built.Store.Value;
+                return built;
 
             var created = new Built(
+                space,
                 issuer,
                 installed => Build(
                     builtFrom,
                     streams,
-                    new SupersededWritesRefusedStreamStore(own, () => IsCurrent(space, installed))));
+                    new SupersededWritesRefusedStreamStore(own, () => IsCurrent(installed))));
             if (Installed(space, built, created, released))
-                return created.Store.Value;
+                return created;
         }
     }
 
@@ -164,11 +191,10 @@ internal sealed class TenantConfiguredStreamStore(
     }
 
     /// <summary>
-    /// Whether <paramref name="built"/> is still the store of declared streams the creation <paramref name="space"/> is
-    /// served.
+    /// Whether <paramref name="built"/> is still the store of declared streams its creation is served.
     /// </summary>
-    private bool IsCurrent(string space, Built built)
-        => _stores.TryGetValue(space, out var current) && ReferenceEquals(current, built);
+    private bool IsCurrent(Built built)
+        => _stores.TryGetValue(built.Space, out var current) && ReferenceEquals(current, built);
 
     /// <summary>
     /// The store of the streams <paramref name="tenant"/> declares, naming its issuer and poll address.
