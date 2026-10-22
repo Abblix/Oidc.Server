@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -24,7 +25,8 @@ public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
-    TimeProvider clock) : IUpdateClientRequestProcessor
+    TimeProvider clock,
+    ITenantAccessor tenantAccessor) : IUpdateClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
@@ -69,7 +71,7 @@ public class UpdateClientRequestProcessor(
             null,
             registrationAccessTokenId);
 
-        if (!await clientInfoManager.TryUpdateClientAsync(
+        if (!await clientInfoManager.TryUpdateClientAsync(tenantAccessor.CurrentTenant(), 
                 request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
         {
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");

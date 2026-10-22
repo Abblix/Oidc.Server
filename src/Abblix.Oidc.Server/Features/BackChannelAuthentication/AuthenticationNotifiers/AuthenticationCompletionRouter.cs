@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -26,12 +27,14 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
 /// <param name="storage">Holds the stored request, whose client decides the route.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class AuthenticationCompletionRouter(
     ILogger<AuthenticationCompletionRouter> logger,
     CredentialFingerprints fingerprints,
     IClientInfoProvider clientInfoProvider,
     IServiceProvider serviceProvider,
-    IBackChannelRequestStorage storage) : IAuthenticationCompletionHandler
+    IBackChannelRequestStorage storage,
+    ITenantAccessor tenantAccessor) : IAuthenticationCompletionHandler
 {
     private static readonly string[] AllDeliveryModes =
     [
@@ -94,7 +97,7 @@ public partial class AuthenticationCompletionRouter(
         }
 
         var clientId = stored.AuthorizedGrant.Context.ClientId;
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(fingerprints.Of(authenticationRequestId), clientId);

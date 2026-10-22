@@ -58,6 +58,7 @@ public class DPoPTokenEndpointValidatorTests
     private readonly Mock<INonceService> _nonceService = new(MockBehavior.Strict);
     private readonly Mock<IOptionsMonitor<OidcOptions>> _options = new(MockBehavior.Strict);
     private readonly OidcOptions _opts = new();
+    private readonly TestIssuer _issuer = new();
     private readonly DPoPTokenEndpointValidator _validator;
 
     public DPoPTokenEndpointValidatorTests()
@@ -69,7 +70,7 @@ public class DPoPTokenEndpointValidatorTests
             _proofValidator.Object,
             _nonceService.Object,
             _options.Object,
-            SingleIssuer.SettingsOf(Options.Create(_options.Object.CurrentValue)));
+            SingleIssuer.SettingsOf(() => _issuer, _opts));
     }
 
     [Fact]
@@ -215,7 +216,7 @@ public class DPoPTokenEndpointValidatorTests
     [Fact]
     public async Task ValidateAsync_MissingHeaderGlobalDefaultFapi2_ReturnsInvalidDPoPProof()
     {
-        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        _issuer.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
 
         var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
@@ -232,7 +233,7 @@ public class DPoPTokenEndpointValidatorTests
     [Fact]
     public async Task ValidateAsync_MissingHeaderExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
     {
-        _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
+        _issuer.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
         var context = CreateContext(
             proofJwt: null, clientRequiresDPoP: false, securityProfile: ClientSecurityProfile.None);
 

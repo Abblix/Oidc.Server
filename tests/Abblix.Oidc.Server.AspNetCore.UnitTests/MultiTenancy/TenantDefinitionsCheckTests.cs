@@ -10,11 +10,10 @@ using System;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -26,18 +25,19 @@ public class TenantDefinitionsCheckTests
     private static string? FailureOf(params TenantDefinition[] tenants) => FailureOf(allowHttp: false, tenants);
 
     /// <summary>
-    /// The refusals of the tenant list, judged as the server judges it: the tenants' own definitions, and each
-    /// tenant's settings by the server's check of its issuer.
+    /// The refusals of the tenant list, judged as the server judges it at startup.
     /// </summary>
     private static string? FailureOf(bool allowHttp, params TenantDefinition[] tenants)
     {
-        var settings = new TenantSettingsCheck(
-            Options.Create(new OidcOptions { AllowHttpIssuer = allowHttp }),
-            [new IssuerOptionsValidator()]);
-        var result = new TenantListValidator([new TenantDefinitionsCheck(), settings])
-            .Validate(null, new MultiTenancyOptions { Tenants = [..tenants] });
+        var result = ValidatorOf(new TenantDefinitionsCheck())
+            .Validate(null, new OidcOptions { AllowHttpIssuer = allowHttp, Tenants = [..tenants] });
         return result.Failed ? result.FailureMessage : null;
     }
+
+    /// <summary>
+    /// The startup check of the tenant list with <paramref name="checks"/>.
+    /// </summary>
+    private static TenantListValidator ValidatorOf(params ITenantsCheck[] checks) => new(checks);
 
     private static TenantDefinition Tenant(string id, string issuer)
         => new() { Id = id, Issuer = new Uri(issuer, UriKind.RelativeOrAbsolute) };
@@ -61,7 +61,7 @@ public class TenantDefinitionsCheckTests
             new TenantDefinition { Id = "acme", Issuer = null! },
             new TenantDefinition { Id = string.Empty, Issuer = null! },
             Tenant("globex", "https://globex.example.com"),
-        ]).ToArray();
+        ], new OidcOptions()).ToArray();
 
         Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme"]));
         Assert.DoesNotContain(refusals, refusal => refusal.TenantIds.Contains("globex"));
@@ -161,7 +161,7 @@ public class TenantDefinitionsCheckTests
         var outer = Tenant("acme", "https://auth.example.com/tenants/acme");
         var inner = Tenant("globex", "https://auth.example.com/tenants/acme/eu");
 
-        var refusal = Assert.Single(new TenantDefinitionsCheck().Check(innerFirst ? [inner, outer] : [outer, inner]));
+        var refusal = Assert.Single(new TenantDefinitionsCheck().Check(innerFirst ? [inner, outer] : [outer, inner], new OidcOptions()));
 
         Assert.Equal(["acme", "globex"], refusal.TenantIds);
     }
@@ -189,10 +189,10 @@ public class TenantDefinitionsCheckTests
     [InlineData(60)] // longer than the timer reading the store accepts
     public void ARefreshPeriodTheTimerCannotKeep_IsRefused(int days)
     {
-        var result = new TenantListValidator([])
-            .Validate(null, new MultiTenancyOptions { RefreshEvery = TimeSpan.FromDays(days) });
+        var result = ValidatorOf()
+            .Validate(null, new OidcOptions { RefreshTenantsEvery = TimeSpan.FromDays(days) });
 
-        Assert.Contains(nameof(MultiTenancyOptions.RefreshEvery), result.FailureMessage, StringComparison.Ordinal);
+        Assert.Contains(nameof(OidcOptions.RefreshTenantsEvery), result.FailureMessage, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -208,7 +208,7 @@ public class TenantDefinitionsCheckTests
             Tenant("globex", "https://auth.example.com/tenants/x"),
             Tenant("initech", "https://init\u200Dech.example.com"),
             Tenant("umbrella", "https://umbrella.example.com"),
-        ]).ToArray();
+        ], new OidcOptions()).ToArray();
 
         Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme", "globex"]));
         Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["initech"]));
@@ -293,7 +293,7 @@ public class TenantDefinitionsCheckTests
             Clients = [new ClientInfo("named") { OfflineAccess = OfflineAccess.Allowed }],
         };
 
-        var refusals = new TenantDefinitionsCheck().Check([acme, globex]).ToArray();
+        var refusals = new ClientOfflineAccessCheck().Check([acme, globex], new OidcOptions()).ToArray();
 
         Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme"]));
         Assert.DoesNotContain(refusals, refusal => refusal.TenantIds.Contains("globex"));
@@ -315,7 +315,7 @@ public class TenantDefinitionsCheckTests
     [InlineData("acme", "g~1")]
     public void ATenantThatCannotNameItsData_IsRefused_WithoutAnyCheck(string id, string generation)
     {
-        var result = new TenantListValidator([]).Validate(null, new MultiTenancyOptions
+        var result = ValidatorOf().Validate(null, new OidcOptions
         {
             Tenants =
             [

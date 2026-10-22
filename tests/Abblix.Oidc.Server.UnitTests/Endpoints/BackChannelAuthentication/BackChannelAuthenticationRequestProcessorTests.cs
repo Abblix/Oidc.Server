@@ -28,6 +28,7 @@ using Moq;
 using Xunit;
 using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using WireRequest = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication;
 
@@ -59,8 +60,8 @@ public class BackChannelAuthenticationRequestProcessorTests
         // A public client, so the session's subject is what the client sees. The pairwise direction is the
         // shared comparison's own business and is covered where it lives.
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<string>(), It.IsAny<ClientInfo>()))
-            .Returns((string subject, ClientInfo _) => subject);
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         _storage
             .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
@@ -71,7 +72,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             options.Object,
             _handler.Object,
             TimeProvider.System,
-            _subjectTypeConverter.Object);
+            _subjectTypeConverter.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private ValidBackChannelAuthenticationRequest Request(

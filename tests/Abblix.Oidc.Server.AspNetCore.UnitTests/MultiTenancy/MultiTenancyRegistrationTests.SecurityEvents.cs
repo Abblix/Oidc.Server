@@ -22,7 +22,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Moq;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -47,11 +46,10 @@ public partial class MultiTenancyRegistrationTests
         tenant ??= TenantSigning;
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.AddSecurityEvents(configure);
         arrange?.Invoke(services);
-        services.AddServerStorage().AddMultiTenancy(options =>
+        services.AddServerStorage().ServeTenants(options =>
         {
             options.Tenants.Add(tenant("acme"));
             options.Tenants.Add(tenant("globex"));
@@ -62,15 +60,11 @@ public partial class MultiTenancyRegistrationTests
     private static void UseTenantSigner(IServiceCollection services)
         => services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
 
-    private static string StartupRefusal(ServiceProvider provider)
-        => Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value).Message;
-
     /// <summary>
     /// One signing key configured for security events signs every tenant's events alike, so it refuses the start.
     /// </summary>
     [Fact]
-    public void ASigningKeyForTheWholeServer_IsRefusedAtStartup()
+    public async Task ASigningKeyForTheWholeServer_IsRefusedAtStartup()
     {
         using var provider = SigningEvents(options =>
             options.SigningKeySource =
@@ -78,7 +72,7 @@ public partial class MultiTenancyRegistrationTests
 
         Assert.Contains(
             nameof(SecurityEventsOptions.SigningKeySource),
-            StartupRefusal(provider),
+            await HostStartup.RefusalAsync(provider),
             StringComparison.Ordinal);
     }
 
@@ -86,12 +80,12 @@ public partial class MultiTenancyRegistrationTests
     /// A host's own signer signs every tenant's events alike, so it refuses the start.
     /// </summary>
     [Fact]
-    public void AHostsOwnSigner_IsRefusedAtStartup()
+    public async Task AHostsOwnSigner_IsRefusedAtStartup()
     {
         using var provider = SigningEvents(null, services =>
             services.Replace(ServiceDescriptor.Singleton(Mock.Of<ISecurityEventTokenSigner>())));
 
-        Assert.Contains(nameof(TenantSecurityEventTokenSigner), StartupRefusal(provider), StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -99,12 +93,12 @@ public partial class MultiTenancyRegistrationTests
     /// from the root where scopes are validated.
     /// </summary>
     [Fact]
-    public void AHostsOwnSignerForEachRequest_IsRefusedAtStartup()
+    public async Task AHostsOwnSignerForEachRequest_IsRefusedAtStartup()
     {
         using var provider = SigningEvents(null, services =>
             services.Replace(ServiceDescriptor.Scoped(_ => Mock.Of<ISecurityEventTokenSigner>())));
 
-        Assert.Contains(nameof(TenantSecurityEventTokenSigner), StartupRefusal(provider), StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -124,7 +118,7 @@ public partial class MultiTenancyRegistrationTests
                 JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256),
             ],
         });
-        var acme = provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants
+        var acme = provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants
             .Single(tenant => tenant.Id == "acme");
         EnterTenant(provider, acme);
 
@@ -145,7 +139,7 @@ public partial class MultiTenancyRegistrationTests
     {
         using var provider = SigningEvents(null, tenantSigner ? UseTenantSigner : null);
 
-        Assert.NotNull(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+        Assert.NotNull(provider.GetRequiredService<IOptions<OidcOptions>>().Value);
     }
 
     /// <summary>
@@ -157,7 +151,7 @@ public partial class MultiTenancyRegistrationTests
     {
         using var provider = SigningEvents(null, UseTenantSigner);
         var signer = provider.GetRequiredService<ISecurityEventTokenSigner>();
-        var tenants = provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants;
+        var tenants = provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants;
 
         async Task<string?> KeyIdAtAsync(TenantDefinition tenant)
         {

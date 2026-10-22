@@ -7,55 +7,35 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 
 /// <summary>
-/// Serves several isolated tenants from one deployment.
+/// Resolves each request to the tenant it is addressed to.
 /// </summary>
-/// <remarks>
-/// A host that never calls these works as before: one tenant, nothing about it in the path.
-/// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public static class MultiTenancyExtensions
 {
     /// <summary>
-    /// Registers tenant resolution, and makes every issuer the resolved tenant's.
+    /// Registers what tells the tenant of the current request: the one the innermost <see cref="TenantScope"/>
+    /// names, or else the one <see cref="TenantResolutionMiddleware"/> resolved the request to.
     /// </summary>
     /// <remarks>
-    /// Each tenant declares its issuer in <see cref="TenantDefinition.Issuer"/>, so
-    /// <see cref="OidcOptions.Issuer"/> must be left unset, and startup refuses it otherwise.
-    /// Call this after <c>AddOidcServices</c> and every other <c>Add*</c> of the server: it keeps each tenant's
-    /// data apart by wrapping the services those calls registered, so it refuses when one is not registered yet,
-    /// and startup refuses a server in which a later registration replaced or wrapped a wrapper. Call it once.
-    /// The users, the consents and the steps a host requires before issuing stay the host's and are not partitioned
-    /// here: a host keeping them apart per tenant reads the tenant of the request from <see cref="ITenantAccessor"/>
-    /// in its <c>IUserInfoProvider</c>, <c>IUserConsentsProvider</c> and <c>IUserInteractionRequirement</c>.
+    /// It takes the place of the server's own <see cref="AmbientTenantAccessor"/>, which knows no request, whichever
+    /// was registered first, and leaves an accessor of the host's own in place.
     /// </remarks>
-    /// <returns>The builder a feature made per tenant is turned on by.</returns>
-    public static IMultiTenancyBuilder AddMultiTenancy(
-        this IServiceCollection services,
-        Action<MultiTenancyOptions> configure)
+    internal static IServiceCollection AddTenantResolution(this IServiceCollection services)
     {
-        // A second call would wrap the storage again, and every key it holds would change.
-        if (services.Any(descriptor => descriptor.ImplementationType == typeof(TenantSeamsValidator)))
-        {
-            throw new InvalidOperationException(
-                $"{nameof(AddMultiTenancy)}() has already been called; configure every tenant in that one call.");
-        }
+        services.AddHttpContextAccessor();
 
-        services.AddOptions<MultiTenancyOptions>().Configure(configure).ValidateOnStart();
-        services.AddTenantValidation();
-        services.AddTenantResolution();
+        var registered = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(ITenantAccessor));
+        if (registered is null || registered.ImplementationType == typeof(AmbientTenantAccessor))
+            services.Replace(ServiceDescriptor.Singleton<ITenantAccessor, HttpContextTenantAccessor>());
 
-        foreach (var seam in TenantSeams.All)
-            seam.Wrap(services);
-
-        return new MultiTenancyBuilder(services);
+        return services;
     }
 
     /// <summary>
@@ -65,9 +45,8 @@ public static class MultiTenancyExtensions
     /// Routing is added right after resolution, because the path of a tenant's issuer moves into the path base
     /// and the route has to be matched on what is left: a web application that routes on its own would otherwise
     /// match the endpoints against the full path and answer every tenant served under a path 404. So call this
-    /// BEFORE any
-    /// <c>UseRouting</c> of the host's - a call placed after one is refused, since a route matched there, a
-    /// fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
+    /// BEFORE any <c>UseRouting</c> of the host's - a call placed after one is refused, since a route matched there,
+    /// a fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
     /// cookie then takes the tenant's path and does not reach another tenant on the same host. A path base set
     /// before this call, by <c>UsePathBase</c> for one, is compared with the issuer's path exactly, the case of an
     /// encoded slash aside, so a request spelling it in another case reaches no tenant.

@@ -303,32 +303,6 @@ public class ClientJwksConfigurationExtensionsTests
         Assert.Equal("dk", derived.Jwks.Keys.Single().KeyId);
     }
 
-    [Fact]
-    public void OidcOptionsWrapper_DelegatesToClientArrayExtension()
-    {
-        const string json = """
-            {
-              "Clients": [
-                {
-                  "ClientId": "wrap",
-                  "Jwks": {
-                    "Keys": [{ "kty": "RSA", "kid": "w", "n": "AQAB", "e": "AQAB" }]
-                  }
-                }
-              ]
-            }
-            """;
-        var config = new ConfigurationBuilder()
-            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
-            .Build();
-
-        var opts = new OidcOptions { Clients = [new ClientInfo("wrap")] };
-        opts.AddClientJwksFromConfiguration(config.GetSection("Clients"));
-
-        var key = Assert.IsType<RsaJsonWebKey>(opts.Clients.First().Jwks!.Keys.Single());
-        Assert.Equal("w", key.KeyId);
-    }
-
     /// <summary>
     /// Regression coverage for the .NET 10 binder edge case. On .NET 10 the standard
     /// configuration binder pre-creates a non-null <see cref="JsonWebKeySet"/> for the

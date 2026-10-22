@@ -10,6 +10,7 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
@@ -151,6 +152,7 @@ public partial class BackChannelAuthenticationTests
         DateTimeOffset sessionBegan,
         DateTimeOffset? authorizedAt)
     {
+        using var tenant = TestTenant.Enter(host.Services);
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
 
@@ -241,7 +243,7 @@ public partial class BackChannelAuthenticationTests
     }
 
     private static ITokenRevoker RevokerOf(WebApplicationFactory<Program> host)
-        => host.Services.GetRequiredService<ITokenRevoker>();
+        => TestTenant.RevokerOf(host.Services);
 
     private static TimeProvider ClockOf(WebApplicationFactory<Program> host)
         => host.Services.GetRequiredService<TimeProvider>();

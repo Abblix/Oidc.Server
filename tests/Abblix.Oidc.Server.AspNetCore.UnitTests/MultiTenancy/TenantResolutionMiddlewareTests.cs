@@ -9,6 +9,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
@@ -17,8 +18,6 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -33,7 +32,7 @@ public class TenantResolutionMiddlewareTests
 
     // Nested tenants among these, which the server's checks refuse: a catalog of the host's own may still serve them,
     // and the longest path is what resolves a request there
-    private static readonly MultiTenancyOptions Declared = new()
+    private static readonly OidcOptions Declared = new()
     {
         Tenants =
         [

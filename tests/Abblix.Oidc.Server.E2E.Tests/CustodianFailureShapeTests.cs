@@ -7,9 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -27,31 +28,56 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 public sealed class CustodianFailureShapeTests
 {
     /// <summary>
-    /// Stands in for a key provider whose custodian is refusing, naming the role that asked so a test can tell
-    /// which of the two enumerations the response came from.
+    /// A custodian that refuses, naming the key that was asked for so a test can tell which enumeration the
+    /// response came from.
     /// </summary>
-    private sealed class FailingKeysProvider(Func<string, Exception> failure) : IAuthServiceKeysProvider
+    private sealed class FailingCustodian(Func<string, Exception> failure) : IKeyCustodian
     {
-        public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
-            => Refuse("encryption");
+        public Task<byte[]> SignAsync(
+            string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+            => throw failure(keyId);
 
-        public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-            => Refuse("signing");
+        public Task<byte[]?> UnwrapKeyAsync(
+            string keyId,
+            string algorithm,
+            JsonWebTokenHeader header,
+            byte[] encryptedKey,
+            CancellationToken cancellationToken)
+            => throw failure(keyId);
 
-        private async IAsyncEnumerable<JsonWebKey> Refuse(string role)
+        public Task<byte[]?> AgreeKeyAsync(
+            string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
+            => throw failure(keyId);
+
+        public bool ServesKeyManagement(string algorithm) => true;
+
+        public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
+            string keyName, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.Yield();
-            throw failure(role);
+            throw failure(keyName);
 #pragma warning disable CS0162 // Unreachable, and required: a method without a yield is not an iterator.
             yield break;
 #pragma warning restore CS0162
         }
     }
 
+    /// <summary>
+    /// A client of the test host whose tenant keeps its keys in a custodian that refuses as
+    /// <paramref name="failure"/> says.
+    /// </summary>
     private static HttpClient ClientWhoseKeysFail(TestFactory factory, Func<string, Exception> failure)
         => factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-                services.AddSingleton<IAuthServiceKeysProvider>(new FailingKeysProvider(failure))))
+            {
+                services.AddSingleton<IKeyCustodian>(new FailingCustodian(failure));
+                services.AddCustodian<FailingCustodian>().UseKeysInCustodian();
+                services.PostConfigure<TestTenantSettings>(tenant =>
+                {
+                    tenant.SigningKeys = [];
+                    tenant.CustodianKeys = new CustodianHeldKeys { SigningKeyName = "signing" };
+                });
+            }))
             .CreateClient(new WebApplicationFactoryClientOptions
             {
                 AllowAutoRedirect = false,

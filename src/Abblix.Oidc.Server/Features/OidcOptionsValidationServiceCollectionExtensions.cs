@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -16,26 +17,24 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features;
 
 /// <summary>
-/// Registers the validators that judge <see cref="OidcOptions"/> when the host starts.
+/// Registers the validators that judge <see cref="OidcOptions"/> when the host starts, and the checks that judge
+/// each tenant's own settings wherever a tenant enters the server.
 /// </summary>
 internal static class OidcOptionsValidationServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the startup validators of <see cref="OidcOptions"/>.
+    /// Registers the startup validators of <see cref="OidcOptions"/> and the checks of the tenants' settings.
     /// </summary>
     /// <remarks>
     /// Called by <see cref="ServiceCollectionExtensions.AddClientInformation"/>, so every host that serves clients
     /// has its settings judged before it starts.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the validators to.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddOidcOptionsValidators(this IServiceCollection services)
     {
-        // Fail loud at startup when a statically-configured client cannot satisfy its effective
-        // security profile, instead of letting the contradiction surface per-request. TryAddEnumerable
-        // because the options framework resolves every registered IValidateOptions.
+        // Fail loud at startup when a security profile removes a control without the ones replacing it
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, OidcOptionsSecurityProfileValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SecurityProfileRelaxationsValidator>());
 
         // Fail loud at startup when a configured secret-bearing length is below the security floor
         // for its kind, instead of generating a guessable secret or an unusable HMAC key at runtime.
@@ -43,26 +42,6 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SecretLengthOptionsValidator>());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RevocationRetentionOptionsValidator>());
-
-        // Fail loud at startup when a client that authenticates by shared secret has none, or carries a
-        // hash of the wrong length, instead of refusing that client on every request it ever makes.
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientSecretsOptionsValidator>());
-
-        // Fail loud at startup when the host keeps registrations for tenants on a server without them, where its
-        // store would never be asked and the registrations would stay in memory
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, TenantClientRegistrationStoreValidator>());
-
-        // Fail loud at startup when the client or resource registry could not hold what is configured, instead
-        // of failing every request that builds it, without naming what it could not hold.
-        services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdsOptionsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientOfflineAccessOptionsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RefreshTokenReusePolicyValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, PairwiseClientsOptionsValidator>(),
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ResourceDefinitionsValidator>(),
-        ]);
 
         // Fail loud at startup when EnabledEndpoints advertises an opt-in endpoint whose feature services were
         // never registered by the matching AddX() call, instead of 500-ing on every request to it.
@@ -74,22 +53,32 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
 
-        // Refuse a default resource indicator that no resource server could accept, rather than minting every
-        // access token with an audience nothing recognizes.
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>());
-
         // Refuse a registration body limit that would answer every request with a refusal, which surfaces as
         // a broken endpoint rather than as the misconfiguration it is.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RegistrationRequestSizeValidator>());
 
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewCeilingValidator>());
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, BackChannelClientAuthenticationValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewValidator>());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, FingerprintKeyValidator>());
+
+        // Refuse a tenant whose clients, resources or keys the server could not serve, wherever it enters the
+        // server, instead of failing every request that meets the contradiction without naming it
+        services.TryAddEnumerable([
+            ServiceDescriptor.Singleton<ITenantsCheck, SecurityProfileCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ClientSecretsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ClientIdsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ClientOfflineAccessCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, RefreshTokenReusePolicyCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, PairwiseClientsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ResourceDefinitionsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, DefaultResourceIndicatorCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ServiceTokenEncryptionKeysCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ClockSkewCeilingCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, BackChannelClientAuthenticationCheck>(),
+        ]);
+
         return services;
     }
 }

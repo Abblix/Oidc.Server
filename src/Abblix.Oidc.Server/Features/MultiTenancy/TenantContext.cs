@@ -17,7 +17,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// Carries the whole definition, since what a request needs of its tenant is read synchronously while the
 /// catalog that holds it is asynchronous.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantContext
 {
     /// <summary>

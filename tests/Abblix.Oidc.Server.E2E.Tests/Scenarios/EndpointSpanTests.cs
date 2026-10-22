@@ -144,6 +144,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             var admitted = key switch
             {
                 TelemetryTags.Endpoint => endpoints.Contains(value),
+                TelemetryTags.Tenant => value == TestTenantSettings.TenantId,
                 TelemetryTags.Stage => stages.Contains(value),
                 TelemetryTags.GrantType => grantTypes.Contains(value),
                 TelemetryTags.ResponseType => value.Split(' ') is var parts &&

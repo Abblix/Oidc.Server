@@ -13,8 +13,6 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 

@@ -23,8 +23,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -44,30 +42,12 @@ public partial class MultiTenancyRegistrationTests
             PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[16]) },
         };
         var services = new ServiceCollection().AddServerStorage();
-        services.AddMultiTenancy(options => options.Tenants.Add(tooShort));
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
-        Assert.Contains("Tenant 'acme': The pairwise salt must decode to at least", refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A pairwise key registered for the whole server would be ignored under multi-tenancy, so startup refuses it.
-    /// </summary>
-    [Fact]
-    public void AServerWidePairwiseKey_IsRefusedAtStartup()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions<OidcOptions>();
-        services.AddPairwiseSubjectIdentifiers(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.ServeTenants(options => options.Tenants.Add(tooShort));
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains($"A {nameof(PairwiseSubjectSettings)} registered for the whole server", refusal.Message,
-            StringComparison.Ordinal);
+        Assert.Contains("Tenant 'acme': The pairwise salt must decode to at least", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -77,9 +57,8 @@ public partial class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>().Configure(options => configure?.Invoke(options));
-        services.AddIssuer();
         services.AddAuthServiceJwt();
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(tenant));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(tenant));
         return services.BuildServiceProvider();
     }
 
@@ -93,7 +72,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = KeysFromSettings(Acme);
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains("Tenant 'acme': No signing key is declared", refusal.Message, StringComparison.Ordinal);
         Assert.Contains($"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}", refusal.Message,
             StringComparison.Ordinal);
@@ -110,7 +89,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddDistributedMemoryCache();
         services.AddMemoryCache();
         services.AddOidcCore(options => options.ServiceTokens.AccessToken.Encrypt = true);
-        services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        services.ServeTenants(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
             Issuer = new Uri(AcmeIssuer),
@@ -119,7 +98,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(
             "Tenant 'acme': ServiceTokens.AccessToken.Encrypt is true, but no encryption key is available: " +
             $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)} is empty",
@@ -138,7 +117,7 @@ public partial class MultiTenancyRegistrationTests
         services.AddDistributedMemoryCache();
         services.AddMemoryCache();
         services.AddOidcCore(options => options.ServiceTokens.AccessToken.Encrypt = true);
-        services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        services.ServeTenants(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
             Issuer = new Uri(AcmeIssuer),
@@ -147,38 +126,47 @@ public partial class MultiTenancyRegistrationTests
         }));
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
         Assert.NotNull(provider.GetRequiredService<IOptions<OidcOptions>>().Value);
     }
 
+    private const string HostRule = "The host signs with one key at a time.";
+
+    /// <summary>A rule of the host's own over each tenant's settings.</summary>
+    private sealed class OneSigningKeyAtATime : ITenantsCheck
+    {
+        public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
+            =>
+                from tenant in tenants
+                where tenant.SigningKeys.Count > 1
+                select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {HostRule}");
+    }
+
     /// <summary>
-    /// A rule the host adds to the server's settings the usual way, bound to the default name, judges each tenant's
-    /// settings too, and its refusal names the tenant.
+    /// A rule the host registers as a check of the tenant list judges each tenant's settings at startup, beside the
+    /// server's own checks.
     /// </summary>
     [Fact]
     public void AHostsOwnRule_JudgesEachTenantsSettings()
     {
-        const string HostRule = "The host signs with one key at a time.";
-
         // The same tenant starts without the rule, so the refusal below is the rule's
         using var withoutTheRule = TwoSigningKeys(hostRule: false);
-        Assert.NotEmpty(withoutTheRule.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotEmpty(withoutTheRule.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
 
         using var withTheRule = TwoSigningKeys(hostRule: true);
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => withTheRule.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => withTheRule.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains($"Tenant 'acme': {HostRule}", refusal.Message, StringComparison.Ordinal);
 
         ServiceProvider TwoSigningKeys(bool hostRule)
         {
             var services = new ServiceCollection();
-            var options = services.AddOptions<OidcOptions>();
+            services.AddOptions<OidcOptions>();
             if (hostRule)
-                options.Validate(settings => settings.SigningKeys.Count <= 1, HostRule);
+                services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantsCheck, OneSigningKeyAtATime>());
 
-            services.AddIssuer();
             services.AddAuthServiceJwt();
-            services.AddServerStorage().AddMultiTenancy(tenants => tenants.Tenants.Add(new TenantDefinition
+            services.AddServerStorage().ServeTenants(tenants => tenants.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
                 Issuer = new Uri(AcmeIssuer),
@@ -211,9 +199,8 @@ public partial class MultiTenancyRegistrationTests
         var globex = TenantWithKeys("globex");
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
-        services.AddServerStorage().AddMultiTenancy(options =>
+        services.AddServerStorage().ServeTenants(options =>
         {
             options.Tenants.Add(acme);
             options.Tenants.Add(globex);
@@ -254,8 +241,8 @@ public partial class MultiTenancyRegistrationTests
                 {
                     TokenTypes = TokenTypePolicy.CheckedByCaller,
                     Options = ValidationOptions.RequireValidSignedTokens,
-                    ResolveIssuerSigningKeys = _ => keys.GetSigningKeys(),
-                    ResolveTokenDecryptionKeys = _ => keys.GetEncryptionKeys(true),
+                    ResolveIssuerSigningKeys = _ => keys.GetSigningKeys(Entered(provider)),
+                    ResolveTokenDecryptionKeys = _ => keys.GetEncryptionKeys(Entered(provider), true),
                 });
         }
     }
@@ -279,9 +266,8 @@ public partial class MultiTenancyRegistrationTests
         var globex = TenantWithKeys("globex");
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
-        services.AddServerStorage().AddMultiTenancy(options =>
+        services.AddServerStorage().ServeTenants(options =>
         {
             options.Tenants.Add(acme);
             options.Tenants.Add(globex);
@@ -291,10 +277,10 @@ public partial class MultiTenancyRegistrationTests
         var ct = TestContext.Current.CancellationToken;
 
         EnterTenant(provider, acme);
-        var acmeDecrypts = await keys.GetEncryptionKeys(includePrivateKeys: true).ToArrayAsync(ct);
-        var acmeSigns = await keys.GetSigningKeys(includePrivateKeys: true).ToArrayAsync(ct);
+        var acmeDecrypts = await keys.GetEncryptionKeys(Entered(provider), includePrivateKeys: true).ToArrayAsync(ct);
+        var acmeSigns = await keys.GetSigningKeys(Entered(provider), includePrivateKeys: true).ToArrayAsync(ct);
         EnterTenant(provider, globex);
-        var globexDecrypts = await keys.GetEncryptionKeys(includePrivateKeys: true).ToArrayAsync(ct);
+        var globexDecrypts = await keys.GetEncryptionKeys(Entered(provider), includePrivateKeys: true).ToArrayAsync(ct);
 
         Assert.Equal("acme-enc", Assert.Single(acmeDecrypts).KeyId);
         Assert.Equal("acme-sig", Assert.Single(acmeSigns).KeyId);
@@ -309,13 +295,12 @@ public partial class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.AddSingleton(Moq.Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(Moq.It.IsAny<string>())));
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
     }
 
     private static TenantDefinition NamingInTheCustodian(string id, string signingKeyName) => new()
@@ -352,13 +337,12 @@ public partial class MultiTenancyRegistrationTests
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(custodian.Object);
         services.AddJsonWebTokens();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         if (serverWideKeys is null)
             services.RequireKeyPlacement().UseKeysInCustodian();
         else
             services.RequireKeyPlacement().UseKeysInCustodian(serverWideKeys);
-        services.AddServerStorage().AddMultiTenancy(options =>
+        services.AddServerStorage().ServeTenants(options =>
         {
             foreach (var tenant in tenants)
                 options.Tenants.Add(tenant);
@@ -375,13 +359,13 @@ public partial class MultiTenancyRegistrationTests
         var acme = NamingInTheCustodian("acme", "acme-sign");
         var globex = NamingInTheCustodian("globex", "globex-sign");
         using var provider = KeysInACustodian([acme, globex]);
-        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         EnterTenant(provider, acme);
-        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
         EnterTenant(provider, globex);
-        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("acme-sign", Assert.Single(atAcme).KeyId);
         Assert.Equal("globex-sign", Assert.Single(atGlobex).KeyId);
@@ -396,7 +380,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = KeysInACustodian([Acme]);
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains("Tenant 'acme': The keys are held by a custodian, and none is named", refusal.Message,
             StringComparison.Ordinal);
     }
@@ -412,7 +396,7 @@ public partial class MultiTenancyRegistrationTests
             [NamingInTheCustodian("acme", "shared-sign"), NamingInTheCustodian("globex", "shared-sign")]);
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains("The custodian key 'shared-sign' is named by the tenants 'acme', 'globex'", refusal.Message,
             StringComparison.Ordinal);
     }
@@ -434,7 +418,7 @@ public partial class MultiTenancyRegistrationTests
             },
         ]);
 
-        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
     }
 
     /// <summary>
@@ -460,7 +444,7 @@ public partial class MultiTenancyRegistrationTests
         ]);
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(EncryptionAlgorithms.KeyManagement.RsaOaep + "'", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -480,7 +464,7 @@ public partial class MultiTenancyRegistrationTests
         });
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(
             $"Tenant 'acme': {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)} is declared, " +
             "but the keys come from each tenant's settings",
@@ -506,7 +490,7 @@ public partial class MultiTenancyRegistrationTests
         ]);
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(
             $"Tenant 'acme': {nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)} is declared, " +
             "but the keys are held by a custodian",
@@ -515,7 +499,8 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// Custodian keys named for the whole server would be ignored under multi-tenancy, so startup refuses them.
+    /// Custodian keys named for the whole server would be ignored, each tenant naming its own, so startup refuses
+    /// them.
     /// </summary>
     [Fact]
     public void CustodianKeysNamedForTheWholeServer_AreRefusedAtStartup()
@@ -526,7 +511,7 @@ public partial class MultiTenancyRegistrationTests
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains("The custodian's keys named for the whole server are not used under multi-tenancy",
+        Assert.Contains("The custodian's keys named for the whole server are not used",
             refusal.Message, StringComparison.Ordinal);
     }
 
@@ -556,11 +541,10 @@ public partial class MultiTenancyRegistrationTests
         services.AddSingleton(Moq.Mock.Of<IKeyRingStore>());
         services.AddSingleton(rings.Object);
         services.AddJsonWebTokens();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
         host(services);
-        services.AddServerStorage().AddMultiTenancy(options =>
+        services.AddServerStorage().ServeTenants(options =>
         {
             foreach (var tenant in tenants)
                 options.Tenants.Add(tenant);
@@ -584,9 +568,9 @@ public partial class MultiTenancyRegistrationTests
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         EnterTenant(provider, Acme);
-        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
         EnterTenant(provider, globex);
-        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("acme", Assert.Single(atAcme).KeyId);
         Assert.Equal("globex~2", Assert.Single(atGlobex).KeyId);
@@ -615,7 +599,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        time.Advance(new MultiTenancyOptions().RefreshEvery);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         Moq.Mock.Get(provider.GetRequiredService<IKeyRings>()).Verify(rings => rings.Close("acme"), Moq.Times.Once);
@@ -635,7 +619,7 @@ public partial class MultiTenancyRegistrationTests
         });
 
         var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value);
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(
             $"Tenant 'acme': {nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)} is declared, " +
             "but the server mints the keys",
@@ -652,10 +636,9 @@ public partial class MultiTenancyRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.AddSingleton(Moq.Mock.Of<ITenantStore>());
-        services.AddServerStorage().AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
             Issuer = new Uri(AcmeIssuer),
@@ -663,6 +646,6 @@ public partial class MultiTenancyRegistrationTests
         }));
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotEmpty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
     }
 }

@@ -99,14 +99,14 @@ public partial class AuthorizationRequestProcessorTests
             _interactionRequirement.Object,
             _consentsProvider.Object,
             _cutoffChecker.Object,
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             _timeProvider,
             [
                 new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ],
-            consentConstraintEnforcer);
+            consentConstraintEnforcer, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ValidAuthorizationRequest CreateRequest(

@@ -25,6 +25,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -115,7 +116,7 @@ public class UnreadableAssertionTimestampTests
         };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(clientInfo);
 
         // Hands the token back without reading a single claim of it, which is what leaves the
         // timestamps to be met first by the authenticator.
@@ -147,7 +148,7 @@ public class UnreadableAssertionTimestampTests
             new FakeTimeProvider(Now),
             replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri(Issuer)),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None })));
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.None })), tenantAccessor: SingleIssuer.Accessor);
 
         return (authenticator, replayCache);
     }

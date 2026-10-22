@@ -9,6 +9,7 @@
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
@@ -30,8 +31,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.Consents;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -132,7 +131,7 @@ public sealed class SharedSignalsReceiverTenantTests
         });
         builder.Services.AddSingleton<ISecurityEventSink, AcceptingSink>();
 
-        builder.Services.AddMultiTenancy(options =>
+        builder.Services.Configure<OidcOptions>(options =>
         {
             options.Tenants.Add(TenantAt("acme", Acme));
             options.Tenants.Add(TenantAt("globex", Globex));

@@ -26,7 +26,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="tenantAccessor">Names the tenant a budget is spent for.</param>
 /// <param name="catalog">Tells when a tenant is released, and its limiter with it.</param>
 /// <typeparam name="TResource">What the budget is partitioned by.</typeparam>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantPartitionedRateLimiter<TResource>(
     Func<PartitionedRateLimiter<TResource>> createLimiter,
     ITenantAccessor tenantAccessor,
@@ -48,7 +47,7 @@ public sealed class TenantPartitionedRateLimiter<TResource>(
     {
         get
         {
-            var tenant = TenantKey.CurrentTenant(tenantAccessor);
+            var tenant = tenantAccessor.CurrentTenant();
             var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
             if (released.IsCancellationRequested)
                 return Unlimited;

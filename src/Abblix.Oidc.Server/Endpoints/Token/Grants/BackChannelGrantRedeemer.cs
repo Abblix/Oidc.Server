@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -36,10 +37,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
 /// authorization_details are still acceptable, which is the only comparison that can see inside an
 /// entry.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 internal sealed partial class BackChannelGrantRedeemer(
     ILoggerFactory loggerFactory,
     ISubjectTypeConverter subjectTypeConverter,
-    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
+    ITenantAccessor tenantAccessor)
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<BackChannelAuthenticationGrantHandler>();
 
@@ -160,7 +163,7 @@ internal sealed partial class BackChannelGrantRedeemer(
     private bool NamesTheRequestedEndUser(
         string[]? requestedSubjects, AuthorizedGrant grant, ClientInfo clientInfo)
         => requestedSubjects is not { } accepted ||
-           subjectTypeConverter.Names(grant.AuthSession, accepted, clientInfo);
+           subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), grant.AuthSession, accepted, clientInfo);
 
     private static bool AcceptsRecordedLevel(BackChannelGrantYardstick yardstick, AuthorizedGrant grant)
         => AuthenticationLevels.Accept(

@@ -9,31 +9,26 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
 /// <summary>
-/// In-memory <see cref="IResourceManager"/> backed by <see cref="IIssuerSettings.Resources"/>, one dictionary for each issuer. Indexes
+/// In-memory <see cref="IResourceManager"/> backed by <see cref="TenantDefinition.Resources"/>, one dictionary for each tenant. Indexes
 /// the configured <see cref="ResourceDefinition"/> entries by their absolute URI for O(1) lookup
 /// during RFC 8707 resource indicator validation.
 /// </summary>
 /// <remarks>
-/// The dictionary of each issuer is built the first time that issuer looks a resource up, and again once
-/// its resource definitions change, as after a reload of its settings.
+/// The dictionary of each tenant is built the first time that tenant looks a resource up, and again once
+/// its resource definitions change, as after a change of its definition.
 /// </remarks>
-/// <param name="settings">The settings of the issuer serving the request, holding its resource definitions.</param>
-/// <param name="resources">The dictionary of each issuer.</param>
-public class ResourceManager(
-    IIssuerSettings settings,
-    IIssuerLocal<Dictionary<Uri, ResourceDefinition>> resources) : IResourceManager
+/// <param name="resources">The dictionary of each tenant.</param>
+public class ResourceManager(IIssuerLocal<Dictionary<Uri, ResourceDefinition>> resources) : IResourceManager
 {
-    private Dictionary<Uri, ResourceDefinition> Resources
+    private Dictionary<Uri, ResourceDefinition> ResourcesOf(TenantDefinition tenant)
     {
-        get
-        {
-            var definitions = settings.Resources;
-            return resources.GetOrCreate(definitions, () => InitializeResources(definitions));
-        }
+        var definitions = tenant.Resources;
+        return resources.GetOrCreate(tenant, definitions, () => InitializeResources(definitions));
     }
 
     private static Dictionary<Uri, ResourceDefinition> InitializeResources(ResourceDefinition[]? definitions)
@@ -64,10 +59,11 @@ public class ResourceManager(
     /// <summary>
     /// Attempts to retrieve the resource definition associated with the specified URI.
     /// </summary>
+    /// <param name="tenant">The tenant whose resources are searched.</param>
     /// <param name="resource">The URI identifying the resource for which the definition is requested.</param>
     /// <param name="definition">When this method returns, contains the resource definition associated with
     /// the specified URI, if the resource is found; otherwise, null. This parameter is passed uninitialized.</param>
     /// <returns><c>true</c> if the resource definition is found; otherwise, <c>false</c>.</returns>
-    public bool TryGet(Uri resource, [MaybeNullWhen(false)] out ResourceDefinition definition)
-        => Resources.TryGetValue(resource, out definition);
+    public bool TryGet(TenantDefinition tenant, Uri resource, [MaybeNullWhen(false)] out ResourceDefinition definition)
+        => ResourcesOf(tenant).TryGetValue(resource, out definition);
 }

@@ -14,7 +14,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// The key a stored value is kept under within the current tenant's space.
 /// </summary>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public static class TenantKey
 {
     private const char GenerationSeparator = '~';
@@ -129,7 +128,7 @@ public static class TenantKey
     /// No tenant is resolved: a tenant's operation that lost its tenant on the way - work carried on after the
     /// request ended - would write where its tenant never reads, and the tenant would silently miss its data.
     /// </exception>
-    internal static TenantDefinition CurrentTenant(ITenantAccessor accessor)
+    public static TenantDefinition CurrentTenant(this ITenantAccessor accessor)
         => accessor.Current?.Tenant
            ?? throw new InvalidOperationException(
                "The operation runs outside any tenant, so it has no tenant's space to keep its data in and no " +

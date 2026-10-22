@@ -8,22 +8,30 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ScopeManagement;
 
 /// <summary>
 /// Registry of OAuth 2.0 scope definitions known to the authorization server (RFC 6749 section 3.3),
 /// including the OIDC standard scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>address</c>,
-/// <c>phone</c>, <c>offline_access</c>; OIDC Core section 5.4) and any host-defined custom scopes.
-/// Implements <see cref="IEnumerable{T}"/> so callers may iterate the full registered set.
+/// <c>phone</c>, <c>offline_access</c>; OIDC Core section 5.4) and the scopes each tenant declares, kept apart for
+/// each tenant: a scope one tenant declares is unknown at another.
 /// </summary>
-public interface IScopeManager: IEnumerable<ScopeDefinition>
+public interface IScopeManager
 {
+    /// <summary>
+    /// Every scope <paramref name="tenant"/> knows.
+    /// </summary>
+    /// <param name="tenant">The tenant whose scopes are listed.</param>
+    IEnumerable<ScopeDefinition> ScopesOf(TenantDefinition tenant);
+
     /// <summary>
     /// Attempts to retrieve the definition of a specified scope.
     /// </summary>
+    /// <param name="tenant">The tenant whose scopes are searched.</param>
     /// <param name="scope">The scope identifier to retrieve the definition for.</param>
     /// <param name="definition">Outputs the <see cref="ScopeDefinition"/> if the scope exists, otherwise null.</param>
     /// <returns>True if the scope exists and the definition is retrieved, false otherwise.</returns>
-    bool TryGet(string scope, [MaybeNullWhen(false)] out ScopeDefinition definition);
+    bool TryGet(TenantDefinition tenant, string scope, [MaybeNullWhen(false)] out ScopeDefinition definition);
 }

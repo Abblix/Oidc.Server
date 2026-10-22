@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
 
@@ -30,9 +31,11 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="clientInfoProvider">Resolves the client a token was issued to, so its subject can be opened
 /// before being re-sealed for a different caller.</param>
 /// <param name="subjectTypeConverter">Opens and re-seals the end-user identifier per client sector.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class IntrospectionRequestProcessor(
 	IClientInfoProvider clientInfoProvider,
-	ISubjectTypeConverter subjectTypeConverter) : IIntrospectionRequestProcessor
+	ISubjectTypeConverter subjectTypeConverter,
+	ITenantAccessor tenantAccessor) : IIntrospectionRequestProcessor
 {
 	/// <summary>
 	/// Processes an introspection request and returns the corresponding introspection response.
@@ -112,12 +115,13 @@ public class IntrospectionRequestProcessor(
 
 		// The subject in the token is what its own client sees, so it has to be opened against that client
 		// before it can be re-sealed for anybody else.
-		var owner = await clientInfoProvider.TryFindClientAsync(ownerId);
+		var tenant = tenantAccessor.CurrentTenant();
+		var owner = await clientInfoProvider.TryFindClientAsync(tenant, ownerId);
 		if (owner == null)
 			return null;
 
-		var realSubject = subjectTypeConverter.ConvertBack(subject, owner);
-		return realSubject == null ? null : subjectTypeConverter.Convert(realSubject, request.ClientInfo);
+		var realSubject = subjectTypeConverter.ConvertBack(tenant, subject, owner);
+		return realSubject == null ? null : subjectTypeConverter.Convert(tenant, realSubject, request.ClientInfo);
 	}
 
 	/// <summary>

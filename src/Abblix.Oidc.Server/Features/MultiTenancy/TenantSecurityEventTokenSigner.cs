@@ -23,18 +23,18 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// The key is the tenant's first signing key of an algorithm the deployment allows
 /// (<see cref="SecurityEventsOptions.AllowedSigningAlgorithms"/>), and the signing itself is the default signer's,
-/// which judges it against the same allowlist. A host transmitting security events under
-/// multi-tenancy registers this signer in place of the one <c>AddSecurityEvents</c> registers; startup refuses any
-/// other.
+/// which judges it against the same allowlist. A host transmitting security events registers this signer in place of
+/// the one <c>AddSecurityEvents</c> registers; startup refuses any other.
 /// </remarks>
 /// <param name="keys">The signing keys of the tenant serving the request.</param>
 /// <param name="creator">The JWT core's token creator.</param>
 /// <param name="options">What the deployment allows to sign with.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public sealed class TenantSecurityEventTokenSigner(
     IAuthServiceKeysProvider keys,
     IJsonWebTokenCreator creator,
-    IOptions<SecurityEventsOptions> options) : ISecurityEventTokenSigner
+    IOptions<SecurityEventsOptions> options,
+    ITenantAccessor tenantAccessor) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
@@ -46,7 +46,7 @@ public sealed class TenantSecurityEventTokenSigner(
 
     /// <exception cref="InvalidOperationException">The tenant has no signing key of an allowed algorithm.</exception>
     private async Task<JsonWebKey> SigningKeyAsync(string[] allowed, CancellationToken cancellationToken)
-        => await keys.GetSigningKeys(true).FirstOrDefaultAsync(
+        => await keys.GetSigningKeys(tenantAccessor.CurrentTenant(), true).FirstOrDefaultAsync(
                key => key.Algorithm is { } algorithm && allowed.Contains(algorithm, StringComparer.Ordinal),
                cancellationToken)
            ?? throw new InvalidOperationException(

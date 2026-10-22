@@ -53,7 +53,7 @@ public class ResourceValidatorsInferenceTests
         Uri[]? resources,
         params string[] scopes)
     {
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             InferResourceFromScope = infer,
             Resources =
@@ -62,7 +62,7 @@ public class ResourceValidatorsInferenceTests
                 new ResourceDefinition(Billing, new ScopeDefinition(BillingRead)),
             ],
         });
-        var resourceManager = SingleIssuer.ResourceManager(options);
+        var resourceManager = SingleIssuer.ResourceManager();
         var inference = new ResourceInference(SingleIssuer.SettingsOf(options));
         var client = new ClientInfo(ClientId);
 
@@ -78,7 +78,7 @@ public class ResourceValidatorsInferenceTests
                     Scope = scopes,
                     Resources = resources,
                 }) { ClientInfo = client };
-                var error = await new AuthorizationResourceValidator(resourceManager, inference).ValidateAsync(context);
+                var error = await new AuthorizationResourceValidator(resourceManager, inference, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -87,7 +87,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new BackChannelAuthenticationValidationContext(
                     new BackChannelAuthenticationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
-                var error = await new BackChannelResourceValidator(resourceManager, inference).ValidateAsync(context);
+                var error = await new BackChannelResourceValidator(resourceManager, inference, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -96,7 +96,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new DeviceAuthorizationValidationContext(
                     new DeviceAuthorizationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
-                var error = await new DeviceResourceValidator(resourceManager, inference).ValidateAsync(context);
+                var error = await new DeviceResourceValidator(resourceManager, inference, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -105,7 +105,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new TokenValidationContext(
                     new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId });
-                var error = await new TokenResourceValidator(resourceManager, inference)
+                var error = await new TokenResourceValidator(resourceManager, inference, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
                     .ValidateAsync(context, TestContext.Current.CancellationToken);
 
                 // The grant handler reads the request, so the resource it is issued for has to be there too
@@ -167,7 +167,7 @@ public class ResourceValidatorsInferenceTests
     [Fact]
     public async Task ATokenExchangeNamingAnAudience_HasNothingInferred()
     {
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             InferResourceFromScope = true,
             Resources = [new ResourceDefinition(Orders, new ScopeDefinition(OrdersRead))],
@@ -177,8 +177,8 @@ public class ResourceValidatorsInferenceTests
             new ClientRequest { ClientId = ClientId });
 
         var error = await new TokenResourceValidator(
-                SingleIssuer.ResourceManager(options),
-                new ResourceInference(SingleIssuer.SettingsOf(options)))
+                SingleIssuer.ResourceManager(),
+                new ResourceInference(SingleIssuer.SettingsOf(options)), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
             .ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
@@ -196,7 +196,7 @@ public class ResourceValidatorsInferenceTests
     [InlineData(GrantTypes.Ciba)]
     public async Task AGrantAuthorizedEarlier_HasNothingInferred(string grantType)
     {
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             InferResourceFromScope = true,
             Resources =
@@ -210,8 +210,8 @@ public class ResourceValidatorsInferenceTests
             new ClientRequest { ClientId = ClientId });
 
         var error = await new TokenResourceValidator(
-                SingleIssuer.ResourceManager(options),
-                new ResourceInference(SingleIssuer.SettingsOf(options)))
+                SingleIssuer.ResourceManager(),
+                new ResourceInference(SingleIssuer.SettingsOf(options)), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
             .ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);

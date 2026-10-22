@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
@@ -42,9 +43,11 @@ public interface IAudienceKeyResolver
 /// </summary>
 /// <param name="resourceManager">Resolves a requested resource URI to its registered definition.</param>
 /// <param name="resourceKeysProvider">Supplies that resource's published encryption keys.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AudienceKeyResolver(
     IResourceManager resourceManager,
-    IResourceKeysProvider resourceKeysProvider) : IAudienceKeyResolver
+    IResourceKeysProvider resourceKeysProvider,
+    ITenantAccessor tenantAccessor) : IAudienceKeyResolver
 {
     /// <inheritdoc />
     public async Task<JsonWebKey?> FindEncryptionKeyAsync(IReadOnlyCollection<Uri> resources)
@@ -54,7 +57,7 @@ public class AudienceKeyResolver(
 
         foreach (var resource in resources)
         {
-            if (!resourceManager.TryGet(resource, out var definition))
+            if (!resourceManager.TryGet(tenantAccessor.CurrentTenant(), resource, out var definition))
                 continue;
 
             var key = await resourceKeysProvider.GetEncryptionKeys(definition).FirstOrDefaultAsync();

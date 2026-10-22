@@ -16,11 +16,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// Refuses a tenant with no address it can be reached at, and tenants sharing an id or an address.
 /// </summary>
-/// <remarks>
-/// A tenant with no issuer is refused here; whether a given issuer can be an issuer is judged by the check of the
-/// server's own issuer, which <see cref="TenantSettingsCheck"/> applies to every tenant's settings.
-/// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantDefinitionsCheck : ITenantsCheck
 {
     /// <summary>
@@ -54,7 +49,7 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     }
 
     /// <inheritdoc />
-    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants)
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
     {
         var failures = new List<TenantRefusal>();
 
@@ -63,6 +58,15 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
             from tenant in tenants
             where tenant.Issuer is null
             select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}' has no issuer."));
+
+        failures.AddRange(
+            from tenant in tenants
+            where tenant.Issuer is not null
+            let refusal = IssuerIdentifier.Refusal(tenant.Issuer, options.AllowHttpIssuer)
+            where refusal is not null
+            select TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': {nameof(TenantDefinition.Issuer)} '{tenant.Issuer.OriginalString}' {refusal}."));
 
         // A Host header is ASCII, so a host with no ASCII form could never be requested.
         failures.AddRange(
@@ -111,17 +115,6 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
                 ? PairwiseSubjectSettings.SaltRefusal(salt)
                 : null
             where refusal is not null
-            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
-
-        failures.AddRange(
-            from tenant in tenants
-            let refusal = PairwiseClientsOptionsValidator.Refusal(tenant.Clients, tenant.PairwiseSubject)
-            where refusal is not null
-            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
-
-        failures.AddRange(
-            from tenant in tenants
-            from refusal in ClientOfflineAccessOptionsValidator.Refusals(tenant.Clients)
             select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
 
         return failures;

@@ -17,7 +17,7 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </summary>
 /// <remarks>
 /// The first refresh runs in <c>StartAsync</c>, so a ring that cannot be read or opened stops the process rather
-/// than letting it serve without keys. Later refreshes tick on the propagation window rather than the rotation
+/// than letting it serve without keys; the adopted keys are judged before that, by <see cref="KeyRingAdoptionCheck"/>. Later refreshes tick on the propagation window rather than the rotation
 /// interval: a pod must notice a key another pod minted while that key is still announced, because once it goes
 /// active every pod has to be able to verify it.
 /// <para>
@@ -36,7 +36,7 @@ internal sealed partial class KeyRingRefreshService(
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await check.CheckAsync(cancellationToken);
+        await check.CheckKeyEncryptionKeyAsync(cancellationToken);
 
         // A partition opened before this start was refreshed then, so it is not refreshed again now
         foreach (var refresh in rounds.BeginRound(exceptOpened: true))

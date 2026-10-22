@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
@@ -22,25 +23,23 @@ namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 public interface ISubjectTypeConverter
 {
     /// <summary>
-    /// Lists the subject types that this converter can issue for the issuer serving the request: discovery
-    /// publishes them, and dynamic registration refuses a pairwise client when pairwise is not among them. Listing
-    /// pairwise without being able to issue it registers a client whose every token request then fails.
+    /// Lists the subject types that this converter can issue for <paramref name="tenant"/>: discovery publishes
+    /// them, and dynamic registration refuses a pairwise client when pairwise is not among them. Listing pairwise
+    /// without being able to issue it registers a client whose every token request then fails.
     /// </summary>
-    /// <remarks>
-    /// It is read at startup while the server's options are being checked, when a configured client takes pairwise
-    /// identifiers, so it must not read those options itself.
-    /// </remarks>
-    IEnumerable<string> SubjectTypesSupported { get; }
+    /// <param name="tenant">The tenant the subjects are issued for.</param>
+    IEnumerable<string> SubjectTypesSupported(TenantDefinition tenant);
 
     /// <summary>
     /// Converts the real subject identifier into the client-facing one based on the client's subject type: a
     /// pairwise client gets a reversible, per-sector pseudonym; a public client gets the subject unchanged.
     /// </summary>
+    /// <param name="tenant">The tenant the subject is issued for, whose pairwise key seals it.</param>
     /// <param name="subject">The original subject identifier of the end-user.</param>
     /// <param name="clientInfo">Information about the client for which the subject identifier is being transformed.
     /// </param>
     /// <returns>The transformed subject identifier suitable for the client's subject type.</returns>
-    string Convert(string subject, ClientInfo clientInfo);
+    string Convert(TenantDefinition tenant, string subject, ClientInfo clientInfo);
 
     /// <summary>
     /// Recovers the real subject identifier from the client-facing one produced by <see cref="Convert"/>: a
@@ -48,6 +47,7 @@ public interface ISubjectTypeConverter
     /// unchanged. The <paramref name="clientInfo"/> must be the client the subject was sealed for, as its sector
     /// binds the pseudonym.
     /// </summary>
+    /// <param name="tenant">The tenant the subject was issued for, whose pairwise key sealed it.</param>
     /// <param name="subject">The client-facing subject identifier (pairwise pseudonym or real subject).</param>
     /// <param name="clientInfo">The client the subject was issued for.</param>
     /// <returns>The real subject identifier, or <c>null</c> when a pairwise pseudonym cannot be opened (malformed,
@@ -55,5 +55,5 @@ public interface ISubjectTypeConverter
     /// token at the protocol level.</returns>
     /// <exception cref="System.InvalidOperationException">Thrown only when pairwise identifiers are not configured
     /// but a pairwise client is asked to recover, which is a server misconfiguration rather than a bad token.</exception>
-    string? ConvertBack(string subject, ClientInfo clientInfo);
+    string? ConvertBack(TenantDefinition tenant, string subject, ClientInfo clientInfo);
 }

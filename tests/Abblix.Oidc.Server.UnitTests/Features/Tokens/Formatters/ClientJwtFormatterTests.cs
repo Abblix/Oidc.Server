@@ -19,6 +19,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
@@ -59,7 +60,7 @@ public class ClientJwtFormatterTests
         _formatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeysProvider.Object,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object, tenantAccessor: SingleIssuer.Accessor);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
@@ -84,7 +85,7 @@ public class ClientJwtFormatterTests
         JsonWebKey? capturedSigningKey = null;
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
 
         _clientKeysProvider
@@ -121,7 +122,7 @@ public class ClientJwtFormatterTests
         JsonWebKey? capturedEncryptionKey = null;
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
 
         _clientKeysProvider
@@ -157,7 +158,7 @@ public class ClientJwtFormatterTests
         JsonWebKey? capturedEncryptionKey = null;
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
 
         _clientKeysProvider
@@ -191,7 +192,7 @@ public class ClientJwtFormatterTests
         };
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
 
         _clientKeysProvider
@@ -234,7 +235,7 @@ public class ClientJwtFormatterTests
         };
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
 
         _clientKeysProvider
@@ -250,7 +251,7 @@ public class ClientJwtFormatterTests
 
         // Assert
         Assert.Equal(EncodedJwt, result);
-        _serviceKeysProvider.Verify(p => p.GetSigningKeys(true), Times.Once);
+        _serviceKeysProvider.Verify(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true), Times.Once);
         _clientKeysProvider.Verify(p => p.GetEncryptionKeys(_clientInfo), Times.Once);
         _jwtCreator.Verify(c => c.IssueAsync(token, _signingKeyRS256, _clientEncryptionKey, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
@@ -278,7 +279,7 @@ public class ClientJwtFormatterTests
         };
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
 
         _clientKeysProvider
@@ -311,7 +312,7 @@ public class ClientJwtFormatterTests
         };
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _clientKeysProvider

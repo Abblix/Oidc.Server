@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -28,13 +29,15 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Provides the issue time.</param>
 /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
     ITokenIdGenerator tokenIdGenerator,
-    IRegistrationAccessTokenService registrationAccessTokenService) : IRegisterClientRequestProcessor
+    IRegistrationAccessTokenService registrationAccessTokenService,
+    ITenantAccessor tenantAccessor) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -76,7 +79,7 @@ public partial class RegisterClientRequestProcessor(
         // registration the store did not keep - one racing another under the same id, or, in a store
         // following reloads, one under an id the settings came to configure meanwhile - is refused as
         // a taken id is.
-        if (!await clientInfoManager.TryAddClientAsync(new RegisteredClient(clientInfo, registrationAccessTokenId)))
+        if (!await clientInfoManager.TryAddClientAsync(tenantAccessor.CurrentTenant(), new RegisteredClient(clientInfo, registrationAccessTokenId)))
         {
             LogRegistrationNotKept(credentials.ClientId);
             return Validation.ErrorFactory.InvalidClientMetadata(

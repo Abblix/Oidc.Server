@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -16,24 +17,20 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses a tenant declaring keys its server's placement never reads, and, with the keys held by a
-/// custodian, a tenant naming no key there or one another tenant names; with the keys minted by the server, a tenant
-/// whose id cannot name its part of the store.
+/// Refuses a tenant declaring keys its server's placement never reads; with the keys coming from each tenant's
+/// settings, a tenant declaring no signing key; and, with the keys held by a custodian, a tenant naming no key there
+/// or one another tenant names.
 /// </summary>
-/// <remarks>
-/// Whether a tenant whose keys come from its settings declares enough of them is judged with the rest of its
-/// settings, by the checks of the server's settings (<see cref="TenantSettingsCheck"/>).
-/// </remarks>
 /// <param name="serviceProvider">The container the key provider is resolved from, once the settings are built.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenantsCheck
 {
     /// <inheritdoc />
-    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants)
+    public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
         => serviceProvider.GetService<IAuthServiceKeysProvider>() switch
         {
             OidcOptionsKeysProvider => Unread(tenants, "the keys come from each tenant's settings",
-                nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys)),
+                    nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
+                .Concat(UnsignedOf(tenants)),
 
             ExternalKeysProvider => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
@@ -42,9 +39,31 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
             MintedKeysProvider => Unread(tenants, "the server mints the keys"),
 
-            // A key provider of the host's own is refused under multi-tenancy by the check of the registries
+            // A key provider of the host's own answers for each tenant's keys itself, so nothing here judges them
             _ => [],
         };
+
+    /// <summary>
+    /// A tenant whose keys come from its settings and that declares no signing key cannot issue a single token and
+    /// publishes an empty key set, which every relying party caches.
+    /// </summary>
+    /// <remarks>
+    /// The library never generates a signing key, so the tenant has nothing to fall back on. A custodian half-wired
+    /// without its placement call leaves the settings' provider registered beside it, and that provider refuses
+    /// the state itself, naming the missing call, so it is not judged here.
+    /// </remarks>
+    private IEnumerable<TenantRefusal> UnsignedOf(IReadOnlyCollection<TenantDefinition> tenants)
+        => serviceProvider.GetService<IKeyCustodian>() is not null
+            ? []
+            :
+            from tenant in tenants
+            where tenant.SigningKeys.Count == 0
+            select TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': No signing key is declared, so the tenant cannot issue a single token and " +
+                $"publishes an empty JWKS. Supply at least one JWK with a private part in " +
+                $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a " +
+                "custodian or minted by the server.");
 
     /// <summary>
     /// The key settings a tenant declares that the placement never reads: declared, they read as the keys the

@@ -12,6 +12,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.UnitTests.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -22,8 +23,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 
@@ -128,7 +127,7 @@ public sealed class TenantManagerTests : IDisposable
     {
         TestLicense.InstallWithIssuerLimit(3);
 
-        var options = Options.Create(new MultiTenancyOptions());
+        var options = Options.Create(new OidcOptions());
         _catalog = new StoreTenantCatalog(
             NullLogger<StoreTenantCatalog>.Instance,
             _store,
@@ -142,6 +141,7 @@ public sealed class TenantManagerTests : IDisposable
             _store,
             [new TenantDefinitionsCheck()],
             _catalog,
+            Options.Create(new OidcOptions()),
             _store);
     }
 
@@ -337,7 +337,7 @@ public sealed class TenantManagerTests : IDisposable
                 Moq.It.IsAny<Exception?>(),
                 (Func<Moq.It.IsAnyType, Exception?, string>)Moq.It.IsAny<object>()))
             .Callback((LogLevel _, EventId eventId, object _, Exception? _, Delegate _) => logged.Add(eventId));
-        var manager = new TenantManager(logger.Object, _store, [new TenantDefinitionsCheck()], _catalog, _store);
+        var manager = new TenantManager(logger.Object, _store, [new TenantDefinitionsCheck()], _catalog, Options.Create(new OidcOptions()), _store);
 
         Stored(await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
         Assert.Null(await _catalog.FindByIdAsync("acme", Ct));
@@ -406,14 +406,16 @@ public sealed class TenantManagerTests : IDisposable
     {
         var refusingAcme = new Moq.Mock<ITenantsCheck>();
         refusingAcme
-            .Setup(check => check.Check(Moq.It.IsAny<IReadOnlyCollection<TenantDefinition>>()))
-            .Returns((IReadOnlyCollection<TenantDefinition> tenants) =>
+            .Setup(check => check.Check(
+                Moq.It.IsAny<IReadOnlyCollection<TenantDefinition>>(), Moq.It.IsAny<OidcOptions>()))
+            .Returns((IReadOnlyCollection<TenantDefinition> tenants, OidcOptions _) =>
                 tenants.Where(tenant => tenant.Id == "acme").Select(tenant => TenantRefusal.Of(tenant, "not acme")));
         var manager = new TenantManager(
             NullLogger<TenantManager>.Instance,
             _store,
             [new TenantDefinitionsCheck(), refusingAcme.Object],
             _catalog,
+            Options.Create(new OidcOptions()),
             _store);
 
         var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
@@ -432,7 +434,8 @@ public sealed class TenantManagerTests : IDisposable
             NullLogger<TenantManager>.Instance,
             _store,
             [new TenantDefinitionsCheck()],
-            _catalog);
+            _catalog,
+            Options.Create(new OidcOptions()));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct));
@@ -449,7 +452,7 @@ public sealed class TenantManagerTests : IDisposable
     [InlineData("münchen")]
     public async Task ATenantThatCannotNameItsData_IsNotStored_WithoutAnyCheck(string id)
     {
-        var manager = new TenantManager(NullLogger<TenantManager>.Instance, _store, [], _catalog, _store);
+        var manager = new TenantManager(NullLogger<TenantManager>.Instance, _store, [], _catalog, Options.Create(new OidcOptions()), _store);
 
         var created = await manager.CreateAsync(Tenant(id, "https://acme.example.com"), Ct);
 

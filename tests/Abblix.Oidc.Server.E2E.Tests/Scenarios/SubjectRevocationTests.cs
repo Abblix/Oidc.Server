@@ -526,7 +526,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         });
 
     private static ITokenRevoker RevokerOf(WebApplicationFactory<Program> host)
-        => host.Services.GetRequiredService<ITokenRevoker>();
+        => TestTenant.RevokerOf(host.Services);
 
     private static TimeProvider ClockOf(WebApplicationFactory<Program> host)
         => host.Services.GetRequiredService<TimeProvider>();

@@ -63,13 +63,13 @@ public class SessionPersistenceTests
                 ? AuthenticateResult.NoResult()
                 : AuthenticateResult.Success(new AuthenticationTicket(_cookie, _cookieProperties, Scheme)));
         _httpContext.RequestServices =
-            new ServiceCollection().AddSingleton(authentication.Object).BuildServiceProvider();
+            new ServiceCollection().AddSingleton(authentication.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
 
         _adapter = new AuthenticationSchemeAdapter(
             accessor.Object,
             terminator.Object,
             _clock,
-            Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == string.Empty),
+            Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == TestTenantAccess.Main),
             Scheme);
     }
 

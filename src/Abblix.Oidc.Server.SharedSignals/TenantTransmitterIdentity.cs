@@ -17,11 +17,10 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </summary>
 /// <remarks>
 /// The options name the host without a path, and the paths they name are kept and put under the tenant's issuer,
-/// the same way multi-tenancy serves every endpoint of a tenant under its issuer's path.
+/// the same way the server serves every endpoint of a tenant under its issuer's path.
 /// </remarks>
 /// <param name="tenantAccessor">Names the tenant of the current request or scope.</param>
 /// <param name="options">The transmitter's options, read for the path of the key set address.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantTransmitterIdentity(
     ITenantAccessor tenantAccessor,
     SharedSignalsTransmitterOptions options) : ITransmitterIdentity
@@ -51,7 +50,7 @@ public sealed class TenantTransmitterIdentity(
     /// </remarks>
     public string? TenantId => tenantAccessor.Current?.Tenant.Id;
 
-    private TenantDefinition Tenant => TenantKey.CurrentTenant(tenantAccessor);
+    private TenantDefinition Tenant => tenantAccessor.CurrentTenant();
 
     private Uri Under(string pathAndQuery) => new(Tenant.Issuer.OriginalString.TrimEnd('/') + pathAndQuery, UriKind.Absolute);
 }

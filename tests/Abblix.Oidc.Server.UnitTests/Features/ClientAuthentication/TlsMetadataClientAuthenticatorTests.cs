@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -38,7 +39,7 @@ public class TlsMetadataClientAuthenticatorTests
 
         _authenticator = new TlsMetadataClientAuthenticator(
             _loggerMock.Object,
-            _clientInfoProviderMock.Object);
+            _clientInfoProviderMock.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -111,7 +112,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("unknown-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "unknown-client"))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -143,7 +144,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -173,7 +174,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -209,7 +210,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -245,7 +246,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -282,7 +283,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -320,7 +321,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -357,7 +358,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -394,7 +395,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -432,7 +433,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -470,7 +471,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -507,7 +508,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -545,7 +546,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -590,7 +591,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -626,7 +627,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -664,7 +665,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -702,7 +703,7 @@ public class TlsMetadataClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(It.IsAny<TenantDefinition>(), "test-client"))
             .ReturnsAsync(client);
 
         // Act

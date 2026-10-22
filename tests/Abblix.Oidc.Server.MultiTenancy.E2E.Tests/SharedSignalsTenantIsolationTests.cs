@@ -37,12 +37,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.Consents;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -66,6 +65,7 @@ public sealed class SharedSignalsTenantIsolationTests
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "The push endpoint a test receiver registers; the recording handler answers it.")]
     private const string PushEndpoint = "https://receiver.example.com/events";
+    private const string StreamId = "alerts";
 
     /// <summary>
     /// A stream acme's receiver creates is acme's alone: globex's receiver, under the same identifier, lists none,
@@ -285,8 +285,8 @@ public sealed class SharedSignalsTenantIsolationTests
             () => StartAsync(issuer, new Uri(jwksUri, UriKind.RelativeOrAbsolute)));
 
     /// <summary>
-    /// Streams declared in configuration belong to no tenant, so the server does not start with them, whether
-    /// they are delivered by push or polled.
+    /// Streams declared for the whole server belong to no tenant's receivers, so the server does not start with them,
+    /// whether they are delivered by push or polled.
     /// </summary>
     [Theory]
     [InlineData(PushEndpoint)]
@@ -298,11 +298,126 @@ public sealed class SharedSignalsTenantIsolationTests
                 [new ConfiguredStream
                 {
                     ReceiverId = ReceiverId,
-                    StreamId = "alerts",
+                    StreamId = StreamId,
                     PushEndpointUrl = pushEndpoint is null ? null : new Uri(pushEndpoint),
                 }])));
 
         Assert.Single(refusal.Failures);
+    }
+
+    /// <summary>
+    /// A tenant's declared streams that no request could be served from - one declared twice, one with no stream id -
+    /// stop the server when it starts rather than on the first request to that tenant, and the refusal names the
+    /// tenant.
+    /// </summary>
+    [Theory]
+    [InlineData(StreamId, StreamId)]
+    [InlineData(StreamId, "")]
+    public async Task ATenantsDeclaredStreamsNoRequestCouldServe_StopTheServer(string first, string second)
+    {
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [
+                    new ConfiguredStream { ReceiverId = ReceiverId, StreamId = first, PushEndpointUrl = new Uri(PushEndpoint) },
+                    new ConfiguredStream { ReceiverId = ReceiverId, StreamId = second, PushEndpointUrl = new Uri(PushEndpoint) },
+                ])));
+
+        Assert.Contains("acme", Assert.Single(refusal.Failures));
+    }
+
+    /// <summary>
+    /// A host that maps its endpoints while it starts, as one configuring its pipeline in <c>Configure</c>, has a poll
+    /// address only from then on, and a tenant's stream delivered by polling is judged after that: the host starts and
+    /// the stream is served with the tenant's poll address.
+    /// </summary>
+    [Fact]
+    public async Task ADeclaredPollStream_OfAHostMappingItsEndpointsWhileItStarts_IsServed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await TestLicense.Loaded;
+        using var host = new HostBuilder()
+            .ConfigureWebHost(web => web
+                .UseTestServer()
+                .ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    services.AddDistributedMemoryCache();
+                    services.AddMemoryCache();
+                    services.AddAuthentication().AddCookie();
+                    services.AddAuthorization();
+                    services.AddConsentGrantedForEveryClient();
+                    var server = services.AddOidcServices(options => options.Tenants.Add(TenantAt("acme", Acme)));
+                    services.AddSecurityEvents();
+                    services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
+                    {
+                        Issuer = Host,
+                        JwksUri = new Uri(Host + JwksPath),
+                        EventsSupported = [MembershipChanged],
+                        DefaultSubjectsMode = StreamSubjectsMode.All,
+                    });
+                    server.AddSharedSignals();
+                    server.AddConfiguredStreams("acme", [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId }]);
+                })
+                .Configure(app =>
+                {
+                    app.UseMultiTenancy();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapOidcEndpoints();
+                        endpoints.MapSharedSignalsTransmitterEndpoints();
+                    });
+                }))
+            .Build();
+
+        await host.StartAsync(ct);
+
+        var tenant = (await host.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync("acme", ct))!;
+        using (TenantScope.Enter(tenant))
+        {
+            var stream = Assert.Single(await host.Services.GetRequiredService<IStreamStore>().ListAllAsync(ct));
+            var poll = Assert.IsType<PollDeliveryMethod>(stream.Configuration.Delivery);
+            Assert.StartsWith(Host + Acme, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
+        }
+
+        await host.StopAsync(ct);
+    }
+
+    /// <summary>
+    /// Streams declared for a tenant the server's settings do not declare would never be served, so the server does
+    /// not start.
+    /// </summary>
+    [Fact]
+    public async Task StreamsDeclaredForATenantTheServerDoesNotServe_StopTheServer()
+    {
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
+            declare: server => server.AddConfiguredStreams(
+                "initech",
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, PushEndpointUrl = new Uri(PushEndpoint) }])));
+
+        Assert.Contains("initech", Assert.Single(refusal.Failures));
+    }
+
+    /// <summary>
+    /// The streams a tenant declares are its receiver's, as created through the management API would be, and no other
+    /// tenant's receiver finds them.
+    /// </summary>
+    [Fact]
+    public async Task ATenantsDeclaredStreams_AreItsReceiversAndNoOneElses()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync(declare: server => server.AddConfiguredStreams(
+            "acme",
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, PushEndpointUrl = new Uri(PushEndpoint) }]));
+
+        var acme = await ClientOf(app, Host + Acme).GetFromJsonAsync<StreamConfiguration[]>(Acme + StreamPath, ct);
+        var globex = await ClientOf(app, Host + Globex).GetFromJsonAsync<StreamConfiguration[]>(Globex + StreamPath, ct);
+
+        var declared = Assert.Single(acme!);
+        Assert.Equal(StreamId, declared.StreamId);
+        Assert.Equal(Host + Acme, declared.Issuer);
+        Assert.Empty(globex!);
     }
 
     private static async Task<int> DispatchAsync(WebApplication app, string tenantId, CancellationToken ct)
@@ -370,7 +485,8 @@ public sealed class SharedSignalsTenantIsolationTests
         string issuer = Host,
         Uri? jwksUri = null,
         Action<IServiceCollection>? beforeMultiTenancy = null,
-        Action<IServiceCollection>? afterSharedSignals = null)
+        Action<IServiceCollection>? afterSharedSignals = null,
+        Action<IOidcServerBuilder>? declare = null)
     {
         await TestLicense.Loaded;
 
@@ -381,7 +497,11 @@ public sealed class SharedSignalsTenantIsolationTests
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        var server = builder.Services.AddOidcServices(options =>
+        {
+            options.Tenants.Add(TenantAt("acme", Acme));
+            options.Tenants.Add(TenantAt("globex", Globex));
+        });
 
         builder.Services.AddSecurityEvents();
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
@@ -396,13 +516,8 @@ public sealed class SharedSignalsTenantIsolationTests
         });
         beforeMultiTenancy?.Invoke(builder.Services);
 
-        builder.Services
-            .AddMultiTenancy(options =>
-            {
-                options.Tenants.Add(TenantAt("acme", Acme));
-                options.Tenants.Add(TenantAt("globex", Globex));
-            })
-            .AddSharedSignals();
+        server.AddSharedSignals();
+        declare?.Invoke(server);
         afterSharedSignals?.Invoke(builder.Services);
 
         var app = builder.Build();

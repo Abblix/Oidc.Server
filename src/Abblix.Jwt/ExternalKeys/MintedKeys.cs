@@ -77,9 +77,10 @@ public sealed record MintedKeys
     public string ContentEncryptionAlgorithm { get; init; } = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
     /// <summary>
-    /// Keys the server already signs with, taken into a ring that has minted nothing yet so the move to minted keys
-    /// does not change which key is producing on the day it happens. Normally set through
-    /// <see cref="IMintedKeysBuilder.AdoptExistingKeys"/> rather than written here.
+    /// Keys an issuer already signs with, by the partition they are taken into: each partition that has minted nothing
+    /// yet takes its own, so the move to minted keys does not change which key is producing on the day it happens, and
+    /// no partition serves another's. Normally set through
+    /// <see cref="IMintedKeysBuilder.AdoptExistingKeys(string, JsonWebKey[])"/> rather than written here.
     /// </summary>
     /// <remarks>
     /// Without this the ring starts empty, and a ring of one key has nothing to trail behind: the freshly minted
@@ -95,5 +96,6 @@ public sealed record MintedKeys
     /// is completed by the next refresh.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<JsonWebKey> AdoptedKeys { get; init; } = [];
+    public IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>> AdoptedKeys { get; init; } =
+        new Dictionary<string, IReadOnlyList<JsonWebKey>>(StringComparer.Ordinal);
 }

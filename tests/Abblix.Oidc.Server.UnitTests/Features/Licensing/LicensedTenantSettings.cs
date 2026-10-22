@@ -30,15 +30,11 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
 
     public string Id => id;
 
-    public string? VouchedId => id;
+    public string? VouchedId(string issuer) => id;
 
     public CancellationToken Released => released;
 
     public string KeyPartition => Rest.KeyPartition;
-
-    public IEnumerable<ClientInfo> Clients => Rest.Clients;
-
-    public ScopeDefinition[]? Scopes => Rest.Scopes;
 
     public ResourceDefinition[]? Resources => Rest.Resources;
 
@@ -58,15 +54,9 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
 
     public ClientSecurityProfile DefaultSecurityProfile => Rest.DefaultSecurityProfile;
 
-    public PairwiseSubjectSettings? PairwiseSubject => Rest.PairwiseSubject;
-
     public string CheckSessionCookieName => Rest.CheckSessionCookieName;
 
-    public IReadOnlyCollection<JsonWebKey> SigningKeys => Rest.SigningKeys;
-
-    public IReadOnlyCollection<JsonWebKey> EncryptionKeys => Rest.EncryptionKeys;
-
-    public CustodianHeldKeys? CustodianKeys => Rest.CustodianKeys;
-
     public Uri? MtlsBaseUri => Rest.MtlsBaseUri;
+
+    public MtlsAliasesOptions? MtlsEndpointAliases => Rest.MtlsEndpointAliases;
 }

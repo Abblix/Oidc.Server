@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -31,10 +30,9 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantClientRegistrationStore>(registrations);
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
     }
 
@@ -61,13 +59,13 @@ public partial class MultiTenancyRegistrationTests
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, Tenant("acme", "1"));
-        Assert.True(await manager.TryAddClientAsync(Registration("app")));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), Registration("app")));
         Assert.Equal(("acme", "1", "APP"), Assert.Single(registrations.Held.Keys));
-        Assert.NotNull(await clients.TryFindClientAsync("app"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "app"));
 
         EnterTenant(provider, Tenant("globex", "1"));
-        Assert.Null(await clients.TryFindClientAsync("app"));
-        Assert.Null(await manager.TryFindRegisteredClientAsync("app"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "app"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync(Entered(provider), "app"));
     }
 
     /// <summary>
@@ -81,10 +79,10 @@ public partial class MultiTenancyRegistrationTests
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, Tenant("acme", "1"));
-        Assert.True(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(Registration("app")));
+        Assert.True(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(Entered(provider), Registration("app")));
 
         EnterTenant(provider, Tenant("acme", "2"));
-        Assert.Null(await clients.TryFindClientAsync("app"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "app"));
     }
 
     /// <summary>
@@ -98,15 +96,15 @@ public partial class MultiTenancyRegistrationTests
         using var provider = ServingWithHostRegistrations(registrations);
         var manager = provider.GetRequiredService<IClientInfoManager>();
         EnterTenant(provider, Tenant("acme", "1"));
-        Assert.True(await manager.TryAddClientAsync(Registration("app")));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), Registration("app")));
 
         EnterTenant(provider, Tenant("acme", "1", "app"));
         Assert.Equal(
             "configured",
-            (await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync("app"))?.ClientName);
+            (await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync(Entered(provider), "app"))?.ClientName);
         Assert.Single(registrations.Held);
 
-        Assert.Null(await manager.TryFindRegisteredClientAsync("app"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync(Entered(provider), "app"));
         Assert.Empty(registrations.Held);
     }
 
@@ -122,7 +120,7 @@ public partial class MultiTenancyRegistrationTests
         EnterTenant(provider, Tenant("acme", "1", "app"));
 
         var found = await provider.GetRequiredService<IClientInfoProvider>()
-            .TryFindClientAsync("app")
+            .TryFindClientAsync(Entered(provider), "app")
             .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.NotNull(found);
@@ -139,13 +137,13 @@ public partial class MultiTenancyRegistrationTests
         var manager = provider.GetRequiredService<IClientInfoManager>();
         EnterTenant(provider, Tenant("acme", "1"));
         var registered = Registration("app");
-        Assert.True(await manager.TryAddClientAsync(registered));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), registered));
 
         var updated = new RegisteredClient(new ClientInfo("app") { ClientName = "renamed" }, "jti-2");
-        Assert.True(await manager.TryUpdateClientAsync(registered, updated));
+        Assert.True(await manager.TryUpdateClientAsync(Entered(provider), registered, updated));
         Assert.Equal("renamed", Assert.Single(registrations.Held.Values).ClientInfo.ClientName);
 
-        Assert.True(await manager.TryRemoveClientAsync(updated));
+        Assert.True(await manager.TryRemoveClientAsync(Entered(provider), updated));
         Assert.Empty(registrations.Held);
     }
 
@@ -160,7 +158,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = ServingWithHostRegistrations(registrations);
         EnterTenant(provider, Tenant("acme", "1", "app"));
 
-        Assert.False(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(Registration("app")));
+        Assert.False(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(Entered(provider), Registration("app")));
 
         Assert.Empty(registrations.Held);
     }

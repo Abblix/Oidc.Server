@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -65,19 +66,19 @@ public class AuthorizationResponseFormatter(
         {
             case AccountSelectionRequired:
                 return await RedirectAsync(
-                    issuerSettings.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
+                    issuerSettings.AccountSelectionUri.NotNull(nameof(TenantDefinition.AccountSelectionUri)), response.Model);
 
             case ConsentRequired:
                 return await RedirectAsync(
-                    issuerSettings.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
+                    issuerSettings.ConsentUri.NotNull(nameof(TenantDefinition.ConsentUri)), response.Model);
 
             case InteractionRequired:
                 return await RedirectAsync(
-                    issuerSettings.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
+                    issuerSettings.InteractionUri.NotNull(nameof(TenantDefinition.InteractionUri)), response.Model);
 
             case LoginRequired:
                 return await RedirectAsync(
-                    issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
+                    issuerSettings.LoginUri.NotNull(nameof(TenantDefinition.LoginUri)), response.Model);
 
             // prompt=create (Initiating User Registration via OpenID Connect 1.0): a dedicated
             // registration UI when the host configured one, otherwise the login UI - the original
@@ -86,7 +87,7 @@ public class AuthorizationResponseFormatter(
             case RegistrationRequired:
                 return await RedirectAsync(
                     issuerSettings.RegistrationUri
-                        ?? issuerSettings.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
+                        ?? issuerSettings.LoginUri.NotNull(nameof(TenantDefinition.LoginUri)),
                     response.Model);
 
             // iss/scope gating and JARM packing are applied upstream by the core response encoder (run from

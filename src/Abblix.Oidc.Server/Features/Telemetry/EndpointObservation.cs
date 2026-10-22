@@ -15,9 +15,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
-// The tenant a span and a measurement name is read from the multi-tenancy feature where it is in use
-#pragma warning disable ABXMT001
-
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
@@ -32,7 +29,7 @@ internal static class EndpointObservation
     /// </summary>
     /// <param name="endpoint">The endpoint, one of <see cref="TelemetryEndpoints"/>.</param>
     /// <param name="instruments">Records the request into the server's metrics.</param>
-    /// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
+    /// <param name="tenants">Tells the tenant serving the request.</param>
     /// <param name="handle">The endpoint's handling.</param>
     /// <param name="errorOf">The error the outcome refuses the request with, or null when it does not.</param>
     /// <param name="tags">The request's attribute, from the closed set its tag documents; asked only when a span is
@@ -41,7 +38,7 @@ internal static class EndpointObservation
     public static async Task<TResult> RunAsync<TResult>(
         string endpoint,
         OidcInstruments instruments,
-        ITenantAccessor? tenants,
+        ITenantAccessor tenants,
         Func<Task<TResult>> handle,
         Func<TResult, OidcError?> errorOf,
         Func<(string Key, string? Value)>? tags = null,
@@ -139,9 +136,9 @@ internal static class EndpointObservation
     }
 
     /// <summary>
-    /// The tenant serving the request under multi-tenancy, or null on a server without tenants.
+    /// The tenant serving the request, or null for a request outside every tenant.
     /// </summary>
-    public static string? TenantOf(ITenantAccessor? tenants) => tenants?.Current?.Tenant.Id;
+    public static string? TenantOf(ITenantAccessor tenants) => tenants.Current?.Tenant.Id;
 
     /// <summary>
     /// The error of a refusal, or null for a success.

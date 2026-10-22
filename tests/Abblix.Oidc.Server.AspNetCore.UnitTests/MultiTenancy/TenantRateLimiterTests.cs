@@ -17,8 +17,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -40,7 +38,7 @@ public sealed class TenantRateLimiterTests : IDisposable
             options.AuthenticationFailureLimit.PermitLimit = 1;
             options.CallerRateLimit.PermitLimit = 1;
         });
-        _provider = services.AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
+        _provider = services.ServeTenants().BuildServiceProvider();
     }
 
     public void Dispose() => _provider.Dispose();
@@ -174,7 +172,7 @@ public sealed class TenantRateLimiterTests : IDisposable
     {
         var ct = TestContext.Current.CancellationToken;
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
-        var declared = new MultiTenancyOptions
+        var declared = new OidcOptions
         {
             Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") }],
         };
@@ -204,7 +202,7 @@ public sealed class TenantRateLimiterTests : IDisposable
         await catalog.RefreshAsync(ct);
         built[0].AttemptAcquire(Address).Dispose();
 
-        time.Advance(declared.RefreshEvery);
+        time.Advance(declared.RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
         Assert.Throws<ObjectDisposedException>(() => built[0].AttemptAcquire(Address));
         budget.AttemptAcquire(Address).Dispose();
@@ -220,7 +218,7 @@ public sealed class TenantRateLimiterTests : IDisposable
     {
         var ct = TestContext.Current.CancellationToken;
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
-        var declared = new MultiTenancyOptions
+        var declared = new OidcOptions
         {
             Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/tenants/acme") }],
         };
@@ -240,7 +238,7 @@ public sealed class TenantRateLimiterTests : IDisposable
             () =>
             {
                 // The reading that releases the tenant lands while the limiter is being built
-                time.Advance(declared.RefreshEvery);
+                time.Advance(declared.RefreshTenantsEvery);
                 catalog.RefreshAsync(ct).GetAwaiter().GetResult();
                 return PartitionedRateLimiter.Create<string, string>(RateLimitPartition.GetNoLimiter);
             },
@@ -281,7 +279,8 @@ public sealed class TenantRateLimiterTests : IDisposable
 
     /// <summary>
     /// A host's own limiter partitions by the address it was written for: each tenant gets one of its own, built
-    /// the way the host registered it, rather than one shared limiter seeing a key the host never produced.
+    /// the way the host registered it under the key of one tenant's budget, rather than one shared limiter seeing a
+    /// key the host never produced.
     /// </summary>
     [Fact]
     public void AHostsOwnLimiter_IsBuiltPerTenant_AndSeesTheAddressUnchanged()
@@ -289,8 +288,8 @@ public sealed class TenantRateLimiterTests : IDisposable
         var built = 0;
         var seen = new System.Collections.Generic.List<string>();
         var services = new ServiceCollection();
-        services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
-            CallerRateLimiters.AuthenticationFailures,
+        services.AddKeyedTransient<PartitionedRateLimiter<string>>(
+            TenantServiceKeys.PerTenant(CallerRateLimiters.AuthenticationFailures),
             (_, _) =>
             {
                 built++;
@@ -300,7 +299,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                     return RateLimitPartition.GetNoLimiter(address);
                 });
             });
-        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
+        using var provider = services.AddServerStorage().ServeTenants().BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures);
@@ -324,9 +323,9 @@ public sealed class TenantRateLimiterTests : IDisposable
     {
         var shared = PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address));
         var services = new ServiceCollection();
-        services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
-            CallerRateLimiters.AuthenticationFailures, (_, _) => shared);
-        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
+        services.AddKeyedTransient<PartitionedRateLimiter<string>>(
+            TenantServiceKeys.PerTenant(CallerRateLimiters.AuthenticationFailures), (_, _) => shared);
+        using var provider = services.AddServerStorage().ServeTenants().BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures);
@@ -405,8 +404,9 @@ public sealed class TenantRateLimiterTests : IDisposable
     {
         var log = new HostLimiterLog();
         var services = new ServiceCollection().AddSingleton(log);
-        services.AddKeyedSingleton<PartitionedRateLimiter<string>, HostLimiter>(CallerRateLimiters.AuthenticationFailures);
-        using var provider = services.AddServerStorage().AddMultiTenancy(_ => { }).Services.BuildServiceProvider();
+        services.AddKeyedTransient<PartitionedRateLimiter<string>, HostLimiter>(
+            TenantServiceKeys.PerTenant(CallerRateLimiters.AuthenticationFailures));
+        using var provider = services.AddServerStorage().ServeTenants().BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures);
@@ -452,41 +452,40 @@ public sealed class TenantRateLimiterTests : IDisposable
     }
 
     /// <summary>
-    /// A limiter registered as a ready instance cannot be built again for each tenant, and handing that one
-    /// instance to every tenant would let one tenant's callers spend another's budget.
-    /// </summary>
-    [Fact]
-    public void AHostsLimiterRegisteredAsAnInstance_IsRefused()
-    {
-        var services = new ServiceCollection();
-        services.AddKeyedSingleton(
-            CallerRateLimiters.AuthenticationFailures,
-            PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)));
-        services.AddServerStorage();
-
-        var refusal = Assert.Throws<InvalidOperationException>(() => services.AddMultiTenancy(_ => { }));
-        Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A budget registered per scope or per resolution starts afresh on every request and limits nothing; kept per
-    /// tenant, each copy would also see one tenant only, so a limiter it shared would never be caught.
+    /// A limiter for one tenant's budget registered as a ready instance, or as a singleton, is one limiter handed to
+    /// every tenant, which would let one tenant's callers spend another's budget, so the second tenant it is handed
+    /// to is refused.
     /// </summary>
     [Theory]
-    [InlineData(ServiceLifetime.Scoped)]
-    [InlineData(ServiceLifetime.Transient)]
-    public void AHostsLimiterLivingShorterThanTheProcess_IsRefused(ServiceLifetime lifetime)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AHostsLimiterRegisteredOnceForEveryTenant_IsRefusedForTheSecondTenant(bool asAnInstance)
     {
-        IServiceCollection services = new ServiceCollection();
-        services.Add(ServiceDescriptor.DescribeKeyed(
-            typeof(PartitionedRateLimiter<string>),
-            CallerRateLimiters.AuthenticationFailures,
-            (_, _) => PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)),
-            lifetime));
-        services.AddServerStorage();
+        var services = new ServiceCollection();
+        var perTenant = TenantServiceKeys.PerTenant(CallerRateLimiters.AuthenticationFailures);
+        if (asAnInstance)
+        {
+            services.AddKeyedSingleton(
+                perTenant,
+                PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)));
+        }
+        else
+        {
+            services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
+                perTenant,
+                (_, _) => PartitionedRateLimiter.Create<string, string>(address => RateLimitPartition.GetNoLimiter(address)));
+        }
 
-        var refusal = Assert.Throws<InvalidOperationException>(() => services.AddMultiTenancy(_ => { }));
-        Assert.Contains(CallerRateLimiters.AuthenticationFailures, refusal.Message, StringComparison.Ordinal);
+        using var provider = services.AddServerStorage().ServeTenants().BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        var failures = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures);
+
+        accessor.HttpContext = InTenant("acme");
+        failures.AttemptAcquire(Address).Dispose();
+
+        accessor.HttpContext = InTenant("globex");
+        Assert.Throws<InvalidOperationException>(() => failures.AttemptAcquire(Address));
     }
 
     private static DefaultHttpContext InTenant(string tenantId)

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -19,7 +20,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.Consents;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -49,7 +49,7 @@ public sealed class SessionTenantBindingTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
-        builder.Services.AddMultiTenancy(options =>
+        builder.Services.Configure<OidcOptions>(options =>
         {
             options.Tenants.Add(Tenant("acme", Acme));
             options.Tenants.Add(Tenant("globex", Globex));

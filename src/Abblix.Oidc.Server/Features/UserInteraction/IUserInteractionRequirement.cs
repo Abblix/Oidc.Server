@@ -17,8 +17,8 @@ namespace Abblix.Oidc.Server.Features.UserInteraction;
 /// </summary>
 /// <remarks>
 /// The endpoint asks once a single session answers the request, and before it reads the consents, so a step is
-/// completed before the end user grants anything. A required step sends the end user to the interaction page,
-/// <c>OidcOptions.InteractionUri</c> or a tenant's <c>TenantDefinition.InteractionUri</c>, with
+/// completed before the end user grants anything. A required step sends the end user to the tenant's interaction
+/// page, <c>TenantDefinition.InteractionUri</c>, with
 /// <see cref="InteractionRequired"/>, and answers the client with
 /// <c>interaction_required</c> when the request carries <c>prompt=none</c> (OpenID Connect Core 1.0, section 3.1.2.6).
 /// <para>
@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.UserInteraction;
 /// on its verification page or on the authentication device, and puts any step of its own there.
 /// </para>
 /// <para>
-/// Under multi-tenancy the server asks the same implementation for every tenant; a host keeping its steps per tenant
+/// The server asks the same implementation for every tenant; a host keeping its steps per tenant
 /// reads the tenant of the request from <c>ITenantAccessor</c>.
 /// </para>
 /// </remarks>

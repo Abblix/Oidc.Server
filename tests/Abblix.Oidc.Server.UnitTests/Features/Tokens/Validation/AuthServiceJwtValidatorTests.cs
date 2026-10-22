@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 
@@ -51,7 +52,7 @@ public class AuthServiceJwtValidatorTests
             _jwtValidator.Object,
             issuerProvider.Object,
             SingleIssuer.Settings,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -444,11 +445,11 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(CreateValidToken());
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys())
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(signingKeys.ToAsyncEnumerable());
 
         _serviceKeysProvider
-            .Setup(p => p.GetEncryptionKeys(true))
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
@@ -479,11 +480,11 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(CreateValidToken());
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys())
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
-            .Setup(p => p.GetEncryptionKeys(true))
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(encryptionKeys.ToAsyncEnumerable());
 
         // Act
@@ -495,7 +496,7 @@ public class AuthServiceJwtValidatorTests
         Assert.Equal(encryptionKeys.Length, resolvedKeys.Length);
 
         // Verify GetEncryptionKeys was called with includePrivate=true
-        _serviceKeysProvider.Verify(p => p.GetEncryptionKeys(true), Times.Once);
+        _serviceKeysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), true), Times.Once);
     }
 
     /// <summary>
@@ -513,11 +514,11 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "No signing keys available"));
 
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys())
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
-            .Setup(p => p.GetEncryptionKeys(true))
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
@@ -547,7 +548,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -665,11 +666,11 @@ public class AuthServiceJwtValidatorTests
     private void SetupKeyProviders()
     {
         _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys())
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         _serviceKeysProvider
-            .Setup(p => p.GetEncryptionKeys(true))
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
     }
 }

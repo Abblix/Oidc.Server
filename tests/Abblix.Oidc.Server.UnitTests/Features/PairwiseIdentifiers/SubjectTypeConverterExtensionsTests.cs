@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.PairwiseIdentifiers;
 
@@ -34,8 +35,8 @@ public class SubjectTypeConverterExtensionsTests
     {
         var converter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         converter
-            .Setup(c => c.Convert(It.IsAny<string>(), It.IsAny<ClientInfo>()))
-            .Returns((string subject, ClientInfo _) => convert(subject));
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Returns((TenantDefinition _, string subject, ClientInfo _) => convert(subject));
 
         return converter.Object;
     }
@@ -52,8 +53,8 @@ public class SubjectTypeConverterExtensionsTests
     {
         var converter = Converting(subject => "sealed:" + subject);
 
-        Assert.True(converter.Names(Session("alice"), ["sealed:alice"], new ClientInfo(ClientId)));
-        Assert.False(converter.Names(Session("alice"), ["alice"], new ClientInfo(ClientId)));
+        Assert.True(converter.Names(SingleIssuer.Tenant, Session("alice"), ["sealed:alice"], new ClientInfo(ClientId)));
+        Assert.False(converter.Names(SingleIssuer.Tenant, Session("alice"), ["alice"], new ClientInfo(ClientId)));
     }
 
     /// <summary>
@@ -68,7 +69,7 @@ public class SubjectTypeConverterExtensionsTests
     {
         var converter = Converting(subject => subject);
 
-        Assert.False(converter.Names(Session("alice"), ["Alice"], new ClientInfo(ClientId)));
+        Assert.False(converter.Names(SingleIssuer.Tenant, Session("alice"), ["Alice"], new ClientInfo(ClientId)));
     }
 
     /// <summary>
@@ -84,7 +85,7 @@ public class SubjectTypeConverterExtensionsTests
     {
         var converter = Converting(subject => subject);
 
-        Assert.False(converter.Names(Session("alice"), [], new ClientInfo(ClientId)));
+        Assert.False(converter.Names(SingleIssuer.Tenant, Session("alice"), [], new ClientInfo(ClientId)));
     }
 
     /// <summary>
@@ -101,6 +102,6 @@ public class SubjectTypeConverterExtensionsTests
     {
         var converter = Converting(_ => throw new InvalidOperationException("pairwise settings are missing"));
 
-        Assert.False(converter.Names(Session("alice"), ["alice"], new ClientInfo(ClientId)));
+        Assert.False(converter.Names(SingleIssuer.Tenant, Session("alice"), ["alice"], new ClientInfo(ClientId)));
     }
 }

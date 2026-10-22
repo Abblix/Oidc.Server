@@ -16,6 +16,7 @@ using Abblix.Jwt.Encryption;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Jwt.Signing;
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using System.Threading.RateLimiting;
@@ -160,7 +161,9 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(new Mock<IIssuerProvider>().Object);
-        services.AddSingleton<IIssuerSettings, OptionsIssuerSettings>();
+        services.AddSingleton(SingleIssuer.Settings);
+        services.AddSingleton(SingleIssuer.AccessorOf(() => new TestIssuer()));
+        services.AddSingleton(Mock.Of<ITenantCatalog>());
         services.AddSingleton(new Mock<IReplayCache>().Object);
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
@@ -186,10 +189,9 @@ public class ServiceCollectionOverrideTests
         };
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
+        clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
 
         services.AddLogging();
-        services.Configure<OidcOptions>(options => options.DefaultSecurityProfile = ClientSecurityProfile.Fapi2);
         services.AddSingleton(clients.Object);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
@@ -197,7 +199,9 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(new Mock<IIssuerProvider>().Object);
-        services.AddSingleton<IIssuerSettings, OptionsIssuerSettings>();
+        services.AddSingleton(SingleIssuer.SettingsOf(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }));
+        services.AddSingleton(SingleIssuer.AccessorOf(() => new TestIssuer()));
+        services.AddSingleton(Mock.Of<ITenantCatalog>());
         services.AddSingleton(new Mock<IReplayCache>().Object);
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
@@ -281,7 +285,7 @@ public class ServiceCollectionOverrideTests
         services.AddClientAuthentication();
         services.AddDPoP();
 
-        Assert.Single(services, d => d.ServiceType == typeof(IReplayCache));
+        Assert.Single(services, d => d.ServiceType == typeof(IReplayCache) && !d.IsKeyedService);
     }
 
     [Fact]
@@ -423,11 +427,14 @@ public class ServiceCollectionOverrideTests
         services.AddRevocation();
         services.AddOidcCore(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-
             // Resolving a limiter reads the options, and the options refuse a server that could issue no token
             // at all - so the composition needs a signing key before it will hand out anything.
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = TestIssuer.TenantId,
+                Issuer = TestConstants.DefaultIssuer,
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
+            });
         });
         using var provider = services.BuildServiceProvider();
 
@@ -452,8 +459,7 @@ public class ServiceCollectionOverrideTests
         services.AddLogging();
         services.AddOidcCore(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -476,8 +482,7 @@ public class ServiceCollectionOverrideTests
         services.AddLogging();
         services.AddOidcCore(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
         await using var provider = services.BuildServiceProvider();
 
@@ -504,8 +509,7 @@ public class ServiceCollectionOverrideTests
 
         services.AddOidcCore(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
         if (!registeredFirst)
             services.AddSingleton(hosts);

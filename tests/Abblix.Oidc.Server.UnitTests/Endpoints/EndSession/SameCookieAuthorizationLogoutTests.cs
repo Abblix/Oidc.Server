@@ -11,6 +11,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
@@ -143,14 +144,13 @@ public class SameCookieAuthorizationLogoutTests
         services.AddConsentGrantedForEveryClient();
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
 
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
-            .ReturnsAsync((string clientId) => Client(clientId));
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string clientId) => Client(clientId));
         services.Replace(ServiceDescriptor.Singleton(clients.Object));
 
         var notifier = new Mock<ILogoutNotifier>();
@@ -160,6 +160,6 @@ public class SameCookieAuthorizationLogoutTests
             .Returns(Task.CompletedTask);
         services.Replace(ServiceDescriptor.Singleton(notifier.Object));
 
-        return services.BuildServiceProvider();
+        return services.ResolveToTheDeclaredTenant().BuildServiceProvider();
     }
 }

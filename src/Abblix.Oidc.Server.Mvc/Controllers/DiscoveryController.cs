@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using JsonWebKeySet = Abblix.Jwt.JsonWebKeySet;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -86,6 +87,7 @@ public sealed class DiscoveryController : ControllerBase
 	/// Clients can use these keys to verify the authenticity of identity tokens and access tokens issued by the provider.
 	/// </summary>
 	/// <param name="serviceKeysProvider">Provider for retrieving the service's public key information.</param>
+	/// <param name="tenantAccessor">Names the tenant whose keys are published.</param>
 	/// <param name="options">OIDC options; supplies the key-rollover propagation window used as the JWKS cache lifetime.</param>
 	/// <param name="logger">Logger used to warn if a key still carrying private material is stripped before publication.</param>
 	/// <returns>
@@ -97,10 +99,11 @@ public sealed class DiscoveryController : ControllerBase
 	[ActionName(nameof(KeysAsync))]
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
 		[FromServices] IAuthServiceKeysProvider serviceKeysProvider,
+		[FromServices] ITenantAccessor tenantAccessor,
 		[FromServices] IOptions<OidcOptions> options,
 		[FromServices] ILogger<IAuthServiceKeysProvider> logger)
 	{
-		var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
+		var keys = await serviceKeysProvider.GetPublishedKeysAsync(tenantAccessor.CurrentTenant(), logger);
 
 		// The JWKS is public, cacheable metadata: advertise a lifetime equal to the key-rollover propagation
 		// window (the deliberate exception to this controller's otherwise no-store metadata policy).

@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -27,7 +28,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider) : IClientAuthenticator
+    IClientInfoProvider clientInfoProvider,
+    ITenantAccessor tenantAccessor) : IClientAuthenticator
 {
     /// <summary>
     /// OID for Subject Alternative Name extension (RFC 5280 section 4.2.1.6).
@@ -73,7 +75,7 @@ public partial class TlsMetadataClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId);
+        var client = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         if (client == null)
             return null;
 

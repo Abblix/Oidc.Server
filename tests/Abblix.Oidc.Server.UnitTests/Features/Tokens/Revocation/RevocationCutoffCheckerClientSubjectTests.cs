@@ -25,6 +25,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -49,8 +50,8 @@ public class RevocationCutoffCheckerClientSubjectTests
                 It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
         _clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
-            .ReturnsAsync((string clientId) => new ClientInfo(clientId));
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string clientId) => new ClientInfo(clientId));
     }
 
     private IRevocationCutoffChecker Checker(SubjectTypeConverter? converter = null)
@@ -64,7 +65,7 @@ public class RevocationCutoffCheckerClientSubjectTests
             issuers.Object,
             Options.Create(new OidcOptions()),
             _clients.Object,
-            converter ?? new SubjectTypeConverter());
+            new FixedSubjectTypeConverter(converter ?? new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static JsonWebTokenPayload Token(string? clientId) => new(new())
@@ -137,7 +138,7 @@ public class RevocationCutoffCheckerClientSubjectTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = "client.example.com",
         };
-        _clients.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(pairwiseClient);
         SetupCutoff(ClientId, IssuedAt.AddMinutes(10));
         var token = Token(ClientId);
         token.Subject = converter.Convert(Subject, pairwiseClient);

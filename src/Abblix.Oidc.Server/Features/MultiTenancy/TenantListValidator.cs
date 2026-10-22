@@ -6,31 +6,32 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses to start a server whose settings declare a tenant any check of a tenant list refuses.
+/// Refuses to start a server whose settings declare a tenant any check of a tenant list refuses, or reread the
+/// tenants at a period the timer cannot keep.
 /// </summary>
 /// <param name="checks">The checks of a tenant list.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks) : IValidateOptions<MultiTenancyOptions>
+public sealed class TenantListValidator(IEnumerable<ITenantsCheck> checks)
+    : IValidateOptions<OidcOptions>
 {
     // The periods System.Threading.PeriodicTimer accepts
     private static readonly TimeSpan ShortestPeriod = TimeSpan.FromMilliseconds(1);
     private static readonly TimeSpan LongestPeriod = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
     /// <inheritdoc />
-    public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
+    public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        var failures = TenantRefusal.AllOf(checks, options.Tenants).Select(refusal => refusal.Message).ToList();
+        var failures = TenantRefusal.AllOf(checks, options.Tenants, options).Select(refusal => refusal.Message).ToList();
 
-        if (options.RefreshEvery < ShortestPeriod || options.RefreshEvery > LongestPeriod)
+        if (options.RefreshTenantsEvery < ShortestPeriod || options.RefreshTenantsEvery > LongestPeriod)
         {
             failures.Add(
-                $"{nameof(MultiTenancyOptions)}.{nameof(MultiTenancyOptions.RefreshEvery)} must lie between " +
+                $"{nameof(OidcOptions)}.{nameof(OidcOptions.RefreshTenantsEvery)} must lie between " +
                 $"{ShortestPeriod} and {LongestPeriod}: it is how often the store of tenants is read again, by a " +
                 "timer that accepts no other period.");
         }

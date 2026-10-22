@@ -107,21 +107,13 @@ public class AuthorizationResponseFormatterTests
     }
 
     /// <summary>
-    /// A formatter whose server-wide options name other pages, so a page read from them shows in the address.
+    /// A formatter reading the pages from <paramref name="issuerSettings"/>, the settings of the request's tenant.
     /// </summary>
     private static AuthorizationResponseFormatter Formatter(
         IIssuerSettings issuerSettings,
         ISessionManagementService? sessionManagement = null)
     {
-        const string serverWide = "https://server-wide.example.com/";
-        var options = new OidcOptions
-        {
-            AccountSelectionUri = new Uri(serverWide + "account-selection"),
-            ConsentUri = new Uri(serverWide + "consent"),
-            InteractionUri = new Uri(serverWide + "interaction"),
-            LoginUri = new Uri(serverWide + "login"),
-            RegistrationUri = new Uri(serverWide + "registration"),
-        };
+        var options = new OidcOptions();
 
         return new AuthorizationResponseFormatter(
             Options.Create(options),
@@ -137,8 +129,6 @@ public class AuthorizationResponseFormatterTests
         public string Id => string.Empty;
         public string KeyPartition => string.Empty;
         public CancellationToken Released => CancellationToken.None;
-        public IEnumerable<ClientInfo> Clients => [];
-        public ScopeDefinition[]? Scopes => null;
         public ResourceDefinition[]? Resources => null;
         public Uri? DefaultResourceIndicator => null;
         public bool InferResourceFromScope => false;
@@ -148,12 +138,9 @@ public class AuthorizationResponseFormatterTests
         public Uri? LoginUri { get; init; } = new(Base + "login");
         public Uri? RegistrationUri { get; init; } = new(Base + "registration");
         public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
-        public PairwiseSubjectSettings? PairwiseSubject => null;
         public string CheckSessionCookieName => "session";
-        public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> SigningKeys => [];
-        public IReadOnlyCollection<Abblix.Jwt.JsonWebKey> EncryptionKeys => [];
-        public Abblix.Jwt.ExternalKeys.CustodianHeldKeys? CustodianKeys => null;
         public Uri? MtlsBaseUri => null;
+        public MtlsAliasesOptions? MtlsEndpointAliases => null;
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

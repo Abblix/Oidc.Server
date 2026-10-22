@@ -13,7 +13,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <summary>
 /// Why <see cref="ITenantManager"/> refused a change of the tenants.
 /// </summary>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public enum TenantChangeRefusalReason
 {
     /// <summary>

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -19,7 +20,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.Consents;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -53,7 +53,7 @@ public sealed class HostRequestOutsideTenantsTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
-        builder.Services.AddMultiTenancy(options => options.Tenants.Add(new TenantDefinition
+        builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
             Issuer = new Uri(Host + Acme),

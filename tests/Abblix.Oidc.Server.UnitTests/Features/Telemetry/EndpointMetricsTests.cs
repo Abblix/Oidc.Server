@@ -35,7 +35,6 @@ using Moq;
 using Xunit;
 
 // The tenant a measurement names comes from the multi-tenancy feature
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Telemetry;
 
@@ -67,7 +66,7 @@ public sealed class EndpointMetricsTests : IDisposable
         Result<TokenIssued, OidcError> result,
         ITenantAccessor? tenants = null)
         => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token, _instruments, tenants, () => Task.FromResult(result), EndpointObservation.ErrorOf);
+            TelemetryEndpoints.Token, _instruments, tenants ?? NoTenant.Accessor, () => Task.FromResult(result), EndpointObservation.ErrorOf);
 
     private static TokenIssued Issued => new(
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
@@ -124,7 +123,7 @@ public sealed class EndpointMetricsTests : IDisposable
     public async Task AFailedRequest_IsMeasuredAsFailedAndPassesOn()
     {
         await Assert.ThrowsAsync<TimeoutException>(() => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
-            TelemetryEndpoints.Token, _instruments, null, () => throw new TimeoutException(), EndpointObservation.ErrorOf));
+            TelemetryEndpoints.Token, _instruments, NoTenant.Accessor, () => throw new TimeoutException(), EndpointObservation.ErrorOf));
 
         var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
         Assert.Equal(TelemetryOutcomes.Failed, request[TelemetryTags.Outcome]);
@@ -147,7 +146,7 @@ public sealed class EndpointMetricsTests : IDisposable
         System.Diagnostics.ActivitySource.AddActivityListener(listener);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(Issued), EndpointObservation.NoError,
+            TelemetryEndpoints.Token, _instruments, NoTenant.Accessor, () => Task.FromResult(Issued), EndpointObservation.NoError,
             enrichment: new EndpointEnrichment(null, [enricher.Object])));
 
         Assert.Equal(
@@ -187,7 +186,7 @@ public sealed class EndpointMetricsTests : IDisposable
             () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
-                null,
+                NoTenant.Accessor,
                 () => throw new TooManyAuthenticationFailuresException(spent),
                 EndpointObservation.ErrorOf));
 
@@ -210,7 +209,7 @@ public sealed class EndpointMetricsTests : IDisposable
             () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
-                null,
+                NoTenant.Accessor,
                 () => throw new LicenseViolationException(reason),
                 EndpointObservation.ErrorOf));
 
@@ -235,7 +234,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Issued with { IdToken = AToken, RefreshToken = AToken });
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants, tenants: NoTenant.Accessor);
 
         // A CIBA push delivery mints its tokens through the processor with no request to the token endpoint
         await measured.ProcessAsync(ValidRequest(GrantTypes.Ciba));
@@ -260,7 +259,7 @@ public sealed class EndpointMetricsTests : IDisposable
     [Fact]
     public async Task AGrantTypeTheServerDoesNotSupportAsSpelled_IsNotNamed()
     {
-        var measured = new MeasuredTokenRequestProcessor(Issuing().Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(Issuing().Object, _instruments, Grants, tenants: NoTenant.Accessor);
 
         await measured.ProcessAsync(ValidRequest("Authorization_Code"));
 
@@ -286,7 +285,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "The code has expired"));
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants, tenants: NoTenant.Accessor);
 
         await measured.ProcessAsync(ValidRequest(GrantTypes.AuthorizationCode));
 
@@ -301,7 +300,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(request))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null));
-        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments);
+        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         await observed.HandleAsync(request);
 
@@ -323,7 +322,7 @@ public sealed class EndpointMetricsTests : IDisposable
                 AccessToken = AToken,
                 IdToken = AToken,
             });
-        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments);
+        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         await traced.HandleAsync(request);
 
@@ -342,7 +341,7 @@ public sealed class EndpointMetricsTests : IDisposable
             .SetupSequence(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
             .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token") { Metadata = new() })
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRedirectUri, "Refused"));
-        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
+        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         await traced.HandleAsync(new ClientRegistrationRequest());
         await traced.HandleAsync(new ClientRegistrationRequest());
@@ -360,7 +359,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TooManyAuthenticationFailuresException(spent));
-        var observed = new ObservedRegisterClientHandler(inner.Object, _instruments);
+        var observed = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
             () => observed.HandleAsync(new ClientRegistrationRequest()));
@@ -376,7 +375,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TimeoutException());
-        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
+        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         await Assert.ThrowsAsync<TimeoutException>(() => traced.HandleAsync(new ClientRegistrationRequest()));
 

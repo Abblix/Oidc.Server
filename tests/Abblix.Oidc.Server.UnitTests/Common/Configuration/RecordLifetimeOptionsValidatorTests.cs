@@ -65,6 +65,7 @@ public class RecordLifetimeOptionsValidatorTests
     public void The_composition_refuses_a_retention_of_zero()
     {
         var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
         services.AddOidcCore(options => options.SessionClientsRetention = TimeSpan.Zero);
         using var provider = services.BuildServiceProvider();
 
@@ -98,6 +99,7 @@ public class RecordLifetimeOptionsValidatorTests
     public void The_composition_refuses_a_logout_confirmation_lifetime_of_zero()
     {
         var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
         services.AddOidcCore(options => options.LogoutConfirmationLifetime = TimeSpan.Zero);
         using var provider = services.BuildServiceProvider();
 

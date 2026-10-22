@@ -12,7 +12,6 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </summary>
 internal sealed class KeyRingFactory
 {
-    private readonly MintedKeys _policy;
     private readonly IKeyRingStore _store;
     private readonly KeyRingRefresh _refresh;
     private readonly KeyRingSchedule _schedule;
@@ -26,7 +25,6 @@ internal sealed class KeyRingFactory
     /// <param name="store">The store whose partitions the rings are kept in.</param>
     public KeyRingFactory(IServiceProvider serviceProvider, MintedKeys policy, IKeyRingStore store)
     {
-        _policy = policy;
         _store = store;
         var steps = new KeyRingRefreshBuilder(serviceProvider, policy);
         _schedule = steps.Schedule;
@@ -36,17 +34,11 @@ internal sealed class KeyRingFactory
     /// <summary>The ring of <paramref name="partition"/>, over that partition of the store.</summary>
     public KeyRing Build(string partition)
     {
-        // Adopted keys would be seeded into every ring, so each partition would serve the others' keys, and only
-        // the unnamed partition is sure to be the ring's one
-        if (partition != KeyRingOptions.DefaultPartition && _policy.AdoptedKeys.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"Existing keys are adopted into a key ring, and its partition '{partition}' is named, so other " +
-                "partitions may come beside it: the same keys would be seeded into each, letting a party trusting " +
-                "one partition's keys verify another's tokens. Adopt keys only into the unnamed partition of a " +
-                "ring serving one issuer.");
-        }
-
-        return new KeyRing(new PartitionedKeyRingStore(_store, partition), _refresh, _schedule);
+        // Each partition takes only the keys handed over to it, so no partition serves another's
+        return new KeyRing(
+            new PartitionedKeyRingStore(_store, partition),
+            _refresh,
+            _schedule,
+            partition);
     }
 }

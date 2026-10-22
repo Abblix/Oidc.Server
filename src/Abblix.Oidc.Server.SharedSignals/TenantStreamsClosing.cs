@@ -28,7 +28,6 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </remarks>
 /// <param name="logger">Records a stream that could not be deleted.</param>
 /// <param name="serviceProvider">Resolves the stream store and the management of streams.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class TenantStreamsClosing(
     ILogger<TenantStreamsClosing> logger,
     IServiceProvider serviceProvider) : ITenantClosing

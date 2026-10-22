@@ -21,6 +21,7 @@ using Moq;
 using Xunit;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 
@@ -60,7 +61,7 @@ public class DiscoverySignedMetadataTests
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            new SignedMetadataProvider(_jwtCreatorMock.Object, _keysProviderMock.Object, _clock),
+            new SignedMetadataProvider(_jwtCreatorMock.Object, _keysProviderMock.Object, _clock, tenantAccessor: SingleIssuer.Accessor),
             SingleIssuer.SettingsOf(_optionsMock.Object));
     }
 
@@ -105,7 +106,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_EmitsPureJws()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
 
         JsonWebKey? capturedEncryptionKey = null;
         _jwtCreatorMock
@@ -130,7 +131,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_PayloadRestatesMetadataWithIssAndNoSelfReference()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;
         _jwtCreatorMock
@@ -162,7 +163,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_NoSigningKeys_Throws()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _formatter.FormatResponseAsync(MinimalResponse()));
@@ -184,7 +185,7 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = true;
         _keysProviderMock
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
             .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;

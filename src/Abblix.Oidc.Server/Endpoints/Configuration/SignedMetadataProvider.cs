@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
@@ -21,10 +22,12 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 /// <param name="jwtCreator">Issues the JWS.</param>
 /// <param name="serviceKeysProvider">Supplies this provider's signing keys.</param>
 /// <param name="clock">Stamps <c>iat</c>.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class SignedMetadataProvider(
     IJsonWebTokenCreator jwtCreator,
     IAuthServiceKeysProvider serviceKeysProvider,
-    TimeProvider clock) : ISignedMetadataProvider
+    TimeProvider clock,
+    ITenantAccessor tenantAccessor) : ISignedMetadataProvider
 {
     /// <summary>
     /// Serializes the metadata into the <c>signed_metadata</c> JWS payload. The members of the metadata leave
@@ -36,7 +39,7 @@ public class SignedMetadataProvider(
     /// <inheritdoc />
     public async Task<string> SignAsync(Model.ConfigurationResponse metadata)
     {
-        var signingKey = await serviceKeysProvider.GetSigningKeys(true).FirstOrDefaultAsync();
+        var signingKey = await serviceKeysProvider.GetSigningKeys(tenantAccessor.CurrentTenant(), true).FirstOrDefaultAsync();
         if (signingKey is null)
         {
             throw new InvalidOperationException(

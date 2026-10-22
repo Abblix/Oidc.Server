@@ -42,7 +42,7 @@ public class ConfirmationValidatorTests
         // These rows exercise public clients (the default subject type), so a converter with no pairwise settings
         // is the production path: it passes a subject through unchanged.
         _validator = new ConfirmationValidator(
-            _authSessionService.Object, new SubjectTypeConverter(), _confirmationStore.Object);
+            _authSessionService.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
 
         SignedIn(null);
 
@@ -269,7 +269,7 @@ public class ConfirmationValidatorTests
         };
 
         var validator = new ConfirmationValidator(
-            _authSessionService.Object, converter, _confirmationStore.Object);
+            _authSessionService.Object, new FixedSubjectTypeConverter(converter), _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
 
         SignedIn(Session(CurrentSubject, CurrentSessionId));
 

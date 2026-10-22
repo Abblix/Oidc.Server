@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInteraction;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -42,7 +43,8 @@ public class AuthorizationRequestProcessor(
 	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
-	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
+	IConsentConstraintEnforcer consentConstraintEnforcer,
+	ITenantAccessor tenantAccessor) : IAuthorizationRequestProcessor
 {
 	// Extracted collaborators, each answering one question of the authorization with its own dependencies, built
 	// here from the constructor's arguments so the processor's public constructor stays as hosts call it.
@@ -53,7 +55,7 @@ public class AuthorizationRequestProcessor(
 	private readonly AuthorizationContextBuilder _contextBuilder = new(consentConstraintEnforcer);
 
 	private readonly AuthSessionSelector _sessionSelector =
-		new(authSessionService, cutoffChecker, subjectTypeConverter, clock);
+		new(authSessionService, cutoffChecker, subjectTypeConverter, clock, tenantAccessor);
 
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,

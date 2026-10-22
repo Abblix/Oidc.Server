@@ -17,8 +17,8 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// to user preferences and legal requirements concerning data access and processing.
 /// </summary>
 /// <remarks>
-/// Under multi-tenancy the consents stay the host's: the server does not partition this provider by tenant, so every
-/// tenant asks the same one, and a consent the host records without the tenant counts at every tenant serving a
+/// The consents stay the host's: the server does not partition this provider by tenant, so every tenant asks the
+/// same one, and a consent the host records without the tenant counts at every tenant serving a
 /// client under the same id. A host keeps each consent under the tenant of the request, read from
 /// <c>ITenantAccessor</c>, and answers only with the consents given at that tenant.
 /// <para>

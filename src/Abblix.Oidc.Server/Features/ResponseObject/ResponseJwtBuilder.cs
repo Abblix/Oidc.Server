@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
@@ -27,17 +28,19 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// <param name="issuerProvider">Supplies the issuer identifier placed in the <c>iss</c> claim.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
 /// <param name="options">Supplies the JARM response-JWT lifetime (<c>exp</c> window).</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IClientJwtFormatter clientJwtFormatter,
     IIssuerProvider issuerProvider,
     TimeProvider timeProvider,
-    IOptions<OidcOptions> options) : IResponseJwtBuilder
+    IOptions<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : IResponseJwtBuilder
 {
     /// <inheritdoc />
     public async Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
-        var clientInfo = (await clientInfoProvider.TryFindClientAsync(clientId.NotNull(nameof(clientId))))
+        var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
 
         var now = timeProvider.GetUtcNow();

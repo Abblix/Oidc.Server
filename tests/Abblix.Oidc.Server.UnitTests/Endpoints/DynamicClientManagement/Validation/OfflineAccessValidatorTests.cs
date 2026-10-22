@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
@@ -32,9 +33,9 @@ public class OfflineAccessValidatorTests
     {
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync(existing is { } offlineAccess ? new ClientInfo(ClientId) { OfflineAccess = offlineAccess } : null);
-        return new OfflineAccessValidator(clients.Object);
+        return new OfflineAccessValidator(clients.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ClientRegistrationValidationContext Context(

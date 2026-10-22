@@ -71,11 +71,13 @@ public sealed class ConfigurationStreamStore : IStreamStore
     private bool _reconciled;
 
     /// <summary>
-    /// Materializes the configured streams: the transmitter's half - issuer, supported and
-    /// delivered sets - comes from <paramref name="options"/>, and the poll endpoint from
-    /// <paramref name="pollEndpoints"/>, exactly as the dynamic create would supply them.
+    /// Materializes the configured streams: the transmitter's half - supported and delivered sets -
+    /// comes from <paramref name="options"/>, the issuer from <paramref name="identity"/>, and the
+    /// poll endpoint from <paramref name="pollEndpoints"/>, exactly as the dynamic create would
+    /// supply them.
     /// </summary>
     /// <param name="options">The deployment's one-time decisions.</param>
+    /// <param name="identity">Who the transmitter answers as when the store is built.</param>
     /// <param name="pollEndpoints">Where a declared poll stream is polled.</param>
     /// <param name="streams">The declared streams.</param>
     /// <param name="backingStore">
@@ -87,11 +89,13 @@ public sealed class ConfigurationStreamStore : IStreamStore
     /// startup rather than surfacing as a broken stream later.</exception>
     public ConfigurationStreamStore(
         SharedSignalsTransmitterOptions options,
+        ITransmitterIdentity identity,
         PollEndpointLocator pollEndpoints,
         IReadOnlyList<ConfiguredStream> streams,
         IStreamStore backingStore)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(pollEndpoints);
         ArgumentNullException.ThrowIfNull(streams);
 
@@ -121,7 +125,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
                     + "more than once.");
             }
 
-            declared.Add(Materialize(options, pollEndpoints, stream));
+            declared.Add(Materialize(options, identity.Issuer, pollEndpoints, stream));
         }
 
         _declared = declared;
@@ -295,6 +299,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
 
     private static StreamState Materialize(
         SharedSignalsTransmitterOptions options,
+        string issuer,
         PollEndpointLocator pollEndpoints,
         ConfiguredStream declared)
     {
@@ -344,7 +349,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
             Configuration = new StreamConfiguration
             {
                 StreamId = declared.StreamId,
-                Issuer = options.Issuer,
+                Issuer = issuer,
                 Audiences = declared.Audiences.Length > 0 ? declared.Audiences : [declared.ReceiverId],
                 EventsSupported = options.EventsSupported is { Count: > 0 } supported ? supported : null,
                 EventsRequested = declared.EventsRequested.Length > 0 ? declared.EventsRequested : null,

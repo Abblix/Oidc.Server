@@ -37,6 +37,7 @@ using Xunit;
 using CibaStorage = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelRequestStorage;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
@@ -107,8 +108,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     {
         var converter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         converter
-            .Setup(c => c.Convert(It.IsAny<string>(), It.IsAny<ClientInfo>()))
-            .Returns((string subject, ClientInfo _) => subject);
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         return converter.Object;
     }
@@ -131,7 +132,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         private readonly BackChannelGrantRedeemer _redeemer = new(
             NullLoggerFactory.Instance,
             PublicSubjects(),
-            policy ?? StubAuthorizationDetailsPolicy.Accepting);
+            policy ?? StubAuthorizationDetailsPolicy.Accepting, tenantAccessor: SingleIssuer.Accessor);
 
         public object? GetKeyedService(Type serviceType, object? serviceKey)
         {

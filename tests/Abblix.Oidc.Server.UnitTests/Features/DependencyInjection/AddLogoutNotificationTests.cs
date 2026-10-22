@@ -10,6 +10,7 @@ using System;
 using System.Linq;
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -125,8 +126,7 @@ public class AddLogoutNotificationTests
 
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
 
         hostCall(services);

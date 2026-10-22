@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.TokenExchange;
 
@@ -36,10 +37,12 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="subjectTypeConverter">Opens a pairwise subject_token's <c>sub</c> back to the real subject.</param>
 /// <param name="clientInfoProvider">Resolves the client the subject_token was issued to, whose sector opens its
 /// pairwise subject.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public sealed class JwtSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
     ISubjectTypeConverter subjectTypeConverter,
-    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
+    IClientInfoProvider clientInfoProvider,
+    ITenantAccessor tenantAccessor) : ISubjectTokenResolver
 {
     /// <summary>
     /// An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server
@@ -100,14 +103,14 @@ public sealed class JwtSubjectTokenResolver(
         // it against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject
         // and pass through unchanged.
         var originalClient = originalClientId is not null
-            ? await clientInfoProvider.TryFindClientAsync(originalClientId)
+            ? await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), originalClientId)
             : null;
 
         if (originalClient is not null)
         {
             // A pairwise 'sub' that does not open for its client (a foreign-sector or pre-change token) is rejected
             // rather than faulting the exchange.
-            var recovered = subjectTypeConverter.ConvertBack(subject, originalClient);
+            var recovered = subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), subject, originalClient);
             if (recovered is null)
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");

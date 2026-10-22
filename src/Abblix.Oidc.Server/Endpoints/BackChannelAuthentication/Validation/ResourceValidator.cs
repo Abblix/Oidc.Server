@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -21,7 +22,8 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// </summary>
 /// <param name="resourceManager">The manager responsible for retrieving and validating resource information.</param>
 /// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
-public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference, ITenantAccessor tenantAccessor)
     : IBackChannelAuthenticationContextValidator
 {
     /// <summary>
@@ -54,7 +56,7 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
             requested = [inferred];
         }
 
-        if (!resourceManager.Validate(
+        if (!resourceManager.Validate(tenantAccessor.CurrentTenant(), 
                 requested,
                 request.Scope,
                 out var resources,

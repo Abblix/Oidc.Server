@@ -29,6 +29,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 
@@ -69,11 +70,11 @@ public class AccessTokenServiceTests
             timeProvider,
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of());
+            new AudienceKeyResolver(NoResources, NoResourceKeys, tenantAccessor: SingleIssuer.Accessor),
+            ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -130,11 +131,11 @@ public class AccessTokenServiceTests
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of(new ScopeDefinition(contactScope, IanaClaimTypes.Email)));
+            new AudienceKeyResolver(NoResources, NoResourceKeys, tenantAccessor: SingleIssuer.Accessor),
+            ScopeClaims.Of(new ScopeDefinition(contactScope, IanaClaimTypes.Email)), tenantAccessor: SingleIssuer.Accessor);
         var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
         var authContext = byHostScope
             ? new AuthorizationContext(ClientId, [Scopes.OpenId, contactScope], null)
@@ -635,11 +636,11 @@ public class AccessTokenServiceTests
             new FakeTimeProvider(_currentTime),
             Mock.Of<ITokenIdGenerator>(),
             Mock.Of<IAuthServiceJwtFormatter>(),
-            converter,
+            new FixedSubjectTypeConverter(converter),
             Options.Create(new OidcOptions()),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of());
+            new AudienceKeyResolver(NoResources, NoResourceKeys, tenantAccessor: SingleIssuer.Accessor),
+            ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
 
         var presentingClient = new ClientInfo(ClientId)
         {
@@ -735,7 +736,7 @@ public class AccessTokenServiceTests
         {
             var definition = new ResourceDefinition(uri);
             var captured = definition;
-            manager.Setup(m => m.TryGet(uri, out captured)).Returns(true);
+            manager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), uri, out captured)).Returns(true);
             keys.Setup(k => k.GetEncryptionKeys(definition)).Returns(resourceKeys.ToAsyncEnumerable());
         }
 
@@ -750,11 +751,11 @@ public class AccessTokenServiceTests
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
             SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            new AudienceKeyResolver(manager.Object, keys.Object),
-            ScopeClaims.Of());
+            new AudienceKeyResolver(manager.Object, keys.Object, tenantAccessor: SingleIssuer.Accessor),
+            ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static AuthorizationContext ContextFor(params Uri[] resources) =>

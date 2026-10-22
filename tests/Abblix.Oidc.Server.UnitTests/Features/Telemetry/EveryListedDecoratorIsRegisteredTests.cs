@@ -11,6 +11,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features;
@@ -71,7 +72,8 @@ public sealed class EveryListedDecoratorIsRegisteredTests
         var enricher = new Mock<IEndpointSpanEnricher>();
         services.AddScoped(_ => enricher.Object);
 
-        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var provider = services.ResolveToTheDeclaredTenant()
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<ICheckSessionHandler>().HandleAsync();
 
@@ -96,8 +98,7 @@ public sealed class EveryListedDecoratorIsRegisteredTests
         services.AddCheckSession();
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
         });
 
         return services;

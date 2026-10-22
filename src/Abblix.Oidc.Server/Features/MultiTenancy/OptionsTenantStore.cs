@@ -6,17 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// The tenants declared in <see cref="MultiTenancyOptions.Tenants"/>, which change only with a restart.
+/// The tenants declared in <see cref="OidcOptions.Tenants"/>, which change only with a restart.
 /// </summary>
 /// <param name="options">The settings declaring the tenants.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
-public sealed class OptionsTenantStore(IOptions<MultiTenancyOptions> options) : ITenantStore
+public sealed class OptionsTenantStore(IOptions<OidcOptions> options) : ITenantStore
 {
     /// <summary>
     /// The version of every tenant the settings declare: they hold one definition for the life of the process.

@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -23,9 +24,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <param name="logger">Logger used for warnings about register/update conflicts.</param>
 /// <param name="clientInfoProvider">Store consulted to check for existing client records.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class ClientIdValidator(
     ILogger<ClientIdValidator> logger,
-    IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
+    IClientInfoProvider clientInfoProvider,
+    ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -34,7 +37,7 @@ public partial class ClientIdValidator(
         if (!clientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         switch (context.Operation)
         {
             // For UPDATE: client MUST exist

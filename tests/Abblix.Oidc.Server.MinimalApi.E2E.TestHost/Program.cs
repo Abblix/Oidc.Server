@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+
 using Abblix.Oidc;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,6 +25,8 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -57,21 +60,38 @@ builder.Services.AddBackChannelLogout();
 // AddOidcMinimalApi = AddOidcCore + the Minimal API transport, the exact counterpart of the MVC
 // host's AddOidcServices (= AddOidcCore + AddOidcMvc). The options block below is identical to the
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
-builder.Services.AddOidcServices(options =>
+builder.Services.AddOidcServices((options, services) =>
 {
-    options.Issuer = TestConstants.IssuerUri;
+    // The host serves one tenant at the issuer, built from settings a test may change for its own host.
+    options.Tenants.Add(services.GetRequiredService<IOptions<TestTenantSettings>>().Value.ToTenant());
+
+    // RFC 8628 device flow settings. These are nullable with no DI default; the device endpoint throws
+    // (HTTP 500) unless the host supplies them. VerificationUri must be https; DeviceCodeLength >= 16.
+    options.DeviceAuthorization = new DeviceAuthorizationOptions
+    {
+        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
+        CodeLifetime = TimeSpan.FromMinutes(15),
+        PollingInterval = TimeSpan.FromSeconds(5),
+        DeviceCodeLength = 32,
+        UserCodeLength = 8,
+    };
+});
+
+builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
+{
+    tenant.Issuer = TestConstants.IssuerUri;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
     // A host that configures only LoginUri leaves the other arms of the authorization response formatter
     // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.
-    options.LoginUri = new Uri("/login", UriKind.Relative);
-    options.ConsentUri = new Uri("/consent", UriKind.Relative);
-    options.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
-    options.RegistrationUri = new Uri("/register", UriKind.Relative);
-    options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+    tenant.LoginUri = new Uri("/login", UriKind.Relative);
+    tenant.ConsentUri = new Uri("/consent", UriKind.Relative);
+    tenant.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
+    tenant.RegistrationUri = new Uri("/register", UriKind.Relative);
+    tenant.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
 
-    options.Clients =
+    tenant.Clients =
     [
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
@@ -134,21 +154,11 @@ builder.Services.AddOidcServices(options =>
 
     // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
-    options.Resources =
+    tenant.Resources =
     [
         new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
     ];
 
-    // RFC 8628 device flow settings. These are nullable with no DI default; the device endpoint throws
-    // (HTTP 500) unless the host supplies them. VerificationUri must be https; DeviceCodeLength >= 16.
-    options.DeviceAuthorization = new DeviceAuthorizationOptions
-    {
-        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
-        CodeLifetime = TimeSpan.FromMinutes(15),
-        PollingInterval = TimeSpan.FromSeconds(5),
-        DeviceCodeLength = 32,
-        UserCodeLength = 8,
-    };
     return;
 
     static ClientInfo Mint(
@@ -212,7 +222,7 @@ builder.Services.AddDistributedMemoryCache();
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
-app.UseRouting();
+app.UseMultiTenancy();
 
 // Lift the X-Test-Consent-Override-AuthorizationDetails header into HttpContext.Items before
 // the OIDC pipeline reaches AutoConsentsProvider.

@@ -12,9 +12,6 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
-// The tenant a measurement names is read from the multi-tenancy feature where it is in use
-#pragma warning disable ABXMT001
-
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
 /// <summary>
@@ -27,12 +24,12 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// <param name="inner">The processor the server uses.</param>
 /// <param name="instruments">Records the tokens into the server's metrics.</param>
 /// <param name="grants">Tells the grant types the server supports, the only ones a measurement names.</param>
-/// <param name="tenants">Tells the tenant serving the request, under multi-tenancy.</param>
+/// <param name="tenants">Tells the tenant serving the request.</param>
 internal sealed class MeasuredTokenRequestProcessor(
     ITokenRequestProcessor inner,
     OidcInstruments instruments,
     IAuthorizationGrantHandler grants,
-    ITenantAccessor? tenants = null) : ITokenRequestProcessor
+    ITenantAccessor tenants) : ITokenRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)

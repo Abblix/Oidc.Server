@@ -99,14 +99,11 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         var encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
         return Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
+            {
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.EncryptionKeys = [encryptionKey]);
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
-                        Options.DefaultName,
-                        options =>
-                        {
-                            options.EncryptionKeys = [encryptionKey];
-                            configure(options);
-                        }))));
+                    new PostConfigureOptions<OidcOptions>(Options.DefaultName, configure));
+            }));
     }
 
     private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
@@ -134,14 +131,13 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     {
         using var host = Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
+            {
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.EncryptionKeys = []);
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                     new PostConfigureOptions<OidcOptions>(
                         Options.DefaultName,
-                        options =>
-                        {
-                            options.EncryptionKeys = [];
-                            options.ServiceTokens.AccessToken.Encrypt = true;
-                        }))));
+                        options => options.ServiceTokens.AccessToken.Encrypt = true));
+            }));
 
         var exception = Assert.Throws<OptionsValidationException>(() => CreateClientFor(host));
 

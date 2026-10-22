@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </remarks>
 /// <param name="inner">The store every tenant shares.</param>
 /// <param name="tenantAccessor">Names the tenant of the current request or scope.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantStreamStore(IStreamStore inner, ITenantAccessor tenantAccessor) : IStreamStore
 {
     /// <inheritdoc />

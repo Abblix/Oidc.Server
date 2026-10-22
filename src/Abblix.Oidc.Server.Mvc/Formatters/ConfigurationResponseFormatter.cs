@@ -125,12 +125,12 @@ public class ConfigurationResponseFormatter(
 	}
 
 	/// <summary>
-	/// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, when either the configuration
-	/// names them or the issuer has a mutual-TLS host to rebase them onto. An alias the configuration names wins.
+	/// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, when either the issuer
+	/// names them or the issuer has a mutual-TLS host to rebase them onto. An alias the issuer names wins.
 	/// </summary>
 	private ModelResponse WithMtlsAliases(ModelResponse document)
 	{
-		var configured = options.Value.Discovery.MtlsEndpointAliases;
+		var configured = issuerSettings.MtlsEndpointAliases;
 		var mtlsBaseUri = issuerSettings.MtlsBaseUri;
 
 		if (configured == null && mtlsBaseUri == null)
@@ -172,7 +172,7 @@ public class ConfigurationResponseFormatter(
 	/// </summary>
 	/// <remarks>
 	/// The host is compared as a tenant is resolved by it, so whatever request reaches the tenant on its mutual-TLS host
-	/// is answered so. A server without tenants whose mutual-TLS host differs from its ordinary one only by port
+	/// is answered so. An issuer whose mutual-TLS host differs from its ordinary one only by port
 	/// therefore names the ordinary endpoints on the issuer's host on either.
 	/// </remarks>
 	private Uri? OnIssuersHost(Uri? endpoint, Uri issuer)
@@ -182,10 +182,8 @@ public class ConfigurationResponseFormatter(
 			? Rebase(endpoint, new Uri(issuer.GetLeftPart(UriPartial.Authority)))
 			: endpoint;
 
-#pragma warning disable ABXMT001
 	private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
 		=> TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
-#pragma warning restore ABXMT001
 
 	/// <summary>
 	/// Rebases an original URI to use a different base URI, preserving the original's path.

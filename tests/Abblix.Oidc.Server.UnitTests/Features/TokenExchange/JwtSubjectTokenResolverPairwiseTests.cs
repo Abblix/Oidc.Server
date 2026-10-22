@@ -18,6 +18,8 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 
@@ -54,10 +56,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             SectorIdentifier = "sector.example.com",
         };
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), OriginalClientId))
             .ReturnsAsync(_pairwiseClient);
 
-        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, _converter, _clientInfoProvider.Object);
+        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter), _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     [Fact]

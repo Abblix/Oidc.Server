@@ -34,7 +34,6 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// the OpenID endpoints refuse it.
 /// </para>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCatalog catalog)
 {
     private static readonly PathString WellKnown = new("/.well-known");

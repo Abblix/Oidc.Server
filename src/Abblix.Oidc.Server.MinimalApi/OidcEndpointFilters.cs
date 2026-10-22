@@ -37,7 +37,7 @@ internal static class OidcEndpointFilters
         // without exception. See RequireHttpsAsync for the redirect/refuse behavior.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
-        // Under multi-tenancy, a request that names no tenant has no issuer, keys or clients of its own, and is
+        // A request that names no tenant has no issuer, keys or clients of its own, and is
         // answered 404 here rather than halfway through an endpoint that has already stored something.
         oidcGroup.AddEndpointFilter(RequireTenantAsync);
 
@@ -96,16 +96,14 @@ internal static class OidcEndpointFilters
             : await next(context);
 
     /// <summary>
-    /// Group endpoint filter answering 404 to a request that multi-tenancy left without a tenant.
+    /// Group endpoint filter answering 404 to a request no tenant was resolved for.
     /// </summary>
     private static async ValueTask<object?> RequireTenantAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-#pragma warning disable ABXMT001 // A deployment without multi-tenancy is never refused here.
         return TenantRequirement.IsUnmet(context.HttpContext)
             ? Results.NotFound()
             : await next(context);
-#pragma warning restore ABXMT001
     }
 
     /// <summary>

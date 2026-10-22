@@ -25,6 +25,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Issuer;
 
@@ -41,39 +42,35 @@ public class IssuerReloadTests
     [Fact]
     public void AResourceAReloadAdds_IsKnown()
     {
-        var options = new ReloadableOptions(new OidcOptions { Resources = [new ResourceDefinition(Api)] });
-        var resources = new ResourceManager(
-            new OptionsIssuerSettings(options),
-            new SingleIssuerLocal<Dictionary<Uri, ResourceDefinition>>());
-        Assert.False(resources.TryGet(Files, out _));
+        var options = new ReloadableOptions(new TestIssuer { Resources = [new ResourceDefinition(Api)] });
+        var resources = SingleIssuer.ResourceManager();
+        Assert.False(resources.TryGet(options.CurrentValue.ToTenant(), Files, out _));
 
-        options.Reload(new OidcOptions { Resources = [new ResourceDefinition(Api), new ResourceDefinition(Files)] });
+        options.Reload(new TestIssuer { Resources = [new ResourceDefinition(Api), new ResourceDefinition(Files)] });
 
-        Assert.True(resources.TryGet(Files, out _));
+        Assert.True(resources.TryGet(options.CurrentValue.ToTenant(), Files, out _));
     }
 
     [Fact]
     public void AScopeAReloadAdds_IsKnown()
     {
-        var options = new ReloadableOptions(new OidcOptions());
-        var scopes = new ScopeManager(
-            new OptionsIssuerSettings(options),
-            new SingleIssuerLocal<Dictionary<string, ScopeDefinition>>());
-        Assert.False(scopes.TryGet("files:read", out _));
+        var options = new ReloadableOptions(new TestIssuer());
+        var scopes = SingleIssuer.ScopeManager();
+        Assert.False(scopes.TryGet(options.CurrentValue.ToTenant(), "files:read", out _));
 
-        options.Reload(new OidcOptions { Scopes = [new ScopeDefinition("files:read")] });
+        options.Reload(new TestIssuer { Scopes = [new ScopeDefinition("files:read")] });
 
-        Assert.True(scopes.TryGet("files:read", out _));
+        Assert.True(scopes.TryGet(options.CurrentValue.ToTenant(), "files:read", out _));
     }
 
     [Fact]
     public async Task AReloadBringsTheClientsItConfigures_AndKeepsWhatRegistrationAdded()
     {
-        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
+        var options = new ReloadableOptions(new TestIssuer { Clients = [new ClientInfo("configured")] });
         var clients = ClientsOf(options);
         Assert.True(await clients.TryAddClientAsync(Registration("registered")));
 
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
+        options.Reload(new TestIssuer { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
 
         Assert.NotNull(await clients.TryFindClientAsync("added"));
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
@@ -83,84 +80,24 @@ public class IssuerReloadTests
     [Fact]
     public async Task AClientAReloadDrops_IsNoLongerKnown()
     {
-        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
+        var options = new ReloadableOptions(new TestIssuer { Clients = [new ClientInfo("configured")] });
         var clients = ClientsOf(options);
         Assert.NotNull(await clients.TryFindClientAsync("configured"));
 
-        options.Reload(new OidcOptions());
+        options.Reload(new TestIssuer());
 
         Assert.Null(await clients.TryFindClientAsync("configured"));
     }
 
-    private static ReloadableClientInfoStorage ClientsOf(
-        IOptionsMonitor<OidcOptions> options,
+    private static ReloadedTenantClients ClientsOf(
+        IOptionsMonitor<TestIssuer> options,
         ILogger<ReloadableClientInfoStorage>? logger = null) => new(
-        logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
-        new OptionsIssuerSettings(options),
-        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new IssuerClientRegistrations(new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>()));
-
-    private static ClientInfoStorage DefaultClientsOf(IOptionsMonitor<OidcOptions> options) => new(
-        new OptionsIssuerSettings(options),
-        new SingleIssuerLocal<Dictionary<string, ClientInfo>>(),
-        new SingleIssuerLocal<ConcurrentDictionary<string, RegisteredClient>>());
-
-    private static IClientInfoManager StoreOf(bool reloadable, IOptionsMonitor<OidcOptions> options)
-        => reloadable ? ClientsOf(options) : DefaultClientsOf(options);
-
-    /// <summary>
-    /// Clients the settings configure, whose reading, once armed, stops until the test lets it go on: it holds the
-    /// store mid-way through building them.
-    /// </summary>
-    private sealed class HeldClients(params ClientInfo[] clients) : IEnumerable<ClientInfo>
-    {
-        // How long a test waits for the other side of a held build before failing rather than hanging
-        public static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
-
-        public bool Armed { get; set; }
-        public SemaphoreSlim Reached { get; } = new(0);
-        public SemaphoreSlim Released { get; } = new(0);
-
-        public IEnumerator<ClientInfo> GetEnumerator()
-        {
-            if (Armed)
-            {
-                Armed = false;
-                Reached.Release();
-                if (!Released.Wait(Patience))
-                    throw new TimeoutException("The test never let the held build go on.");
-            }
-
-            return ((IEnumerable<ClientInfo>)clients).GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    }
-
-    /// <summary>
-    /// A build of the clients a former reload configured, begun before the next reload and ending after, does not
-    /// drop a registration made meanwhile under an id the next reload freed.
-    /// </summary>
-    [Fact]
-    public async Task BuildOfFormerSettingsEndingLate_KeepsRegistrationMadeMeanwhile()
-    {
-        var held = new HeldClients(new ClientInfo("freed"));
-        var options = new ReloadableOptions(new OidcOptions());
-        var clients = ClientsOf(options);
-        Assert.Null(await clients.TryFindClientAsync("other"));
-        options.Reload(new OidcOptions { Clients = held });
-        held.Armed = true;
-        var building = Task.Run(() => clients.TryFindClientAsync("other"));
-        Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
-
-        options.Reload(new OidcOptions());
-        Assert.True(await clients.TryAddClientAsync(Registration("freed")));
-        held.Released.Release();
-        await building.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
-
-        Assert.NotNull(await clients.TryFindRegisteredClientAsync("freed"));
-    }
-
+        new ReloadableClientInfoStorage(
+            logger ?? NullLogger<ReloadableClientInfoStorage>.Instance,
+            SingleIssuer.Catalog,
+            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(),
+            new IssuerClientRegistrations(SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>())),
+        options);
     private static RegisteredClient Registration(string clientId, string? name = null, string tokenId = "jti-1")
         => new(new ClientInfo(clientId) { ClientName = name }, tokenId);
 
@@ -171,11 +108,11 @@ public class IssuerReloadTests
     [Fact]
     public async Task ARegistrationUnderAnIdAReloadConfigures_GivesWayToTheConfiguredClient()
     {
-        var options = new ReloadableOptions(new OidcOptions());
+        var options = new ReloadableOptions(new TestIssuer());
         var clients = ClientsOf(options);
         Assert.True(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
 
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
+        options.Reload(new TestIssuer { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
 
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
     }
@@ -187,13 +124,13 @@ public class IssuerReloadTests
     [Fact]
     public async Task ARegistrationUnderAnIdAReloadConfigures_IsDropped()
     {
-        var options = new ReloadableOptions(new OidcOptions());
+        var options = new ReloadableOptions(new TestIssuer());
         var clients = ClientsOf(options);
         Assert.True(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
+        options.Reload(new TestIssuer { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
-        options.Reload(new OidcOptions());
+        options.Reload(new TestIssuer());
 
         Assert.Null(await clients.TryFindClientAsync("partner-app"));
     }
@@ -202,11 +139,11 @@ public class IssuerReloadTests
     public async Task ARegistrationAReloadDrops_IsLogged()
     {
         var logger = new CapturingLogger<ReloadableClientInfoStorage>();
-        var options = new ReloadableOptions(new OidcOptions());
+        var options = new ReloadableOptions(new TestIssuer());
         var clients = ClientsOf(options, logger);
         Assert.True(await clients.TryAddClientAsync(Registration("partner-app")));
 
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("partner-app")] });
+        options.Reload(new TestIssuer { Clients = [new ClientInfo("partner-app")] });
         await clients.TryFindClientAsync("partner-app");
 
         var entry = Assert.Single(logger.Entries);
@@ -222,7 +159,7 @@ public class IssuerReloadTests
     [Fact]
     public async Task AClientAddedUnderAConfiguredId_DoesNotComeBackWhenTheIdLeaves()
     {
-        var options = new ReloadableOptions(new OidcOptions
+        var options = new ReloadableOptions(new TestIssuer
         {
             Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
         });
@@ -236,7 +173,7 @@ public class IssuerReloadTests
             Assert.Single(logger.Entries).EventId.Id);
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
-        options.Reload(new OidcOptions());
+        options.Reload(new TestIssuer());
         Assert.Null(await clients.TryFindClientAsync("partner-app"));
     }
 
@@ -247,11 +184,11 @@ public class IssuerReloadTests
     [Fact]
     public async Task AnUpdateUnderAnIdAReloadConfigured_IsNotMade()
     {
-        var options = new ReloadableOptions(new OidcOptions());
+        var options = new ReloadableOptions(new TestIssuer());
         var clients = ClientsOf(options);
         var registration = Registration("partner-app", "registered");
         Assert.True(await clients.TryAddClientAsync(registration));
-        options.Reload(new OidcOptions
+        options.Reload(new TestIssuer
         {
             Clients = [new ClientInfo("partner-app") { ClientName = "configured" }],
         });
@@ -259,51 +196,47 @@ public class IssuerReloadTests
         Assert.False(await clients.TryUpdateClientAsync(registration, Registration("partner-app", "updated", "jti-2")));
         Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
 
-        options.Reload(new OidcOptions());
+        options.Reload(new TestIssuer());
         Assert.Null(await clients.TryFindClientAsync("partner-app"));
     }
 
     /// <summary>
     /// The settings own the ids they configure, so the store changes nothing under one.
     /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AConfiguredClient_IsNeitherAddedOverNorChangedNorRemoved(bool reloadable)
+    [Fact]
+    public async Task AConfiguredClient_IsNeitherAddedOverNorChangedNorRemoved()
     {
-        var options = new ReloadableOptions(new OidcOptions
+        var options = new ReloadableOptions(new TestIssuer
         {
             Clients = [new ClientInfo("app") { ClientName = "configured" }],
         });
-        var clients = StoreOf(reloadable, options);
+        var clients = ClientsOf(options);
 
         Assert.False(await clients.TryAddClientAsync(Registration("app", "added")));
 
         Assert.Null(await clients.TryFindRegisteredClientAsync("app"));
         Assert.False(await clients.TryUpdateClientAsync(Registration("app"), Registration("app", "updated", "jti-2")));
         Assert.False(await clients.TryRemoveClientAsync(Registration("app")));
-        Assert.Equal("configured", (await ((IClientInfoProvider)clients).TryFindClientAsync("app"))?.ClientName);
+        Assert.Equal("configured", (await clients.TryFindClientAsync("app"))?.ClientName);
     }
 
     [Fact]
     public async Task ARegistrationAfterAConfiguredClientLeaves_IsKept()
     {
-        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("app")] });
+        var options = new ReloadableOptions(new TestIssuer { Clients = [new ClientInfo("app")] });
         var clients = ClientsOf(options);
         Assert.NotNull(await clients.TryFindClientAsync("app"));
-        options.Reload(new OidcOptions());
+        options.Reload(new TestIssuer());
 
         Assert.True(await clients.TryAddClientAsync(Registration("app", "registered")));
 
         Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ARemovedRegistration_IsNoLongerKnown(bool reloadable)
+    [Fact]
+    public async Task ARemovedRegistration_IsNoLongerKnown()
     {
-        var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
+        var clients = ClientsOf(new ReloadableOptions(new TestIssuer()));
         Assert.True(await clients.TryAddClientAsync(Registration("app")));
 
         Assert.True(await clients.TryRemoveClientAsync(Registration("app")));
@@ -315,12 +248,10 @@ public class IssuerReloadTests
     /// A change or removal decided on a registration since rotated changes nothing: of two updates decided on one
     /// registration only the first lands, and an update or removal racing another comes too late to undo it.
     /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AChangeDecidedOnARotatedRegistration_ChangesNothing(bool reloadable)
+    [Fact]
+    public async Task AChangeDecidedOnARotatedRegistration_ChangesNothing()
     {
-        var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
+        var clients = ClientsOf(new ReloadableOptions(new TestIssuer()));
         var first = Registration("app", "first");
         Assert.True(await clients.TryAddClientAsync(first));
         var second = Registration("app", "second", "jti-2");
@@ -337,12 +268,10 @@ public class IssuerReloadTests
     /// <summary>
     /// An update landing after the removal it raced does not bring the client back.
     /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AnUpdateAfterARemoval_DoesNotBringTheClientBack(bool reloadable)
+    [Fact]
+    public async Task AnUpdateAfterARemoval_DoesNotBringTheClientBack()
     {
-        var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
+        var clients = ClientsOf(new ReloadableOptions(new TestIssuer()));
         var registration = Registration("app");
         Assert.True(await clients.TryAddClientAsync(registration));
         Assert.True(await clients.TryRemoveClientAsync(registration));
@@ -351,12 +280,10 @@ public class IssuerReloadTests
         Assert.Null(await clients.TryFindRegisteredClientAsync("app"));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task TwoRegistrationsUnderOneId_KeepTheFirst(bool reloadable)
+    [Fact]
+    public async Task TwoRegistrationsUnderOneId_KeepTheFirst()
     {
-        var clients = StoreOf(reloadable, new ReloadableOptions(new OidcOptions()));
+        var clients = ClientsOf(new ReloadableOptions(new TestIssuer()));
 
         Assert.True(await clients.TryAddClientAsync(Registration("app", "first")));
         Assert.False(await clients.TryAddClientAsync(Registration("app", "second")));
@@ -371,71 +298,28 @@ public class IssuerReloadTests
     [Fact]
     public async Task ARemovedRegistration_HidesNoClientAReloadConfigures()
     {
-        var options = new ReloadableOptions(new OidcOptions());
+        var options = new ReloadableOptions(new TestIssuer());
         var clients = ClientsOf(options);
         Assert.True(await clients.TryAddClientAsync(Registration("app")));
         await clients.TryRemoveClientAsync(Registration("app"));
 
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("app")] });
+        options.Reload(new TestIssuer { Clients = [new ClientInfo("app")] });
 
         Assert.NotNull(await clients.TryFindClientAsync("app"));
     }
 
     /// <summary>
-    /// The default store reads the configured clients once, so a reload does not reach them.
-    /// </summary>
-    [Fact]
-    public async Task TheDefaultStore_KeepsTheClientsItStartedWith()
-    {
-        var options = new ReloadableOptions(new OidcOptions { Clients = [new ClientInfo("configured")] });
-        var clients = DefaultClientsOf(options);
-        Assert.NotNull(await clients.TryFindClientAsync("configured"));
-
-        options.Reload(new OidcOptions { Clients = [new ClientInfo("added")] });
-
-        Assert.NotNull(await clients.TryFindClientAsync("configured"));
-        Assert.Null(await clients.TryFindClientAsync("added"));
-    }
-
-    /// <summary>
-    /// The reloadable store serves both the lookups and the registrations, whether it is asked for before or after
-    /// the server's own registrations.
-    /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void TheReloadableStore_ServesClientsWhereverItIsAskedFor(bool beforeTheServer)
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddOptions<OidcOptions>();
-        services.AddIssuer();
-        if (beforeTheServer)
-            services.AddReloadableClientInformation();
-        services.AddClientInformation();
-        if (!beforeTheServer)
-            services.AddReloadableClientInformation();
-
-        // The startup checks of the options take services this test has no use for
-        services.RemoveAll<IValidateOptions<OidcOptions>>();
-        using var provider = services.BuildServiceProvider();
-
-        var clients = Assert.IsType<ReloadableClientInfoStorage>(provider.GetRequiredService<IClientInfoProvider>());
-        Assert.Same(clients, provider.GetRequiredService<IClientInfoManager>());
-    }
-
-    /// <summary>
     /// Options a test replaces, as a configuration reload does.
     /// </summary>
-    private sealed class ReloadableOptions(OidcOptions initial) : IOptionsMonitor<OidcOptions>
+    private sealed class ReloadableOptions(TestIssuer initial) : IOptionsMonitor<TestIssuer>
     {
-        public OidcOptions CurrentValue { get; private set; } = initial;
+        public TestIssuer CurrentValue { get; private set; } = initial;
 
-        public void Reload(OidcOptions options) => CurrentValue = options;
+        public void Reload(TestIssuer options) => CurrentValue = options;
 
-        public OidcOptions Get(string? name) => CurrentValue;
+        public TestIssuer Get(string? name) => CurrentValue;
 
-        public IDisposable? OnChange(Action<OidcOptions, string?> listener) => null;
+        public IDisposable? OnChange(Action<TestIssuer, string?> listener) => null;
     }
 
     /// <summary>
@@ -453,5 +337,26 @@ public class IssuerReloadTests
             LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
             => Entries.Add((logLevel, eventId));
+    }
+
+    /// <summary>
+    /// The store asked as a request of the tenant the settings describe at the moment of each call would ask it, so a
+    /// reload of the settings is a change of the tenant's definition.
+    /// </summary>
+    private sealed class ReloadedTenantClients(ReloadableClientInfoStorage store, IOptionsMonitor<TestIssuer> options)
+    {
+        private TenantDefinition Tenant => options.CurrentValue.ToTenant();
+
+        public Task<ClientInfo?> TryFindClientAsync(string clientId) => store.TryFindClientAsync(Tenant, clientId);
+
+        public Task<bool> TryAddClientAsync(RegisteredClient client) => store.TryAddClientAsync(Tenant, client);
+
+        public Task<RegisteredClient?> TryFindRegisteredClientAsync(string clientId)
+            => store.TryFindRegisteredClientAsync(Tenant, clientId);
+
+        public Task<bool> TryUpdateClientAsync(RegisteredClient current, RegisteredClient updated)
+            => store.TryUpdateClientAsync(Tenant, current, updated);
+
+        public Task<bool> TryRemoveClientAsync(RegisteredClient current) => store.TryRemoveClientAsync(Tenant, current);
     }
 }

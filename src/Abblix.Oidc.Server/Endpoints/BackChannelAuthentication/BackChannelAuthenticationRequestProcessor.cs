@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
@@ -43,12 +44,14 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// Seals a session's subject the way the requesting client sees it, so the session the host authenticated can
 /// be compared against the end user an <c>id_token_hint</c> named.
 /// </param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class BackChannelAuthenticationRequestProcessor(
 	IBackChannelRequestStorage storage,
 	IOptionsSnapshot<OidcOptions> options,
 	IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
 	TimeProvider timeProvider,
-	ISubjectTypeConverter subjectTypeConverter) : IBackChannelAuthenticationRequestProcessor
+	ISubjectTypeConverter subjectTypeConverter,
+	ITenantAccessor tenantAccessor) : IBackChannelAuthenticationRequestProcessor
 {
 	/// <inheritdoc />
 	/// <summary>
@@ -123,7 +126,7 @@ public class BackChannelAuthenticationRequestProcessor(
 		// to reach somebody else is refused before any notification goes out. The end user who eventually
 		// answers is judged separately, at completion, against what is carried on the stored request.
 		if (namedSubjects is { } accepted &&
-			!subjectTypeConverter.Names(authSession, accepted, request.ClientInfo))
+			!subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), authSession, accepted, request.ClientInfo))
 		{
 			// CIBA Core 1.0 Section 13 defines access_denied as "The resource owner or OpenID Provider
 			// denied the request", and it is this server denying it. The note attached there describes the

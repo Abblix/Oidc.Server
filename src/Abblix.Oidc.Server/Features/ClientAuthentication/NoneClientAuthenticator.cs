@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -27,9 +28,11 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 /// <param name="logger">The logger for logging authentication events.</param>
 /// <param name="clientInfoProvider">The provider for retrieving client information.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class NoneClientAuthenticator(
     ILogger<NoneClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider): IClientAuthenticator
+    IClientInfoProvider clientInfoProvider,
+    ITenantAccessor tenantAccessor): IClientAuthenticator
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -58,7 +61,7 @@ public partial class NoneClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId);
+        var client = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
         switch (client)
         {
             case null:

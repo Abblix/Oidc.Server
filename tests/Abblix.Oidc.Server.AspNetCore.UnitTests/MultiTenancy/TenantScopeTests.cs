@@ -17,8 +17,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -37,8 +35,7 @@ public sealed class TenantScopeTests : IDisposable
     private readonly ServiceProvider _provider = new ServiceCollection()
         .AddServerStorage()
         .AddTokenRevocation()
-        .AddMultiTenancy(_ => { })
-        .Services
+        .ServeTenants()
         .BuildServiceProvider();
 
     public void Dispose() => _provider.Dispose();

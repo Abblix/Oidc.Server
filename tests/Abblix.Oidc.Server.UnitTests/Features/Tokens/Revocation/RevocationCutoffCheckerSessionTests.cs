@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -74,7 +75,7 @@ public class RevocationCutoffCheckerSessionTests
                 ? new OidcOptions { RevocationCutoffSkew = configured }
                 : new OidcOptions()),
             _clients.Object,
-            new SubjectTypeConverter());
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor);
     }
 
     private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)
@@ -329,7 +330,7 @@ public class RevocationCutoffCheckerSessionTests
 
         await Checker().IsSessionRefusedAsync(Session());
 
-        _clients.Verify(p => p.TryFindClientAsync(It.IsAny<string>()), Times.Never);
+        _clients.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     private static string PrincipalOf(RevocationScope scope) => scope switch

@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
@@ -37,7 +38,7 @@ public class ClientValidatorTests
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         var logger = new Mock<ILogger<ClientValidator>>(MockBehavior.Loose);
-        _validator = new ClientValidator(logger.Object, _clientInfoProvider.Object);
+        _validator = new ClientValidator(logger.Object, _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -67,7 +68,7 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
@@ -78,7 +79,7 @@ public class ClientValidatorTests
         // Assert
         Assert.Null(result);
         Assert.Same(clientInfo, context.ClientInfo);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId), Times.Once);
     }
 
     /// <summary>
@@ -111,7 +112,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
@@ -123,7 +124,7 @@ public class ClientValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("not authorized", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(UnknownClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId), Times.Once);
     }
 
     /// <summary>
@@ -136,7 +137,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(string.Empty))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), string.Empty))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(string.Empty);
@@ -160,7 +161,7 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId2);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId2))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId2))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId2);
@@ -184,7 +185,7 @@ public class ClientValidatorTests
         // Arrange
         const string uppercaseClientId = TestConstants.DefaultClientId;
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(uppercaseClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), uppercaseClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(uppercaseClientId);
@@ -195,7 +196,7 @@ public class ClientValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(uppercaseClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), uppercaseClientId), Times.Once);
     }
 
     /// <summary>
@@ -213,7 +214,7 @@ public class ClientValidatorTests
             AllowedResponseTypes = [[ResponseTypes.Code]]
         };
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
@@ -238,7 +239,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
@@ -283,7 +284,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
@@ -308,7 +309,7 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
@@ -318,7 +319,7 @@ public class ClientValidatorTests
 
         // Assert
         _clientInfoProvider.Verify(
-            p => p.TryFindClientAsync(ValidClientId),
+            p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId),
             Times.Once);
     }
 
@@ -332,7 +333,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(ValidClientId);

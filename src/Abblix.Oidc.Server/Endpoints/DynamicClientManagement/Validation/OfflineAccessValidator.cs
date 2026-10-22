@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -25,7 +26,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// the host already allowed keeps <c>allowed</c> there, while one it did not cannot raise itself to it.
 /// </remarks>
 /// <param name="clientInfoProvider">Store consulted for the offline access of the client being updated.</param>
-public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider, ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error when the client asks for offline access without
@@ -65,7 +67,7 @@ public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IC
             case DynamicClientOperation.Update:
                 var clientId = context.Request.ClientId;
                 return clientId.HasValue() &&
-                       await clientInfoProvider.TryFindClientAsync(clientId) is { OfflineAccess: OfflineAccess.Allowed };
+                       await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId) is { OfflineAccess: OfflineAccess.Allowed };
 
             default:
                 throw new InvalidOperationException($"Unsupported dynamic client operation: {context.Operation}");

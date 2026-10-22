@@ -11,13 +11,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 
@@ -149,14 +149,14 @@ public class StoreTenantCatalogTests
     private readonly FakeClosing _failingClosing = new() { Failing = { "acme" } };
     private readonly FakeClosing _closing = new();
 
-    private readonly MultiTenancyOptions _options = new();
+    private readonly OidcOptions _options = new();
 
     private readonly FakeTimeProvider _time = new();
 
     /// <summary>Reads the store once a refresh period has passed, as the refresh loop does.</summary>
     private async Task ReadAfterAPeriodAsync(StoreTenantCatalog catalog, CancellationToken ct)
     {
-        _time.Advance(_options.RefreshEvery);
+        _time.Advance(_options.RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
     }
 
@@ -302,7 +302,7 @@ public class StoreTenantCatalogTests
     public async Task ATenantTheSettingsDeclare_ThatCannotBeOpened_FailsTheFirstReading()
     {
         var ct = TestContext.Current.CancellationToken;
-        var declared = new MultiTenancyOptions
+        var declared = new OidcOptions
         {
             Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }],
         };
@@ -349,17 +349,17 @@ public class StoreTenantCatalogTests
     public async Task TheTenantsTheSettingsDeclare_AreOpenedWithoutALimit_OnTheFirstReading()
     {
         var ct = TestContext.Current.CancellationToken;
-        var declared = new MultiTenancyOptions
+        var declared = new OidcOptions
         {
             Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }],
         };
-        _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
+        _options.RefreshTenantsEvery = TimeSpan.FromMilliseconds(1);
         var hold = new TaskCompletionSource();
         _opening.Hold = hold;
         var catalog = Catalog(new OptionsTenantStore(Options.Create(declared)));
 
         var reading = catalog.RefreshAsync(ct);
-        await Task.Delay(_options.RefreshEvery * 100, ct);
+        await Task.Delay(_options.RefreshTenantsEvery * 100, ct);
         hold.SetResult();
         await reading;
 
@@ -402,7 +402,7 @@ public class StoreTenantCatalogTests
         var ct = TestContext.Current.CancellationToken;
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
         _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
-        _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
+        _options.RefreshTenantsEvery = TimeSpan.FromMilliseconds(1);
         _opening.Hold = new TaskCompletionSource();
         _opening.ReportsAStopAsFailures = true;
         _opening.ReadyBeforeTheStop.Add("acme");
@@ -423,7 +423,7 @@ public class StoreTenantCatalogTests
     {
         var ct = TestContext.Current.CancellationToken;
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
-        _options.RefreshEvery = TimeSpan.FromMilliseconds(1);
+        _options.RefreshTenantsEvery = TimeSpan.FromMilliseconds(1);
         _opening.Hold = new TaskCompletionSource();
         var catalog = Catalog();
 
@@ -450,7 +450,7 @@ public class StoreTenantCatalogTests
 
         _store.Tenants.Clear();
         await catalog.RefreshAsync(ct);
-        _time.Advance(_options.RefreshEvery - TimeSpan.FromSeconds(1));
+        _time.Advance(_options.RefreshTenantsEvery - TimeSpan.FromSeconds(1));
         await catalog.RefreshAsync(ct);
         Assert.False(released.IsCancellationRequested);
         Assert.Same(acme, catalog.InForce(acme));
@@ -503,7 +503,7 @@ public class StoreTenantCatalogTests
             [],
             Options.Create(_options),
             clock.Object);
-        var pause = _options.RefreshEvery;
+        var pause = _options.RefreshTenantsEvery;
 
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
         await catalog.RefreshAsync(ct);
@@ -618,11 +618,11 @@ public class StoreTenantCatalogTests
         await catalog.RefreshAsync(ct);
         _store.Tenants.Clear();
         await catalog.RefreshAsync(ct);
-        _time.Advance(_options.RefreshEvery);
+        _time.Advance(_options.RefreshTenantsEvery);
 
         var reading = catalog.RefreshAsync(ct);
         Assert.False(reading.IsCompleted);
-        _time.Advance(_options.RefreshEvery);
+        _time.Advance(_options.RefreshTenantsEvery);
 
         // Bounded in real time too, so a closing never cut off turns the test red rather than hang it
         await reading.WaitAsync(TimeSpan.FromSeconds(10), ct);
@@ -651,7 +651,7 @@ public class StoreTenantCatalogTests
         await catalog.RefreshAsync(ct);
         _store.Tenants.Clear();
         await catalog.RefreshAsync(ct);
-        _time.Advance(_options.RefreshEvery);
+        _time.Advance(_options.RefreshTenantsEvery);
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var reading = catalog.RefreshAsync(stopping.Token);

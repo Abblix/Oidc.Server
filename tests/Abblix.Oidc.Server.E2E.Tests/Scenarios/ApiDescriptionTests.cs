@@ -7,6 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 #if !MINIMAL_API_TRANSPORT
+
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -266,13 +269,11 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(options =>
-        {
-            options.Issuer = TestConstants.IssuerUri;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-        });
+        builder.Services.AddOidcServices(
+            options => TestTenant.ServeOn(options, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)));
 
         var app = builder.Build();
+        app.UseMultiTenancy();
         convention(app.MapOidcControllers());
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;

@@ -22,7 +22,8 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 internal static class ScopeClaims
 {
     public static IScopeClaimsProvider Of(params ScopeDefinition[] hostScopes)
-        => new ScopeClaimsProvider(new ScopeManager(
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { Scopes = hostScopes })),
-            new SingleIssuerLocal<Dictionary<string, ScopeDefinition>>()));
+    {
+        var issuer = new TestIssuer { Scopes = hostScopes };
+        return new ScopeClaimsProvider(SingleIssuer.ScopeManager(), SingleIssuer.AccessorOf(() => issuer));
+    }
 }

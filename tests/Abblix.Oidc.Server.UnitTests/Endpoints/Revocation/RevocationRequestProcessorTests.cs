@@ -38,7 +38,7 @@ public class RevocationRequestProcessorTests
         _clock = new FakeTimeProvider();
         _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _processor = new RevocationRequestProcessor(
-            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object), _clock);
+            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor), _clock);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()

@@ -23,6 +23,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 
@@ -85,7 +86,7 @@ public class ClientMayTightenItselfTests
         var clientInfo = new ClientInfo(ClientId) { SecurityProfile = clientProfile };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(clientInfo);
 
         var tokenValidator = new Mock<IJsonWebTokenValidator>();
         tokenValidator
@@ -100,7 +101,7 @@ public class ClientMayTightenItselfTests
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
-            .Setup(p => p.GetEncryptionKeys(It.IsAny<bool>()))
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         var validator = new ClientJwtValidator(
@@ -111,8 +112,8 @@ public class ClientMayTightenItselfTests
             new Mock<IClientKeysProvider>().Object,
             issuerProvider.Object,
             serviceKeys.Object,
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions { DefaultSecurityProfile = deploymentProfile })),
-            new FakeTimeProvider(Now));
+            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = deploymentProfile })),
+            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
 
         return await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller, options);
     }

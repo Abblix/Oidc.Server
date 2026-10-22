@@ -293,10 +293,10 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     {
         await using var host = Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
+                services.AddSingleton<IPostConfigureOptions<TestTenantSettings>>(_ =>
+                    new PostConfigureOptions<TestTenantSettings>(
                         Options.DefaultName,
-                        options => options.InferResourceFromScope = true))));
+                        tenant => tenant.InferResourceFromScope = true))));
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -341,10 +341,10 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     private WebApplicationFactory<Program> CreateHostWithDefaultResource()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
+                services.AddSingleton<IPostConfigureOptions<TestTenantSettings>>(_ =>
+                    new PostConfigureOptions<TestTenantSettings>(
                         Options.DefaultName,
-                        options => options.DefaultResourceIndicator = new Uri(TestConstants.ApiResource)))));
+                        tenant => tenant.DefaultResourceIndicator = new Uri(TestConstants.ApiResource)))));
 
     /// <summary>
     /// A resource that publishes an encryption key gets its access token encrypted to that key, so the party
@@ -388,19 +388,19 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     private WebApplicationFactory<Program> CreateHostWithResourceKey(JsonWebKey resourceKey)
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
+                services.AddSingleton<IPostConfigureOptions<TestTenantSettings>>(_ =>
+                    new PostConfigureOptions<TestTenantSettings>(
                         Options.DefaultName,
-                        options =>
+                        tenant =>
                         {
-                            options.EncryptionKeys =
+                            tenant.EncryptionKeys =
                             [
                                 JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with
                                 {
                                     KeyId = "server-enc",
                                 },
                             ];
-                            options.Resources =
+                            tenant.Resources =
                             [
                                 new ResourceDefinition(new Uri(TestConstants.ApiResource))
                                 {

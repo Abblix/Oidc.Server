@@ -183,10 +183,10 @@ public sealed partial class KeyRingTests : IDisposable
             RotateEvery = rotateEvery ?? TimeSpan.FromDays(30),
             EncryptionAlgorithm = encryptionAlgorithm,
             KeepRetiredFor = keepRetiredFor,
-            AdoptedKeys = adoptedKeys ?? [],
+            AdoptedKeys = Adopted(KeyRingOptions.DefaultPartition, adoptedKeys),
         };
         var steps = new KeyRingRefreshBuilder(provider, policy);
-        var ring = new KeyRing(store, steps.Refresh, steps.Schedule);
+        var ring = new KeyRing(store, steps.Refresh, steps.Schedule, KeyRingOptions.DefaultPartition);
 
         return (ring, store);
     }
@@ -198,7 +198,7 @@ public sealed partial class KeyRingTests : IDisposable
     private (KeyRingParts Rings, KeyRing Ring, FakeStore Store) CreateRings(
         TimeSpan propagation,
         TimeProvider time,
-        IReadOnlyList<JsonWebKey>? adoptedKeys = null,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null,
         params string[] partitions)
     {
         var store = new FakeStore();
@@ -225,7 +225,7 @@ public sealed partial class KeyRingTests : IDisposable
             {
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
                 RotateEvery = TimeSpan.FromDays(30),
-                AdoptedKeys = adoptedKeys ?? [],
+                AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
             },
             store,
             new OptionsKeyRingPartitions(options));
@@ -313,7 +313,7 @@ public sealed partial class KeyRingTests : IDisposable
     private (KeyRingParts Rings, FakeStore Store) RingsKeeping(
         IKeyRingPartitions kept,
         IKeyCustodian custodian,
-        params JsonWebKey[] adoptedKeys)
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null)
     {
         var store = new FakeStore();
         var services = new ServiceCollection();
@@ -327,7 +327,11 @@ public sealed partial class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        var policy = new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName, AdoptedKeys = adoptedKeys };
+        var policy = new MintedKeys
+        {
+            KeyEncryptionKeyName = KeyEncryptionKeyName,
+            AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
+        };
         return (new KeyRingParts(provider, policy, store, kept), store);
     }
 
@@ -339,38 +343,74 @@ public sealed partial class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// Adopted keys would be seeded into every ring, and a named partition may have others beside it, so each would
-    /// serve the others' keys: adoption stands only in the unnamed partition of a ring serving one issuer.
+    /// Keys adopted into one partition are taken into that partition alone: another partition beside it serves none
+    /// of them, so a party trusting one partition's keys cannot verify the other's tokens.
     /// </summary>
     [Fact]
-    public async Task AdoptingKeys_IntoANamedPartition_IsRefused()
+    public async Task AdoptedKeys_AreTakenOnlyIntoThePartitionTheyAreAddressedTo()
     {
-        var adopted = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
-        var (unnamed, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adopted);
-        Assert.NotNull(unnamed.For(KeyRingOptions.DefaultPartition));
+        var (rings, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted]), "acme", "globex");
 
-        Assert.Throws<InvalidOperationException>(
-            () => CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adopted, "acme"));
-        var failure = Assert.Single(await Open(unnamed, "globex"));
-        Assert.IsType<InvalidOperationException>(failure.Value);
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, TestContext.Current.CancellationToken);
+
+        var thumbprint = adopted.ComputeJwkThumbprintBase64Url();
+        Assert.Contains(
+            rings.For("acme").Get(PublicKeyUsages.Signature, includePrivateKeys: false),
+            key => key.ComputeJwkThumbprintBase64Url() == thumbprint);
+        Assert.DoesNotContain(
+            rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false),
+            key => key.ComputeJwkThumbprintBase64Url() == thumbprint);
     }
 
+    private static IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>> Adopted(
+        string partition,
+        IReadOnlyList<JsonWebKey>? keys)
+        => keys is { Count: > 0 }
+            ? new Dictionary<string, IReadOnlyList<JsonWebKey>> { [partition] = keys }
+            : new Dictionary<string, IReadOnlyList<JsonWebKey>>();
+
     /// <summary>
-    /// Keys adopted into a ring whose partitions come and go could serve no partition it opens later, so the ring
-    /// refuses to start with them rather than leave each such partition unopened for good.
+    /// Keys adopted into the unnamed partition of a ring whose partitions come and go are served by no partition it
+    /// opens, so the ring refuses to start with them; keys adopted into a named partition wait for it.
     /// </summary>
     [Fact]
-    public async Task AdoptedKeys_WhenThePartitionsComeAndGo_RefuseTheStart()
+    public void KeysAdoptedIntoTheUnnamedPartition_WhenThePartitionsComeAndGo_RefuseTheStart()
     {
         var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
         var (minting, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey));
-        await minting.CheckAsync(TestContext.Current.CancellationToken);
+        minting.CheckAdoption();
 
-        var (adopting, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), adopted);
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => adopting.CheckAsync(TestContext.Current.CancellationToken));
+        var (named, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), Adopted("acme", [adopted]));
+        named.CheckAdoption();
+
+        var (unnamed, _) = RingsKeeping(
+            Keeping(), StubCustodian(_keyEncryptionKey), Adopted(KeyRingOptions.DefaultPartition, [adopted]));
+        Assert.Throws<InvalidOperationException>(unnamed.CheckAdoption);
+    }
+
+    /// <summary>
+    /// Keys adopted into a partition the settings do not keep are served by no partition, so the ring refuses to start
+    /// with them; adopted into one they keep, it starts.
+    /// </summary>
+    [Theory]
+    [InlineData("initech")]
+    [InlineData(KeyRingOptions.DefaultPartition)]
+    public void KeysAdoptedIntoAPartitionTheSettingsDoNotKeep_RefuseTheStart(string partition)
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (kept, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted]), "acme", "globex");
+        kept.CheckAdoption();
+
+        var (unkept, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted(partition, [adopted]), "acme", "globex");
+        Assert.Throws<InvalidOperationException>(unkept.CheckAdoption);
     }
 
     /// <summary>
@@ -388,7 +428,7 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => rings.CheckAsync(TestContext.Current.CancellationToken));
+            () => rings.CheckKeyEncryptionKeyAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -1166,11 +1206,17 @@ public sealed partial class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        // Started the way a host starts it: the first refresh runs in StartAsync, which is the door production
-        // walks through.
-        var refresher = provider.GetServices<IHostedService>().Single();
-        await refresher.StartAsync(TestContext.Current.CancellationToken);
-        await refresher.StopAsync(TestContext.Current.CancellationToken);
+        // Started the way a host starts it: every service's StartingAsync, then the first refresh in StartAsync,
+        // which is the door production walks through.
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        foreach (var starting in hosted.OfType<IHostedLifecycleService>())
+            await starting.StartingAsync(TestContext.Current.CancellationToken);
+
+        foreach (var service in hosted)
+            await service.StartAsync(TestContext.Current.CancellationToken);
+
+        foreach (var service in hosted)
+            await service.StopAsync(TestContext.Current.CancellationToken);
 
         var published = provider.GetRequiredService<IKeyRing>()
             .Get(PublicKeyUsages.Signature, includePrivateKeys: false).ToList();
@@ -1198,7 +1244,7 @@ public sealed partial class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        Assert.IsType<KeyRingRefreshService>(Assert.Single(provider.GetServices<IHostedService>()));
+        Assert.Single(provider.GetServices<IHostedService>().OfType<KeyRingRefreshService>());
         Assert.Same(
             provider.GetRequiredService<IKeyRings>().For(KeyRingOptions.DefaultPartition),
             provider.GetRequiredService<IKeyRing>());

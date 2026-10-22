@@ -27,7 +27,7 @@ public enum ClientSecurityProfile
     /// No bundled profile: nothing is demanded beyond the client's individual metadata flags. As a
     /// client's explicit value it therefore adds nothing to whatever the deployment already demands,
     /// and takes nothing away; as the server-wide
-    /// <see cref="Configuration.OidcOptions.DefaultSecurityProfile"/> it demands nothing of anyone. A
+    /// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/> it demands nothing of anyone. A
     /// client that states no preference leaves its profile unset (<c>null</c>) rather than selecting
     /// this.
     /// </summary>

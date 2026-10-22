@@ -28,13 +28,14 @@ public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>
     /// The in-memory TestServer base address. It is HTTPS on purpose: MapOidcEndpoints enforces TLS on the OIDC
     /// endpoints (mirroring the MVC controllers' [RequireHttps]), so every test client must present Request.IsHttps,
-    /// otherwise the group's HTTPS filter would redirect/refuse it. Every client-options object in the suite sets its
+    /// otherwise the group's HTTPS filter would redirect/refuse it, and on the tenant's host, since a request reaches a
+    /// tenant by the host its issuer names. Every client-options object in the suite sets its
     /// BaseAddress from here, because WebApplicationFactory overrides ConfigureClient's base with options.BaseAddress
     /// (whose framework default is http://localhost).
     /// </summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "In-memory TestServer base address; not a deployment URL.")]
-    public static readonly Uri BaseAddress = new("https://localhost");
+    public static readonly Uri BaseAddress = new("https://auth.example.com");
 
     /// <summary>
     /// Eagerly builds the single shared host once, single-threaded, before parallel test methods

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -18,7 +19,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// </summary>
 /// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
 /// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
-public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference, ITenantAccessor tenantAccessor)
     : SyncTokenContextValidatorBase
 {
     /// <summary>
@@ -63,7 +65,7 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
         if (request.Resources is not { Length: > 0 })
             return null;
 
-        if (!resourceManager.Validate(
+        if (!resourceManager.Validate(tenantAccessor.CurrentTenant(), 
                 request.Resources,
                 request.Scope,
                 out var resources,

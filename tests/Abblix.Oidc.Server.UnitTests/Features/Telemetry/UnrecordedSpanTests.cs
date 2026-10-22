@@ -9,6 +9,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,7 +47,7 @@ public sealed class UnrecordedSpanTests
         await EndpointObservation.RunAsync(
             TelemetryEndpoints.Token,
             instruments,
-            null,
+            NoTenant.Accessor,
             () => Task.FromResult(0),
             EndpointObservation.NoError,
             enrichment: new EndpointEnrichment(new TokenRequest(), [enricher.Object]));

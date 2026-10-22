@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -21,10 +22,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="jwtCreator">Creator for issuing JWTs.</param>
 /// <param name="clientKeysProvider">Provider for client encryption keys.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ClientJwtFormatter(
     IJsonWebTokenCreator jwtCreator,
     IClientKeysProvider clientKeysProvider,
-    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
+    IAuthServiceKeysProvider serviceKeysProvider,
+    ITenantAccessor tenantAccessor) : IClientJwtFormatter
 {
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
@@ -38,7 +41,7 @@ public class ClientJwtFormatter(
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
     public async Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
     {
-        var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
+        var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenantAccessor.CurrentTenant(), true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
         // JARM section 2.2 / section 3 opt-in: when the policy requires a registered key-management algorithm and the client has

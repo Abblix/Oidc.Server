@@ -17,6 +17,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
@@ -46,7 +47,7 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object);
+        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, tenantAccessor: SingleIssuer.Accessor);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
@@ -72,10 +73,10 @@ public class AuthServiceJwtFormatterTests
         Encrypt: null, KeyManagementAlgorithm: null, KeyId: null, ContentEnc);
 
     private void SetupSigningKeys(params JsonWebKey[] keys) =>
-        _keysProvider.Setup(p => p.GetSigningKeys(true)).Returns(keys.ToAsyncEnumerable());
+        _keysProvider.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(keys.ToAsyncEnumerable());
 
     private void SetupEncryptionKeys(params JsonWebKey[] keys) =>
-        _keysProvider.Setup(p => p.GetEncryptionKeys(false)).Returns(keys.ToAsyncEnumerable());
+        _keysProvider.Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), false)).Returns(keys.ToAsyncEnumerable());
 
     private static JsonWebToken TokenWith(string algorithm = SigningAlgorithms.RS256, string? keyId = null) => new()
     {
@@ -150,7 +151,7 @@ public class AuthServiceJwtFormatterTests
 
         Assert.Equal(EncodedJwt, result);
         Assert.Null(capturedEncryptionKey);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<bool>()), Times.Never);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
     }
 
     /// <summary>
@@ -179,7 +180,7 @@ public class AuthServiceJwtFormatterTests
         await _formatter.FormatAsync(token, disabledButConfigured);
 
         Assert.Null(capturedEncryptionKey);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<bool>()), Times.Never);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
     }
 
     // Encryption

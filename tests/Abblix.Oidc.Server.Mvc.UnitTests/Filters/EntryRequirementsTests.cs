@@ -47,29 +47,22 @@ public class EntryRequirementsTests
 
     /// <summary>
     /// A request over plain HTTP is sent to https, as <see cref="RequireHttpsAttribute"/> sends it, unless the server
-    /// lets an http issuer through and this request's issuer is one.
+    /// lets an http issuer through and the issuer of the request's tenant is one.
     /// </summary>
-    /// <remarks>
-    /// An issuer taken from the request, as with no issuer configured, carries the request's own scheme, so it keeps
-    /// the requirement: otherwise every plain http request would be served once the setting is on.
-    /// </remarks>
     [Theory]
     [InlineData(true, "http://localhost", false)]
     [InlineData(false, "http://localhost", true)]
     [InlineData(true, "https://localhost", true)]
-    [InlineData(true, null, true)]
     public void TheHttpsRequirement_IsWaivedOnlyForADeclaredHttpIssuerLetThrough(
         bool allowHttpIssuer,
-        string? issuer,
+        string issuer,
         bool redirected)
     {
         var services = new ServiceCollection();
-        services.AddSingleton(Options.Create(new OidcOptions
-        {
-            AllowHttpIssuer = allowHttpIssuer,
-            Issuer = issuer is null ? null : new Uri(issuer),
-        }));
+        services.AddSingleton(Options.Create(new OidcOptions { AllowHttpIssuer = allowHttpIssuer }));
         services.AddSingleton(Options.Create(new MvcOptions()));
+        var tenant = new TenantContext { Tenant = new TenantDefinition { Id = "local", Issuer = new Uri(issuer) } };
+        services.AddSingleton(Mock.Of<ITenantAccessor>(accessor => accessor.Current == tenant));
         using var provider = services.BuildServiceProvider();
         var httpContext = new DefaultHttpContext { RequestServices = provider };
         httpContext.Request.Method = HttpMethods.Get;
@@ -96,9 +89,7 @@ public class EntryRequirementsTests
         var services = new ServiceCollection();
         services.AddSingleton(Options.Create(new OidcOptions { AllowHttpIssuer = true }));
         services.AddSingleton(Options.Create(new MvcOptions()));
-#pragma warning disable ABXMT001 // The feature is experimental for its consumers; these tests are where it is built.
         services.AddSingleton(Mock.Of<ITenantAccessor>(accessor => accessor.Current == null));
-#pragma warning restore ABXMT001
         using var provider = services.BuildServiceProvider();
         var httpContext = new DefaultHttpContext { RequestServices = provider };
         httpContext.Request.Method = HttpMethods.Get;
@@ -124,10 +115,8 @@ public class EntryRequirementsTests
         var services = new ServiceCollection();
         services.AddSingleton(Options.Create(new OidcOptions { AllowHttpIssuer = true }));
         services.AddSingleton(Options.Create(new MvcOptions()));
-#pragma warning disable ABXMT001 // The feature is experimental for its consumers; these tests are where it is built.
         var tenant = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri(issuer) } };
         services.AddSingleton(Mock.Of<ITenantAccessor>(accessor => accessor.Current == tenant));
-#pragma warning restore ABXMT001
         using var provider = services.BuildServiceProvider();
         var httpContext = new DefaultHttpContext { RequestServices = provider };
         httpContext.Request.Method = HttpMethods.Get;
@@ -145,23 +134,27 @@ public class EntryRequirementsTests
     }
 
     /// <summary>
-    /// Under multi-tenancy a request without a tenant is answered 404 before the action runs; without
-    /// multi-tenancy nothing is refused.
+    /// A request resolved to no tenant is answered 404 before the action runs; one resolved to a tenant is let
+    /// through.
     /// </summary>
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public void TheFilter_Answers404_OnlyToATenantlessRequestUnderMultiTenancy(bool multiTenant, bool refused)
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TheFilter_Answers404_OnlyToATenantlessRequest(bool underTenant, bool refused)
     {
         var services = new ServiceCollection();
         services.AddHttpContextAccessor();
-#pragma warning disable ABXMT001 // The feature is experimental for its consumers; these tests are where it is built.
-        if (multiTenant)
-            services.AddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
-#pragma warning restore ABXMT001
+        services.AddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
         using var provider = services.BuildServiceProvider();
         var httpContext = new DefaultHttpContext { RequestServices = provider };
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = httpContext;
+        if (underTenant)
+        {
+            httpContext.Features.Set(new TenantContext
+            {
+                Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") },
+            });
+        }
 
         var context = new ResourceExecutingContext(
             new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), [], []);

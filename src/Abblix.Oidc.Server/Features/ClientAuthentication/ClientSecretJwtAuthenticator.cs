@@ -20,6 +20,7 @@ using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -35,6 +36,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
 /// <param name="issuerSettings">Supplies the issuer's default security profile.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     IJsonWebTokenValidator tokenValidator,
@@ -43,7 +45,8 @@ public partial class ClientSecretJwtAuthenticator(
     TimeProvider clock,
     IReplayCache replayCache,
     IIssuerProvider issuerProvider,
-    IIssuerSettings issuerSettings)
+    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor)
     : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, issuerSettings, clock)
 {
     /// <summary>
@@ -140,7 +143,7 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        switch (await clientInfoProvider.TryFindClientAsync(issuer))
+        switch (await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), issuer))
         {
             case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
                 LogWrongAuthMethod(issuer);

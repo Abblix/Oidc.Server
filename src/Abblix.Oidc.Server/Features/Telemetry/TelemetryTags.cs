@@ -20,7 +20,7 @@ public static class TelemetryTags
     public const string Endpoint = "oidc.endpoint";
 
     /// <summary>
-    /// The tenant serving the request, under multi-tenancy; absent on a server without tenants.
+    /// The tenant serving the request.
     /// </summary>
     public const string Tenant = "oidc.tenant";
 

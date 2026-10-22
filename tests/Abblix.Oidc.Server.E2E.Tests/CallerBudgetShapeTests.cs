@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Builder;
@@ -30,8 +31,8 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// whichever host factory the project supplies, so the two cannot drift apart by an edit to one of them.
 /// </summary>
 /// <remarks>
-/// The host here registers its own limiter under the published key, which is both how a budget of one is
-/// arranged for a test and the substitution a deployment makes when it counts requests its own way. The token
+/// The host here registers its own limiter under the published key of one tenant's budget, which is both how a
+/// budget of one is arranged for a test and the substitution a deployment makes when it counts requests its own way. The token
 /// posted is not a real one: the budget is charged before the token is read, so the first request is answered
 /// (inactive) and the second is refused without either being about the token at all.
 /// </remarks>
@@ -68,9 +69,9 @@ public sealed class CallerBudgetShapeTests
                     services.AddSingleton<IStartupFilter>(new GiveEveryRequestASource(SomeSource));
                 }
 
-                services.AddKeyedSingleton(
-                    limiterKey,
-                    PartitionedRateLimiter.Create<(string ClientId, string? Source), (string, string?)>(
+                services.AddKeyedTransient(
+                    TenantServiceKeys.PerTenant(limiterKey),
+                    (_, _) => PartitionedRateLimiter.Create<(string ClientId, string? Source), (string, string?)>(
                         caller => RateLimitPartition.GetFixedWindowLimiter(
                             caller,
                             _ => new FixedWindowRateLimiterOptions
@@ -279,9 +280,9 @@ public sealed class CallerBudgetShapeTests
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IStartupFilter>(new GiveEveryRequestASource(SomeSource));
-                services.AddKeyedSingleton(
-                    CallerRateLimiters.AuthenticationFailures,
-                    PartitionedRateLimiter.Create<string, string>(
+                services.AddKeyedTransient(
+                    TenantServiceKeys.PerTenant(CallerRateLimiters.AuthenticationFailures),
+                    (_, _) => PartitionedRateLimiter.Create<string, string>(
                         source => RateLimitPartition.GetFixedWindowLimiter(
                             source,
                             _ => new FixedWindowRateLimiterOptions

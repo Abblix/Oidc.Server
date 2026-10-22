@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
@@ -21,10 +22,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="options">The refresh period the openings share.</param>
 /// <param name="store">The store the tenants are read from, which tells whether they are the tenants the settings
 /// declare.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 internal sealed class CompositeTenantOpening(
     IEnumerable<ITenantOpening> openings,
-    IOptions<MultiTenancyOptions> options,
+    IOptions<OidcOptions> options,
     ITenantStore store) : ITenantOpening
 {
     /// <inheritdoc />
@@ -68,7 +68,7 @@ internal sealed class CompositeTenantOpening(
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!unlimited)
-            limit.CancelAfter(options.Value.RefreshEvery);
+            limit.CancelAfter(options.Value.RefreshTenantsEvery);
 
         var failures = new Dictionary<string, Exception>(StringComparer.Ordinal);
         try

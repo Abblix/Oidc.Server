@@ -6,10 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -25,14 +26,15 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="store">Where the tenants are read from.</param>
 /// <param name="checks">The checks of the tenant list, the ones the catalog runs at every reading.</param>
 /// <param name="catalog">Reads the store again once a change is written.</param>
+/// <param name="options">The server's own settings, the checks judge a tenant with.</param>
 /// <param name="writer">Writes the changes to the store; none when the host writes to its store by other means.
 /// </param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class TenantManager(
     ILogger<TenantManager> logger,
     ITenantStore store,
     IEnumerable<ITenantsCheck> checks,
     StoreTenantCatalog catalog,
+    IOptions<OidcOptions> options,
     ITenantStoreWriter? writer = null) : ITenantManager
 {
     private readonly SemaphoreSlim _changingOne = new(1, 1);
@@ -249,7 +251,7 @@ public sealed partial class TenantManager(
         ];
 
         var messages = (
-            from refusal in TenantRefusal.AllOf(checks, candidate)
+            from refusal in TenantRefusal.AllOf(checks, candidate, options.Value)
             where refusal.TenantIds.Contains(changed.Id, StringComparer.Ordinal)
             select refusal.Message
         ).ToArray();

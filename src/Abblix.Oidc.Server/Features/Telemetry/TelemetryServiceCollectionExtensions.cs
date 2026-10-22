@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -39,6 +40,9 @@ internal static class TelemetryServiceCollectionExtensions
             // one only where none is.
             services.AddMetrics();
             services.TryAddSingleton<OidcInstruments>();
+
+            // Every measurement names the tenant it was taken for
+            services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
         }
 
         return registered.Decorators.Add(typeof(TDecorator))

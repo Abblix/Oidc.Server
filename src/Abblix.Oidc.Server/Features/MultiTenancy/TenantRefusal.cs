@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -16,7 +17,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="TenantIds">The tenants refused: one for a mistake of its own, every party to a conflict between
 /// several.</param>
 /// <param name="Message">What is wrong, naming the tenants.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string Message)
 {
     /// <summary>
@@ -34,6 +34,20 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
     /// </remarks>
     internal static IEnumerable<TenantRefusal> AllOf(
         IEnumerable<ITenantsCheck> checks,
-        IReadOnlyCollection<TenantDefinition> tenants)
-        => TenantKey.Unnamed(tenants).Concat(from check in checks from refusal in check.Check(tenants) select refusal);
+        IReadOnlyCollection<TenantDefinition> tenants,
+        OidcOptions options)
+        => TenantKey.Unnamed(tenants).Concat(
+            from check in checks from refusal in check.Check(tenants, options) select refusal);
+
+    /// <summary>
+    /// The refusals of each of <paramref name="tenants"/> that <paramref name="failures"/> finds wrong with it alone,
+    /// each naming the tenant.
+    /// </summary>
+    internal static IEnumerable<TenantRefusal> EachOf(
+        IEnumerable<TenantDefinition> tenants,
+        Func<TenantDefinition, IEnumerable<string>> failures)
+        =>
+            from tenant in tenants
+            from failure in failures(tenant)
+            select Of(tenant, $"Tenant '{tenant.Id}': {failure}");
 }

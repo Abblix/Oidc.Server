@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
@@ -19,7 +20,8 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 public sealed class ScopesAndClaimsProvider(
 	IScopeClaimsProvider scopeClaimsProvider,
 	IEnumerable<IGrantTypeInformer> grantTypeProviders,
-	ISubjectTypeConverter subjectTypeConverter) : IScopesAndClaimsProvider
+	ISubjectTypeConverter subjectTypeConverter,
+	ITenantAccessor tenantAccessor) : IScopesAndClaimsProvider
 {
 	private IEnumerable<string>? _grantTypesSupported;
 
@@ -33,7 +35,7 @@ public sealed class ScopesAndClaimsProvider(
 	public IEnumerable<string> GrantTypesSupported => _grantTypesSupported ??= ComputeGrantTypes();
 
 	/// <inheritdoc />
-	public IEnumerable<string> SubjectTypesSupported => subjectTypeConverter.SubjectTypesSupported;
+	public IEnumerable<string> SubjectTypesSupported => subjectTypeConverter.SubjectTypesSupported(tenantAccessor.CurrentTenant());
 
 	/// <summary>
 	/// Computes and caches the list of supported grant types by aggregating from all providers.

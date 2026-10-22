@@ -111,11 +111,11 @@ public class RefreshTokenSpendRaceTests
             ids.Object,
             formatter.Object,
             registry,
-            new GrantRevocation(registry, Mock.Of<IClientInfoProvider>()),
+            new GrantRevocation(registry, Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
             new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(options)),
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options,
-            SingleIssuer.SettingsOf(options));
+            SingleIssuer.SettingsOf(options), tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ClientInfo Client() => new(ClientId)

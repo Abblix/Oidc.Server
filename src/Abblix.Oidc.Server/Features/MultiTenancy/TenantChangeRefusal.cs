@@ -15,5 +15,4 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </summary>
 /// <param name="Reason">What kind of refusal it is, for the host to act on.</param>
 /// <param name="Message">What is wrong, for a person to read.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed record TenantChangeRefusal(TenantChangeRefusalReason Reason, string Message);

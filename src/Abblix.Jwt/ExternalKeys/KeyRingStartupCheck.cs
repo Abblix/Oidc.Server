@@ -8,31 +8,61 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// Refuses, before anything is served, what would leave a partition opened later unable to serve: keys adopted
-/// while the partitions come and go, which only the unnamed one may take, and a key-encryption key the custodian
-/// cannot show, which a ring keeping no partition yet would otherwise first meet on its first tenant.
+/// Refuses, before anything is served, what would leave a partition opened later unable to serve: keys adopted into
+/// a partition the ring never keeps, or into the unnamed partition while the partitions come and go, which no issuer
+/// is served from, and a key-encryption key the custodian cannot show, which a ring keeping no partition yet would
+/// otherwise first meet on its first tenant.
 /// </summary>
 /// <param name="setup">The policy and the partitions the ring is set up with.</param>
 /// <param name="custodian">Holds the key-encryption key.</param>
 internal sealed class KeyRingStartupCheck(KeyRingSetup setup, IKeyCustodian custodian)
 {
     /// <summary>
-    /// Throws when the ring could not serve a partition opened later.
+    /// Throws when keys are adopted where no partition will take them.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Keys are adopted into partitions that come and go, or the
-    /// custodian holds no version of the key-encryption key.</exception>
-    public async Task CheckAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// Judged before any partition opens: a partition takes adopted keys only until it holds a key it minted, so one
+    /// opened before the refusal would mint, and the host correcting the adoption would never have its keys taken.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Keys are adopted into a partition the ring never keeps, or into the
+    /// unnamed partition of a ring whose partitions come and go.</exception>
+    public void CheckAdoption()
     {
         var policy = setup.Policy;
 
-        // The settings' partitions are fixed at startup, so the ring meets each of them now; a host's own come later
-        if (policy.AdoptedKeys.Count > 0 && setup.PartitionsKept is not OptionsKeyRingPartitions)
+        // A fixed set names every partition the ring will meet; partitions added while it runs are not known yet
+        if (setup.PartitionsKept.Fixed is { } fixedPartitions)
+        {
+            var unkept = policy.AdoptedKeys
+                .Where(adopted => adopted.Value.Count > 0 && !fixedPartitions.Contains(adopted.Key, StringComparer.Ordinal))
+                .Select(adopted => adopted.Key)
+                .FirstOrDefault();
+
+            if (unkept is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Existing keys are adopted into the partition '{unkept}', which the key ring never keeps, so no " +
+                    "issuer is served them. Adopt them into the partition of the issuer that signs with them.");
+            }
+        }
+        else if (policy.AdoptedKeys.GetValueOrDefault(KeyRingOptions.DefaultPartition) is { Count: > 0 })
         {
             throw new InvalidOperationException(
-                "Existing keys are adopted into a key ring whose partitions come and go while it runs, and adopted " +
-                "keys go only into the unnamed partition of a ring serving one issuer. Mint new keys instead.");
+                "Existing keys are adopted into the unnamed partition of a key ring whose partitions come and go " +
+                "while it runs, and no issuer is served from that partition. Adopt them into the partition of the " +
+                "issuer that signs with them.");
         }
+    }
 
+    /// <summary>
+    /// Throws when the custodian holds no version of the key-encryption key, which a ring keeping no partition yet
+    /// would otherwise first meet on its first tenant.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The custodian holds no version of the key-encryption key.
+    /// </exception>
+    public async Task CheckKeyEncryptionKeyAsync(CancellationToken cancellationToken)
+    {
+        var policy = setup.Policy;
         if (await custodian.GetKeyVersionsAsync(policy.KeyEncryptionKeyName, cancellationToken)
                 .AnyAsync(cancellationToken))
         {

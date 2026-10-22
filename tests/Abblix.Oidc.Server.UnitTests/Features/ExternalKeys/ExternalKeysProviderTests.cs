@@ -17,6 +17,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -38,10 +40,10 @@ public class ExternalKeysProviderTests
     {
         using var rsa = RSA.Create(2048);
         var custodian = CustodianWith("sign-key", BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false))));
-        var provider = Provider(custodian, TimeProvider.System, TimeSpan.FromHours(1),
+        var (provider, tenant) = Provider(custodian, TimeProvider.System, TimeSpan.FromHours(1),
             signingKeyName: "sign-key", signingAlgorithm: SigningAlgorithms.PS256);
 
-        var key = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var key = await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         Assert.IsType<RsaJsonWebKey>(key);
         Assert.Equal("sign-key", key.KeyId);
@@ -57,10 +59,10 @@ public class ExternalKeysProviderTests
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var custodian = CustodianWith(
             "sign-key", BareVersion(new EllipticCurveJsonWebKey().Apply(ecdsa.ExportParameters(false))));
-        var provider = Provider(custodian, TimeProvider.System, TimeSpan.FromHours(1),
+        var (provider, tenant) = Provider(custodian, TimeProvider.System, TimeSpan.FromHours(1),
             signingKeyName: "sign-key", signingAlgorithm: SigningAlgorithms.ES256);
 
-        var key = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var key = await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         // The provider keeps the custodian's key type; an EC key is published as an EC JWK.
         Assert.IsType<EllipticCurveJsonWebKey>(key);
@@ -75,10 +77,10 @@ public class ExternalKeysProviderTests
     {
         using var rsa = RSA.Create(2048);
         var custodian = CustodianWith("enc-key", BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false))));
-        var provider = Provider(custodian, TimeProvider.System, TimeSpan.FromHours(1),
+        var (provider, tenant) = Provider(custodian, TimeProvider.System, TimeSpan.FromHours(1),
             encryptionKeyName: "enc-key", encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep);
 
-        var key = await SingleAsync(provider.GetEncryptionKeys(), TestContext.Current.CancellationToken);
+        var key = await SingleAsync(provider.GetEncryptionKeys(tenant), TestContext.Current.CancellationToken);
 
         Assert.Equal("enc-key", key.KeyId);
         Assert.Equal(PublicKeyUsages.Encryption, key.Usage);
@@ -90,10 +92,10 @@ public class ExternalKeysProviderTests
     public async Task GetEncryptionKeys_PublishesNothing_WhenNoEncryptionKeyIsNamed()
     {
         var custodian = new Mock<IKeyCustodian>(MockBehavior.Strict);
-        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1),
+        var (provider, tenant) = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1),
             encryptionKeyName: null);
 
-        var keys = await ToListAsync(provider.GetEncryptionKeys(), TestContext.Current.CancellationToken);
+        var keys = await ToListAsync(provider.GetEncryptionKeys(tenant), TestContext.Current.CancellationToken);
 
         // A signing-only deployment holds no encryption key, so a guessed name would fail against the custodian.
         // The strict mock proves the provider does not ask for one.
@@ -108,9 +110,9 @@ public class ExternalKeysProviderTests
             "sign-key",
             VersionAt("v1", now - TimeSpan.FromDays(2)),
             VersionAt("v2", now - TimeSpan.FromHours(1)));
-        var provider = Provider(custodian, TimeAt(now), TimeSpan.FromMinutes(30), signingKeyName: "sign-key");
+        var (provider, tenant) = Provider(custodian, TimeAt(now), TimeSpan.FromMinutes(30), signingKeyName: "sign-key");
 
-        var keys = await ToListAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var keys = await ToListAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         // Both versions are published, each carrying the custodian-assigned kid (not the configured key name).
         Assert.Equal(new[] { "v1", "v2" }, keys.Select(k => k.KeyId).OrderBy(k => k));
@@ -129,9 +131,9 @@ public class ExternalKeysProviderTests
 
         // Custodian enumeration order is irrelevant; the provider imposes the produce-first order.
         var custodian = CustodianWith("sign-key", fresh, active, old);
-        var provider = Provider(custodian, TimeAt(now), propagation, signingKeyName: "sign-key");
+        var (provider, tenant) = Provider(custodian, TimeAt(now), propagation, signingKeyName: "sign-key");
 
-        var keys = await ToListAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var keys = await ToListAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         Assert.Equal(3, keys.Count); // every version is published for verification and rotation overlap
         Assert.Equal("v2", keys[0].KeyId); // the produce role signs with the newest version PAST propagation
@@ -150,15 +152,15 @@ public class ExternalKeysProviderTests
         // Both are still inside the window; with no version past propagation the newest overall must lead, so the
         // very first rollover still has something to sign with. There is no older version a client could hold.
         var custodian = CustodianWith("sign-key", newer, newest);
-        var provider = Provider(custodian, TimeAt(now), propagation, signingKeyName: "sign-key");
+        var (provider, tenant) = Provider(custodian, TimeAt(now), propagation, signingKeyName: "sign-key");
 
-        var keys = await ToListAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var keys = await ToListAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         Assert.Equal(2, keys.Count);
         Assert.Equal("v2", keys[0].KeyId);
     }
 
-    private static ExternalKeysProvider Provider(
+    private static (ExternalKeysProvider Provider, TenantDefinition Tenant) Provider(
         IKeyCustodian custodian,
         TimeProvider timeProvider,
         TimeSpan propagation,
@@ -175,12 +177,13 @@ public class ExternalKeysProviderTests
             EncryptionAlgorithm = encryptionAlgorithm,
         };
         var options = Options.Create(new OidcOptions { KeyRolloverPropagation = propagation });
-        return new ExternalKeysProvider(
+        var provider = new ExternalKeysProvider(
             NullLogger<ExternalKeysProvider>.Instance,
             custodian,
-            SingleIssuer.SettingsOf(options, keys),
+            SingleIssuer.Catalog,
             options,
             timeProvider);
+        return (provider, new TestIssuer { CustodianKeys = keys }.ToTenant());
     }
 
 
@@ -201,20 +204,21 @@ public class ExternalKeysProviderTests
                 ? Throwing()
                 : new[] { version }.ToAsyncEnumerable());
 
-        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
+        var (provider, tenant) = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
 
-        var first = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var first = await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
         sealedUp = true;
-        var afterTheOutage = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var afterTheOutage = await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         Assert.Equal(first.KeyId, afterTheOutage.KeyId);
     }
 
     [Fact]
-    public async Task ThePublishedSet_IsLetGo_OnceItsIssuerIsReleased()
+    public async Task ThePublishedSet_IsLetGo_OnceItsTenantIsReleased()
     {
         // The set kept against an outage is kept per key name, so a tenant gone for good must take its names'
         // sets with it, or a server whose tenants come and go keeps every set any of them ever published
+        var ct = TestContext.Current.CancellationToken;
         using var rsa = RSA.Create(2048);
         var version = BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
         var custodian = new Mock<IKeyCustodian>();
@@ -222,34 +226,27 @@ public class ExternalKeysProviderTests
         custodian
             .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
             .Returns(() => sealedUp ? Throwing() : new[] { version }.ToAsyncEnumerable());
-        using var released = new CancellationTokenSource();
-        var settings = new Mock<IIssuerSettings>();
-        settings
-            .Setup(s => s.CustodianKeys)
-            .Returns(new CustodianHeldKeys { SigningKeyName = "sign-key", SigningAlgorithm = SigningAlgorithms.RS256 });
-        settings.Setup(s => s.Released).Returns(released.Token);
-        var options = Options.Create(new OidcOptions { KeyRolloverPropagation = TimeSpan.FromHours(1) });
-        var provider = new ExternalKeysProvider(
-            NullLogger<ExternalKeysProvider>.Instance,
-            custodian.Object,
-            settings.Object,
-            options,
-            TimeProvider.System);
+        var tenants = new ServedTenants();
+        var served = await tenants.ServeAsync(Tenant("g1"), ct);
+        var provider = ProviderOver(custodian.Object, tenants.Catalog);
 
-        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        await SingleAsync(provider.GetSigningKeys(served), ct);
         sealedUp = true;
-        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        await SingleAsync(provider.GetSigningKeys(served), ct);
 
-        await released.CancelAsync();
+        tenants.Listed.Clear();
+        await tenants.RefreshAsync(ct);
+        await tenants.RefreshAfterThePauseAsync(ct);
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
-            () => SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken));
+            () => SingleAsync(provider.GetSigningKeys(served), ct));
     }
 
     [Fact]
     public async Task ATenantCreatedAgainUnderAKeyName_KeepsItsSet_WhenTheFormerCreationIsReleased()
     {
-        // The set is kept per issuer and key name, so releasing the former creation of a tenant does not take the
+        // The set is kept per tenant and key name, so releasing the former creation of a tenant does not take the
         // set the new creation published under the same key name
+        var ct = TestContext.Current.CancellationToken;
         using var rsa = RSA.Create(2048);
         var version = BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
         var custodian = new Mock<IKeyCustodian>();
@@ -257,31 +254,34 @@ public class ExternalKeysProviderTests
         custodian
             .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
             .Returns(() => sealedUp ? Throwing() : new[] { version }.ToAsyncEnumerable());
-        using var former = new CancellationTokenSource();
-        var partition = "acme";
-        var released = former.Token;
-        var settings = new Mock<IIssuerSettings>();
-        settings
-            .Setup(s => s.CustodianKeys)
-            .Returns(new CustodianHeldKeys { SigningKeyName = "sign-key", SigningAlgorithm = SigningAlgorithms.RS256 });
-        settings.Setup(s => s.KeyPartition).Returns(() => partition);
-        settings.Setup(s => s.Released).Returns(() => released);
-        var provider = new ExternalKeysProvider(
-            NullLogger<ExternalKeysProvider>.Instance,
-            custodian.Object,
-            settings.Object,
-            Options.Create(new OidcOptions { KeyRolloverPropagation = TimeSpan.FromHours(1) }),
-            TimeProvider.System);
-        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var tenants = new ServedTenants();
+        var former = await tenants.ServeAsync(Tenant("g1"), ct);
+        var provider = ProviderOver(custodian.Object, tenants.Catalog);
+        await SingleAsync(provider.GetSigningKeys(former), ct);
 
-        partition = "acme~2";
-        released = CancellationToken.None;
-        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
-        await former.CancelAsync();
+        tenants.Listed.Clear();
+        var current = await tenants.ServeAsync(Tenant("g2"), ct);
+        await SingleAsync(provider.GetSigningKeys(current), ct);
+        await tenants.RefreshAfterThePauseAsync(ct);
         sealedUp = true;
 
-        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        await SingleAsync(provider.GetSigningKeys(current), ct);
     }
+
+    private static TenantDefinition Tenant(string generation) => new()
+    {
+        Id = TestIssuer.TenantId,
+        Issuer = TestConstants.DefaultIssuer,
+        Generation = generation,
+        CustodianKeys = new CustodianHeldKeys { SigningKeyName = "sign-key", SigningAlgorithm = SigningAlgorithms.RS256 },
+    };
+
+    private static ExternalKeysProvider ProviderOver(IKeyCustodian custodian, ITenantCatalog catalog) => new(
+        NullLogger<ExternalKeysProvider>.Instance,
+        custodian,
+        catalog,
+        Options.Create(new OidcOptions { KeyRolloverPropagation = TimeSpan.FromHours(1) }),
+        TimeProvider.System);
 
     [Fact]
     public async Task AColdStartHasNothingToServeAndSaysSo()
@@ -295,10 +295,10 @@ public class ExternalKeysProviderTests
             .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
             .Returns(Throwing);
 
-        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
+        var (provider, tenant) = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
 
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
-            () => SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken));
+            () => SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken));
     }
 
 
@@ -319,13 +319,13 @@ public class ExternalKeysProviderTests
                 ? Refusing()
                 : new[] { version }.ToAsyncEnumerable());
 
-        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
+        var (provider, tenant) = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
 
-        await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
         revoked = true;
 
         await Assert.ThrowsAsync<KeyCustodianFailedException>(
-            () => SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken));
+            () => SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -344,11 +344,11 @@ public class ExternalKeysProviderTests
                     VersionOf(rotated ? second : first, rotated ? "v2" : "v1"),
                 }.ToAsyncEnumerable());
 
-        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
+        var (provider, tenant) = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
 
-        var before = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var before = await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
         rotated = true;
-        var after = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        var after = await SingleAsync(provider.GetSigningKeys(tenant), TestContext.Current.CancellationToken);
 
         Assert.Equal("v1", before.KeyId);
         Assert.Equal("v2", after.KeyId);

@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -22,7 +23,9 @@ namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 /// E2E can assert the access token's <c>sub</c> equals the id_token's <c>sub</c> directly rather than against a
 /// recomputed value. The default stub emits the raw subject, which cannot exercise that equality.
 /// </summary>
-public sealed class PairwiseStaticUserClaimsProvider(ISubjectTypeConverter subjectTypeConverter) : IUserClaimsProvider
+public sealed class PairwiseStaticUserClaimsProvider(
+    ISubjectTypeConverter subjectTypeConverter,
+    ITenantAccessor tenantAccessor) : IUserClaimsProvider
 {
     public Task<JsonObject?> GetUserClaimsAsync(
         AuthSession authSession,
@@ -35,7 +38,7 @@ public sealed class PairwiseStaticUserClaimsProvider(ISubjectTypeConverter subje
             // Mirror UserClaimsProvider: the client-facing subject is the pairwise pseudonym for a pairwise client
             // (a public client is untouched by the converter), so the id_token carries the same value the access
             // token does.
-            ["sub"] = subjectTypeConverter.Convert(authSession.Subject, clientInfo),
+            ["sub"] = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo),
             ["name"] = "E2E Test User",
             ["email"] = "e2e@example.com",
         };

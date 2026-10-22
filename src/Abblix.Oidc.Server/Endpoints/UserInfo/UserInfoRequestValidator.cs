@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.UserInfoRequest;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 
@@ -37,12 +38,14 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
 /// <param name="mtlsValidator">RFC 8705 section 3 mutual-TLS resource-server-side validator that enforces
 /// the certificate binding when the access token carries a <c>cnf.x5t#S256</c> confirmation.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,
 	IClientInfoProvider clientInfoProvider,
 	IDPoPUserInfoValidator dpopValidator,
-	IMtlsUserInfoValidator mtlsValidator) : IUserInfoRequestValidator
+	IMtlsUserInfoValidator mtlsValidator,
+	ITenantAccessor tenantAccessor) : IUserInfoRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
@@ -106,7 +109,7 @@ public class UserInfoRequestValidator(
 		// the real subject with the client's sector, so AuthenticateByAccessTokenAsync needs the ClientInfo.
 		var clientId = token.Payload.ClientId;
 		var clientInfo = clientId is not null
-			? await clientInfoProvider.TryFindClientAsync(clientId)
+			? await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId)
 			: null;
 
 		if (clientInfo == null)

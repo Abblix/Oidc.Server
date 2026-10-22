@@ -8,6 +8,7 @@
 
 using System.Text.Json.Serialization.Metadata;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -34,12 +35,15 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="configureOptions">A delegate that configures the <see cref="OidcOptions"/>.</param>
-    /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
+    /// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
     /// <remarks>
     /// Named exactly as the MVC integration names it, so moving a host from one adapter to the other leaves
     /// this line alone: what changes is the package reference and the endpoint mapping, not the registration.
+    /// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
+    /// declaring one, and the request pipeline resolves each request to its tenant with <c>app.UseMultiTenancy()</c>
+    /// before routing and authentication.
     /// </remarks>
-    public static IServiceCollection AddOidcServices(
+    public static IOidcServerBuilder AddOidcServices(
         this IServiceCollection services, Action<OidcOptions> configureOptions)
         => services.AddOidcServices((options, _) => configureOptions(options));
 
@@ -49,12 +53,12 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="configureOptions">A delegate that configures the <see cref="OidcOptions"/>.</param>
-    /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
-    public static IServiceCollection AddOidcServices(
+    /// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
+    public static IOidcServerBuilder AddOidcServices(
         this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
-        => services
+        => new OidcServerBuilder(services
             .AddOidcCore(configureOptions)
-            .AddOidcMinimalApi();
+            .AddOidcMinimalApi());
 
     /// <summary>
     /// Adds the Minimal API transport services for the OpenID Connect server. Assumes the core services
@@ -79,7 +83,7 @@ public static class ServiceCollectionExtensions
             "Abblix.OIDC.Server.MVC package reference, or this one together with the " +
             "Abblix.OIDC.Server.MinimalApi package reference.");
 
-        services.AddHttpContextAccessor();
+        services.AddTenantResolution();
         services.AddOptions<OidcRouteOptions>();
 
         // The core resolves request details (base URL, scheme, client IP) through this contract; the adapter

@@ -12,7 +12,7 @@ namespace Abblix.Jwt.ExternalKeys;
 /// producing until the first minted key has reached every consumer.
 /// </summary>
 /// <param name="sealing">Seals the keys before they are stored.</param>
-/// <param name="policy">The keys to adopt.</param>
+/// <param name="policy">The keys to adopt into each partition.</param>
 /// <param name="schedule">The clock and the rotation period an adopted key is dated by.</param>
 internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy, KeyRingSchedule schedule)
 {
@@ -34,16 +34,18 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
     /// </para>
     /// </remarks>
     public async Task<bool> AdoptExistingKeysAsync(
+        string partition,
         IReadOnlyList<StoredKey> entries,
         IKeyRingStore source,
         CancellationToken cancellationToken)
     {
-        if (policy.AdoptedKeys.Count == 0 || entries.Any(entry => !AdoptedEntries.IsAdopted(entry.Id)))
+        var adoptedKeys = policy.AdoptedKeys.GetValueOrDefault(partition) ?? [];
+        if (adoptedKeys.Count == 0 || entries.Any(entry => !AdoptedEntries.IsAdopted(entry.Id)))
             return false;
 
         // Every key is checked, and named, before the custodian is asked or anything is stored, so a refused set
         // leaves the ring without the keys listed before the refused one
-        var ids = AdoptedEntries.IdsFor(policy.AdoptedKeys);
+        var ids = AdoptedEntries.IdsFor(adoptedKeys);
 
         // Dated a rotation period before the current one, or at the earliest instant there is for a ring that
         // never rotates, which is what makes the first of them the active key:
@@ -52,7 +54,7 @@ internal sealed class KeyRingAdoption(KeyRingSealing sealing, MintedKeys policy,
         // read off the rotation grid rather than the clock, so every pod adopting in one period dates the set alike.
         var dates = AdoptedEntries.DatesFor(entries, ids, schedule.PreviousPeriodStart);
 
-        var sealedKeys = await sealing.SealAllAsync(policy.AdoptedKeys, cancellationToken);
+        var sealedKeys = await sealing.SealAllAsync(adoptedKeys, cancellationToken);
         for (var index = 0; index < sealedKeys.Count; index++)
         {
             var entry = new StoredKey

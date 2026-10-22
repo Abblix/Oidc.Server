@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 
@@ -46,11 +47,11 @@ public class RefreshTokenSubjectTokenResolverTests
         // The refresh token names its original client; the resolver looks that client up (its sector opens a
         // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), OriginalClientId))
             .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.ConsentRequired });
 
         _resolver = new RefreshTokenSubjectTokenResolver(
-            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);
+            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     [Fact]
@@ -166,7 +167,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(NewRefreshJwt());
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), OriginalClientId))
             .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Disabled });
 
         var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);

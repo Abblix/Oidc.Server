@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
@@ -34,14 +35,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="options">How long the openings of one reading may take, and how long a tenant gone from the store
 /// is kept.</param>
 /// <param name="timeProvider">Tells how long a tenant has been gone from the store.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class StoreTenantCatalog(
     ILogger<StoreTenantCatalog> logger,
     ITenantStore store,
     IEnumerable<ITenantsCheck> checks,
     IEnumerable<ITenantOpening> openings,
     IEnumerable<ITenantClosing> closings,
-    IOptions<MultiTenancyOptions> options,
+    IOptions<OidcOptions> options,
     TimeProvider timeProvider) : ITenantCatalog
 {
     /// <summary>A tenant and where it is served.</summary>
@@ -96,12 +96,12 @@ public sealed partial class StoreTenantCatalog(
         var previous = Volatile.Read(ref _reading);
 
         await _creations.CloseAsync(
-            _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshEvery),
-            options.Value.RefreshEvery,
+            _creations.Track(listed.Select(entry => entry.Tenant), options.Value.RefreshTenantsEvery),
+            options.Value.RefreshTenantsEvery,
             cancellationToken);
 
         var stored = listed.Select(fresh => Unchanged(previous, fresh) ?? fresh).ToArray();
-        var refusals = TenantRefusal.AllOf(checks, [..stored.Select(tenant => tenant.Tenant)]).ToArray();
+        var refusals = TenantRefusal.AllOf(checks, [..stored.Select(tenant => tenant.Tenant)], options.Value).ToArray();
 
         foreach (var refusal in refusals.Where(refusal => previous?.Refused.Contains(refusal.Message) != true))
             LogTenantsLeftOut(string.Join(", ", refusal.TenantIds), refusal.Message);
@@ -227,6 +227,12 @@ public sealed partial class StoreTenantCatalog(
     /// </summary>
     internal static CancellationToken ReleasedOf(ITenantCatalog catalog, TenantDefinition tenant)
         => catalog is StoreTenantCatalog own ? own.Released(tenant) : CancellationToken.None;
+
+    /// <summary>
+    /// Whether this catalog has served the creation of <paramref name="tenant"/> at <paramref name="issuer"/>, while it
+    /// is served or not yet long released.
+    /// </summary>
+    internal bool HasServedAt(TenantDefinition tenant, string issuer) => _creations.HasServedAt(tenant, issuer);
 
     /// <summary>
     /// The definition in force for the tenant and generation of <paramref name="held"/>: the one served now, or the

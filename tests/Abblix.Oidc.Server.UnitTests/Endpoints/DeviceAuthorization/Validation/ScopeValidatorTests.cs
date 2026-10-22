@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DeviceAuthorization.Validation;
 
@@ -24,7 +25,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DeviceAuthorization.Validation;
 /// </summary>
 public class ScopeValidatorTests
 {
-    private delegate bool TryGetCallback(string scope, out ScopeDefinition? definition);
+    private delegate bool TryGetCallback(TenantDefinition tenant, string scope, out ScopeDefinition? definition);
 
     [Theory]
     [InlineData(OfflineAccess.Disabled, ErrorCodes.InvalidScope)]
@@ -34,13 +35,13 @@ public class ScopeValidatorTests
     {
         var scopeManager = new Mock<IScopeManager>();
         scopeManager
-            .Setup(m => m.TryGet(It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string scope, out ScopeDefinition? definition) =>
+            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(scope);
                 return true;
             }));
-        var validator = new ScopeValidator(scopeManager.Object);
+        var validator = new ScopeValidator(scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
         var context = new DeviceAuthorizationValidationContext(
             new DeviceAuthorizationRequest { Scope = [Scopes.OpenId, Scopes.OfflineAccess] },
             new ClientRequest { ClientId = "device-client" })

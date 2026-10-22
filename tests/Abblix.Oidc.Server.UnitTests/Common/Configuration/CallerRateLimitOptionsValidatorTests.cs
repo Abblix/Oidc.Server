@@ -128,6 +128,7 @@ public class CallerRateLimitOptionsValidatorTests
     public void The_composition_refuses_a_limit_that_permits_nothing()
     {
         var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
         services.AddIntrospection();
         services.AddRevocation();
         services.AddOidcCore(options => options.CallerRateLimit.PermitLimit = 0);

@@ -27,7 +27,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 ///     await tokenRevoker.RevokeSubjectAsync(subject, cancellationToken: cancellationToken);
 /// </code>
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed class TenantScope : IDisposable
 {
     private static readonly AsyncLocal<TenantScope?> Ambient = new();

@@ -44,8 +44,9 @@ public class ExternalKeysWiringTests
         services.AddLogging();
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
-        services.AddIssuer();
+        services.AddSingleton(SingleIssuer.Settings);
         services.AddAuthServiceJwt();
         return services;
     }
@@ -59,23 +60,6 @@ public class ExternalKeysWiringTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
-    }
-
-    /// <summary>
-    /// A server without tenants whose keys are held by a custodian and that names none there has nothing to sign
-    /// with, so startup refuses it rather than the first token.
-    /// </summary>
-    [Fact]
-    public void ACustodianPlacementNamingNoKey_IsRefusedAtStartup()
-    {
-        var services = AnOidcHost();
-        services.RequireKeyPlacement().UseKeysInCustodian();
-
-        using var provider = services.BuildServiceProvider();
-
-        var refusal = Assert.Throws<OptionsValidationException>(
-            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains(ExternalKeysProvider.NoKeyNamed, refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -98,12 +82,13 @@ public class ExternalKeysWiringTests
         services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
 
         // The placement runs BEFORE the server's own registration. Reading the choice at resolve is what permits
         // that: nothing here has to be ordered against the placement call.
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
-        services.AddIssuer();
+        services.AddSingleton(SingleIssuer.Settings);
         services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();
@@ -121,8 +106,9 @@ public class ExternalKeysWiringTests
         services.AddSingleton(chosen);
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
-        services.AddIssuer();
+        services.AddSingleton(SingleIssuer.Settings);
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
 
@@ -150,7 +136,9 @@ public class ExternalKeysWiringTests
         // Both roles, because both fail the same silent way: the host believes its private halves are in the
         // custodian and they are in a settings file, with nothing anywhere saying so.
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await (signing ? keysProvider.GetSigningKeys() : keysProvider.GetEncryptionKeys())
+            async () => await (signing
+                    ? keysProvider.GetSigningKeys(SingleIssuer.Tenant)
+                    : keysProvider.GetEncryptionKeys(SingleIssuer.Tenant))
                 .ToListAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian), error.Message);
@@ -163,10 +151,10 @@ public class ExternalKeysWiringTests
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddOptions<OidcOptions>().Configure(options => options.SigningKeys = [signingKey]);
+        services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
 
         await using var provider = services.BuildServiceProvider();
@@ -174,7 +162,8 @@ public class ExternalKeysWiringTests
 
         // The refusal is about a HALF-wired custodian, so a host that wired none must be unaffected
         // by it and simply served the keys it configured.
-        var served = await keysProvider.GetSigningKeys().ToListAsync(TestContext.Current.CancellationToken);
+        var served = await keysProvider.GetSigningKeys(new TestIssuer { SigningKeys = [signingKey] }.ToTenant())
+            .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKey.KeyId, Assert.Single(served).KeyId);
     }
 

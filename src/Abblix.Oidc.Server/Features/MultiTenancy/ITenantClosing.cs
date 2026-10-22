@@ -28,7 +28,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// A tenant created again under the same id is a different creation, so closing the one released leaves what the new
 /// one keeps alone.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantClosing
 {
     /// <summary>

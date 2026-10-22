@@ -19,8 +19,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -39,18 +37,17 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation();
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         using var provider = services.BuildServiceProvider();
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, Acme("before"));
-        Assert.NotNull(await clients.TryFindClientAsync("before"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "before"));
 
         EnterTenant(provider, Acme("after"));
-        Assert.Null(await clients.TryFindClientAsync("before"));
-        Assert.NotNull(await clients.TryFindClientAsync("after"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "before"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "after"));
     }
 
     /// <summary>
@@ -65,16 +62,16 @@ public partial class MultiTenancyRegistrationTests
         var acme = await Served(provider, store, AcmeWithoutClients(), "1");
         EnterTenant(provider, acme);
         var local = provider.GetRequiredService<IIssuerLocal<object>>();
-        var built = local.GetOrCreate(null, () => new object());
+        var built = local.GetOrCreate(Entered(provider), null, () => new object());
         var catalog = provider.GetRequiredService<StoreTenantCatalog>();
 
         store.Tenants = [];
         await catalog.RefreshAsync(CancellationToken.None);
-        Assert.Same(built, local.GetOrCreate(null, () => new object()));
+        Assert.Same(built, local.GetOrCreate(Entered(provider), null, () => new object()));
 
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(CancellationToken.None);
-        Assert.NotSame(built, local.GetOrCreate(null, () => new object()));
+        Assert.NotSame(built, local.GetOrCreate(Entered(provider), null, () => new object()));
     }
 
     /// <summary>
@@ -127,7 +124,6 @@ public partial class MultiTenancyRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         services.AddClientInformation();
         services.AddSingleton<ITenantStore>(store);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider());
@@ -137,7 +133,7 @@ public partial class MultiTenancyRegistrationTests
             services.AddSingleton<ITenantCatalog>(serviceProvider => serviceProvider.GetRequiredService<HostCatalog>());
         }
 
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
     }
 
@@ -187,17 +183,17 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith("freed"), "1");
         EnterTenant(provider, former);
-        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "freed"));
 
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
-        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         EnterTenant(provider, former);
-        await clients.TryFindClientAsync("freed");
+        await clients.TryFindClientAsync(Entered(provider), "freed");
 
         EnterTenant(provider, current);
-        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -212,18 +208,18 @@ public partial class MultiTenancyRegistrationTests
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWith("first"), "1"));
-        Assert.NotNull(await clients.TryFindClientAsync("first"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "first"));
         var between = await Served(provider, store, AcmeWith("between"), "2");
         var last = await Served(provider, store, AcmeWith("last"), "3");
         EnterTenant(provider, last);
-        Assert.NotNull(await clients.TryFindClientAsync("last"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "last"));
 
         EnterTenant(provider, between);
-        Assert.Null(await clients.TryFindClientAsync("between"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "between"));
 
         EnterTenant(provider, last);
-        Assert.NotNull(await clients.TryFindClientAsync("last"));
-        Assert.Null(await clients.TryFindClientAsync("between"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "last"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "between"));
     }
 
     /// <summary>
@@ -238,12 +234,12 @@ public partial class MultiTenancyRegistrationTests
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWithoutClients(), "1"));
-        Assert.Null(await clients.TryFindClientAsync("removed"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "removed"));
         EnterTenant(provider, await Served(provider, store, AcmeWith("removed"), "2"));
-        Assert.NotNull(await clients.TryFindClientAsync("removed"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "removed"));
 
         EnterTenant(provider, await Served(provider, store, AcmeWithoutClients(), "3"));
-        Assert.Null(await clients.TryFindClientAsync("removed"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "removed"));
     }
 
     /// <summary>
@@ -259,12 +255,12 @@ public partial class MultiTenancyRegistrationTests
         var kept = AcmeWith("kept");
 
         EnterTenant(provider, await Served(provider, store, kept, "1"));
-        Assert.NotNull(await clients.TryFindClientAsync("kept"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "kept"));
         EnterTenant(provider, await Served(provider, store, AcmeWith("replacing"), "2"));
-        Assert.NotNull(await clients.TryFindClientAsync("replacing"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "replacing"));
 
         EnterTenant(provider, await Served(provider, store, kept, "3"));
-        Assert.NotNull(await clients.TryFindClientAsync("kept"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "kept"));
     }
 
     /// <summary>
@@ -311,7 +307,7 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith(), "1");
         EnterTenant(provider, former);
-        Assert.Null(await clients.TryFindClientAsync("taken"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "taken"));
 
         var held = new HeldClients(
             new ClientInfo("taken") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
@@ -321,14 +317,14 @@ public partial class MultiTenancyRegistrationTests
         var building = Task.Run(async () =>
         {
             EnterTenant(provider, current);
-            return await clients.TryFindClientAsync("taken");
+            return await clients.TryFindClientAsync(Entered(provider), "taken");
         });
         Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
 
         var registering = Task.Run(async () =>
         {
             EnterTenant(provider, former);
-            return await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id"));
+            return await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("taken"), "token-id"));
         });
         Assert.False(await registering.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
         held.Released.Release();
@@ -350,13 +346,13 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith(), "1");
         EnterTenant(provider, former);
-        Assert.Null(await clients.TryFindClientAsync("taken"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "taken"));
         var current = await Served(provider, store, AcmeWith("taken"), "2");
 
-        Assert.False(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id")));
+        Assert.False(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("taken"), "token-id")));
 
         EnterTenant(provider, current);
-        Assert.Null(await manager.TryFindRegisteredClientAsync("taken"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync(Entered(provider), "taken"));
     }
 
     /// <summary>
@@ -374,10 +370,10 @@ public partial class MultiTenancyRegistrationTests
         var former = await Served(provider, store, AcmeWith(), "1");
         EnterTenant(provider, former);
         var registration = new RegisteredClient(new ClientInfo("taken"), "token-id");
-        Assert.True(await manager.TryAddClientAsync(registration));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), registration));
         await Served(provider, store, AcmeWith("taken"), "2");
 
-        Assert.False(await manager.TryUpdateClientAsync(
+        Assert.False(await manager.TryUpdateClientAsync(Entered(provider), 
             registration,
             new RegisteredClient(new ClientInfo("taken") { ClientName = "changed" }, "token-id")));
     }
@@ -395,7 +391,7 @@ public partial class MultiTenancyRegistrationTests
         var manager = provider.GetRequiredService<IClientInfoManager>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
-        Assert.Null(await clients.TryFindClientAsync("freed"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "freed"));
         var held = new HeldClients(
             new ClientInfo("freed") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None });
         var former = await Served(
@@ -404,7 +400,7 @@ public partial class MultiTenancyRegistrationTests
         var building = Task.Run(async () =>
         {
             EnterTenant(provider, former);
-            return await clients.TryFindClientAsync("other");
+            return await clients.TryFindClientAsync(Entered(provider), "other");
         });
         Assert.True(await held.Reached.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken));
 
@@ -412,14 +408,14 @@ public partial class MultiTenancyRegistrationTests
         var registered = await Task.Run(async () =>
         {
             EnterTenant(provider, current);
-            return await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id"));
+            return await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("freed"), "token-id"));
         });
         Assert.True(registered);
         held.Released.Release();
         await building.WaitAsync(HeldClients.Patience, TestContext.Current.CancellationToken);
 
         EnterTenant(provider, current);
-        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -434,14 +430,14 @@ public partial class MultiTenancyRegistrationTests
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWith("removed"), "1"));
-        Assert.NotNull(await clients.TryFindClientAsync("removed"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "removed"));
         var last = await Served(provider, store, AcmeWith(), "2");
 
         store.Tenants = [];
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(CancellationToken.None);
 
         EnterTenant(provider, last);
-        Assert.Null(await clients.TryFindClientAsync("removed"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "removed"));
     }
 
     /// <summary>
@@ -457,14 +453,14 @@ public partial class MultiTenancyRegistrationTests
         var manager = provider.GetRequiredService<IClientInfoManager>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
-        Assert.Null(await clients.TryFindClientAsync("other"));
-        Assert.True(await manager.TryAddClientAsync(
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "other"));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), 
             new RegisteredClient(new ClientInfo("taken") { ClientName = "registrant" }, "token-id")));
         var replaced = await Served(provider, store, AcmeWith("taken"), "2");
         await Served(provider, store, AcmeWith("taken", "more"), "3");
 
         EnterTenant(provider, replaced);
-        var found = await clients.TryFindClientAsync("taken");
+        var found = await clients.TryFindClientAsync(Entered(provider), "taken");
 
         Assert.NotNull(found);
         Assert.NotEqual("registrant", found.ClientName);
@@ -484,15 +480,15 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith(), "1");
         EnterTenant(provider, former);
-        Assert.Null(await clients.TryFindClientAsync("other"));
-        Assert.True(await manager.TryAddClientAsync(
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "other"));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), 
             new RegisteredClient(new ClientInfo("taken") { ClientName = "registrant" }, "token-id")));
         await Served(provider, store, AcmeWith("taken"), "2");
 
         EnterTenant(provider, former);
 
-        Assert.Null(await clients.TryFindClientAsync("taken"));
-        Assert.Null(await manager.TryFindRegisteredClientAsync("taken"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "taken"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync(Entered(provider), "taken"));
     }
 
     /// <summary>
@@ -508,15 +504,15 @@ public partial class MultiTenancyRegistrationTests
         var manager = provider.GetRequiredService<IClientInfoManager>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
-        Assert.Null(await clients.TryFindClientAsync("other"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "other"));
         var held = await Served(provider, store, AcmeWith("freed"), "2");
         var current = await Served(provider, store, AcmeWith(), "3");
 
         EnterTenant(provider, held);
-        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         EnterTenant(provider, current);
-        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -532,18 +528,18 @@ public partial class MultiTenancyRegistrationTests
         var manager = provider.GetRequiredService<IClientInfoManager>();
 
         EnterTenant(provider, await Served(provider, store, AcmeWith(), "1"));
-        Assert.Null(await clients.TryFindClientAsync("other"));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "other"));
         var registration = new RegisteredClient(new ClientInfo("freed"), "token-id");
-        Assert.True(await manager.TryAddClientAsync(registration));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), registration));
         var held = await Served(provider, store, AcmeWith("freed"), "2");
         var current = await Served(provider, store, AcmeWith(), "3");
 
         var changed = new RegisteredClient(new ClientInfo("freed") { ClientName = "changed" }, "token-id");
         EnterTenant(provider, held);
-        Assert.True(await manager.TryUpdateClientAsync(registration, changed));
+        Assert.True(await manager.TryUpdateClientAsync(Entered(provider), registration, changed));
 
         EnterTenant(provider, current);
-        Assert.Same(changed, await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.Same(changed, await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -565,7 +561,7 @@ public partial class MultiTenancyRegistrationTests
         var earlier = await Served(provider, store, AcmeWith(), "1");
         var last = await Served(provider, store, AcmeWith("taken"), "2");
         EnterTenant(provider, last);
-        Assert.NotNull(await clients.TryFindClientAsync("taken"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "taken"));
 
         // Globex claims acme's issuer, so the checks refuse both
         store.Tenants = refused
@@ -579,7 +575,7 @@ public partial class MultiTenancyRegistrationTests
         Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
 
         EnterTenant(provider, earlier);
-        Assert.False(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id")));
+        Assert.False(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("taken"), "token-id")));
     }
 
     /// <summary>
@@ -606,7 +602,7 @@ public partial class MultiTenancyRegistrationTests
         Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
 
         EnterTenant(provider, held);
-        Assert.False(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("taken"), "token-id")));
+        Assert.False(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("taken"), "token-id")));
     }
 
     /// <summary>
@@ -625,10 +621,10 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith("freed"), "1");
         EnterTenant(provider, former);
-        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "freed"));
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
-        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         // Globex claims acme's issuer, so the checks refuse both
         store.Tenants =
@@ -640,10 +636,10 @@ public partial class MultiTenancyRegistrationTests
         Assert.Null(await catalog.FindByIdAsync("acme", CancellationToken.None));
 
         EnterTenant(provider, former);
-        await clients.TryFindClientAsync("freed");
+        await clients.TryFindClientAsync(Entered(provider), "freed");
 
         EnterTenant(provider, current);
-        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -660,19 +656,19 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith("freed"), "1");
         EnterTenant(provider, former);
-        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "freed"));
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
-        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         store.Tenants = [];
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(CancellationToken.None);
 
         EnterTenant(provider, former);
-        await clients.TryFindClientAsync("freed");
+        await clients.TryFindClientAsync(Entered(provider), "freed");
 
         EnterTenant(provider, current);
-        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -690,20 +686,20 @@ public partial class MultiTenancyRegistrationTests
 
         var former = await Served(provider, store, AcmeWith("freed"), "1");
         EnterTenant(provider, former);
-        Assert.NotNull(await clients.TryFindClientAsync("freed"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "freed"));
         var current = await Served(provider, store, AcmeWith(), "2");
         EnterTenant(provider, current);
-        Assert.Null(await clients.TryFindClientAsync("freed"));
-        Assert.True(await manager.TryAddClientAsync(new RegisteredClient(new ClientInfo("freed"), "token-id")));
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "freed"));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), new RegisteredClient(new ClientInfo("freed"), "token-id")));
 
         store.Tenants = [];
         await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(CancellationToken.None);
 
         EnterTenant(provider, former);
-        await clients.TryFindClientAsync("freed");
+        await clients.TryFindClientAsync(Entered(provider), "freed");
 
         EnterTenant(provider, current);
-        Assert.NotNull(await manager.TryFindRegisteredClientAsync("freed"));
+        Assert.NotNull(await manager.TryFindRegisteredClientAsync(Entered(provider), "freed"));
     }
 
     /// <summary>
@@ -720,41 +716,35 @@ public partial class MultiTenancyRegistrationTests
         var clients = provider.GetRequiredService<IClientInfoProvider>();
 
         EnterTenant(provider, await catalog.FindByIdAsync("acme", CancellationToken.None));
-        Assert.NotNull(await clients.TryFindClientAsync("stored"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "stored"));
 
         catalog.Own = AcmeWith("own");
         EnterTenant(provider, await catalog.FindByIdAsync("acme", CancellationToken.None));
-        Assert.NotNull(await clients.TryFindClientAsync("own"));
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "own"));
     }
 
     /// <summary>
-    /// The default client store follows each tenant's definition under multi-tenancy, whichever of the two calls
-    /// comes first, and reads a server's clients once without it, as before; the store finding clients is the one
-    /// keeping them.
+    /// The default client store follows each tenant's definition, whichever of the two calls comes first; the store
+    /// finding clients is the one keeping them.
     /// </summary>
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public void DefaultClientStore_FollowsTenants_OnlyUnderMultiTenancy(bool multiTenancy, bool clientsFirst)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DefaultClientStore_FollowsTenants(bool clientsFirst)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddOptions<OidcOptions>();
-        services.AddIssuer();
         if (clientsFirst)
             services.AddClientInformation();
-        if (multiTenancy)
-            services.AddServerStorage().AddMultiTenancy(_ => { });
+        services.AddServerStorage().ServeTenants(_ => { });
         if (!clientsFirst)
             services.AddClientInformation();
         using var provider = services.BuildServiceProvider();
 
         var finding = provider.GetRequiredService<IClientInfoProvider>();
         Assert.Same(finding, provider.GetRequiredService<IClientInfoManager>());
-        Assert.Equal(
-            multiTenancy ? "ReloadableClientInfoStorage" : "ClientInfoStorage",
-            finding.GetType().Name);
+        Assert.Equal("ReloadableClientInfoStorage", finding.GetType().Name);
     }
 }

@@ -19,8 +19,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Options;
 
-// The feature is marked experimental for its consumers; these tests are where it is built.
-#pragma warning disable ABXMT001
 
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
@@ -79,7 +77,11 @@ public partial class MultiTenancyRegistrationTests
     /// A container minting its keys for real: each ring seals what it mints to a key-encryption key a stub custodian
     /// holds, and keeps it in a store in memory.
     /// </summary>
-    private static ServiceProvider MintingRealKeys(ChangingTenantStore store, params JsonWebKey[] adoptedKeys)
+    private static ServiceProvider MintingRealKeys(
+        ChangingTenantStore? store,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null,
+        Action<OidcOptions>? settings = null,
+        bool serverFirst = false)
     {
         var keyEncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "kek-1" };
         var custodian = new Moq.Mock<IKeyCustodian>();
@@ -101,17 +103,23 @@ public partial class MultiTenancyRegistrationTests
         services.AddSingleton<TimeProvider>(new FakeTimeProvider());
         services.AddSingleton(custodian.Object);
         services.AddSingleton<IKeyRingStore>(new MemoryKeyRingStore());
-        services.AddSingleton<ITenantStore>(store);
+        if (store is not null)
+            services.AddSingleton<ITenantStore>(store);
+
+        if (serverFirst)
+            services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+
         services.AddJsonWebTokens();
-        services.AddIssuer();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement()
             .UseKeysInProcess(new MintedKeys
             {
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
-                AdoptedKeys = adoptedKeys,
+                AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
             });
-        services.AddServerStorage().AddMultiTenancy(_ => { });
+        if (!serverFirst)
+            services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+
         return services.BuildServiceProvider();
     }
 
@@ -134,7 +142,7 @@ public partial class MultiTenancyRegistrationTests
     {
         var store = new ChangingTenantStore();
         using var provider = MintingRealKeys(store);
-        Assert.Empty(provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value.Tenants);
+        Assert.Empty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
 
         var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
         store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
@@ -143,9 +151,9 @@ public partial class MultiTenancyRegistrationTests
 
         var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
         EnterTenant(provider, await catalog.FindByIdAsync("acme", TestContext.Current.CancellationToken));
-        var atAcme = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
         EnterTenant(provider, await catalog.FindByIdAsync("globex", TestContext.Current.CancellationToken));
-        var atGlobex = await keys.GetSigningKeys().ToArrayAsync(TestContext.Current.CancellationToken);
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
 
         Assert.NotEqual(Assert.Single(atAcme).KeyId, Assert.Single(atGlobex).KeyId);
     }
@@ -172,7 +180,7 @@ public partial class MultiTenancyRegistrationTests
         Assert.Equal(["acme"], partitions.Kept);
 
         EnterTenant(provider, globex);
-        var stillHeld = await provider.GetRequiredService<IAuthServiceKeysProvider>().GetSigningKeys()
+        var stillHeld = await provider.GetRequiredService<IAuthServiceKeysProvider>().GetSigningKeys(Entered(provider))
             .ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Single(stillHeld);
     }
@@ -194,7 +202,7 @@ public partial class MultiTenancyRegistrationTests
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
 
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.Throws<InvalidOperationException>(() => rings.For("acme"));
     }
@@ -216,7 +224,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [new StoredTenant(globex, "1")];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
@@ -242,7 +250,7 @@ public partial class MultiTenancyRegistrationTests
         store.Tenants = [new StoredTenant(second, "1")];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
@@ -267,7 +275,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [new StoredTenant(live, "1")];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
@@ -289,7 +297,7 @@ public partial class MultiTenancyRegistrationTests
 
         store.Tenants = [];
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
-        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new MultiTenancyOptions().RefreshEvery);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
         var loadsBefore = keyStore.Loads;
         await catalog.RefreshAsync(TestContext.Current.CancellationToken);
 
@@ -347,20 +355,96 @@ public partial class MultiTenancyRegistrationTests
         => entry => entry.Id.StartsWith(partition + ".", StringComparison.Ordinal);
 
     /// <summary>
-    /// Keys adopted into the ring would be seeded into each tenant's part of it, so a server serving tenants refuses
-    /// to start with them, its store empty or not.
+    /// Keys adopted into the tenant's part of the ring are served by that tenant and no other.
     /// </summary>
     [Fact]
-    public async Task AdoptedKeys_UnderMultiTenancy_RefuseTheStart()
+    public async Task KeysAdoptedIntoATenantsPartition_AreServedByThatTenantAlone()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var store = new ChangingTenantStore();
+        using var provider = MintingRealKeys(
+            store,
+            new Dictionary<string, IReadOnlyList<JsonWebKey>> { [TenantKey.PartitionOf(Acme)] = [adopted] });
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(ct);
+
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+        var atAcme = await keys.GetSigningKeys((await catalog.FindByIdAsync("acme", ct))!).ToArrayAsync(ct);
+        var atGlobex = await keys.GetSigningKeys((await catalog.FindByIdAsync("globex", ct))!).ToArrayAsync(ct);
+
+        Assert.Contains(atAcme, key => key.KeyId == adopted.KeyId);
+        Assert.DoesNotContain(atGlobex, key => key.KeyId == adopted.KeyId);
+    }
+
+    /// <summary>
+    /// Keys adopted into the unnamed part of the ring would be served by no tenant, so the server refuses to start
+    /// with them, its store empty or not.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoTheUnnamedPartition_RefuseTheStart()
     {
         using var provider = MintingRealKeys(
             new ChangingTenantStore(),
-            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature));
+            new Dictionary<string, IReadOnlyList<JsonWebKey>>
+            {
+                [KeyRingOptions.DefaultPartition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-        {
-            foreach (var service in provider.GetServices<IHostedService>())
-                await service.StartAsync(TestContext.Current.CancellationToken);
-        });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(provider));
+    }
+
+    /// <summary>
+    /// Keys adopted into a partition no tenant of the server's settings is kept in would be served by no tenant, so the
+    /// server refuses to start with them when its tenants are only those; adopted into a declared tenant's partition,
+    /// it starts.
+    /// </summary>
+    [Theory]
+    [InlineData("initech")]
+    [InlineData("acme~1")]
+    public async Task KeysAdoptedIntoAPartitionNoDeclaredTenantIsKeptIn_RefuseTheStart(string partition)
+    {
+        using var kept = MintingRealKeys(store: null, AdoptedInto(TenantKey.PartitionOf(Acme)), Declaring);
+        await StartLikeTheHostAsync(kept);
+
+        using var unkept = MintingRealKeys(store: null, AdoptedInto(partition), Declaring);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(unkept));
+    }
+
+    private static void Declaring(OidcOptions options) => options.Tenants.Add(Acme);
+
+    private static Dictionary<string, IReadOnlyList<JsonWebKey>> AdoptedInto(string partition)
+        => new() { [partition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] };
+
+    /// <summary>
+    /// Keys adopted into a partition no tenant is kept in are refused before any tenant's partition mints its first
+    /// key, with the server registered before the key ring as well, so a host that fixes the adoption still has its
+    /// keys taken on the next start.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoAPartitionNoTenantIsKeptIn_AreRefusedBeforeAnyKeyIsMinted()
+    {
+        using var provider = MintingRealKeys(store: null, AdoptedInto("initech"), Declaring, serverFirst: true);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(provider));
+
+        Assert.Empty(await provider.GetRequiredService<IKeyRingStore>().LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Starts the hosted services as the host does: every one's <see cref="IHostedLifecycleService.StartingAsync"/>
+    /// before any one's <see cref="IHostedService.StartAsync"/>.
+    /// </summary>
+    private static async Task StartLikeTheHostAsync(IServiceProvider provider)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var services = provider.GetServices<IHostedService>().ToArray();
+        foreach (var service in services.OfType<IHostedLifecycleService>())
+            await service.StartingAsync(ct);
+
+        foreach (var service in services)
+            await service.StartAsync(ct);
     }
 }

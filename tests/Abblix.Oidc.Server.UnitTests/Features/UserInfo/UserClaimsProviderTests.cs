@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.UserInfo;
 
@@ -59,14 +60,14 @@ public class UserClaimsProviderTests
         // proves the converter was consulted rather than passing on a value production could have copied.
         var subjectTypeConverter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         subjectTypeConverter
-            .Setup(c => c.Convert(SessionSubject, It.IsAny<ClientInfo>()))
+            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SessionSubject, It.IsAny<ClientInfo>()))
             .Returns(ClientFacingSubject);
 
         _provider = new UserClaimsProvider(
             NullLogger<UserClaimsProvider>.Instance,
             _userInfoProvider.Object,
             scopeClaimsProvider.Object,
-            subjectTypeConverter.Object);
+            subjectTypeConverter.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ResourceIndicators;
 
@@ -25,6 +26,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ResourceIndicators;
 public class ResourceManagerExtensionsTests
 {
     private readonly IResourceManager _resourceManager;
+    private readonly TenantDefinition _tenant;
 
     public ResourceManagerExtensionsTests()
     {
@@ -37,12 +39,13 @@ public class ResourceManagerExtensionsTests
             new Uri("https://api2.example.com"),
             new ScopeDefinition("api2:admin", "admin_claim"));
 
-        var options = Options.Create(new OidcOptions
+        var options = Options.Create(new TestIssuer
         {
             Resources = [resource1, resource2]
         });
 
-        _resourceManager = SingleIssuer.ResourceManager(options);
+        _resourceManager = SingleIssuer.ResourceManager();
+        _tenant = options.Value.ToTenant();
     }
 
     /// <summary>
@@ -57,7 +60,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -79,7 +82,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -100,7 +103,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -121,7 +124,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "unknown:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -142,7 +145,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" }; // Only requesting read, not write
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -166,7 +169,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read", "api1:write" }; // Both scopes
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -195,7 +198,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read", "api2:admin" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -224,7 +227,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -245,7 +248,7 @@ public class ResourceManagerExtensionsTests
         var scopes = Enumerable.Empty<string>();
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -268,7 +271,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api2:admin" }; // Scope from different resource
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -291,14 +294,15 @@ public class ResourceManagerExtensionsTests
             new Uri("https://api.example.com?version=v1"),
             new ScopeDefinition("api:read"));
 
-        var options = Options.Create(new OidcOptions { Resources = [resourceWithQuery] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var options = Options.Create(new TestIssuer { Resources = [resourceWithQuery] });
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         var resources = new[] { new Uri("https://api.example.com?version=v1") };
         var scopes = new[] { "api:read" };
 
         // Act
-        var result = manager.Validate(resources, scopes, out var definitions, out var error);
+        var result = manager.Validate(tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -324,7 +328,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.False(result);
@@ -349,7 +353,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out var error);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);
@@ -371,7 +375,7 @@ public class ResourceManagerExtensionsTests
         var scopes = new[] { "api1:read" };
 
         // Act
-        var result = _resourceManager.Validate(resources, scopes, out var definitions, out _);
+        var result = _resourceManager.Validate(_tenant, resources, scopes, out var definitions, out _);
 
         // Assert
         Assert.True(result);
@@ -398,14 +402,15 @@ public class ResourceManagerExtensionsTests
             new Uri("https://api.example.com:8443"),
             new ScopeDefinition("api:read"));
 
-        var options = Options.Create(new OidcOptions { Resources = [resourceWithPort] });
-        var manager = SingleIssuer.ResourceManager(options);
+        var options = Options.Create(new TestIssuer { Resources = [resourceWithPort] });
+        var manager = SingleIssuer.ResourceManager();
+        var tenant = options.Value.ToTenant();
 
         var resources = new[] { new Uri("https://api.example.com:8443") };
         var scopes = new[] { "api:read" };
 
         // Act
-        var result = manager.Validate(resources, scopes, out var definitions, out var error);
+        var result = manager.Validate(tenant, resources, scopes, out var definitions, out var error);
 
         // Assert
         Assert.True(result);

@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -21,7 +22,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// are requested, enhancing security and compliance with the defined authorization policies.
 /// </summary>
 /// <param name="scopeManager">The scope manager used to validate scopes.</param>
-public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationContextValidatorBase
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAccessor) : SyncAuthorizationContextValidatorBase
 {
 	/// <summary>
 	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
@@ -52,7 +54,7 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 			}
 		}
 
-		if (!scopeManager.Validate(
+		if (!scopeManager.Validate(tenantAccessor.CurrentTenant(), 
 			    context.Request.Scope,
 			    context.Resources,
 			    context.ClientInfo.AllowedScopes,

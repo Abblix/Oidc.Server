@@ -63,7 +63,7 @@ public class AuthSessionSelectorTests
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         });
 
-        return new AuthSessionSelector(service.Object, cutoff.Object, new SubjectTypeConverter(), _clock)
+        return new AuthSessionSelector(service.Object, cutoff.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clock, tenantAccessor: SingleIssuer.Accessor)
             .SelectAsync(request);
     }
 

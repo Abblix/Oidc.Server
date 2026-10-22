@@ -141,7 +141,7 @@ public record DeviceAuthorizationOptions
     /// <remarks>
     /// A relative one names a page under the issuer, resolved against the issuer taken as a directory: with the
     /// issuer <c>https://auth.example.com/tenants/acme</c>, <c>device</c> is
-    /// <c>https://auth.example.com/tenants/acme/device</c>. Under multi-tenancy that sends each tenant's users to
+    /// <c>https://auth.example.com/tenants/acme/device</c>. That sends each tenant's users to
     /// a page whose path resolves the tenant their user code was issued in. One that would leave the issuer's path,
     /// such as <c>/device</c> or <c>../device</c>, is refused here, since that depends on the reference alone; one
     /// resolved under an issuer without HTTPS is refused when the response is built, since that depends on the issuer.

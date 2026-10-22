@@ -7,8 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
-using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -23,40 +21,18 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// <param name="jwtCreator">Source of the registered signing and JWE key-management algorithms. Kept
 /// lightweight on purpose, so validating options does not drag the runtime token pipeline (and its storage)
 /// into startup.</param>
-/// <param name="custodian">Present when the host holds its keys in an external custodian (a Vault or Key Vault
-/// backend), absent when they come from <see cref="OidcOptions.EncryptionKeys"/>. It is a registration marker
-/// only, and is never called here: it answers where the keys come from without reading them, and without
-/// reading the options that are still being created. Injecting the key provider instead would re-enter
-/// <see cref="IOptions{TOptions}.Value"/> from inside its own creation.</param>
-/// <param name="services">Tells whether the server serves tenants, whose own settings carry no keys while each
-/// tenant's carry its own.</param>
-public sealed class ServiceTokensAlgorithmsValidator(
-    IJsonWebTokenCreator jwtCreator,
-    IKeyCustodian? custodian = null,
-    IServiceProvider? services = null) : IValidateOptions<OidcOptions>
+/// <remarks>
+/// Whether a tenant has a key to encrypt with, where a token type asks for encryption, is judged per tenant by
+/// <see cref="ServiceTokenEncryptionKeysCheck"/>.
+/// </remarks>
+public sealed class ServiceTokensAlgorithmsValidator(IJsonWebTokenCreator jwtCreator) : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        // Under multi-tenancy the server's own settings carry no keys and each tenant's carry its own
-        var ofTenant = MultiTenancyDetection.IsTenantsOwn(options);
-        var keysJudgedHere = custodian is null &&
-                             (ofTenant || services is null || !MultiTenancyDetection.IsActive(services));
-#pragma warning disable ABXMT001
-        var keysSetting = ofTenant
-            ? $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.EncryptionKeys)}"
-            : $"{nameof(OidcOptions)}.{nameof(OidcOptions.EncryptionKeys)}";
-#pragma warning restore ABXMT001
-
-        // The key set is only knowable here when it comes from the options; with a custodian registered the
-        // keys live outside them, so the emptiness of the options says nothing
-        var noKeyToEncryptWith = keysJudgedHere && options.EncryptionKeys.Count == 0;
-
         var check = new ServiceTokenCheck(
             jwtCreator.SignedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal),
-            jwtCreator.EncryptedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal),
-            noKeyToEncryptWith,
-            keysSetting);
+            jwtCreator.EncryptedResponseAlgorithmsSupported.ToHashSet(StringComparer.Ordinal));
 
         var serviceTokens = options.ServiceTokens;
         var failures = new List<string>();
@@ -82,13 +58,9 @@ public sealed class ServiceTokensAlgorithmsValidator(
     /// <param name="SigningAlgorithms">The signing algorithms the registered signers produce.</param>
     /// <param name="KeyManagementAlgorithms">The JWE key-management algorithms the registered encryptors
     /// produce.</param>
-    /// <param name="NoKeyToEncryptWith">Whether the options are known to hold no encryption key.</param>
-    /// <param name="KeysSetting">The setting a refusal names as the empty key set.</param>
     private sealed record ServiceTokenCheck(
         HashSet<string> SigningAlgorithms,
-        HashSet<string> KeyManagementAlgorithms,
-        bool NoKeyToEncryptWith,
-        string KeysSetting)
+        HashSet<string> KeyManagementAlgorithms)
     {
         public IEnumerable<string> Failures(string tokenType, ServiceTokenOptions token)
         {
@@ -110,18 +82,6 @@ public sealed class ServiceTokensAlgorithmsValidator(
                     $"ServiceTokens.{tokenType}.Encryption.Algorithm '{encryptionAlgorithm}' is not among the " +
                     $"registered JWE key-management algorithms ({string.Join(", ", KeyManagementAlgorithms)}).";
             }
-
-            // Asked to encrypt with nothing to encrypt with. Only an explicit true is refused: the null default
-            // states nothing, and a host that never touched the setting must keep starting and issuing a signed
-            // JWS exactly as before.
-            if (token.Encrypt == true && NoKeyToEncryptWith)
-                yield return NoEncryptionKey(tokenType, KeysSetting);
         }
-
-        private static string NoEncryptionKey(string tokenType, string keysSetting)
-            => $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
-               $"{keysSetting} is empty and no external key custodian is registered. " +
-               $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
-               $"this token as a signed JWS.";
     }
 }

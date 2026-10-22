@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
   </ItemGroup>
 
   <!-- Expose internal Program to the E2E.Tests assembly so WebApplicationFactory<Program>

@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -32,6 +33,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// endpoint the same way a poll client does, and the long-poll gate does not read the delivery mode - so
 /// one that polls before its notification arrives waits, and is woken from here.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
+/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
@@ -39,8 +41,10 @@ public partial class PingModeCompletionHandler(
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     TimeProvider clock,
+    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier = null)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
+    : AuthenticationCompletionHandler(
+        logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 

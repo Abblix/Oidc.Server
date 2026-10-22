@@ -17,7 +17,6 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// Read on every call rather than captured, so a singleton holding it sees the tenant of whichever request is
 /// running - the way <see cref="Common.Interfaces.IRequestInfoProvider"/> gives that request's address.
 /// </remarks>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public interface ITenantAccessor
 {
     /// <summary>

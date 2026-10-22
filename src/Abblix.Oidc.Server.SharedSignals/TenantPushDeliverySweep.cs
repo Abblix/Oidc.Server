@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <param name="logger">Records a tenant whose pass failed.</param>
 /// <param name="inner">The pass over one tenant's streams.</param>
 /// <param name="catalog">Names the tenants served now.</param>
-[Experimental(MultiTenancyDiagnostics.Experimental)]
 public sealed partial class TenantPushDeliverySweep(
     ILogger<TenantPushDeliverySweep> logger,
     IPushDeliverySweep inner,

@@ -9,6 +9,7 @@
 using System.Text.Json;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -37,9 +38,8 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 {
     private static readonly Uri MtlsBaseUri = new("https://mtls.example.com");
 
-    // Both derived from the one host above, so a deployment shape is described by its PATH here
-    // rather than by repeating an address the file already names.
-    private static readonly Uri MtlsGatewayBase = new(MtlsBaseUri, "/gateway");
+    // Derived from the one host above, so a deployment shape is described by its PATH here rather than by
+    // repeating an address the file already names.
     private static readonly Uri DedicatedTokenAlias = new(MtlsBaseUri, "/dedicated/token");
 
     private HttpClient CreateClientFor(WebApplicationFactory<Program> host)
@@ -54,6 +54,25 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
             builder.ConfigureTestServices(services => services.PostConfigure(configure)));
 
     /// <summary>
+    /// The shared host with its tenant changed by <paramref name="tenant"/>.
+    /// </summary>
+    private WebApplicationFactory<Program> HostWithTenant(Action<TestTenantSettings> tenant)
+        => factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.PostConfigure(tenant)));
+
+    /// <summary>
+    /// The shared host with its tenant's mutual-TLS host at <paramref name="mtlsBaseUri"/>, and the server's
+    /// own settings changed by <paramref name="configure"/>.
+    /// </summary>
+    private WebApplicationFactory<Program> HostWithMtls(Uri mtlsBaseUri, Action<OidcOptions>? configure = null)
+        => factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.MtlsBaseUri = mtlsBaseUri);
+                services.PostConfigure(configure ?? (_ => { }));
+            }));
+
+    /// <summary>
     /// With a mutual-TLS base configured, the document gains an alias block naming the same endpoints on that
     /// host, so a client holding a certificate knows where to present it. The paths must survive the rebase:
     /// an alias pointing at the right host but the wrong path is a 404 for every certificate-bound client.
@@ -61,7 +80,7 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task A_configured_mtls_base_publishes_aliases_on_that_host_with_the_same_paths()
     {
-        await using var host = HostWith(options => options.Discovery.MtlsBaseUri = MtlsBaseUri);
+        await using var host = HostWithMtls(MtlsBaseUri);
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();
@@ -86,10 +105,10 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     public async Task An_explicit_alias_wins_over_the_one_the_base_uri_would_compute()
     {
         var chosen = DedicatedTokenAlias;
-        await using var host = HostWith(options =>
+        await using var host = HostWithTenant(tenant =>
         {
-            options.Discovery.MtlsBaseUri = MtlsBaseUri;
-            options.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = chosen };
+            tenant.MtlsBaseUri = MtlsBaseUri;
+            tenant.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = chosen };
         });
         var client = CreateClientFor(host);
 
@@ -107,31 +126,6 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     }
 
     /// <summary>
-    /// A base URI carrying a path prefix keeps that prefix and the endpoint path, joined by exactly one
-    /// separator. Deployments put the mutual-TLS listener behind a gateway path rather than on its own host, and
-    /// a doubled or dropped slash there is a 404 for every certificate-bound client - the kind of mistake a test
-    /// asserting only the host would not see.
-    /// </summary>
-    [Fact]
-    public async Task An_mtls_base_with_a_path_keeps_the_prefix_and_the_endpoint_path()
-    {
-        var gateway = MtlsGatewayBase;
-        await using var host = HostWith(options => options.Discovery.MtlsBaseUri = gateway);
-        var client = CreateClientFor(host);
-
-        var discovery = await client.FetchDiscoveryAsync();
-
-        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
-        Assert.NotNull(aliases);
-
-        var token = new Uri(OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.TokenEndpoint));
-        var aliased = new Uri(aliases[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
-
-        Assert.Equal($"/gateway{token.AbsolutePath}", aliased.AbsolutePath);
-        Assert.DoesNotContain("//", aliased.AbsolutePath, StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// Named aliases with no base at all: the endpoints nobody named keep their ordinary addresses rather than
     /// vanishing or being invented. A deployment that exposes one endpoint over mutual TLS is not thereby
     /// claiming the others moved, and dropping them from the block would tell a client the opposite.
@@ -139,8 +133,8 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task Named_aliases_without_a_base_leave_the_other_endpoints_where_they_are()
     {
-        await using var host = HostWith(options =>
-            options.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = DedicatedTokenAlias });
+        await using var host = HostWithTenant(tenant =>
+            tenant.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = DedicatedTokenAlias });
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();
@@ -165,11 +159,8 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task A_disabled_endpoint_is_missing_from_the_alias_block_too()
     {
-        await using var host = HostWith(options =>
-        {
-            options.Discovery.MtlsBaseUri = MtlsBaseUri;
-            options.EnabledEndpoints &= ~OidcEndpoints.Revocation;
-        });
+        await using var host = HostWithMtls(
+            MtlsBaseUri, options => options.EnabledEndpoints &= ~OidcEndpoints.Revocation);
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();
@@ -192,11 +183,8 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     [Fact]
     public async Task With_path_discovery_off_the_document_names_no_endpoint_addresses()
     {
-        await using var host = HostWith(options =>
-        {
-            options.Discovery.AllowEndpointPathsDiscovery = false;
-            options.Discovery.MtlsBaseUri = MtlsBaseUri;
-        });
+        await using var host = HostWithMtls(
+            MtlsBaseUri, options => options.Discovery.AllowEndpointPathsDiscovery = false);
         var client = CreateClientFor(host);
 
         var discovery = await client.FetchDiscoveryAsync();

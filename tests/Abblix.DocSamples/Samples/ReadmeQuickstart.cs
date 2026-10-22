@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 // </ambient>
 using Abblix.Jwt;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
 
 namespace Abblix.DocSamples.Samples;
@@ -36,14 +38,20 @@ internal static class ReadmeQuickstartSample
         // to ask the end user for consent, register your own IUserConsentsProvider instead
         builder.Services.AddConsentGrantedForEveryClient();
 
-        // Turn your ASP.NET Core app into an OpenID Connect provider
-        builder.Services.AddOidcServices(options =>
+        // Turn your ASP.NET Core app into an OpenID Connect provider serving one issuer
+        builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
         {
-            options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
-        });
+            Id = "main",
+            // The address the app is served on: a request to any other reaches no tenant and is answered 404
+            Issuer = new Uri("https://auth.example.com"),
+            LoginUri = new Uri("/Auth/Login", UriKind.Relative),
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
 
         var app = builder.Build();
+
+        // Resolve each request to the tenant its address names, before routing
+        app.UseMultiTenancy();
         app.MapOidcEndpoints();
         app.Run();
         // </sample>
