@@ -25,7 +25,7 @@ internal sealed class KeyRingParts
     {
         var setup = new KeyRingSetup(policy, kept, store);
         Check = new KeyRingStartupCheck(setup, provider.GetRequiredService<IKeyCustodian>());
-        Registry = new KeyRingRegistry(new KeyRingFactory(provider, policy, store), setup);
+        Registry = new KeyRingRegistry(new KeyRingFactory(provider, policy, store, Check), setup);
         var opening = new KeyRingPartitionOpening(
             Registry,
             provider.GetRequiredService<IOptions<KeyRingOptions>>(),

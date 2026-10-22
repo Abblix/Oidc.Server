@@ -29,11 +29,13 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <param name="refresh">The steps of a refresh.</param>
 /// <param name="schedule">The clock and the propagation window that decide which held key produces.</param>
 /// <param name="partition">The name of the ring's partition, which the keys a host hands over are addressed to.</param>
+/// <param name="check">Judges where the host adopted its keys before a refresh mints.</param>
 internal sealed class KeyRing(
     IKeyRingStore store,
     KeyRingRefresh refresh,
     KeyRingSchedule schedule,
-    string partition) : IKeyRing
+    string partition,
+    KeyRingStartupCheck check) : IKeyRing
 {
     private readonly HeldKeys _held = new(schedule);
 
@@ -55,6 +57,14 @@ internal sealed class KeyRing(
     /// </summary>
     /// <param name="source">Where the entries are read from and written to.</param>
     /// <param name="cancellationToken">Cancels the refresh.</param>
+    /// <exception cref="InvalidOperationException">Keys are adopted where no partition takes them, or one key into
+    /// two partitions.</exception>
     internal async Task RefreshAsync(IKeyRingStore source, CancellationToken cancellationToken)
-        => _held.Replace(await refresh.RunAsync(source, partition, cancellationToken));
+    {
+        // Before the first mint, whichever path refreshes the ring: a partition takes adopted keys only until it holds
+        // a key it minted, so a ring refreshed before the start would mint, and a corrected adoption would never be
+        // taken
+        check.CheckAdoption();
+        _held.Replace(await refresh.RunAsync(source, partition, cancellationToken));
+    }
 }
