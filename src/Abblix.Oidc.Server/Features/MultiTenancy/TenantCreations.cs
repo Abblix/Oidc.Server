@@ -33,14 +33,16 @@ internal sealed partial class TenantCreations(
     IEnumerable<ITenantClosing> closings)
 {
     /// <summary>
-    /// A creation, the definition last served for it, the issuers it has been served at, and when a reading first
-    /// found it gone.
+    /// A creation, the definition last served for it, the issuers it is served at or has left lately, and when a
+    /// reading first found it gone.
     /// </summary>
     private sealed class Creation(TenantDefinition tenant)
     {
         public TenantDefinition Tenant { get; set; } = tenant;
 
-        public ImmutableHashSet<string> Issuers { get; set; } = ImmutableHashSet.Create<string>(StringComparer.Ordinal);
+        // Each issuer with when the creation left it, or null while it is served there
+        public ImmutableDictionary<string, DateTimeOffset?> Issuers { get; set; } =
+            ImmutableDictionary.Create<string, DateTimeOffset?>(StringComparer.Ordinal);
 
         // Never disposed: a request may still ask for its token after the release, and a source without a timer
         // holds nothing a collection does not free
@@ -77,7 +79,7 @@ internal sealed partial class TenantCreations(
         if (_creations.TryGetValue(TenantKey.SpaceOf(tenant), out var creation))
         {
             creation.Tenant = tenant;
-            creation.Issuers = creation.Issuers.Add(tenant.Issuer.OriginalString);
+            creation.Issuers = Moved(creation.Issuers, tenant.Issuer.OriginalString, timeProvider.GetUtcNow());
         }
 
         var former = _lastServed.GetValueOrDefault(tenant.Id);
@@ -89,6 +91,21 @@ internal sealed partial class TenantCreations(
                 .Except(tenant.Clients.Select(client => client.ClientId), StringComparer.Ordinal)
                 .ToArray();
     }
+
+    /// <summary>
+    /// The issuers of a creation once it is served at <paramref name="issuer"/>: any other it was served at until now
+    /// is left at <paramref name="now"/>.
+    /// </summary>
+    private static ImmutableDictionary<string, DateTimeOffset?> Moved(
+        ImmutableDictionary<string, DateTimeOffset?> issuers,
+        string issuer,
+        DateTimeOffset now)
+        => issuers
+            .SetItems(
+                from served in issuers
+                where served.Value is null && served.Key != issuer
+                select KeyValuePair.Create(served.Key, (DateTimeOffset?)now))
+            .SetItem(issuer, null);
 
     /// <summary>
     /// Takes the clients <paramref name="clientIds"/> of the tenant <paramref name="tenantId"/> off the license's
@@ -103,17 +120,15 @@ internal sealed partial class TenantCreations(
     public TenantDefinition? LastServed(string tenantId) => _lastServed.GetValueOrDefault(tenantId);
 
     /// <summary>
-    /// Whether the creation of <paramref name="tenant"/> has been served at <paramref name="issuer"/>, while it is kept
-    /// or for one pause after its release.
+    /// Whether the creation of <paramref name="tenant"/> is served at <paramref name="issuer"/>, or left it no longer
+    /// than one pause ago, while it is kept or for one pause after its release.
     /// </summary>
     public bool HasServedAt(TenantDefinition tenant, string issuer)
     {
         var space = TenantKey.SpaceOf(tenant);
-        var issuers = _creations.TryGetValue(space, out var creation)
-            ? creation.Issuers
-            : Volatile.Read(ref _releasedLately).GetValueOrDefault(space)?.Issuers;
-
-        return issuers?.Contains(issuer) == true;
+        return _creations.TryGetValue(space, out var creation)
+            ? creation.Issuers.ContainsKey(issuer)
+            : Volatile.Read(ref _releasedLately).GetValueOrDefault(space)?.Issuers.Contains(issuer) == true;
     }
 
     /// <summary>
@@ -148,6 +163,17 @@ internal sealed partial class TenantCreations(
         }
 
         var now = timeProvider.GetUtcNow();
+
+        // An issuer a creation left is still its own for one pause, the time a request resolved before the move has
+        // to finish, and no longer
+        foreach (var creation in _creations.Values)
+        {
+            creation.Issuers = creation.Issuers.RemoveRange(
+                from served in creation.Issuers
+                where served.Value is { } left && now - left >= pause
+                select served.Key);
+        }
+
         var due = new Dictionary<string, Creation>(StringComparer.Ordinal);
         foreach (var (space, creation) in _creations.Where(entry => !spaces.Contains(entry.Key)))
         {
@@ -165,7 +191,7 @@ internal sealed partial class TenantCreations(
         // A creation released again while its last release is remembered, as after the clock was set back, takes
         // the time of this release
         foreach (var (space, creation) in due)
-            releasedLately[space] = new ReleasedCreation(now, creation.Issuers);
+            releasedLately[space] = new ReleasedCreation(now, creation.Issuers.Keys.ToImmutableHashSet(StringComparer.Ordinal));
 
         Volatile.Write(ref _releasedLately, releasedLately);
         foreach (var (space, creation) in due)

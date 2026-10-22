@@ -225,16 +225,16 @@ public static partial class LicenseChecker
 
     /// <summary>
     /// What <paramref name="issuer"/> and its clients are counted under, and what lets them go: the tenant the
-    /// server's own settings vouch for, until the server releases it; for any other, the issuer itself, counted for
-    /// the life of the process.
+    /// server's own settings vouch for, or else the issuer itself, until the server releases that tenant; for settings
+    /// of any other kind, the issuer itself, counted for the life of the process.
     /// </summary>
     /// <remarks>
     /// Settings a host registers answer for themselves, and taking their word would let one answer count every
     /// issuer, or every client of an id, as one.
     /// </remarks>
     private static (string Key, CancellationToken Released) CountedAs(string issuer, IIssuerSettings settings)
-        => settings is ILicensedIssuer own && own.VouchedId(issuer) is { } tenantId
-            ? (tenantId, own.Released)
+        => settings is ILicensedIssuer own
+            ? (own.VouchedId(issuer) ?? issuer, own.Released)
             : (issuer, CancellationToken.None);
 
     /// <summary>
