@@ -646,6 +646,7 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "okta",
                 ClientId = ClientId,  // Required for ToAuthorizationContext
                 Scope = [Scopes.OpenId],  // Required for ToAuthorizationContext
+                GrantId = GrantId,
             }
         };
 
@@ -681,6 +682,7 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = scopes,
+                GrantId = GrantId,
             }
         };
 
@@ -713,6 +715,7 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = [Scopes.OpenId],
+                GrantId = GrantId,
             }
         };
 
@@ -723,6 +726,32 @@ public class RefreshTokenServiceTests
         Assert.True(result.TryGetSuccess(out var grant));
         var refreshGrant = Assert.IsType<Abblix.Oidc.Server.Endpoints.Token.Interfaces.RefreshTokenAuthorizedGrant>(grant);
         Assert.Same(refreshToken, refreshGrant.RefreshToken);
+    }
+
+    /// <summary>
+    /// A refresh token issued before 3.0 carries no grant id, which every refresh token this server issues carries,
+    /// and what was recorded about it then is not carried over, so it is refused rather than renewed.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizeByRefreshToken_WithoutAGrantId_IsRefused()
+    {
+        var refreshToken = new JsonWebToken
+        {
+            Payload =
+            {
+                Subject = UserId,
+                SessionId = SessionId,
+                AuthenticationTime = _currentTime.AddMinutes(-30),
+                IdentityProvider = "local",
+                ClientId = ClientId,
+                Scope = [Scopes.OpenId],
+            }
+        };
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>

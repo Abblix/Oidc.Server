@@ -202,6 +202,14 @@ public class RefreshTokenService(
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
 		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
+		// Every refresh token this server issues names its grant, and one issued before 3.0 names none: what was
+		// recorded about that one then, revoked, rotated or cut off, is not carried over, so nothing could judge it
+		if (refreshToken.Payload.GrantId is null)
+		{
+			return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+				new OidcError(ErrorCodes.InvalidGrant, "The refresh token was issued before this server's version"));
+		}
+
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 
