@@ -81,6 +81,10 @@ public static class SharedSignalsMultiTenancyExtensions
     /// The declared streams are kept as a store of declared streams keeps them: the configuration owns what each stream
     /// is, the receiver what it has done through the management API since, and a stream of the tenant the
     /// configuration no longer declares is deleted. A tenant declares its streams in one call.
+    /// <para>
+    /// The server does not start when a tenant it serves at that moment declares a stream no request could be served
+    /// from, or when its tenants are only those of its settings and none of them has the id.
+    /// </para>
     /// </remarks>
     /// <param name="builder">What registering the server returned, after <see cref="AddSharedSignals"/>.</param>
     /// <param name="tenantId">The id of the tenant whose streams these are.</param>

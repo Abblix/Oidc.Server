@@ -31,6 +31,11 @@ internal sealed class TenantConfiguredStreams
     }
 
     /// <summary>
+    /// The ids of the tenants declaring streams.
+    /// </summary>
+    public IEnumerable<string> TenantIds => _byTenant.Keys;
+
+    /// <summary>
     /// The streams <paramref name="tenantId"/> declares, or null when it declares none.
     /// </summary>
     public IReadOnlyList<ConfiguredStream>? Of(string tenantId) => _byTenant.GetValueOrDefault(tenantId);

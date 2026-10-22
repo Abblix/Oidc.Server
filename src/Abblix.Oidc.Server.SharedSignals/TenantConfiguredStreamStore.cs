@@ -61,6 +61,13 @@ internal sealed class TenantConfiguredStreamStore(
     public Task<bool> DeleteAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
         => Current.DeleteAsync(receiverId, streamId, cancellationToken);
 
+    /// <summary>
+    /// The store the current tenant is served, built as its first request would build it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The tenant declares a stream no request could be served from.</exception>
+    internal IStreamStore ForCurrentTenant() => Current;
+
     private IStreamStore Current
     {
         get

@@ -304,6 +304,42 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// A tenant's declared streams that no request could be served from - one declared twice, one with no stream id -
+    /// stop the server when it starts rather than on the first request to that tenant, and the refusal names the
+    /// tenant.
+    /// </summary>
+    [Theory]
+    [InlineData("alerts", "alerts")]
+    [InlineData("alerts", "")]
+    public async Task ATenantsDeclaredStreamsNoRequestCouldServe_StopTheServer(string first, string second)
+    {
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [
+                    new ConfiguredStream { ReceiverId = ReceiverId, StreamId = first, PushEndpointUrl = new Uri(PushEndpoint) },
+                    new ConfiguredStream { ReceiverId = ReceiverId, StreamId = second, PushEndpointUrl = new Uri(PushEndpoint) },
+                ])));
+
+        Assert.Contains("acme", Assert.Single(refusal.Failures));
+    }
+
+    /// <summary>
+    /// Streams declared for a tenant the server's settings do not declare would never be served, so the server does
+    /// not start.
+    /// </summary>
+    [Fact]
+    public async Task StreamsDeclaredForATenantTheServerDoesNotServe_StopTheServer()
+    {
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
+            declare: server => server.AddConfiguredStreams(
+                "initech",
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }])));
+
+        Assert.Contains("initech", Assert.Single(refusal.Failures));
+    }
+
+    /// <summary>
     /// The streams a tenant declares are its receiver's, as created through the management API would be, and no other
     /// tenant's receiver finds them.
     /// </summary>

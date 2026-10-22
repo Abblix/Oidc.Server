@@ -24,18 +24,27 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// to serve every tenant alike. A started service rather than a check of the settings: it builds the parts it
 /// judges, and a part that reads the settings while it is built would wait on itself inside their check. Streams
 /// declared for the whole server are refused before it runs, by <see cref="ServerWideStreamsValidator"/>.
+/// <para>
+/// The streams a tenant declares are built into its store here, inside the tenant, as its first request would build
+/// them, so a declaration no request could be served from stops the start rather than that request. A tenant the
+/// catalog does not hold yet is left to its first request, unless the server's settings are its only tenants.
+/// </para>
 /// </remarks>
 /// <param name="serviceProvider">Resolves the transmitter's parts as the server will use them.</param>
 internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider serviceProvider) : IHostedLifecycleService
 {
     /// <inheritdoc />
-    public Task StartingAsync(CancellationToken cancellationToken)
+    public async Task StartingAsync(CancellationToken cancellationToken)
     {
         var failures = Failures();
+        if (serviceProvider.GetRequiredService<IStreamStore>() is TenantConfiguredStreamStore store &&
+            serviceProvider.GetService<TenantConfiguredStreams>() is { } declared)
+        {
+            failures.AddRange(await DeclarationFailuresAsync(store, declared, cancellationToken));
+        }
+
         if (failures.Count > 0)
             throw new OptionsValidationException(Options.DefaultName, typeof(OidcOptions), failures);
-
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -81,6 +90,43 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
             failures.Add(
                 $"The transmitter's key set address '{jwksUri}' must be on the issuer's host: "
                 + "each tenant's key set is served at that path under the tenant's own issuer.");
+        }
+
+        return failures;
+    }
+
+    private async Task<List<string>> DeclarationFailuresAsync(
+        TenantConfiguredStreamStore store,
+        TenantConfiguredStreams declared,
+        CancellationToken cancellationToken)
+    {
+        var catalog = serviceProvider.GetRequiredService<ITenantCatalog>();
+        var onlySettings = serviceProvider.GetRequiredService<ITenantStore>() is OptionsTenantStore;
+
+        var failures = new List<string>();
+        foreach (var tenantId in declared.TenantIds)
+        {
+            if (await catalog.FindByIdAsync(tenantId, cancellationToken) is not { } tenant)
+            {
+                if (onlySettings)
+                {
+                    failures.Add(
+                        $"Streams are declared for the tenant '{tenantId}', which the server's settings do not "
+                        + "declare, so no request would ever be served them.");
+                }
+
+                continue;
+            }
+
+            using var scope = TenantScope.Enter(tenant);
+            try
+            {
+                store.ForCurrentTenant();
+            }
+            catch (InvalidOperationException exception)
+            {
+                failures.Add($"Tenant '{tenantId}': {exception.Message}");
+            }
         }
 
         return failures;

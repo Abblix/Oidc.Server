@@ -131,6 +131,30 @@ public sealed class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// A server whose tenants come from a store starts with streams declared for a tenant the store does not hold yet,
+    /// and the tenant is served them once it is added.
+    /// </summary>
+    [Fact]
+    public async Task StreamsDeclaredForATenantAddedLater_AreServedOnceItIsAdded()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await using var app = await StartAsync(
+            store,
+            new FakeTimeProvider(),
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }]));
+
+        await store.AddAsync(TenantAt("acme"), ct);
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(ct);
+
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal("alerts", Assert.Single(await StreamsOfAsync(app, acme, ct)).StreamId);
+    }
+
+    /// <summary>
     /// A stream whose deletion fails stays and is logged, the released tenant's other streams are deleted, and the
     /// tenant is logged as not closed.
     /// </summary>
