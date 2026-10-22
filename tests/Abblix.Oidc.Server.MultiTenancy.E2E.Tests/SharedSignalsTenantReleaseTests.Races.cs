@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.SharedSignals;
 using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -119,7 +120,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
 
     /// <summary>
     /// A stream its writer could not delete after the tenant's release is logged, naming the tenant with the creation
-    /// it belonged to, since it stays in the store until it is deleted by hand.
+    /// it belonged to.
     /// </summary>
     [Theory]
     [InlineData("", "acme")]
@@ -285,6 +286,78 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// A receiver deleting its declared stream while a move replaces the store of the tenant's declared streams, and
+    /// a move back replaces the replacement before the deletion passes it, has the stream deleted: each replaced store
+    /// refuses the deletion, and it is made through the store the tenant is served at last.
+    /// </summary>
+    [Fact]
+    public async Task AStreamDeletedWhileTwoMovesReplaceTheStore_IsDeleted()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        var streams = HeldStore.HoldingTheFirstCreates(2);
+        var tenants = new SignallingTenantAccessor();
+        await using var app = await StartAsync(
+            store, new FakeTimeProvider(), streams.Store, declare: DeclareAStream, tenants: tenants);
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+
+        var deleting = ClientOf(app, "acme").DeleteAsync($"/tenants/acme{StreamPath}?stream_id=alerts", ct);
+        await streams.Entered(0).WaitAsync(HeldFor, ct);
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var replacing = StreamsOfAsync(app, (await catalog.FindByIdAsync("acme", ct))!, ct);
+        await streams.Entered(1).WaitAsync(HeldFor, ct);
+
+        // The deletion, refused by the first store, picks the store it is sent to next: the replacement
+        var retried = tenants.NextRead();
+        streams.Apply(0);
+        await retried.WaitAsync(HeldFor, ct);
+
+        await MoveAsync(store, catalog, TenantAt("acme"), ct);
+        var back = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Single(await StreamsOfAsync(app, back, ct));
+
+        streams.Apply(1);
+        await replacing;
+        using var deleted = await deleting;
+
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.Empty(await StreamsOfAsync(app, back, ct));
+    }
+
+    /// <summary>
+    /// A declared poll stream of a moved tenant is polled at the issuer it moved to.
+    /// </summary>
+    [Fact]
+    public async Task AMovedTenantsDeclaredPollStream_IsPolledAtTheIssuerItMovedTo()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(
+            store,
+            new FakeTimeProvider(),
+            declare: server => server.AddConfiguredStreams(
+                "acme", [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]));
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var first = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.StartsWith(first.Issuer.OriginalString, await PolledAtAsync(app, first, ct), StringComparison.Ordinal);
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var moved = (await catalog.FindByIdAsync("acme", ct))!;
+
+        Assert.StartsWith(moved.Issuer.OriginalString, await PolledAtAsync(app, moved, ct), StringComparison.Ordinal);
+    }
+
+    private static async Task<string> PolledAtAsync(WebApplication app, TenantDefinition tenant, CancellationToken ct)
+    {
+        var delivery = Assert.IsType<PollDeliveryMethod>(
+            Assert.Single(await StreamsOfAsync(app, tenant, ct)).Configuration.Delivery);
+        return Assert.IsType<Uri>(delivery.EndpointUrl).OriginalString;
+    }
+
+    /// <summary>
     /// Moves the tenant while the first store of its declared streams is held in its write, and has the store the
     /// move builds write the declared stream at the issuer the tenant moved to.
     /// </summary>
@@ -309,10 +382,13 @@ public sealed partial class SharedSignalsTenantReleaseTests
             store,
             time,
             streams,
-            declare: server => server.AddConfiguredStreams(
-                "acme",
-                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }]),
+            declare: DeclareAStream,
             multipleStreamsPerReceiver: multipleStreamsPerReceiver);
+
+    private static void DeclareAStream(IOidcServerBuilder server)
+        => server.AddConfiguredStreams(
+            "acme",
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }]);
 
     private static async Task ReleaseAsync(
         MemoryTenantStore store,
@@ -350,28 +426,31 @@ public sealed partial class SharedSignalsTenantReleaseTests
     };
 
     /// <summary>
-    /// A stream store in memory that holds its first create until told to apply it, as a store slower than the
-    /// release or the move would, and whose deletion honours the token it is handed, as a networked store's does.
+    /// A stream store in memory that holds each of its first creates until told to apply it, as a store slower than
+    /// the release or the move would, and whose deletion honours the token it is handed, as a networked store's does.
     /// </summary>
     private sealed class HeldStore
     {
-        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource _apply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource[] _entered;
+        private readonly TaskCompletionSource[] _apply;
         private int _creates;
 
-        private HeldStore(CancellationTokenSource? cancelAfterCreate, bool deleteFails)
+        private HeldStore(int held, CancellationTokenSource? cancelAfterCreate, bool deleteFails)
         {
+            _entered = [..Enumerable.Range(0, held).Select(_ => Signal())];
+            _apply = [..Enumerable.Range(0, held).Select(_ => Signal())];
             var inner = new InMemoryStreamStore();
             var store = new Mock<IStreamStore>(MockBehavior.Strict);
             store
                 .Setup(s => s.TryCreateAsync(It.IsAny<StreamState>(), It.IsAny<CancellationToken>()))
                 .Returns(async (StreamState stream, CancellationToken token) =>
                 {
-                    if (Interlocked.Increment(ref _creates) != 1)
+                    var create = Interlocked.Increment(ref _creates) - 1;
+                    if (create >= held)
                         return await inner.TryCreateAsync(stream, token);
 
-                    _entered.TrySetResult();
-                    await _apply.Task.WaitAsync(HeldFor);
+                    _entered[create].TrySetResult();
+                    await _apply[create].Task.WaitAsync(HeldFor);
                     var created = await inner.TryCreateAsync(stream, CancellationToken.None);
                     if (cancelAfterCreate is not null)
                         await cancelAfterCreate.CancelAsync();
@@ -395,7 +474,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
                 .Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns((string receiverId, string streamId, CancellationToken token) =>
                 {
-                    if (deleteFails && _apply.Task.IsCompleted)
+                    if (deleteFails && _apply[0].Task.IsCompleted)
                         throw new InvalidOperationException("The store lost its connection.");
 
                     token.ThrowIfCancellationRequested();
@@ -408,12 +487,52 @@ public sealed partial class SharedSignalsTenantReleaseTests
         public static HeldStore HoldingTheFirstCreate(
             CancellationTokenSource? cancelAfterCreate = null,
             bool deleteFails = false)
-            => new(cancelAfterCreate, deleteFails);
+            => new(1, cancelAfterCreate, deleteFails);
+
+        public static HeldStore HoldingTheFirstCreates(int held) => new(held, null, false);
 
         public IStreamStore Store { get; }
 
-        public Task CreateEntered => _entered.Task;
+        public Task CreateEntered => Entered(0);
 
-        public void Apply() => _apply.TrySetResult();
+        public Task Entered(int create) => _entered[create].Task;
+
+        public void Apply() => Apply(0);
+
+        public void Apply(int create) => _apply[create].TrySetResult();
+
+        private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    /// <summary>
+    /// The tenant of the request as the server reads it, telling the test when it is next read: every choice of the
+    /// store a tenant is served reads it.
+    /// </summary>
+    private sealed class SignallingTenantAccessor : ITenantAccessor
+    {
+        private ITenantAccessor? _inner;
+        private TaskCompletionSource? _next;
+
+        public TenantContext? Current
+        {
+            get
+            {
+                Interlocked.Exchange(ref _next, null)?.TrySetResult();
+                return _inner?.Current;
+            }
+        }
+
+        public ITenantAccessor Over(ITenantAccessor inner)
+        {
+            _inner = inner;
+            return this;
+        }
+
+        public Task NextRead()
+        {
+            var next = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Volatile.Write(ref _next, next);
+            return next.Task;
+        }
     }
 }

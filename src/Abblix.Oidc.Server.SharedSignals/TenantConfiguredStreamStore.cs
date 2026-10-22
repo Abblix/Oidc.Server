@@ -90,27 +90,33 @@ internal sealed class TenantConfiguredStreamStore(
 
     /// <inheritdoc />
     public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
-        => WrittenAsync(store => store.UpdateAsync(stream, cancellationToken));
+        => Current.Store.UpdateAsync(stream, cancellationToken);
 
     /// <inheritdoc />
     public Task<bool> DeleteAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
         => WrittenAsync(store => store.DeleteAsync(receiverId, streamId, cancellationToken));
 
     /// <summary>
-    /// Writes through the store the tenant is served, and once more through the one it is served then when the write
-    /// is refused by a store of declared streams a move replaced meanwhile, as a receiver's write queued behind that
-    /// store's reconcile is (<see cref="SupersededWritesRefusedStreamStore"/>).
+    /// Writes through the store the tenant is served, and again through the one it is served then for as long as the
+    /// write is refused by a store of declared streams another replaced meanwhile, as a receiver's create or delete
+    /// queued behind that store's reconcile is (<see cref="SupersededWritesRefusedStreamStore"/>).
     /// </summary>
+    /// <remarks>
+    /// Each further round follows a replacement made during this call, since a replaced store is never installed
+    /// again, and a released creation is served no store of declared streams, so the rounds end.
+    /// </remarks>
     private async Task<bool> WrittenAsync(Func<IStreamStore, Task<bool>> write)
     {
         var serving = Current;
-        if (await write(serving.Store))
-            return true;
+        while (!await write(serving.Store))
+        {
+            if (serving.Declared is null || IsCurrent(serving.Declared))
+                return false;
 
-        if (serving.Declared is null || IsCurrent(serving.Declared))
-            return false;
+            serving = Current;
+        }
 
-        return await write(Current.Store);
+        return true;
     }
 
     /// <summary>

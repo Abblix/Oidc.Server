@@ -25,6 +25,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -267,7 +268,8 @@ public sealed partial class SharedSignalsTenantReleaseTests
         IStreamStore? streams = null,
         ILoggerProvider? logs = null,
         Action<IOidcServerBuilder>? declare = null,
-        bool multipleStreamsPerReceiver = false)
+        bool multipleStreamsPerReceiver = false,
+        SignallingTenantAccessor? tenants = null)
     {
         await TestLicense.Loaded;
 
@@ -294,6 +296,11 @@ public sealed partial class SharedSignalsTenantReleaseTests
             builder.Services.Replace(ServiceDescriptor.Singleton(streams));
 
         builder.Services.AddSingleton<ITenantStore>(store);
+        if (tenants is not null)
+        {
+            builder.Services.Replace(ServiceDescriptor.Singleton<ITenantAccessor>(provider
+                => tenants.Over(new HttpContextTenantAccessor(provider.GetRequiredService<IHttpContextAccessor>()))));
+        }
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
         server.AddSharedSignals();
