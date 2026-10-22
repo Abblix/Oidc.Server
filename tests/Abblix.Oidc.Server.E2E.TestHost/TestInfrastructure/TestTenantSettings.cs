@@ -27,6 +27,7 @@ public sealed class TestTenantSettings
     public const string TenantId = "e2e";
 
     public Uri Issuer { get; set; } = TestConstants.IssuerUri;
+    public string Generation { get; set; } = string.Empty;
     public ClientInfo[] Clients { get; set; } = [];
     public ResourceDefinition[]? Resources { get; set; }
     public Uri? DefaultResourceIndicator { get; set; }
@@ -48,6 +49,7 @@ public sealed class TestTenantSettings
     {
         Id = TenantId,
         Issuer = Issuer,
+        Generation = Generation,
         Clients = Clients,
         Resources = Resources,
         DefaultResourceIndicator = DefaultResourceIndicator,

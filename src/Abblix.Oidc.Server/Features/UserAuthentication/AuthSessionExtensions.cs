@@ -9,6 +9,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
@@ -21,7 +22,7 @@ public static class AuthSessionExtensions
 {
     /// <summary>
     /// Claims the library decides: the dedicated properties of <see cref="AuthSession"/>, the claims the token services
-    /// write, and the authorization's own (its key binding, authorization details, actor, nonce and requested
+    /// and the server's token formatter write, and the authorization's own (its key binding, authorization details, actor, nonce and requested
     /// claims). They are excluded when reading a token back into a session and never written from additional claims,
     /// because the authorization writes some of them only when it has one, and a host's value would stand in for
     /// its absence and come back as the grant on the next refresh.
@@ -45,6 +46,7 @@ public static class AuthSessionExtensions
         IanaClaimTypes.Scope,
         IanaClaimTypes.ClientId,
         OidcClaimTypes.GrantId,
+        RefreshTokenTenant.ClaimType,
         IanaClaimTypes.Nonce,
         OidcClaimTypes.RequestedClaims,
         IanaClaimTypes.Cnf,
