@@ -18,12 +18,15 @@ namespace Abblix.Jwt.ExternalKeys;
 internal sealed class KeyRingStartupCheck(KeyRingSetup setup, IKeyCustodian custodian)
 {
     /// <summary>
-    /// Throws when the ring could not serve a partition opened later.
+    /// Throws when keys are adopted where no partition will take them.
     /// </summary>
+    /// <remarks>
+    /// Judged before any partition opens: a partition takes adopted keys only until it holds a key it minted, so one
+    /// opened before the refusal would mint, and the host correcting the adoption would never have its keys taken.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">Keys are adopted into a partition the ring never keeps, or into the
-    /// unnamed partition of a ring whose partitions come and go, or the custodian holds no version of the
-    /// key-encryption key.</exception>
-    public async Task CheckAsync(CancellationToken cancellationToken)
+    /// unnamed partition of a ring whose partitions come and go.</exception>
+    public void CheckAdoption()
     {
         var policy = setup.Policy;
 
@@ -49,7 +52,17 @@ internal sealed class KeyRingStartupCheck(KeyRingSetup setup, IKeyCustodian cust
                 "while it runs, and no issuer is served from that partition. Adopt them into the partition of the " +
                 "issuer that signs with them.");
         }
+    }
 
+    /// <summary>
+    /// Throws when the custodian holds no version of the key-encryption key, which a ring keeping no partition yet
+    /// would otherwise first meet on its first tenant.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The custodian holds no version of the key-encryption key.
+    /// </exception>
+    public async Task CheckKeyEncryptionKeyAsync(CancellationToken cancellationToken)
+    {
+        var policy = setup.Policy;
         if (await custodian.GetKeyVersionsAsync(policy.KeyEncryptionKeyName, cancellationToken)
                 .AnyAsync(cancellationToken))
         {

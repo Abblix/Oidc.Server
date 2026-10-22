@@ -33,7 +33,9 @@ public interface IMintedKeysBuilder
     /// <remarks>
     /// This is a migration call and is meant to be deleted once the ring has rotated past the keys it names, but
     /// nothing breaks if it is not: keys are taken only until the ring holds its first minted key, so from then on
-    /// the call does nothing. See <see cref="MintedKeys.AdoptedKeys"/> for what adoption does to the ordering.
+    /// the call does nothing. It goes with its partition, though: when every partition is known at startup, keys
+    /// adopted into one the ring no longer keeps refuse the start. See <see cref="MintedKeys.AdoptedKeys"/> for what
+    /// adoption does to the ordering.
     /// </remarks>
     IMintedKeysBuilder AdoptExistingKeys(params JsonWebKey[] keys);
 

@@ -58,7 +58,10 @@ internal sealed class KeyRingParts
         CancellationToken cancellationToken)
         => Rings.DeleteAsync(partitions, cancellationToken);
 
-    public Task CheckAsync(CancellationToken cancellationToken) => Check.CheckAsync(cancellationToken);
+    public void CheckAdoption() => Check.CheckAdoption();
+
+    public Task CheckKeyEncryptionKeyAsync(CancellationToken cancellationToken)
+        => Check.CheckKeyEncryptionKeyAsync(cancellationToken);
 
     public IReadOnlyList<KeyRingPartitionRefresh> BeginRound(bool exceptOpened = false)
         => Rounds.BeginRound(exceptOpened);

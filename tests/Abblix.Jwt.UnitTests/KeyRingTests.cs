@@ -378,20 +378,19 @@ public sealed partial class KeyRingTests : IDisposable
     /// opens, so the ring refuses to start with them; keys adopted into a named partition wait for it.
     /// </summary>
     [Fact]
-    public async Task KeysAdoptedIntoTheUnnamedPartition_WhenThePartitionsComeAndGo_RefuseTheStart()
+    public void KeysAdoptedIntoTheUnnamedPartition_WhenThePartitionsComeAndGo_RefuseTheStart()
     {
         var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
         var (minting, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey));
-        await minting.CheckAsync(TestContext.Current.CancellationToken);
+        minting.CheckAdoption();
 
         var (named, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), Adopted("acme", [adopted]));
-        await named.CheckAsync(TestContext.Current.CancellationToken);
+        named.CheckAdoption();
 
         var (unnamed, _) = RingsKeeping(
             Keeping(), StubCustodian(_keyEncryptionKey), Adopted(KeyRingOptions.DefaultPartition, [adopted]));
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => unnamed.CheckAsync(TestContext.Current.CancellationToken));
+        Assert.Throws<InvalidOperationException>(unnamed.CheckAdoption);
     }
 
     /// <summary>
@@ -401,18 +400,17 @@ public sealed partial class KeyRingTests : IDisposable
     [Theory]
     [InlineData("initech")]
     [InlineData(KeyRingOptions.DefaultPartition)]
-    public async Task KeysAdoptedIntoAPartitionTheSettingsDoNotKeep_RefuseTheStart(string partition)
+    public void KeysAdoptedIntoAPartitionTheSettingsDoNotKeep_RefuseTheStart(string partition)
     {
         var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
         var (kept, _, _) = CreateRings(
             TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted]), "acme", "globex");
-        await kept.Check.CheckAsync(TestContext.Current.CancellationToken);
+        kept.CheckAdoption();
 
         var (unkept, _, _) = CreateRings(
             TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted(partition, [adopted]), "acme", "globex");
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => unkept.Check.CheckAsync(TestContext.Current.CancellationToken));
+        Assert.Throws<InvalidOperationException>(unkept.CheckAdoption);
     }
 
     /// <summary>
@@ -430,7 +428,7 @@ public sealed partial class KeyRingTests : IDisposable
         var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => rings.CheckAsync(TestContext.Current.CancellationToken));
+            () => rings.CheckKeyEncryptionKeyAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -1208,11 +1206,17 @@ public sealed partial class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        // Started the way a host starts it: the first refresh runs in StartAsync, which is the door production
-        // walks through.
-        var refresher = provider.GetServices<IHostedService>().Single();
-        await refresher.StartAsync(TestContext.Current.CancellationToken);
-        await refresher.StopAsync(TestContext.Current.CancellationToken);
+        // Started the way a host starts it: every service's StartingAsync, then the first refresh in StartAsync,
+        // which is the door production walks through.
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        foreach (var starting in hosted.OfType<IHostedLifecycleService>())
+            await starting.StartingAsync(TestContext.Current.CancellationToken);
+
+        foreach (var service in hosted)
+            await service.StartAsync(TestContext.Current.CancellationToken);
+
+        foreach (var service in hosted)
+            await service.StopAsync(TestContext.Current.CancellationToken);
 
         var published = provider.GetRequiredService<IKeyRing>()
             .Get(PublicKeyUsages.Signature, includePrivateKeys: false).ToList();
@@ -1240,7 +1244,7 @@ public sealed partial class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        Assert.IsType<KeyRingRefreshService>(Assert.Single(provider.GetServices<IHostedService>()));
+        Assert.Single(provider.GetServices<IHostedService>().OfType<KeyRingRefreshService>());
         Assert.Same(
             provider.GetRequiredService<IKeyRings>().For(KeyRingOptions.DefaultPartition),
             provider.GetRequiredService<IKeyRing>());

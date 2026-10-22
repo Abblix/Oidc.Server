@@ -80,7 +80,8 @@ public partial class MultiTenancyRegistrationTests
     private static ServiceProvider MintingRealKeys(
         ChangingTenantStore? store,
         IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null,
-        Action<OidcOptions>? settings = null)
+        Action<OidcOptions>? settings = null,
+        bool serverFirst = false)
     {
         var keyEncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "kek-1" };
         var custodian = new Moq.Mock<IKeyCustodian>();
@@ -105,6 +106,9 @@ public partial class MultiTenancyRegistrationTests
         if (store is not null)
             services.AddSingleton<ITenantStore>(store);
 
+        if (serverFirst)
+            services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+
         services.AddJsonWebTokens();
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement()
@@ -113,7 +117,9 @@ public partial class MultiTenancyRegistrationTests
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
                 AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
             });
-        services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+        if (!serverFirst)
+            services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+
         return services.BuildServiceProvider();
     }
 
@@ -387,11 +393,7 @@ public partial class MultiTenancyRegistrationTests
                 [KeyRingOptions.DefaultPartition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-        {
-            foreach (var service in provider.GetServices<IHostedService>())
-                await service.StartAsync(TestContext.Current.CancellationToken);
-        });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(provider));
     }
 
     /// <summary>
@@ -405,10 +407,10 @@ public partial class MultiTenancyRegistrationTests
     public async Task KeysAdoptedIntoAPartitionNoDeclaredTenantIsKeptIn_RefuseTheStart(string partition)
     {
         using var kept = MintingRealKeys(store: null, AdoptedInto(TenantKey.PartitionOf(Acme)), Declaring);
-        await StartAllAsync(kept);
+        await StartLikeTheHostAsync(kept);
 
         using var unkept = MintingRealKeys(store: null, AdoptedInto(partition), Declaring);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => StartAllAsync(unkept));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(unkept));
     }
 
     private static void Declaring(OidcOptions options) => options.Tenants.Add(Acme);
@@ -416,9 +418,33 @@ public partial class MultiTenancyRegistrationTests
     private static Dictionary<string, IReadOnlyList<JsonWebKey>> AdoptedInto(string partition)
         => new() { [partition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] };
 
-    private static async Task StartAllAsync(IServiceProvider provider)
+    /// <summary>
+    /// Keys adopted into a partition no tenant is kept in are refused before any tenant's partition mints its first
+    /// key, with the server registered before the key ring as well, so a host that fixes the adoption still has its
+    /// keys taken on the next start.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoAPartitionNoTenantIsKeptIn_AreRefusedBeforeAnyKeyIsMinted()
     {
-        foreach (var service in provider.GetServices<IHostedService>())
-            await service.StartAsync(TestContext.Current.CancellationToken);
+        using var provider = MintingRealKeys(store: null, AdoptedInto("initech"), Declaring, serverFirst: true);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(provider));
+
+        Assert.Empty(await provider.GetRequiredService<IKeyRingStore>().LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Starts the hosted services as the host does: every one's <see cref="IHostedLifecycleService.StartingAsync"/>
+    /// before any one's <see cref="IHostedService.StartAsync"/>.
+    /// </summary>
+    private static async Task StartLikeTheHostAsync(IServiceProvider provider)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var services = provider.GetServices<IHostedService>().ToArray();
+        foreach (var service in services.OfType<IHostedLifecycleService>())
+            await service.StartingAsync(ct);
+
+        foreach (var service in services)
+            await service.StartAsync(ct);
     }
 }

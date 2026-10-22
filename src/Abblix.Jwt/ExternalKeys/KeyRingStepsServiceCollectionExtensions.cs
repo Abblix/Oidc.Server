@@ -7,6 +7,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -26,6 +27,7 @@ internal static class KeyRingStepsServiceCollectionExtensions
         services.TryAddSingleton<KeyRingPartitionsOpening>();
         services.TryAddSingleton<KeyRingEntriesRemoval>();
         services.TryAddSingleton<KeyRingStartupCheck>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingAdoptionCheck>());
         services.TryAddSingleton<KeyRingRounds>();
         return services;
     }
