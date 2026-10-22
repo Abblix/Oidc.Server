@@ -182,6 +182,25 @@ public class TenantKeysCheckTests
         Assert.Equal(["acme"], refusal.TenantIds);
     }
 
+    /// <summary>
+    /// A tenant declaring several incomplete keys, or one with no key id, is refused once, and alone.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Check_ATenantsIncompleteKeys_RefuseItOnce(bool withKeyId)
+    {
+        using var serviceProvider = BuildHost();
+        JsonWebKey[] incomplete = withKeyId
+            ? [new RsaJsonWebKey { KeyId = "rsa", Exponent = [1, 0, 1] }, new OctetJsonWebKey { KeyId = "oct" }]
+            : [new RsaJsonWebKey { Exponent = [1, 0, 1] }];
+        var broken = Tenant([JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), ..incomplete]);
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([broken], new OidcOptions()));
+
+        Assert.Equal(["acme"], refusal.TenantIds);
+    }
+
     private static TenantDefinition Tenant(params JsonWebKey[] signingKeys) => new()
     {
         Id = "acme",
