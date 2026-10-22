@@ -32,10 +32,18 @@ public record UserConsents
     /// <summary>
     /// When the end user last gave the consent the host records, or null when the host records no such moment, as for
     /// a consent the server grants on its own. A consent given after the server sent the end user to the consent page
-    /// is the one <c>prompt=consent</c> asked for; any other leaves every scope pending again. A consent given that
+    /// is the one <c>prompt=consent</c> asked for; any other leaves every scope pending again, unless it is
+    /// <see cref="GivenWithoutEndUser"/>, which answers the prompt whatever this moment. A consent given that
     /// grants nothing of what the request asked for, with nothing left pending, is the end user's refusal, and the
     /// client is told access_denied. A grant leaving the authorization details list out counts as granting none of
     /// them only there, when it grants no scope and no resource either; otherwise the requested ones pass through.
     /// </summary>
     public DateTimeOffset? GivenAt { get; init; }
+
+    /// <summary>
+    /// Whether the consent is given without the end user, as a provider granting every client everything gives it,
+    /// so no consent page could change it: a request asking for consent with <c>prompt=consent</c> is answered by it
+    /// and is sent to no consent page.
+    /// </summary>
+    public bool GivenWithoutEndUser { get; init; }
 };

@@ -42,7 +42,7 @@ public interface IMintedKeysBuilder
     /// <summary>
     /// Takes keys an issuer already signs with into the ring's partition <paramref name="partition"/>, so that the
     /// issuer switching to minted keys does not change which key produces on the day it happens; no other partition
-    /// serves them.
+    /// serves them, and a key adopted into two partitions refuses the start and any opening of a partition.
     /// </summary>
     /// <param name="partition">The partition the keys are taken into: under a server keeping one partition for each
     /// tenant, the tenant's id, followed by '~' and its generation when it declares one. When every partition is known

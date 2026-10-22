@@ -140,7 +140,6 @@ public class AuthorizationResponseFormatterTests
         public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
         public string CheckSessionCookieName => "session";
         public Uri? MtlsBaseUri => null;
-        public MtlsAliasesOptions? MtlsEndpointAliases => null;
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

@@ -33,7 +33,8 @@ public static class ConsentsServiceCollectionExtensions
 	/// <remarks>
 	/// It suits only a deployment whose every client is its own. With it, <c>prompt=none</c> never answers
 	/// <c>consent_required</c> and <c>prompt=consent</c> never shows a consent page, so the end user cannot refuse
-	/// what a client asks for (OpenID Connect Core 1.0, section 3.1.2.4). A host serving clients it does not own
+	/// what a client asks for (OpenID Connect Core 1.0, section 3.1.2.4). So a client allowed offline access only
+	/// with <c>prompt=consent</c> gets a refresh token by sending it. A host serving clients it does not own
 	/// registers its own <see cref="IUserConsentsProvider"/> instead, which wins over this call whichever comes
 	/// first when registered with an <c>Add*</c> method; a <c>TryAdd*</c> registration after this call is skipped.
 	/// <para>

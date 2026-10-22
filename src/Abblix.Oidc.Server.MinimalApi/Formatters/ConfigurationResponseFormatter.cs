@@ -10,7 +10,6 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -115,7 +114,7 @@ public class ConfigurationResponseFormatter(
             AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
         };
 
-        modelResponse = WithMtlsAliases(modelResponse);
+        modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, issuerSettings.MtlsBaseUri);
 
         if (options.Value.Discovery.SignedMetadata)
         {
@@ -123,33 +122,6 @@ public class ConfigurationResponseFormatter(
         }
 
         return Results.Json(modelResponse);
-    }
-
-    /// <summary>
-    /// Adds the mutual-TLS aliases of the endpoints a certificate-bound client calls, when either the issuer
-    /// names them or the issuer has a mutual-TLS host to rebase them onto. An alias the issuer names wins.
-    /// </summary>
-    private ModelResponse WithMtlsAliases(ModelResponse document)
-    {
-        var configured = issuerSettings.MtlsEndpointAliases;
-        var mtlsBaseUri = issuerSettings.MtlsBaseUri;
-
-        if (configured == null && mtlsBaseUri == null)
-            return document;
-
-        // Read through an empty set when nothing is configured, so each alias falls back to the rebased endpoint.
-        configured ??= new MtlsAliasesOptions();
-        return document with
-        {
-            MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
-            {
-                TokenEndpoint = configured.TokenEndpoint ?? Rebase(document.TokenEndpoint, mtlsBaseUri),
-                RevocationEndpoint = configured.RevocationEndpoint ?? Rebase(document.RevocationEndpoint, mtlsBaseUri),
-                IntrospectionEndpoint =
-                    configured.IntrospectionEndpoint ?? Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
-                UserInfoEndpoint = configured.UserInfoEndpoint ?? Rebase(document.UserInfoEndpoint, mtlsBaseUri),
-            },
-        };
     }
 
     /// <summary>
@@ -165,50 +137,7 @@ public class ConfigurationResponseFormatter(
 
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
         var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
-        return url is null ? null : OnIssuersHost(new Uri(url, UriKind.Absolute), issuer);
-    }
-
-    /// <summary>
-    /// An endpoint resolved on the issuer's mutual-TLS host, where the document was fetched, moved to the issuer's
-    /// own host: a client without a certificate follows the ordinary endpoints, and only the aliases may name the host
-    /// that demands one.
-    /// </summary>
-    /// <remarks>
-    /// The host is compared as a tenant is resolved by it, so whatever request reaches the tenant on its mutual-TLS host
-    /// is answered so. An issuer whose mutual-TLS host differs from its ordinary one only by port
-    /// therefore names the ordinary endpoints on the issuer's host on either.
-    /// </remarks>
-    private Uri? OnIssuersHost(Uri? endpoint, Uri issuer)
-        => endpoint is not null &&
-           issuerSettings.MtlsBaseUri is { } mtlsBaseUri &&
-           SameHost(endpoint, mtlsBaseUri)
-            ? Rebase(endpoint, new Uri(issuer.GetLeftPart(UriPartial.Authority)))
-            : endpoint;
-
-    private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
-        => TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
-
-    /// <summary>
-    /// Rebases an original URI onto a different base URI, preserving the original's path. Used to generate mTLS
-    /// endpoint aliases with an alternative base URL.
-    /// </summary>
-    private static Uri? Rebase(Uri? original, Uri? baseUri)
-    {
-        if (baseUri == null)
-            return original;
-
-        if (original == null)
-            return null;
-
-        var basePath = baseUri.AbsolutePath.TrimEnd('/');
-        var origPath = original.AbsolutePath.TrimStart('/');
-
-        var ub = new System.UriBuilder(baseUri)
-        {
-            Path = string.IsNullOrEmpty(basePath) || basePath == "/"
-                ? $"/{origPath}"
-                : $"{basePath}/{origPath}",
-        };
-        return ub.Uri;
+        return url is null ? null : MtlsEndpointAliasing.OnIssuersHost(
+            new Uri(url, UriKind.Absolute), issuer, issuerSettings.MtlsBaseUri);
     }
 }
