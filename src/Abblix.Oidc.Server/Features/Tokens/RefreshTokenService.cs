@@ -156,6 +156,8 @@ public class RefreshTokenService(
 		// overwritten here.
 		authContext.ApplyTo(newToken.Payload);
 
+		RefreshTokenTenant.NameCurrent(newToken.Payload, tenantAccessor);
+
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
 		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.
@@ -202,12 +204,13 @@ public class RefreshTokenService(
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
 		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
-		// Every refresh token this server issues names its grant, and one issued before 3.0 names none: what was
-		// recorded about that one then, revoked, rotated or cut off, is not carried over, so nothing could judge it
-		if (refreshToken.Payload.GrantId is null)
+		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
+		// was issued at, so a token of another creation, or of a version before 3.0, which names none, would be read
+		// against no records at all and renewed whatever was recorded about it
+		if (!RefreshTokenTenant.NamesCurrent(refreshToken.Payload, tenantAccessor))
 		{
 			return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
-				new OidcError(ErrorCodes.InvalidGrant, "The refresh token was issued before this server's version"));
+				new OidcError(ErrorCodes.InvalidGrant, "The refresh token was not issued at this tenant"));
 		}
 
 		var authSession = refreshToken.Payload.ToAuthSession();

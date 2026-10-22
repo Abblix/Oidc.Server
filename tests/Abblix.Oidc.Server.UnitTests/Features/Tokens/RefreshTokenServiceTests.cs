@@ -624,6 +624,9 @@ public class RefreshTokenServiceTests
         Assert.NotNull(result);
         Assert.Same(capturedToken, result.Token);
         Assert.Equal(EncodedToken, result.EncodedJwt);
+        Assert.Equal(
+            TestIssuer.TenantId,
+            result.Token.Payload.Json.GetProperty<string>(RefreshTokenTenant.ClaimType));
     }
 
     /// <summary>
@@ -651,7 +654,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, TestIssuer.TenantId), CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -687,7 +690,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, TestIssuer.TenantId), CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -720,7 +723,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, TestIssuer.TenantId), CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -729,11 +732,15 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// A refresh token issued before 3.0 carries no grant id, which every refresh token this server issues carries,
-    /// and what was recorded about it then is not carried over, so it is refused rather than renewed.
+    /// A refresh token names the tenant and creation it was issued at, as one of this tenant's is renewed only here: one
+    /// naming no tenant, as every refresh token before 3.0 does, or another creation of it, has its records kept where
+    /// this tenant reads none, so it is refused rather than renewed.
     /// </summary>
-    [Fact]
-    public async Task AuthorizeByRefreshToken_WithoutAGrantId_IsRefused()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(TestIssuer.TenantId + "~1")]
+    [InlineData("other")]
+    public async Task AuthorizeByRefreshToken_IssuedAtNoneOrAnotherTenant_IsRefused(string? tenant)
     {
         var refreshToken = new JsonWebToken
         {
@@ -745,13 +752,22 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = [Scopes.OpenId],
+                GrantId = GrantId,
             }
         };
 
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(IssuedAt(refreshToken, tenant), CreateClientInfo());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    private static JsonWebToken IssuedAt(JsonWebToken refreshToken, string? tenant)
+    {
+        if (tenant is not null)
+            refreshToken.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, tenant);
+
+        return refreshToken;
     }
 
     /// <summary>
