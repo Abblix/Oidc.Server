@@ -20,9 +20,8 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <remarks>
 /// The declared streams are the tenant's stream set, as they are the server's in a store of declared streams: they
 /// are built and reconciled the first time the tenant is asked for its streams, inside the tenant, so the poll address
-/// of a declared stream is the tenant's. Each creation of a tenant keeps a store of its own at each issuer it is served
-/// at, so a tenant moved to another address is served its streams under the issuer it moved to; each is let go once
-/// the creation is released.
+/// of a declared stream is the tenant's. Each creation of a tenant keeps a store of its own, let go once the creation
+/// is released.
 /// </remarks>
 /// <param name="inner">The store each tenant's part of is kept apart in.</param>
 /// <param name="declared">The streams each tenant declares.</param>
@@ -36,7 +35,7 @@ internal sealed class TenantConfiguredStreamStore(
     ITenantCatalog catalog,
     IServiceProvider serviceProvider) : IStreamStore
 {
-    private readonly ConcurrentDictionary<(string Space, string Issuer), Lazy<IStreamStore>> _stores = new();
+    private readonly ConcurrentDictionary<string, Lazy<IStreamStore>> _stores = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
@@ -83,17 +82,17 @@ internal sealed class TenantConfiguredStreamStore(
             if (released.IsCancellationRequested)
                 return inner;
 
-            var key = (TenantKey.SpaceOf(tenant), tenant.Issuer.OriginalString);
-            if (_stores.TryGetValue(key, out var store))
+            var space = TenantKey.SpaceOf(tenant);
+            if (_stores.TryGetValue(space, out var store))
                 return store.Value;
 
             var created = new Lazy<IStreamStore>(() => serviceProvider.CreateService<ConfigurationStreamStore>(
                 Dependency.Override(streams),
                 Dependency.Override(inner)));
 
-            store = _stores.GetOrAdd(key, created);
+            store = _stores.GetOrAdd(space, created);
             if (ReferenceEquals(store, created))
-                released.Register(() => _stores.TryRemove(key, out _));
+                released.Register(() => _stores.TryRemove(space, out _));
 
             return store.Value;
         }
