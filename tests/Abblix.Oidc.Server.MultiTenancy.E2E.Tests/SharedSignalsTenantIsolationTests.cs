@@ -65,6 +65,7 @@ public sealed class SharedSignalsTenantIsolationTests
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "The push endpoint a test receiver registers; the recording handler answers it.")]
     private const string PushEndpoint = "https://receiver.example.com/events";
+    private const string StreamId = "alerts";
 
     /// <summary>
     /// A stream acme's receiver creates is acme's alone: globex's receiver, under the same identifier, lists none,
@@ -297,7 +298,7 @@ public sealed class SharedSignalsTenantIsolationTests
                 [new ConfiguredStream
                 {
                     ReceiverId = ReceiverId,
-                    StreamId = "alerts",
+                    StreamId = StreamId,
                     PushEndpointUrl = pushEndpoint is null ? null : new Uri(pushEndpoint),
                 }])));
 
@@ -310,8 +311,8 @@ public sealed class SharedSignalsTenantIsolationTests
     /// tenant.
     /// </summary>
     [Theory]
-    [InlineData("alerts", "alerts")]
-    [InlineData("alerts", "")]
+    [InlineData(StreamId, StreamId)]
+    [InlineData(StreamId, "")]
     public async Task ATenantsDeclaredStreamsNoRequestCouldServe_StopTheServer(string first, string second)
     {
         var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
@@ -356,7 +357,7 @@ public sealed class SharedSignalsTenantIsolationTests
                         DefaultSubjectsMode = StreamSubjectsMode.All,
                     });
                     server.AddSharedSignals();
-                    server.AddConfiguredStreams("acme", [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]);
+                    server.AddConfiguredStreams("acme", [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId }]);
                 })
                 .Configure(app =>
                 {
@@ -393,7 +394,7 @@ public sealed class SharedSignalsTenantIsolationTests
         var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
             declare: server => server.AddConfiguredStreams(
                 "initech",
-                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }])));
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, PushEndpointUrl = new Uri(PushEndpoint) }])));
 
         Assert.Contains("initech", Assert.Single(refusal.Failures));
     }
@@ -408,13 +409,13 @@ public sealed class SharedSignalsTenantIsolationTests
         var ct = TestContext.Current.CancellationToken;
         await using var app = await StartAsync(declare: server => server.AddConfiguredStreams(
             "acme",
-            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) }]));
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, PushEndpointUrl = new Uri(PushEndpoint) }]));
 
         var acme = await ClientOf(app, Host + Acme).GetFromJsonAsync<StreamConfiguration[]>(Acme + StreamPath, ct);
         var globex = await ClientOf(app, Host + Globex).GetFromJsonAsync<StreamConfiguration[]>(Globex + StreamPath, ct);
 
         var declared = Assert.Single(acme!);
-        Assert.Equal("alerts", declared.StreamId);
+        Assert.Equal(StreamId, declared.StreamId);
         Assert.Equal(Host + Acme, declared.Issuer);
         Assert.Empty(globex!);
     }
