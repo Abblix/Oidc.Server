@@ -82,11 +82,13 @@ internal sealed class UserConsentsReader(IUserConsentsProvider consentsProvider,
     /// <see cref="UserConsents.GivenAt"/> tells.
     /// </summary>
     /// <remarks>
-    /// A consent the host records no moment for, as one the server grants on its own, never answers the prompt.
+    /// A consent the host records no moment for never answers the prompt, unless it is given without the end user,
+    /// which no consent page could change.
     /// </remarks>
     private static UserConsents ConsentAskedOf(ValidAuthorizationRequest request, UserConsents consents)
     {
         if (!PromptPages.Asks(request.Model, Prompts.Consent) ||
+            consents.GivenWithoutEndUser ||
             PromptPages.AnsweredBy(request.Model, Prompts.Consent, consents.GivenAt))
         {
             return consents;

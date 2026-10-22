@@ -29,6 +29,7 @@ public class NullConsentService : IUserConsentsProvider
 	{
 		var userConsents = new UserConsents
 		{
+			GivenWithoutEndUser = true,
 			Granted = new(request.Scope, request.Resources)
 			{
 				AuthorizationDetails = request.AuthorizationDetails,
