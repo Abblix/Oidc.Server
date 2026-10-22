@@ -15,6 +15,9 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -159,6 +162,35 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
         Assert.Null(introspected[TenantClaim]);
     }
 
+    /// <summary>
+    /// At a tenant created again, a refresh token naming the tenant without its creation is not renewed, while the one
+    /// issued there, naming both, is.
+    /// </summary>
+    [Fact]
+    public async Task AtATenantCreatedAgain_ARefreshTokenNamingTheTenantAlone_IsNotRenewed()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.PostConfigure<TestTenantSettings>(tenant => tenant.Generation = "g7")));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+
+        var tenantAlone = await ResignAsync(
+            RefreshTokenOf(tokens),
+            payload => payload[TenantClaim] = TestTenantSettings.TenantId,
+            host.Services);
+        var (refused, body) = await RefreshAsync(client, discovery, tenantAlone);
+        var (renewed, _) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused);
+        Assert.Equal(ErrorCodes.InvalidGrant, body![ErrorMember]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.OK, renewed);
+    }
+
     private async Task<(HttpClient Client, DiscoveryDocument Discovery, JsonObject Tokens)> GenuineAsync()
     {
         var client = CreateClient();
@@ -173,14 +205,14 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     private Task<string> WithoutTenantAsync(JsonObject tokens)
         => ResignAsync(RefreshTokenOf(tokens), payload => payload.Remove(TenantClaim));
 
-    private async Task<string> ResignAsync(string jwt, Action<JsonObject> edit)
+    private async Task<string> ResignAsync(string jwt, Action<JsonObject> edit, IServiceProvider? host = null)
     {
         var parts = jwt.Split('.');
         var header = JsonNode.Parse(Encoding.UTF8.GetString(Base64UrlDecode(parts[0])))!.AsObject();
         var payload = JsonNode.Parse(Encoding.UTF8.GetString(Base64UrlDecode(parts[1])))!.AsObject();
         edit(payload);
 
-        var key = Factory.Services.GetRequiredService<IOptions<TestTenantSettings>>().Value.SigningKeys.First();
+        var key = (host ?? Factory.Services).GetRequiredService<IOptions<TestTenantSettings>>().Value.SigningKeys.First();
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(header),
