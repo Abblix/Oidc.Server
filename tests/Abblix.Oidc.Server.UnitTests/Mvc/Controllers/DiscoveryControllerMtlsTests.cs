@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 
 /// <summary>
 /// Unit tests for <see cref="ConfigurationResponseFormatter"/> verifying RFC 8705
-/// mTLS endpoint alias auto-computation and configuration.
+/// mTLS endpoint aliases computed from the issuer's mutual TLS host.
 /// </summary>
 public class DiscoveryControllerMtlsTests
 {

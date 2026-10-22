@@ -142,6 +142,9 @@ public class ConfigurationResponseFormatter(
                 RevocationEndpoint = Rebase(document.RevocationEndpoint, mtlsBaseUri),
                 IntrospectionEndpoint = Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
                 UserInfoEndpoint = Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+                PushedAuthorizationRequestEndpoint = Rebase(document.PushedAuthorizationRequestEndpoint, mtlsBaseUri),
+                BackChannelAuthenticationEndpoint = Rebase(document.BackChannelAuthenticationEndpoint, mtlsBaseUri),
+                DeviceAuthorizationEndpoint = Rebase(document.DeviceAuthorizationEndpoint, mtlsBaseUri),
             },
         };
     }
@@ -186,11 +189,8 @@ public class ConfigurationResponseFormatter(
     /// Rebases an original URI onto a different base URI, preserving the original's path. Used to generate mTLS
     /// endpoint aliases with an alternative base URL.
     /// </summary>
-    private static Uri? Rebase(Uri? original, Uri? baseUri)
+    private static Uri? Rebase(Uri? original, Uri baseUri)
     {
-        if (baseUri == null)
-            return original;
-
         if (original == null)
             return null;
 

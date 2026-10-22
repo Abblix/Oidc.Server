@@ -141,6 +141,9 @@ public class ConfigurationResponseFormatter(
 				RevocationEndpoint = Rebase(document.RevocationEndpoint, mtlsBaseUri),
 				IntrospectionEndpoint = Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
 				UserInfoEndpoint = Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+				PushedAuthorizationRequestEndpoint = Rebase(document.PushedAuthorizationRequestEndpoint, mtlsBaseUri),
+				BackChannelAuthenticationEndpoint = Rebase(document.BackChannelAuthenticationEndpoint, mtlsBaseUri),
+				DeviceAuthorizationEndpoint = Rebase(document.DeviceAuthorizationEndpoint, mtlsBaseUri),
 			},
 		};
 	}
@@ -185,12 +188,9 @@ public class ConfigurationResponseFormatter(
 	/// </summary>
 	/// <param name="original">The original URI to rebase.</param>
 	/// <param name="baseUri">The new base URI to use (scheme, host, port, and optionally base path).</param>
-	/// <returns>A new URI combining the base URI with the original's path, or null if either parameter is null.</returns>
-	private static Uri? Rebase(Uri? original, Uri? baseUri)
+	/// <returns>A new URI combining the base URI with the original's path, or null when there is no original.</returns>
+	private static Uri? Rebase(Uri? original, Uri baseUri)
 	{
-		if (baseUri == null)
-			return original;
-
 		if (original == null)
 			return null;
 
