@@ -33,6 +33,11 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configureOptions">Configures the vault URI and the service-principal credentials.</param>
     /// <returns>The builder whose placement call completes the wiring.</returns>
+    /// <remarks>
+    /// The example names the keys for the whole process, as a host without the OIDC server does. An OpenID Provider
+    /// names them for each tenant in <c>TenantDefinition.CustodianKeys</c> and calls <c>UseKeysInCustodian()</c>
+    /// without them, and refuses to start with keys named for the whole server.
+    /// </remarks>
     /// <example>
     /// <code>
     /// services

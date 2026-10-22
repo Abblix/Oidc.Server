@@ -18,12 +18,12 @@ Wiring is two steps for `UseKeysInCustodian`, three for `UseKeysInProcess` (the 
 ```csharp
 builder.Services
     .AddVaultCustodian(vault => { /* which custodian, and how to reach it */ })
-    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    .UseKeysInCustodian();
 ```
 
-The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site.
+The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site. An OpenID Provider names the keys themselves for each tenant, in `TenantDefinition.CustodianKeys` (`new CustodianHeldKeys { SigningKeyName = "oidc-sign" }`), so no two tenants sign with one key, and it refuses to start with keys named for the whole server. A host without the OIDC server names them in the placement call instead: `UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "sign" })`.
 
-The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from `OidcOptions`, so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
+The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from each tenant's settings (`TenantDefinition.SigningKeys`), so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
 
 ## You do not need the OIDC server for this
 
@@ -131,7 +131,7 @@ The seam is public. If your keys live somewhere these packages do not cover, imp
 ```csharp
 builder.Services
     .AddCustodian<MyCustodian>()
-    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    .UseKeysInCustodian();
 ```
 
 `AddCustodian<T>` builds your custodian through the container, so it may depend on your own services. If you registered it yourself instead - as a typed `HttpClient`, or as an instance you built - call `RequireKeyPlacement()` in its place: it registers nothing and only opens the placement choice, which is the step that must not be skipped. Either way the custodian must be a singleton, because the signing and decryption backends that reach it are; a shorter lifetime is refused at the placement call rather than left to pin one scope's custodian for the life of the process.
