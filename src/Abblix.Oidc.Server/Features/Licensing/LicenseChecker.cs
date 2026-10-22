@@ -233,13 +233,23 @@ public static partial class LicenseChecker
     /// issuer, or every client of an id, as one.
     /// </remarks>
     private static (string Key, CancellationToken Released) CountedAs(string issuer, IIssuerSettings settings)
-        => settings is ILicensedIssuer own
-            ? (own.VouchedId(issuer) ?? issuer, own.Released)
-            : (issuer, CancellationToken.None);
+    {
+        if (settings is not ILicensedIssuer own)
+            return (issuer, CancellationToken.None);
+
+        if (own.VouchedId(issuer) is { } tenantId)
+            return (tenantId, own.Released);
+
+        // An issuer the server does not vouch for is let go with its tenant, but one first seen after that tenant was
+        // released would be let go before it was ever counted, so it counts for the life of the process
+        var released = own.Released;
+        return (issuer, released.IsCancellationRequested ? CancellationToken.None : released);
+    }
 
     /// <summary>
     /// The tenant the clients of <paramref name="issuer"/> are counted with, when the server's own settings vouch
-    /// for it. Null for any other settings, whose clients are counted with the issuer and are not taken off the count.
+    /// for it. Null for any other issuer, whose clients are counted with the issuer and are not taken off the count by
+    /// a removal through registration.
     /// </summary>
     /// <param name="issuer">The issuer the tokens of those clients name.</param>
     /// <param name="settings">The settings of that issuer.</param>

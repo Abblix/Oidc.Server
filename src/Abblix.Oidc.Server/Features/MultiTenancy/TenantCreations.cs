@@ -67,6 +67,10 @@ internal sealed partial class TenantCreations(
     // one of its definitions is judged by the last one in force rather than by none, until its creation is released
     private readonly ConcurrentDictionary<string, TenantDefinition> _lastServed = new(StringComparer.Ordinal);
 
+    // When the reading being served was taken: a creation leaves an issuer at that instant, as one found gone then is
+    // measured from it, however long the closings and checks of that reading take before it is served
+    private DateTimeOffset _readAt;
+
     /// <summary>
     /// Takes <paramref name="tenant"/> as the definition last served under its id.
     /// </summary>
@@ -79,7 +83,7 @@ internal sealed partial class TenantCreations(
         if (_creations.TryGetValue(TenantKey.SpaceOf(tenant), out var creation))
         {
             creation.Tenant = tenant;
-            creation.Issuers = Moved(creation.Issuers, tenant.Issuer.OriginalString, timeProvider.GetUtcNow());
+            creation.Issuers = Moved(creation.Issuers, tenant.Issuer.OriginalString, _readAt);
         }
 
         var former = _lastServed.GetValueOrDefault(tenant.Id);
@@ -103,7 +107,7 @@ internal sealed partial class TenantCreations(
         => issuers
             .SetItems(
                 from served in issuers
-                where served.Value is null && served.Key != issuer
+                where served.Value is null
                 select KeyValuePair.Create(served.Key, (DateTimeOffset?)now))
             .SetItem(issuer, null);
 
@@ -163,6 +167,7 @@ internal sealed partial class TenantCreations(
         }
 
         var now = timeProvider.GetUtcNow();
+        _readAt = now;
 
         // An issuer a creation left is still its own for one pause, the time a request resolved before the move has
         // to finish, and no longer

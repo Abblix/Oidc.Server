@@ -229,8 +229,8 @@ public sealed partial class StoreTenantCatalog(
         => catalog is StoreTenantCatalog own ? own.Released(tenant) : CancellationToken.None;
 
     /// <summary>
-    /// Whether this catalog has served the creation of <paramref name="tenant"/> at <paramref name="issuer"/>, while it
-    /// is served or not yet long released.
+    /// Whether this catalog serves the creation of <paramref name="tenant"/> at <paramref name="issuer"/>, or did no
+    /// longer than one refresh period ago, while the creation is served or for one refresh period after its release.
     /// </summary>
     internal bool HasServedAt(TenantDefinition tenant, string issuer) => _creations.HasServedAt(tenant, issuer);
 
