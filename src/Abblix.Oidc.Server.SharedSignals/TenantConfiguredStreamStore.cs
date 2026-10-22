@@ -69,6 +69,12 @@ internal sealed class TenantConfiguredStreamStore(
             if (declared.Of(tenant.Id) is not { } streams)
                 return inner;
 
+            // A released creation's declared streams are deleted as the streams it kept, and declaring them again
+            // for a request still holding it would leave them with nobody to delete them
+            var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
+            if (released.IsCancellationRequested)
+                return inner;
+
             var space = TenantKey.SpaceOf(tenant);
             if (_stores.TryGetValue(space, out var store))
                 return store.Value;
@@ -79,7 +85,7 @@ internal sealed class TenantConfiguredStreamStore(
 
             store = _stores.GetOrAdd(space, created);
             if (ReferenceEquals(store, created))
-                StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => _stores.TryRemove(space, out _));
+                released.Register(() => _stores.TryRemove(space, out _));
 
             return store.Value;
         }

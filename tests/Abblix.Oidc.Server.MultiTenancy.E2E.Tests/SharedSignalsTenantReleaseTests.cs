@@ -44,6 +44,7 @@ public sealed class SharedSignalsTenantReleaseTests
     private const string Host = "https://auth.example.com";
     private const string StreamPath = "/ssf/stream";
     private const string ReceiverId = "https://receiver.example.com";
+    private const string PushEndpoint = ReceiverId + "/events";
     private const string MembershipChanged = "https://tenant.example.com/events/membership-changed";
 
     // The event a stream of a released tenant that could not be deleted is logged under, as the package numbers it
@@ -84,6 +85,49 @@ public sealed class SharedSignalsTenantReleaseTests
         Assert.Empty(await StreamsOfAsync(app, acme, ct));
         Assert.Empty(await PendingAsync(app, acme, streamIds["acme"], ct));
         Assert.Single(await StreamsOfAsync(app, globex, ct));
+    }
+
+    /// <summary>
+    /// The streams a released tenant declared are deleted with it, and a request still holding the tenant after its
+    /// release finds them gone rather than declaring them again.
+    /// </summary>
+    [Fact]
+    public async Task AReleasedTenantsDeclaredStreams_AreNotDeclaredAgainByALateRequest()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        var time = new FakeTimeProvider();
+        await store.AddAsync(TenantAt("acme"), ct);
+        var streams = new InMemoryStreamStore();
+        await using var app = await StartAsync(
+            store,
+            time,
+            streams,
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [
+                    new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", PushEndpointUrl = new Uri(PushEndpoint) },
+                    new ConfiguredStream
+                    {
+                        ReceiverId = ReceiverId + "/second",
+                        StreamId = "audit",
+                        PushEndpointUrl = new Uri(PushEndpoint),
+                    },
+                ]));
+
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(2, (await StreamsOfAsync(app, acme, ct)).Count);
+
+        var stored = Assert.Single(await store.ListAsync(ct));
+        Assert.True(await store.RemoveAsync("acme", stored.Version, ct));
+        await catalog.RefreshAsync(ct);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+        Assert.Empty(await streams.ListAllAsync(ct));
+
+        Assert.Empty(await StreamsOfAsync(app, acme, ct));
+        Assert.Empty(await streams.ListAllAsync(ct));
     }
 
     /// <summary>
@@ -197,7 +241,8 @@ public sealed class SharedSignalsTenantReleaseTests
         MemoryTenantStore store,
         FakeTimeProvider time,
         IStreamStore? streams = null,
-        ILoggerProvider? logs = null)
+        ILoggerProvider? logs = null,
+        Action<IOidcServerBuilder>? declare = null)
     {
         await TestLicense.Loaded;
 
@@ -226,6 +271,7 @@ public sealed class SharedSignalsTenantReleaseTests
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
         server.AddSharedSignals();
+        declare?.Invoke(server);
 
         var app = builder.Build();
 
