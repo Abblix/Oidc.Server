@@ -79,6 +79,31 @@ public partial class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// Consent given without the end user, as the provider granting every client everything gives it, answers a
+    /// request asking for consent with no consent page.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_PromptConsentGivenWithoutTheEndUser_NeedsNoConsentPage()
+    {
+        var request = CreateRequest(prompt: [Prompts.Consent], scope: [Scopes.OpenId, Scopes.Email]);
+        var session = CreateAuthSession();
+        var granted = await new NullConsentService().GetUserConsentsAsync(request, session);
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .ReturnsAsync(granted);
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
+            .ReturnsAsync("code");
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.IsType<SuccessfullyAuthenticated>(result);
+    }
+
+    /// <summary>
     /// Consent given on the request's consent page answers the prompt, so the request goes on with the host's
     /// consents: only what the host still holds pending is asked for.
     /// </summary>

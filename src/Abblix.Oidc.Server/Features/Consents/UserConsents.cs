@@ -38,4 +38,11 @@ public record UserConsents
     /// them only there, when it grants no scope and no resource either; otherwise the requested ones pass through.
     /// </summary>
     public DateTimeOffset? GivenAt { get; init; }
+
+    /// <summary>
+    /// Whether the consent is given without the end user, as a provider granting every client everything gives it,
+    /// so no consent page could change it: a request asking for consent with <c>prompt=consent</c> is answered by it
+    /// and is sent to no consent page.
+    /// </summary>
+    public bool GivenWithoutEndUser { get; init; }
 };
