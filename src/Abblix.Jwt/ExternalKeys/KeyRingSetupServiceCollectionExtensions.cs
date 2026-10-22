@@ -45,7 +45,11 @@ internal static class KeyRingSetupServiceCollectionExtensions
             serviceProvider =>
             {
                 var setup = serviceProvider.GetRequiredService<KeyRingSetup>();
-                return new KeyRingFactory(serviceProvider, setup.Policy, setup.Store);
+                return new KeyRingFactory(
+                    serviceProvider,
+                    setup.Policy,
+                    setup.Store,
+                    serviceProvider.GetRequiredService<KeyRingStartupCheck>());
             });
 
         services.TryAddSingleton<KeyRingRegistry>();

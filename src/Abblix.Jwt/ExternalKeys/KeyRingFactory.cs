@@ -15,6 +15,7 @@ internal sealed class KeyRingFactory
     private readonly IKeyRingStore _store;
     private readonly KeyRingRefresh _refresh;
     private readonly KeyRingSchedule _schedule;
+    private readonly KeyRingStartupCheck _check;
 
     /// <summary>
     /// Builds the steps of a refresh once: they hold no partition of their own, so one refresh serves every ring
@@ -23,8 +24,15 @@ internal sealed class KeyRingFactory
     /// <param name="serviceProvider">Resolves the services a ring and its steps take from the container.</param>
     /// <param name="policy">The rotation policy of every ring this factory builds.</param>
     /// <param name="store">The store whose partitions the rings are kept in.</param>
-    public KeyRingFactory(IServiceProvider serviceProvider, MintedKeys policy, IKeyRingStore store)
+    /// <param name="check">Judges where the host adopted its keys before a ring built here is refreshed by host code.
+    /// </param>
+    public KeyRingFactory(
+        IServiceProvider serviceProvider,
+        MintedKeys policy,
+        IKeyRingStore store,
+        KeyRingStartupCheck check)
     {
+        _check = check;
         _store = store;
         var steps = new KeyRingRefreshBuilder(serviceProvider, policy);
         _schedule = steps.Schedule;
@@ -39,6 +47,7 @@ internal sealed class KeyRingFactory
             new PartitionedKeyRingStore(_store, partition),
             _refresh,
             _schedule,
-            partition);
+            partition,
+            _check);
     }
 }
