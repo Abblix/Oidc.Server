@@ -31,6 +31,12 @@ namespace Abblix.Oidc.Server.Common.Interfaces;
 /// <para>
 /// Every call names the tenant whose keys are asked for, and no two tenants sign or decrypt with one key.
 /// </para>
+/// <para>
+/// A provider of the host's own is registered on the service collection the server is added to, before or after
+/// it: that registration is how the server tells it from its own provider without building it, and leaves each
+/// tenant's keys to it. One registered only through a third-party container's own API is taken for the server's
+/// provider, and each tenant's keys are judged by where the host placed them.
+/// </para>
 /// </remarks>
 public interface IAuthServiceKeysProvider
 {

@@ -16,8 +16,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// it serves now, and opens each new one through <see cref="IKeyRings.OpenAsync"/> before naming it here: the
 /// refresh loop builds a partition it meets for the first time without opening it, so one named before it is opened
 /// is served with no key until the loop's next round. Keys adopted into a partition outside <see cref="Fixed"/>
-/// refuse the start, since no issuer would be served them; with no fixed set, keys adopted into the unnamed partition
-/// refuse it, and keys adopted into a named one are taken when it opens.
+/// refuse the start and any opening, since no issuer would be served them; with no fixed set, keys adopted into the
+/// unnamed partition refuse them, and keys adopted into a named one are taken when it opens.
 /// </remarks>
 public interface IKeyRingPartitions
 {

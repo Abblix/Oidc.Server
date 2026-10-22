@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.DependencyInjection;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -42,20 +41,11 @@ public static class JwtServiceCollectionExtensions
         // TryAdd, so a host that registered its own key provider keeps it whichever placement it then chooses -
         // which is how the custodian's key listing gets cached in production, since the provider below does not
         // cache. The placement decides what the LIBRARY would install, never that one must be installed.
-        services.TryAddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
-            serviceProvider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement switch
-            {
-                // No custodian at all, or one registered with the placement call forgotten. This provider reads the
-                // static keys of OidcOptions and refuses outright in the second case, so a half-wired host cannot
-                // quietly serve local keys while believing its keys are in an HSM.
-                null => serviceProvider.CreateService<OidcOptionsKeysProvider>(),
-
-                KeyPlacement.Custodian => serviceProvider.CreateService<ExternalKeysProvider>(),
-                KeyPlacement.InProcess => serviceProvider.CreateService<MintedKeysProvider>(),
-
-                var unknown => throw new InvalidOperationException(
-                    $"No {nameof(IAuthServiceKeysProvider)} serves the {nameof(KeyPlacement)} '{unknown}'."),
-            });
+        services.TryAddSingleton(serviceProvider => new KeyProviderRegistration(
+            services,
+            serviceProvider.GetRequiredService<IOptions<KeyPlacementChoice>>()));
+        services.TryAdd(
+            ServiceDescriptor.Singleton(typeof(IAuthServiceKeysProvider), KeyProviderRegistration.LibraryProvider));
 
         // The write-role counterpart to the reader above. The default is the read-only static
         // configuration that fails loud if asked to persist a generated key; a persistent store (shipped

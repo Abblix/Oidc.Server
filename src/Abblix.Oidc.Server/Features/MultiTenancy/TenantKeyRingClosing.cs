@@ -8,7 +8,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,7 +32,7 @@ public sealed class TenantKeyRingClosing(IServiceProvider serviceProvider) : ITe
         IReadOnlyCollection<TenantDefinition> tenants,
         CancellationToken cancellationToken)
     {
-        if (serviceProvider.GetService<IAuthServiceKeysProvider>() is not MintedKeysProvider)
+        if (serviceProvider.GetService<KeyProviderRegistration>() is not { Mints: true })
             return new Dictionary<TenantDefinition, Exception>();
 
         var byPartition = tenants.ToDictionary(TenantKey.PartitionOf, StringComparer.Ordinal);

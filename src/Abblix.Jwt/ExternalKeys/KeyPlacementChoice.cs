@@ -15,8 +15,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// Riding the options-validation pipeline is what buys the timing: <c>ValidateOnStart</c> registers a
 /// startup validator, and the host runs it BEFORE it starts any hosted service, including the one that
 /// opens the HTTP port. A hosted service of our own would only run once that port is already open. The state
-/// lives here rather than on <c>OidcOptions</c> because validating those would resolve the key provider, which
-/// itself depends on those same options.
+/// lives here rather than on <c>OidcOptions</c> because the placement is made in this package, which a host signing
+/// tokens without being an OpenID Provider wires as well.
 /// </remarks>
 public sealed class KeyPlacementChoice
 {

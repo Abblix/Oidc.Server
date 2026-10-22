@@ -24,6 +24,7 @@ internal sealed class KeyRingParts
     public KeyRingParts(IServiceProvider provider, MintedKeys policy, IKeyRingStore store, IKeyRingPartitions kept)
     {
         var setup = new KeyRingSetup(policy, kept, store);
+        Check = new KeyRingStartupCheck(setup, provider.GetRequiredService<IKeyCustodian>());
         Registry = new KeyRingRegistry(new KeyRingFactory(provider, policy, store), setup);
         var opening = new KeyRingPartitionOpening(
             Registry,
@@ -31,9 +32,8 @@ internal sealed class KeyRingParts
             provider.GetRequiredService<TimeProvider>());
         Rings = new KeyRings(
             Registry,
-            new KeyRingPartitionsOpening(opening, setup),
+            new KeyRingPartitionsOpening(opening, setup, Check),
             new KeyRingEntriesRemoval(setup));
-        Check = new KeyRingStartupCheck(setup, provider.GetRequiredService<IKeyCustodian>());
         Rounds = new KeyRingRounds(Registry, setup, provider.GetRequiredService<IOptions<KeyRingOptions>>());
     }
 

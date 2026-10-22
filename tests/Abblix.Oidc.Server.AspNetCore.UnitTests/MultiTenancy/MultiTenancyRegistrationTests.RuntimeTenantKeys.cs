@@ -434,6 +434,29 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A host that reads the catalog before it starts opens its tenants' partitions then, so keys adopted where no
+    /// partition will take them are refused at that read, before any partition mints a key: into a partition no tenant
+    /// of the settings is kept in, or into the unnamed one when the tenants come from a store of the host's own.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KeysAdoptedWhereNoPartitionTakesThem_AreRefusedAtACatalogReadBeforeTheStart(bool hostsOwnStore)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = hostsOwnStore ? new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1")] } : null;
+        using var provider = MintingRealKeys(
+            store,
+            AdoptedInto(hostsOwnStore ? KeyRingOptions.DefaultPartition : "initech"),
+            hostsOwnStore ? null : Declaring);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await provider.GetRequiredService<ITenantCatalog>().FindByIdAsync(Acme.Id, ct));
+
+        Assert.Empty(await provider.GetRequiredService<IKeyRingStore>().LoadAsync(ct));
+    }
+
+    /// <summary>
     /// Starts the hosted services as the host does: every one's <see cref="IHostedLifecycleService.StartingAsync"/>
     /// before any one's <see cref="IHostedService.StartAsync"/>.
     /// </summary>
