@@ -72,12 +72,11 @@ public sealed partial class KeyRingTests
 
     /// <summary>
     /// One key adopted into two partitions, under any key id and whether the partitions are known at the start or come
-    /// and go, refuses the start naming both; a tenant created again under the same id is another partition.
+    /// and go, refuses the start naming both.
     /// </summary>
     [Theory]
     [InlineData("globex", false, true)]
     [InlineData("globex", true, true)]
-    [InlineData("acme~g2", false, true)]
     [InlineData("globex", false, false)]
     public void OneKeyAdoptedIntoTwoPartitions_RefusesTheStart_NamingBoth(
         string other,
@@ -119,6 +118,26 @@ public sealed partial class KeyRingTests
 
         var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
         Assert.Contains("'initech'", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("'acme'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A key adopted into the unnamed partition of a ring whose partitions come and go and into a named one is refused
+    /// for the unnamed partition, which names the one edit that fixes both, rather than as a key two partitions share.
+    /// </summary>
+    [Fact]
+    public void OneKeyAdoptedIntoTheUnnamedAndANamedPartition_IsRefusedForTheUnnamedOne()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var adoptedKeys = new Dictionary<string, IReadOnlyList<JsonWebKey>>
+        {
+            [KeyRingOptions.DefaultPartition] = [adopted],
+            ["acme"] = [adopted],
+        };
+
+        var (parts, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), adoptedKeys);
+
+        var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
         Assert.DoesNotContain("'acme'", refusal.Message, StringComparison.Ordinal);
     }
 

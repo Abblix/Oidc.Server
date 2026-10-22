@@ -16,7 +16,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// Refuses a tenant declaring keys its server's placement never reads; with the keys coming from each tenant's
-/// settings, a tenant declaring no signing key, a key without its public half, or a key another tenant declares; and,
+/// settings, a tenant declaring no signing key, a key lacking a member its type requires, or a key another tenant
+/// declares; and,
 /// with the keys held by a custodian, a tenant naming no key there or one another tenant names.
 /// </summary>
 /// <param name="serviceProvider">Tells which key provider serves the keys, and resolves the custodian.</param>
@@ -77,7 +78,7 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
     /// </summary>
     /// <remarks>
     /// A tenant may declare one key in both roles or twice, so each tenant counts once per key. A key with no public
-    /// half has no thumbprint and is refused on its own (<see cref="IncompleteSettingsKeysOf"/>).
+    /// type requires has no thumbprint and is refused on its own (<see cref="IncompleteSettingsKeysOf"/>).
     /// </remarks>
     private static IEnumerable<TenantRefusal> SharedSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
         =>
@@ -95,18 +96,24 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 "its own.");
 
     /// <summary>
-    /// A key a tenant declares without every member of its public half can neither be published nor told apart from
-    /// another tenant's, so the tenant is refused, naming the key, and the tenants beside it are served.
+    /// A key a tenant declares without every member its key type requires can neither be published nor told apart
+    /// from another tenant's, so the tenant is refused once, naming each such key, and the tenants beside it are served.
     /// </summary>
     private static IEnumerable<TenantRefusal> IncompleteSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
         =>
             from tenant in tenants
-            from key in tenant.SigningKeys.Concat(tenant.EncryptionKeys)
-            where !key.HasPublicKey
+            let incomplete = tenant.SigningKeys.Concat(tenant.EncryptionKeys)
+                .Where(key => !key.HasPublicKey)
+                .Select(key => key.KeyId is { } keyId
+                    ? $"'{keyId}' ({key.KeyType})"
+                    : $"one with no key id ({key.KeyType})")
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            where incomplete.Length > 0
             select TenantRefusal.Of(
                 tenant,
-                $"Tenant '{tenant.Id}': the key '{key.KeyId}' it declares lacks a member of its public half, so it " +
-                "can be neither published nor compared with another tenant's keys.");
+                $"Tenant '{tenant.Id}': the keys {string.Join(", ", incomplete)} it declares lack a member their key " +
+                "type requires, so they can be neither published nor compared with another tenant's keys.");
 
     /// <summary>
     /// The key settings a tenant declares that the placement never reads: declared, they read as the keys the

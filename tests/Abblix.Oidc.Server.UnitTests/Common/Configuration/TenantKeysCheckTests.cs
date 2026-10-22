@@ -133,23 +133,43 @@ public class TenantKeysCheckTests
         Assert.Empty(new TenantKeysCheck(serviceProvider).Check([tenant], new OidcOptions()));
     }
 
-    public static TheoryData<JsonWebKey> KeysWithoutTheirPublicHalf() =>
-    [
-        new RsaJsonWebKey { KeyId = "incomplete", Exponent = [1, 0, 1] },
-        new EllipticCurveJsonWebKey { KeyId = "incomplete", X = [1], Y = [2] },
-        new OctetJsonWebKey { KeyId = "incomplete" },
-    ];
+    public static TheoryData<JsonWebKey, bool> KeysLackingAMemberTheirTypeRequires()
+    {
+        JsonWebKey[] keys =
+        [
+            new RsaJsonWebKey { KeyId = "incomplete", Exponent = [1, 0, 1] },
+            new EllipticCurveJsonWebKey { KeyId = "incomplete", X = [1], Y = [2] },
+            new OctetJsonWebKey { KeyId = "incomplete" },
+        ];
+
+        var rows = new TheoryData<JsonWebKey, bool>();
+        foreach (var key in keys)
+        {
+            rows.Add(key, false);
+            rows.Add(key, true);
+        }
+
+        return rows;
+    }
 
     /// <summary>
-    /// A key declared without every member of its public half refuses its own tenant, naming it, and leaves the tenant
-    /// beside it served, rather than failing the whole check.
+    /// A key declared, to sign or to encrypt, without every member its key type requires refuses its own tenant and
+    /// leaves the tenant beside it served, rather than failing the whole check.
     /// </summary>
     [Theory]
-    [MemberData(nameof(KeysWithoutTheirPublicHalf))]
-    public void Check_AKeyWithoutItsPublicHalf_RefusesItsTenantAlone(JsonWebKey incomplete)
+    [MemberData(nameof(KeysLackingAMemberTheirTypeRequires))]
+    public void Check_AKeyLackingAMemberItsTypeRequires_RefusesItsTenantAlone(JsonWebKey incomplete, bool asEncryption)
     {
         using var serviceProvider = BuildHost();
-        var broken = Tenant(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), incomplete);
+        var broken = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri("https://auth.example.com"),
+            SigningKeys = asEncryption
+                ? [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)]
+                : [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), incomplete],
+            EncryptionKeys = asEncryption ? [incomplete] : [],
+        };
         var served = new TenantDefinition
         {
             Id = "globex",
