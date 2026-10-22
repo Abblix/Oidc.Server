@@ -16,8 +16,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// Refuses a tenant declaring keys its server's placement never reads; with the keys coming from each tenant's
-/// settings, a tenant declaring no signing key; and, with the keys held by a custodian, a tenant naming no key there
-/// or one another tenant names.
+/// settings, a tenant declaring no signing key, a key lacking a member its type requires, or a key another tenant
+/// declares; and, with the keys held by a custodian, a tenant naming no key there or one another tenant names.
 /// </summary>
 /// <param name="serviceProvider">Tells which key provider serves the keys, and resolves the custodian.</param>
 public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenantsCheck
@@ -28,7 +28,9 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
         {
             KeyProviderKind.Settings => Unread(tenants, "the keys come from each tenant's settings",
                     nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
-                .Concat(UnsignedOf(tenants)),
+                .Concat(UnsignedOf(tenants))
+                .Concat(IncompleteSettingsKeysOf(tenants))
+                .Concat(SharedSettingsKeysOf(tenants)),
 
             KeyProviderKind.Custodian => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
@@ -67,6 +69,57 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 $"publishes an empty JWKS. Supply at least one JWK with a private part in " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a " +
                 "custodian or minted by the server.");
+
+    /// <summary>
+    /// No key, compared by its thumbprint, is declared by two tenants: sharing one would let a party trusting one
+    /// tenant's keys verify the other's tokens, or open what was encrypted to it, which keys of their own exist to
+    /// prevent.
+    /// </summary>
+    /// <remarks>
+    /// A tenant may declare one key in both roles or twice, so each tenant counts once per key. A key lacking a member
+    /// its type requires has no thumbprint and is refused on its own (<see cref="IncompleteSettingsKeysOf"/>).
+    /// </remarks>
+    private static IEnumerable<TenantRefusal> SharedSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
+        =>
+            from tenant in tenants
+            from thumbprint in tenant.SigningKeys.Concat(tenant.EncryptionKeys)
+                .Where(key => key.HasPublicKey)
+                .Select(key => key.ComputeJwkThumbprintBase64Url())
+                .Distinct(StringComparer.Ordinal)
+            group tenant.Id by thumbprint into declarers
+            where declarers.Count() > 1
+            select new TenantRefusal(
+                [..declarers],
+                $"The key with the thumbprint '{declarers.Key}' is declared by the tenants " +
+                $"{string.Join(", ", declarers.Select(id => $"'{id}'"))}; each tenant signs and decrypts with keys of " +
+                "its own.");
+
+    /// <summary>
+    /// A key a tenant declares without every member its key type requires can neither be published nor told apart
+    /// from another tenant's, so the tenant is refused once, naming each such key, and the tenants beside it are served.
+    /// </summary>
+    private static IEnumerable<TenantRefusal> IncompleteSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
+        => TenantRefusal.EachOf(tenants, IncompleteKeysOf);
+
+    private static IEnumerable<string> IncompleteKeysOf(TenantDefinition tenant)
+    {
+        var incomplete = tenant.SigningKeys.Concat(tenant.EncryptionKeys)
+            .Where(key => !key.HasPublicKey)
+            .Select(key => key.KeyId is { } keyId ? $"'{keyId}' ({key.KeyType})" : $"one with no key id ({key.KeyType})")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (incomplete.Length == 1)
+        {
+            yield return $"the key {incomplete[0]} it declares lacks a member its key type requires, so it can be " +
+                         "neither published nor compared with another tenant's keys.";
+        }
+        else if (incomplete.Length > 1)
+        {
+            yield return $"the keys {string.Join(", ", incomplete)} it declares lack a member their key type " +
+                         "requires, so they can be neither published nor compared with another tenant's keys.";
+        }
+    }
 
     /// <summary>
     /// The key settings a tenant declares that the placement never reads: declared, they read as the keys the

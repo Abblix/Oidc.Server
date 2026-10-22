@@ -89,6 +89,118 @@ public class TenantKeysCheckTests
         Assert.Empty(new TenantKeysCheck(serviceProvider).Check([Tenant()], new OidcOptions()));
     }
 
+    /// <summary>
+    /// One key declared by two tenants, in either role and under any key id, is refused naming both.
+    /// </summary>
+    [Theory]
+    [InlineData("globex", false, false)]
+    [InlineData("globex", true, false)]
+    [InlineData("globex", false, true)]
+    public void Check_OneKeyDeclaredByTwoTenants_RefusesBoth(string otherId, bool otherKeyId, bool asEncryption)
+    {
+        using var serviceProvider = BuildHost();
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var copy = otherKeyId ? key with { KeyId = "another" } : key;
+        var other = new TenantDefinition
+        {
+            Id = otherId,
+            Issuer = new Uri("https://other.example.com"),
+            SigningKeys = asEncryption ? [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)] : [copy],
+            EncryptionKeys = asEncryption ? [copy] : [],
+        };
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([Tenant(key), other], new OidcOptions()));
+
+        Assert.Equal(["acme", otherId], refusal.TenantIds);
+    }
+
+    /// <summary>
+    /// A tenant declaring one key twice, or in both roles, shares it with nobody.
+    /// </summary>
+    [Fact]
+    public void Check_OneKeyDeclaredTwiceByOneTenant_Passes()
+    {
+        using var serviceProvider = BuildHost();
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var tenant = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri("https://auth.example.com"),
+            SigningKeys = [key, key],
+            EncryptionKeys = [key],
+        };
+
+        Assert.Empty(new TenantKeysCheck(serviceProvider).Check([tenant], new OidcOptions()));
+    }
+
+    public static TheoryData<JsonWebKey, bool> KeysLackingAMemberTheirTypeRequires()
+    {
+        JsonWebKey[] keys =
+        [
+            new RsaJsonWebKey { KeyId = "incomplete", Exponent = [1, 0, 1] },
+            new EllipticCurveJsonWebKey { KeyId = "incomplete", X = [1], Y = [2] },
+            new OctetJsonWebKey { KeyId = "incomplete" },
+        ];
+
+        var rows = new TheoryData<JsonWebKey, bool>();
+        foreach (var key in keys)
+        {
+            rows.Add(key, false);
+            rows.Add(key, true);
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// A key declared, to sign or to encrypt, without every member its key type requires refuses its own tenant and
+    /// leaves the tenant beside it served, rather than failing the whole check.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(KeysLackingAMemberTheirTypeRequires))]
+    public void Check_AKeyLackingAMemberItsTypeRequires_RefusesItsTenantAlone(JsonWebKey incomplete, bool asEncryption)
+    {
+        using var serviceProvider = BuildHost();
+        var broken = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri("https://auth.example.com"),
+            SigningKeys = asEncryption
+                ? [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)]
+                : [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), incomplete],
+            EncryptionKeys = asEncryption ? [incomplete] : [],
+        };
+        var served = new TenantDefinition
+        {
+            Id = "globex",
+            Issuer = new Uri("https://other.example.com"),
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        };
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([broken, served], new OidcOptions()));
+
+        Assert.Equal(["acme"], refusal.TenantIds);
+    }
+
+    /// <summary>
+    /// A tenant declaring several incomplete keys, or one with no key id, is refused once, and alone.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Check_ATenantsIncompleteKeys_RefuseItOnce(bool withKeyId)
+    {
+        using var serviceProvider = BuildHost();
+        JsonWebKey[] incomplete = withKeyId
+            ? [new RsaJsonWebKey { KeyId = "rsa", Exponent = [1, 0, 1] }, new OctetJsonWebKey { KeyId = "oct" }]
+            : [new RsaJsonWebKey { Exponent = [1, 0, 1] }];
+        var broken = Tenant([JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), ..incomplete]);
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([broken], new OidcOptions()));
+
+        Assert.Equal(["acme"], refusal.TenantIds);
+    }
+
     private static TenantDefinition Tenant(params JsonWebKey[] signingKeys) => new()
     {
         Id = "acme",

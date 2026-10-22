@@ -69,4 +69,89 @@ public sealed partial class KeyRingTests
 
         Assert.Empty(store.Entries);
     }
+
+    /// <summary>
+    /// One key adopted into two partitions, under any key id and whether the partitions are known at the start or come
+    /// and go, refuses the start naming both.
+    /// </summary>
+    [Theory]
+    [InlineData("globex", false, true)]
+    [InlineData("globex", true, true)]
+    [InlineData("globex", false, false)]
+    public void OneKeyAdoptedIntoTwoPartitions_RefusesTheStart_NamingBoth(
+        string other,
+        bool otherKeyId,
+        bool partitionsFixed)
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var copy = otherKeyId ? adopted with { KeyId = "another" } : adopted;
+        var adoptedKeys = new Dictionary<string, IReadOnlyList<JsonWebKey>>
+        {
+            ["acme"] = [adopted],
+            [other] = [copy],
+        };
+
+        var parts = partitionsFixed
+            ? CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adoptedKeys, "acme", other).Item1
+            : RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), adoptedKeys).Item1;
+
+        var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
+        Assert.Contains("'acme'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{other}'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A key adopted into a partition the ring never keeps and into one it keeps is refused for the partition never
+    /// kept, which names the one edit that fixes both, rather than as a key two partitions share.
+    /// </summary>
+    [Fact]
+    public void OneKeyAdoptedIntoAKeptAndAnUnkeptPartition_IsRefusedForTheUnkeptOne()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var adoptedKeys = new Dictionary<string, IReadOnlyList<JsonWebKey>>
+        {
+            ["acme"] = [adopted],
+            ["initech"] = [adopted],
+        };
+
+        var (parts, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), adoptedKeys, "acme");
+
+        var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
+        Assert.Contains("'initech'", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("'acme'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A key adopted into the unnamed partition of a ring whose partitions come and go and into a named one is refused
+    /// for the unnamed partition, which names the one edit that fixes both, rather than as a key two partitions share.
+    /// </summary>
+    [Fact]
+    public void OneKeyAdoptedIntoTheUnnamedAndANamedPartition_IsRefusedForTheUnnamedOne()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var adoptedKeys = new Dictionary<string, IReadOnlyList<JsonWebKey>>
+        {
+            [KeyRingOptions.DefaultPartition] = [adopted],
+            ["acme"] = [adopted],
+        };
+
+        var (parts, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), adoptedKeys);
+
+        var refusal = Assert.Throws<InvalidOperationException>(parts.CheckAdoption);
+        Assert.DoesNotContain("'acme'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One key adopted twice into the same partition is a repeat, not sharing, so the ring starts.
+    /// </summary>
+    [Fact]
+    public void OneKeyAdoptedTwiceIntoOnePartition_Starts()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (parts, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted, adopted]), "acme", "globex");
+
+        parts.CheckAdoption();
+    }
 }
