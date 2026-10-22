@@ -318,7 +318,9 @@ public sealed class SharedSignalsTenantIsolationTests
         var acme = await ClientOf(app, Host + Acme).GetFromJsonAsync<StreamConfiguration[]>(Acme + StreamPath, ct);
         var globex = await ClientOf(app, Host + Globex).GetFromJsonAsync<StreamConfiguration[]>(Globex + StreamPath, ct);
 
-        Assert.Equal("alerts", Assert.Single(acme!).StreamId);
+        var declared = Assert.Single(acme!);
+        Assert.Equal("alerts", declared.StreamId);
+        Assert.Equal(Host + Acme, declared.Issuer);
         Assert.Empty(globex!);
     }
 
