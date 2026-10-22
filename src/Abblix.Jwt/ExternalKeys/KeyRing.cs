@@ -49,7 +49,15 @@ internal sealed class KeyRing(
     /// Mints whatever the current period is missing, then reloads and opens the ring into memory.
     /// </summary>
     /// <param name="cancellationToken">Cancels the refresh.</param>
-    public Task RefreshAsync(CancellationToken cancellationToken) => RefreshAsync(store, cancellationToken);
+    /// <exception cref="InvalidOperationException">Keys are adopted where no partition takes them.</exception>
+    public Task RefreshAsync(CancellationToken cancellationToken)
+    {
+        // The one path host code reaches before the start, which is judged before any partition opens: a partition
+        // takes adopted keys only until it holds a key it minted, so a ring refreshed here first would mint, and a
+        // corrected adoption would never be taken. The refresh rounds and openings come after that judgement.
+        check.CheckAdoption();
+        return RefreshAsync(store, cancellationToken);
+    }
 
     /// <summary>
     /// Refreshes the ring from <paramref name="source"/>: a view of the store read once for every partition
@@ -57,14 +65,6 @@ internal sealed class KeyRing(
     /// </summary>
     /// <param name="source">Where the entries are read from and written to.</param>
     /// <param name="cancellationToken">Cancels the refresh.</param>
-    /// <exception cref="InvalidOperationException">Keys are adopted where no partition takes them, or one key into
-    /// two partitions.</exception>
     internal async Task RefreshAsync(IKeyRingStore source, CancellationToken cancellationToken)
-    {
-        // Before the first mint, whichever path refreshes the ring: a partition takes adopted keys only until it holds
-        // a key it minted, so a ring refreshed before the start would mint, and a corrected adoption would never be
-        // taken
-        check.CheckAdoption();
-        _held.Replace(await refresh.RunAsync(source, partition, cancellationToken));
-    }
+        => _held.Replace(await refresh.RunAsync(source, partition, cancellationToken));
 }
