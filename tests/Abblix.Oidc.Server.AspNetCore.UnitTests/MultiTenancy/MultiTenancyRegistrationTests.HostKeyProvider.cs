@@ -115,6 +115,26 @@ public partial class MultiTenancyRegistrationTests
         services.AddKeyedSingleton("elsewhere", Moq.Mock.Of<IAuthServiceKeysProvider>());
         using var provider = services.BuildServiceProvider();
 
-        Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        var refusals = KeysCheckOf(provider).Check([Acme], new OidcOptions());
+
+        Assert.Equal(["acme"], Assert.Single(refusals).TenantIds);
     }
+
+    /// <summary>
+    /// With no key provider registered at all, as tenants served without the token services have, no tenant's keys
+    /// are judged, so a tenant declaring none is served.
+    /// </summary>
+    [Fact]
+    public void WithoutAnyKeyProvider_NoTenantsKeysAreJudged()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OidcOptions>();
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Empty(KeysCheckOf(provider).Check([Acme], new OidcOptions()));
+    }
+
+    private static TenantKeysCheck KeysCheckOf(IServiceProvider provider)
+        => provider.GetServices<ITenantsCheck>().OfType<TenantKeysCheck>().Single();
 }

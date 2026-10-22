@@ -27,8 +27,8 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// an empty <see cref="TenantDefinition.SigningKeys"/> - because that tenant can never sign a token and the fact is
 /// fully known before the first request. Every other arrangement passes this check: a host-supplied provider may
 /// read keys from a store that is legitimately unreachable while the host boots, and a half-wired custodian is
-/// refused elsewhere with a message naming the missing placement call. The key provider is resolved through the
-/// real registration, so the provider the check sees is the one a host gets.
+/// refused elsewhere with a message naming the missing placement call. The kind of key provider is read from the
+/// real registration, so the check judges the provider a host gets.
 /// </summary>
 public class TenantKeysCheckTests
 {

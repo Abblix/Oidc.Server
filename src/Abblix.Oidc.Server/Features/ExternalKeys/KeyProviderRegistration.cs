@@ -22,11 +22,12 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// <remarks>
 /// The checks that judge each tenant's keys run while the server's settings are validated, and a host's own provider
 /// may take the key ring, whose settings are completed from the server's: building the provider there to ask its
-/// type would build it inside its own construction. So the answer is read from the registrations, where the last
-/// one for the provider is the one the container serves. They are read while the container runs rather than
+/// type would build it inside its own construction. So the answer is read from the registrations the server was added
+/// to, where the last one for the provider is the one the built-in container serves, and where a host registers a
+/// provider of its own (<see cref="IAuthServiceKeysProvider"/>). They are read while the container runs rather than
 /// copied while registering, since a host may register its provider after the server.
 /// </remarks>
-/// <param name="services">The registrations the container was built from.</param>
+/// <param name="services">The registrations the server was added to.</param>
 /// <param name="placement">Where the host placed the private halves of its keys, if anywhere.</param>
 internal sealed class KeyProviderRegistration(IServiceCollection services, IOptions<KeyPlacementChoice> placement)
 {
