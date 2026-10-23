@@ -165,24 +165,25 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
-    /// Verifies mTLS aliases are null when standard endpoints are disabled.
+    /// A document naming no endpoint, with every endpoint disabled or with endpoint paths hidden, carries no alias
+    /// block, since an alias block names one or more endpoints (RFC 8705 section 5).
     /// </summary>
-    [Fact]
-    public async Task ConfigurationAsync_WithDisabledEndpoints_ShouldHaveNullMtlsAliases()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADocumentNamingNoEndpoint_CarriesNoAliasBlock(bool pathsHidden)
     {
-        // Arrange
         _issuer.MtlsBaseUri = new Uri("https://mtls.example.com");
-        _oidcOptions.EnabledEndpoints = 0; // Disable all endpoints
-        var baseResponse = MinimalResponse();
+        if (pathsHidden)
+            _oidcOptions.Discovery.AllowEndpointPathsDiscovery = false;
+        else
+            _oidcOptions.EnabledEndpoints = 0;
 
-        // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
+        var result = await _formatter.FormatResponseAsync(MinimalResponse());
 
-        // Assert
         Assert.NotNull(result.Value);
         Assert.Null(result.Value.TokenEndpoint);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Null(result.Value.MtlsEndpointAliases.TokenEndpoint); // Null because standard endpoint is null
+        Assert.Null(result.Value.MtlsEndpointAliases);
     }
 
     /// <summary>

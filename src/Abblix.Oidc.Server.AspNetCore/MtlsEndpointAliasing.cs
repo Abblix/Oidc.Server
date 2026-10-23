@@ -20,8 +20,13 @@ internal static class MtlsEndpointAliasing
 {
     /// <summary>
     /// Adds the mutual-TLS aliases of the endpoints a client authenticating with its certificate calls, each the
-    /// endpoint moved onto <paramref name="mtlsBaseUri"/>, when the issuer has a mutual-TLS host.
+    /// endpoint moved onto <paramref name="mtlsBaseUri"/>, when the issuer has a mutual-TLS host and the document names
+    /// at least one of those endpoints.
     /// </summary>
+    /// <remarks>
+    /// The alias block "consists of one or more endpoint parameters" (RFC 8705 section 5), so a document naming none
+    /// of the endpoints, with them disabled or their paths hidden, carries no block rather than an empty one.
+    /// </remarks>
     /// <param name="document">The document naming the ordinary endpoints.</param>
     /// <param name="mtlsBaseUri">The scheme, host and port of the issuer's mutual-TLS host, or null without one.
     /// </param>
@@ -30,19 +35,19 @@ internal static class MtlsEndpointAliasing
         if (mtlsBaseUri is null)
             return document;
 
-        return document with
+        var aliases = new MtlsAliases
         {
-            MtlsEndpointAliases = new MtlsAliases
-            {
-                TokenEndpoint = Rebase(document.TokenEndpoint, mtlsBaseUri),
-                RevocationEndpoint = Rebase(document.RevocationEndpoint, mtlsBaseUri),
-                IntrospectionEndpoint = Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
-                UserInfoEndpoint = Rebase(document.UserInfoEndpoint, mtlsBaseUri),
-                PushedAuthorizationRequestEndpoint = Rebase(document.PushedAuthorizationRequestEndpoint, mtlsBaseUri),
-                BackChannelAuthenticationEndpoint = Rebase(document.BackChannelAuthenticationEndpoint, mtlsBaseUri),
-                DeviceAuthorizationEndpoint = Rebase(document.DeviceAuthorizationEndpoint, mtlsBaseUri),
-            },
+            TokenEndpoint = Rebase(document.TokenEndpoint, mtlsBaseUri),
+            RevocationEndpoint = Rebase(document.RevocationEndpoint, mtlsBaseUri),
+            IntrospectionEndpoint = Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
+            UserInfoEndpoint = Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+            PushedAuthorizationRequestEndpoint = Rebase(document.PushedAuthorizationRequestEndpoint, mtlsBaseUri),
+            BackChannelAuthenticationEndpoint = Rebase(document.BackChannelAuthenticationEndpoint, mtlsBaseUri),
+            DeviceAuthorizationEndpoint = Rebase(document.DeviceAuthorizationEndpoint, mtlsBaseUri),
         };
+
+        // Compared as a whole, so an alias added to the block counts without being listed here again
+        return aliases == new MtlsAliases() ? document : document with { MtlsEndpointAliases = aliases };
     }
 
     /// <summary>

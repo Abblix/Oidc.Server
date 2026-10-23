@@ -202,9 +202,10 @@ public sealed class TenantDefinition
     /// the address therefore carries no path of its own.
     /// </summary>
     /// <remarks>
-    /// The server publishes an alias at this address for each mutual-TLS endpoint it serves, and names no alias of
-    /// any other kind: a request reaches a tenant only at its issuer and at this address, so an alias anywhere else
-    /// would send a client where no request reaches the tenant.
+    /// The server publishes an alias at this address for each mutual-TLS endpoint its discovery document names, so
+    /// none while endpoint paths are hidden from discovery, and names no alias of any other kind: a request reaches a
+    /// tenant only at its issuer and at this address, so an alias anywhere else would send a client where no request
+    /// reaches the tenant.
     /// </remarks>
     public Uri? MtlsBaseUri { get; init; }
 }
