@@ -22,7 +22,8 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
     /// <summary>
     /// What is wrong with a conflict between several tenants as told to one of them, naming none of the tenants,
     /// since the party changing one tenant may not be entitled to learn which others exist; null for a refusal of
-    /// one tenant alone.
+    /// one tenant alone. A host's own check may leave it null for a conflict too, and the party is then told only
+    /// that its tenant conflicts with another, which the host's log names.
     /// </summary>
     public string? PartyMessage { get; init; }
 

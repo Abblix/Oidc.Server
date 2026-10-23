@@ -405,7 +405,8 @@ public partial class MultiTenancyRegistrationTests
         var conflict = Assert.Single(
             provider.GetServices<ITenantsCheck>().SelectMany(check => check.Check(tenants, new OidcOptions())),
             found => found.TenantIds.Count > 1);
-        Assert.DoesNotContain("globex", Assert.IsType<string>(conflict.PartyMessage), StringComparison.Ordinal);
+        var partyMessage = Assert.IsType<string>(conflict.PartyMessage);
+        Assert.All(conflict.TenantIds, id => Assert.DoesNotContain(id, partyMessage, StringComparison.Ordinal));
     }
 
     /// <summary>

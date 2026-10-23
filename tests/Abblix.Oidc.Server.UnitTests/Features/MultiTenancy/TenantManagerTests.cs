@@ -219,8 +219,8 @@ public sealed class TenantManagerTests : IDisposable
     }
 
     /// <summary>
-    /// A change refused for a conflict with another tenant tells the caller what is wrong without naming that tenant,
-    /// and the host's log names both.
+    /// A change refused for a conflict with another tenant tells the caller what the check says to one party, which
+    /// names neither tenant, and the host's log names both.
     /// </summary>
     [Theory]
     [InlineData("https://auth.example.com/tenants/x", "https://auth.example.com/tenants/x")]
@@ -237,6 +237,11 @@ public sealed class TenantManagerTests : IDisposable
         Assert.True(refused.TryGetFailure(out var refusal));
         Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
         Assert.DoesNotContain("globex", refusal.Message, StringComparison.Ordinal);
+        var conflict = Assert.Single(
+            new TenantDefinitionsCheck().Check(
+                [Tenant("globex", existing), Tenant("acme", changed)],
+                new OidcOptions()));
+        Assert.Contains(Assert.IsType<string>(conflict.PartyMessage), refusal.Message, StringComparison.Ordinal);
         var logged = Assert.Single(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
         Assert.Contains("globex", logged.Text, StringComparison.Ordinal);
     }
@@ -254,7 +259,8 @@ public sealed class TenantManagerTests : IDisposable
             .Returns((IReadOnlyCollection<TenantDefinition> tenants, OidcOptions _) => tenants.Count > 1
                 ? [new TenantRefusal([..tenants.Select(tenant => tenant.Id)], "acme and globex share a billing account.")]
                 : []);
-        var manager = ManagerLoggingTo(new RecordingLogger(), hostsCheck.Object);
+        var logger = new RecordingLogger();
+        var manager = ManagerLoggingTo(logger, hostsCheck.Object);
         Stored(await manager.CreateAsync(Tenant("globex", "https://globex.example.com"), Ct));
 
         var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
@@ -262,6 +268,29 @@ public sealed class TenantManagerTests : IDisposable
         Assert.True(refused.TryGetFailure(out var refusal));
         Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
         Assert.DoesNotContain("globex", refusal.Message, StringComparison.Ordinal);
+        Assert.Single(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
+    }
+
+    /// <summary>
+    /// A refusal of the changed tenant alone is told to the caller as the check gave it, and logs no conflict.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalOfTheChangedTenantAlone_IsToldAsTheCheckGaveIt()
+    {
+        var ownRefusal = new TenantRefusal(["acme"], "acme has no billing account.");
+        var hostsCheck = new Mock<ITenantsCheck>();
+        hostsCheck
+            .Setup(check => check.Check(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<OidcOptions>()))
+            .Returns((IReadOnlyCollection<TenantDefinition> tenants, OidcOptions _) =>
+                tenants.Any(tenant => tenant.Id == "acme") ? [ownRefusal] : []);
+        var logger = new RecordingLogger();
+        var manager = ManagerLoggingTo(logger, hostsCheck.Object);
+
+        var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
+
+        Assert.True(refused.TryGetFailure(out var refusal));
+        Assert.Equal(ownRefusal.Message, refusal.Message);
+        Assert.DoesNotContain(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
     }
 
     // The event a refusal told without the other tenants of a conflict is logged under
