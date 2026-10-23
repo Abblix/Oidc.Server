@@ -250,16 +250,39 @@ public sealed partial class TenantManager(
             changed,
         ];
 
-        var messages = (
+        var refusals = (
             from refusal in TenantRefusal.AllOf(checks, candidate, options.Value)
             where refusal.TenantIds.Contains(changed.Id, StringComparer.Ordinal)
-            select refusal.Message
+            select refusal
         ).ToArray();
 
-        return messages.Length == 0
-            ? null
-            : new TenantChangeRefusal(TenantChangeRefusalReason.Invalid, string.Join(" ", messages));
+        if (refusals.Length == 0)
+            return null;
+
+        return new TenantChangeRefusal(
+            TenantChangeRefusalReason.Invalid,
+            string.Join(" ", refusals.Select(refusal => ToParty(refusal, changed.Id))));
     }
+
+    /// <summary>
+    /// What <paramref name="refusal"/> says to the party changing <paramref name="tenantId"/>: all of it when it
+    /// names that tenant alone, and otherwise what is wrong without naming the other tenants, which the host's log
+    /// is given in full.
+    /// </summary>
+    /// <remarks>
+    /// A host may let each tenant change its own definition through this manager and pass the refusal on, so a
+    /// conflict told in full would show one tenant which others exist and which keys and addresses they use.
+    /// </remarks>
+    private string ToParty(TenantRefusal refusal, string tenantId)
+    {
+        if (refusal.TenantIds.All(id => string.Equals(id, tenantId, StringComparison.Ordinal)))
+            return refusal.Message;
+
+        LogConflictToldWithoutTheOthers(tenantId, refusal.Message);
+        return $"Tenant '{tenantId}': {refusal.PartyMessage ?? UnnamedConflict}";
+    }
+
+    private const string UnnamedConflict = "it conflicts with another tenant, which the host's log names.";
 
     private static TenantChangeRefusal AlreadyExists(string tenantId)
         => new(TenantChangeRefusalReason.AlreadyExists, $"The store holds a tenant '{tenantId}' already.");

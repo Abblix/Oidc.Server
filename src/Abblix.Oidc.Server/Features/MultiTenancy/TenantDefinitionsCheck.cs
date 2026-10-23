@@ -45,7 +45,11 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         ).Distinct().Select(nested => new TenantRefusal(
             [nested.Outer, nested.Inner],
             $"The issuer of tenant '{nested.Inner}' lies under that of tenant '{nested.Outer}' on the same host, " +
-            $"so the sign-in cookie of '{nested.Outer}' would reach '{nested.Inner}'."));
+            $"so the sign-in cookie of '{nested.Outer}' would reach '{nested.Inner}'.")
+        {
+            PartyMessage = "its issuer and the issuer of another tenant lie one under the other on the same host, " +
+                           "so the sign-in cookie of the outer tenant would reach the inner one.",
+        });
     }
 
     /// <inheritdoc />
@@ -104,7 +108,10 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
             select new TenantRefusal(
                 [..same],
                 $"The tenants {string.Join(", ", same)} are served at the same address " +
-                $"{same.Key.Host}{same.Key.Path}."));
+                $"{same.Key.Host}{same.Key.Path}.")
+            {
+                PartyMessage = $"it is served at the address {same.Key.Host}{same.Key.Path}, as another tenant is.",
+            });
 
         failures.AddRange(NestedIssuers(tenants));
 
