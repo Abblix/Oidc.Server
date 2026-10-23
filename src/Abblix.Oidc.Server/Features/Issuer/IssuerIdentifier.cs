@@ -25,10 +25,11 @@ internal static class IssuerIdentifier
     /// Two slashes in a row, the form an empty path segment takes anywhere but at the end of the path.
     /// </summary>
     /// <remarks>
-    /// Request routing takes such a path as it is written, while an address resolved against the issuer's host reads
-    /// a path opening with one as a network-path reference naming another host (RFC 3986 section 4.2), so parts of the
-    /// server would disagree about where the issuer is. A single slash closing the path is kept, as the common form of
-    /// an issuer at the root of its host.
+    /// Request routing takes a path opening with one as it is written, while an address resolved against the issuer's
+    /// host reads it as a network-path reference naming another host (RFC 3986 section 4.2), so parts of the server
+    /// would disagree about where the issuer is. An empty segment further along names nothing of its own and is all
+    /// but certainly a mistake in the configuration, so it is refused by the same rule. A single slash closing the
+    /// path is kept, since an issuer is commonly written with one, at the root of its host or under a path.
     /// </remarks>
     private const string EmptySegment = "//";
 
@@ -52,11 +53,13 @@ internal static class IssuerIdentifier
         if (issuer.UserInfo.Length > 0)
             return "must have no user name or password";
 
-        if (issuer.AbsolutePath.Contains(EmptySegment, StringComparison.Ordinal))
-            return "must have no empty segment in its path";
-
         if (!IsWrittenAsUrl(issuer.OriginalString))
             return "must be written as a URL with no whitespace or control characters";
+
+        // After the written form, which a backslash fails, since the parser turns one into a slash and the operator
+        // would be told of two slashes nobody wrote
+        if (issuer.AbsolutePath.Contains(EmptySegment, StringComparison.Ordinal))
+            return "must have no empty segment in its path";
 
         return null;
     }
