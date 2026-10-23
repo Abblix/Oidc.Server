@@ -22,6 +22,18 @@ namespace Abblix.Oidc.Server.Features.Issuer;
 internal static class IssuerIdentifier
 {
     /// <summary>
+    /// Two slashes in a row, the form an empty path segment takes anywhere but at the end of the path.
+    /// </summary>
+    /// <remarks>
+    /// Request routing takes a path opening with one as it is written, while an address resolved against the issuer's
+    /// host reads it as a network-path reference naming another host (RFC 3986 section 4.2), so parts of the server
+    /// would disagree about where the issuer is. An empty segment further along names nothing of its own and is all
+    /// but certainly a mistake in the configuration, so it is refused by the same rule. A single slash closing the
+    /// path is kept, since an issuer is commonly written with one, at the root of its host or under a path.
+    /// </remarks>
+    private const string EmptySegment = "//";
+
+    /// <summary>
     /// Why <paramref name="issuer"/> cannot be an issuer, or null when it can.
     /// </summary>
     /// <param name="issuer">The issuer as configured.</param>
@@ -43,6 +55,11 @@ internal static class IssuerIdentifier
 
         if (!IsWrittenAsUrl(issuer.OriginalString))
             return "must be written as a URL with no whitespace or control characters";
+
+        // After the written form, which a backslash fails, since the parser turns one into a slash and the operator
+        // would be told of two slashes nobody wrote
+        if (issuer.AbsolutePath.Contains(EmptySegment, StringComparison.Ordinal))
+            return "must have no empty segment in its path";
 
         return null;
     }
