@@ -392,13 +392,21 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public void TwoTenantsNamingOneCustodianKey_AreRefusedAtStartup()
     {
-        using var provider = KeysInACustodian(
-            [NamingInTheCustodian("acme", "shared-sign"), NamingInTheCustodian("globex", "shared-sign")]);
+        TenantDefinition[] tenants =
+            [NamingInTheCustodian("acme", "shared-sign"), NamingInTheCustodian("globex", "shared-sign")];
+        using var provider = KeysInACustodian(tenants);
 
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains("The custodian key 'shared-sign' is named by the tenants 'acme', 'globex'", refusal.Message,
             StringComparison.Ordinal);
+
+        // What one of the two is told names neither of them
+        var conflict = Assert.Single(
+            provider.GetServices<ITenantsCheck>().SelectMany(check => check.Check(tenants, new OidcOptions())),
+            found => found.TenantIds.Count > 1);
+        var partyMessage = Assert.IsType<string>(conflict.PartyMessage);
+        Assert.All(conflict.TenantIds, id => Assert.DoesNotContain(id, partyMessage, StringComparison.Ordinal));
     }
 
     /// <summary>
