@@ -57,6 +57,4 @@ internal sealed class LicensedTenantSettings(string id, CancellationToken releas
     public string CheckSessionCookieName => Rest.CheckSessionCookieName;
 
     public Uri? MtlsBaseUri => Rest.MtlsBaseUri;
-
-    public MtlsAliasesOptions? MtlsEndpointAliases => Rest.MtlsEndpointAliases;
 }
