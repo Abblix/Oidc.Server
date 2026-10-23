@@ -25,6 +25,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,7 +40,7 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// A tenant removed from the store of tenants while the server runs: once it is released, the streams its
 /// receivers created and the events queued on them are deleted, and another tenant's are kept.
 /// </summary>
-public sealed class SharedSignalsTenantReleaseTests
+public sealed partial class SharedSignalsTenantReleaseTests
 {
     private const string Host = "https://auth.example.com";
     private const string StreamPath = "/ssf/stream";
@@ -266,7 +267,9 @@ public sealed class SharedSignalsTenantReleaseTests
         FakeTimeProvider time,
         IStreamStore? streams = null,
         ILoggerProvider? logs = null,
-        Action<IOidcServerBuilder>? declare = null)
+        Action<IOidcServerBuilder>? declare = null,
+        bool multipleStreamsPerReceiver = false,
+        SignallingTenantAccessor? tenants = null)
     {
         await TestLicense.Loaded;
 
@@ -287,11 +290,17 @@ public sealed class SharedSignalsTenantReleaseTests
             Issuer = Host,
             EventsSupported = [MembershipChanged],
             DefaultSubjectsMode = StreamSubjectsMode.All,
+            AllowMultipleStreamsPerReceiver = multipleStreamsPerReceiver,
         });
         if (streams is not null)
             builder.Services.Replace(ServiceDescriptor.Singleton(streams));
 
         builder.Services.AddSingleton<ITenantStore>(store);
+        if (tenants is not null)
+        {
+            builder.Services.Replace(ServiceDescriptor.Singleton<ITenantAccessor>(provider
+                => tenants.Over(new HttpContextTenantAccessor(provider.GetRequiredService<IHttpContextAccessor>()))));
+        }
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
         server.AddSharedSignals();
@@ -359,20 +368,27 @@ public sealed class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// Keeps the event id of every entry logged, so a test can tell which records were written.
+    /// Keeps the event id and the named values of every entry logged, so a test can tell which records were written
+    /// and what they name.
     /// </summary>
     private sealed class RecordingLoggerProvider : ILoggerProvider
     {
-        public System.Collections.Concurrent.ConcurrentBag<int> EventIds { get; } = [];
+        private readonly System.Collections.Concurrent.ConcurrentBag<Entry> _entries = [];
 
-        public ILogger CreateLogger(string categoryName) => new Recording(EventIds);
+        public IEnumerable<int> EventIds => _entries.Select(entry => entry.EventId);
+
+        public IEnumerable<Entry> Entries => _entries;
+
+        public ILogger CreateLogger(string categoryName) => new Recording(_entries);
 
         public void Dispose()
         {
             // Nothing is held
         }
 
-        private sealed class Recording(System.Collections.Concurrent.ConcurrentBag<int> eventIds) : ILogger
+        public sealed record Entry(int EventId, IReadOnlyDictionary<string, object?> Values);
+
+        private sealed class Recording(System.Collections.Concurrent.ConcurrentBag<Entry> entries) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -381,7 +397,11 @@ public sealed class SharedSignalsTenantReleaseTests
             public void Log<TState>(
                 LogLevel logLevel, EventId eventId, TState state, Exception? exception,
                 Func<TState, Exception?, string> formatter)
-                => eventIds.Add(eventId.Id);
+                => entries.Add(new Entry(
+                    eventId.Id,
+                    state is IEnumerable<KeyValuePair<string, object?>> values
+                        ? values.ToDictionary(StringComparer.Ordinal)
+                        : new Dictionary<string, object?>(StringComparer.Ordinal)));
         }
     }
 }
