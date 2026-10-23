@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Model.Delivery;
 
 namespace Abblix.SharedSignals.Transmitter;
 
@@ -155,22 +156,40 @@ public sealed class StreamManagementService(
             return NoSuchStream<StreamConfiguration>(request.StreamId);
         }
 
-        var configuration = stream.Configuration;
-
+        var delivery = default(StreamDeliveryMethod);
         if (request.Delivery is { } proposedDelivery)
         {
             var accepted = _deliveries.Create(proposedDelivery, stream.StreamId);
-            if (accepted.Body is not { } delivery)
+            if (accepted.Body is not { } created)
             {
                 return StreamDeliveryFactory.RefusalOf(accepted);
             }
 
-            configuration = configuration with { Delivery = delivery };
+            delivery = created;
         }
+
+        return await SaveConfigurationAsync(
+            stream,
+            current => Updated(current, request, delivery),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// <paramref name="current"/> with the members <paramref name="request"/> carries changed, and the others as
+    /// they are.
+    /// </summary>
+    private StreamConfiguration Updated(
+        StreamConfiguration current,
+        UpdateStreamRequest request,
+        StreamDeliveryMethod? delivery)
+    {
+        var updated = current;
+        if (delivery is not null)
+            updated = updated with { Delivery = delivery };
 
         if (request.EventsRequested is { } requested)
         {
-            configuration = configuration with
+            updated = updated with
             {
                 EventsRequested = requested,
                 EventsDelivered = StreamConfigurations.DeliveredOf(options, requested),
@@ -178,11 +197,9 @@ public sealed class StreamManagementService(
         }
 
         if (request.Description is { } description)
-        {
-            configuration = configuration with { Description = description };
-        }
+            updated = updated with { Description = description };
 
-        return await SaveConfigurationAsync(stream, configuration, cancellationToken);
+        return updated;
     }
 
     /// <summary>
@@ -218,15 +235,16 @@ public sealed class StreamManagementService(
             return StreamDeliveryFactory.RefusalOf(accepted);
         }
 
-        var configuration = stream.Configuration with
-        {
-            Delivery = delivery,
-            EventsRequested = request.EventsRequested,
-            EventsDelivered = StreamConfigurations.DeliveredOf(options, request.EventsRequested),
-            Description = request.Description,
-        };
-
-        return await SaveConfigurationAsync(stream, configuration, cancellationToken);
+        return await SaveConfigurationAsync(
+            stream,
+            current => current with
+            {
+                Delivery = delivery,
+                EventsRequested = request.EventsRequested,
+                EventsDelivered = StreamConfigurations.DeliveredOf(options, request.EventsRequested),
+                Description = request.Description,
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -500,15 +518,20 @@ public sealed class StreamManagementService(
         return true;
     }
 
+    /// <summary>
+    /// Writes the receiver's change of a stream's configuration, applied to the stream as each attempt reads it, so
+    /// what another writer changed between the receiver's first read and the write, such as the issuer of a tenant
+    /// that moved, is kept rather than written back from that first read.
+    /// </summary>
     private async Task<ManagementResult<StreamConfiguration>> SaveConfigurationAsync(
         StreamState stream,
-        StreamConfiguration configuration,
+        Func<StreamConfiguration, StreamConfiguration> change,
         CancellationToken cancellationToken)
     {
         var (written, missing) = await MutateAsync(
             stream.ReceiverId,
             stream.StreamId,
-            current => current with { Configuration = configuration },
+            current => current with { Configuration = change(current.Configuration) },
             cancellationToken);
 
         if (missing)
@@ -516,7 +539,7 @@ public sealed class StreamManagementService(
 
         return written is null
             ? AcceptedNotProcessed<StreamConfiguration>(stream.StreamId)
-            : ManagementResult<StreamConfiguration>.Ok(configuration);
+            : ManagementResult<StreamConfiguration>.Ok(written.Configuration);
     }
 
     private static StreamStatus StatusOf(StreamState stream) => new()
