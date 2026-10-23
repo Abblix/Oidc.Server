@@ -71,8 +71,8 @@ internal static class MtlsEndpointAliasing
     /// <paramref name="host"/>, whose own path is not used.
     /// </summary>
     /// <remarks>
-    /// Joined as text rather than resolved as a reference: a path opening with an empty segment, as one under an
-    /// issuer whose path does, is a network-path reference to RFC 3986 section 4.2 and would name a host.
+    /// Joined as text rather than resolved as a reference: a resolved path opening with an empty segment is a
+    /// network-path reference to RFC 3986 section 4.2 and would name a host.
     /// </remarks>
     private static Uri? Rebase(Uri? original, Uri host)
         => original is null ? null : new Uri(host.GetLeftPart(UriPartial.Authority) + original.AbsolutePath);
