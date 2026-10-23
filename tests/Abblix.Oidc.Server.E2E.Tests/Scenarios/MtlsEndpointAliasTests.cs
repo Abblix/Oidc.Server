@@ -26,6 +26,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class MtlsEndpointAliasTests(TestFactory factory) : TestBase(factory)
 {
+    private static readonly Uri MtlsHost = new("https://mtls.example.com");
+
     public static TheoryData<string, string> Aliases()
     {
         string[] endpoints =
@@ -74,7 +76,7 @@ public class MtlsEndpointAliasTests(TestFactory factory) : TestBase(factory)
     public async Task WithPathDiscoveryOff_TheDocumentNamesNoEndpointAddresses()
     {
         var discovery = await DiscoveryWithMtlsAsync(
-            new Uri("https://mtls.example.com"), options => options.Discovery.AllowEndpointPathsDiscovery = false);
+            MtlsHost, options => options.Discovery.AllowEndpointPathsDiscovery = false);
 
         Assert.Null(discovery[ConfigurationResponse.Parameters.TokenEndpoint]);
         Assert.Null(discovery[ConfigurationResponse.Parameters.UserInfoEndpoint]);
@@ -85,18 +87,30 @@ public class MtlsEndpointAliasTests(TestFactory factory) : TestBase(factory)
         Assert.NotNull(discovery[ConfigurationResponse.Parameters.Issuer]);
     }
 
+    public static TheoryData<OidcEndpoints, string> SingleEndpoints() => new()
+    {
+        { OidcEndpoints.Token, ConfigurationResponse.Parameters.TokenEndpoint },
+        { OidcEndpoints.Revocation, ConfigurationResponse.Parameters.RevocationEndpoint },
+        { OidcEndpoints.Introspection, ConfigurationResponse.Parameters.IntrospectionEndpoint },
+        { OidcEndpoints.UserInfo, ConfigurationResponse.Parameters.UserInfoEndpoint },
+        { OidcEndpoints.PushedAuthorizationRequest, ConfigurationResponse.Parameters.PushedAuthorizationRequestEndpoint },
+        { OidcEndpoints.BackChannelAuthentication, ConfigurationResponse.Parameters.BackchannelAuthenticationEndpoint },
+        { OidcEndpoints.DeviceAuthorization, ConfigurationResponse.Parameters.DeviceAuthorizationEndpoint },
+    };
+
     /// <summary>
-    /// A server serving no token endpoint still publishes the aliases of the endpoints it serves.
+    /// A server serving one of the aliased endpoints alone publishes an alias block holding that endpoint's alias
+    /// and no other.
     /// </summary>
-    [Fact]
-    public async Task WithoutATokenEndpoint_TheOtherEndpointsAreStillAliased()
+    [Theory]
+    [MemberData(nameof(SingleEndpoints))]
+    public async Task OneEndpointServed_ItsAliasAloneIsPublished(OidcEndpoints served, string parameter)
     {
         var discovery = await DiscoveryWithMtlsAsync(
-            new Uri("https://mtls.example.com"), options => options.EnabledEndpoints &= ~OidcEndpoints.Token);
+            MtlsHost, options => options.EnabledEndpoints = OidcEndpoints.Configuration | OidcEndpoints.Keys | served);
 
         var aliases = Assert.IsType<JsonObject>(discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]);
-        Assert.False(aliases.ContainsKey(ConfigurationResponse.Parameters.TokenEndpoint));
-        Assert.True(aliases.ContainsKey(ConfigurationResponse.Parameters.UserInfoEndpoint));
+        Assert.Equal([parameter], aliases.Select(property => property.Key));
     }
 
     /// <summary>
