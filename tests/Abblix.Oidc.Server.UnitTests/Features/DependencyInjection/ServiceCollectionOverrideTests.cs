@@ -189,7 +189,7 @@ public class ServiceCollectionOverrideTests
         };
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
+        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
 
         services.AddLogging();
         services.AddSingleton(clients.Object);

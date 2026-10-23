@@ -955,7 +955,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     private static async Task RemoveThroughRegistrationAsync(RegisteredClient removed, IIssuerSettings issuer)
     {
         var clients = new Mock<IClientInfoManager>();
-        clients.Setup(manager => manager.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), removed)).ReturnsAsync(true);
+        clients.Setup(manager => manager.TryRemoveClientAsync(TestTenant.Matched, removed)).ReturnsAsync(true);
         var result = await new RemoveClientRequestProcessor(
                 clients.Object,
                 TimeProvider.System,

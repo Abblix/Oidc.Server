@@ -47,7 +47,7 @@ public class RefreshTokenSubjectTokenResolverTests
         // The refresh token names its original client; the resolver looks that client up (its sector opens a
         // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.ConsentRequired });
 
         _resolver = new RefreshTokenSubjectTokenResolver(
@@ -167,7 +167,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
             .ReturnsAsync(NewRefreshJwt());
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Disabled });
 
         var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);

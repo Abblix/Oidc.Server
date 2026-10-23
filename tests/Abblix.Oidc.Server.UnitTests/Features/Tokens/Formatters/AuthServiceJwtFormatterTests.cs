@@ -76,10 +76,10 @@ public class AuthServiceJwtFormatterTests
         Encrypt: null, KeyManagementAlgorithm: null, KeyId: null, ContentEnc);
 
     private void SetupSigningKeys(params JsonWebKey[] keys) =>
-        _keysProvider.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(keys.ToAsyncEnumerable());
+        _keysProvider.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(keys.ToAsyncEnumerable());
 
     private void SetupEncryptionKeys(params JsonWebKey[] keys) =>
-        _keysProvider.Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), false)).Returns(keys.ToAsyncEnumerable());
+        _keysProvider.Setup(p => p.GetEncryptionKeys(TestTenant.Matched, false)).Returns(keys.ToAsyncEnumerable());
 
     private static JsonWebToken TokenWith(string algorithm = SigningAlgorithms.RS256, string? keyId = null) => new()
     {
@@ -185,7 +185,7 @@ public class AuthServiceJwtFormatterTests
 
         Assert.Equal(EncodedJwt, result);
         Assert.Null(capturedEncryptionKey);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()), Times.Never);
     }
 
     /// <summary>
@@ -214,7 +214,7 @@ public class AuthServiceJwtFormatterTests
         await _formatter.FormatAsync(token, disabledButConfigured);
 
         Assert.Null(capturedEncryptionKey);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()), Times.Never);
     }
 
     // Encryption

@@ -80,7 +80,7 @@ public class TokenStatusValidatorDecoratorTests
         // A public client is what every test but the pairwise one carries, and for it the subject in the
         // token is already the subject a host would revoke.
         _clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo(ClientId) { SubjectType = SubjectTypes.Public });
     }
 
@@ -288,7 +288,7 @@ public class TokenStatusValidatorDecoratorTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
         var pseudonym = SubjectConverter.Convert(SingleIssuer.Tenant, Subject, pairwiseClient);
         Assert.NotEqual(Subject, pseudonym); // the fixture is only meaningful if the two actually differ
@@ -443,7 +443,7 @@ public class TokenStatusValidatorDecoratorTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
         SetupInnerReturns(new JsonWebToken
         {
@@ -478,7 +478,7 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenNamingAClientThatIsGone_IsRefused()
     {
-        _clients.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync((ClientInfo?)null);
+        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync((ClientInfo?)null);
 
         SetupInnerReturns(new JsonWebToken
         {

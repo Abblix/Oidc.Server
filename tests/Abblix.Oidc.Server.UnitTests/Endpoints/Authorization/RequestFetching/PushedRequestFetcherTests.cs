@@ -85,7 +85,7 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_FlaggedClientWithoutPushedRequest_ReturnsError()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequirePushedAuthorizationRequests = true,
@@ -101,7 +101,7 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_UnflaggedClientWithoutPushedRequest_PassesThrough()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
 
         var request = CreateRequest();
@@ -121,7 +121,7 @@ public class PushedRequestFetcherTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -133,7 +133,7 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_Fapi2ClientWithoutPushedRequest_ReturnsError()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 SecurityProfile = ClientSecurityProfile.Fapi2,
@@ -153,7 +153,7 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_GlobalDefaultFapi2_ImposesPushedRequestOnUnprofiledClient()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
 
         var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2)
@@ -172,7 +172,7 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 SecurityProfile = ClientSecurityProfile.None,

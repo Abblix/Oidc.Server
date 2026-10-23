@@ -330,7 +330,7 @@ public class RevocationCutoffCheckerSessionTests
 
         await Checker().IsSessionRefusedAsync(Session());
 
-        _clients.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
+        _clients.Verify(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()), Times.Never);
     }
 
     private static string PrincipalOf(RevocationScope scope) => scope switch

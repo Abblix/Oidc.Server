@@ -113,7 +113,7 @@ public class TokenStatusCoverageTests
 
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo("client_1") { SubjectType = SubjectTypes.Public });
 
         var inner = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);

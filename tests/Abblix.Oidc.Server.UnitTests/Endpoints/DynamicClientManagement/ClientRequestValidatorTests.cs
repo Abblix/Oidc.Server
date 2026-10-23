@@ -54,7 +54,7 @@ public class ClientRequestValidatorTests
             .ReturnsAsync(tokenId);
 
     private void Holds(RegisteredClient? client)
-        => _clients.Setup(c => c.TryFindRegisteredClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(client);
+        => _clients.Setup(c => c.TryFindRegisteredClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(client);
 
     [Fact]
     public async Task ValidateAsync_TokenTheRegistrationHolds_ReturnsValidRequest()

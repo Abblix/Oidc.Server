@@ -79,7 +79,7 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -101,7 +101,7 @@ public class ClientValidatorTests
         var context = CreateContext("unknown_client");
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "unknown_client"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "unknown_client"))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -125,7 +125,7 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo("client_456");
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client_456"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_456"))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -164,14 +164,14 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo("specific_client_789");
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "specific_client_789"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "specific_client_789"))
             .ReturnsAsync(clientInfo);
 
         // Act
         await _validator.ValidateAsync(context);
 
         // Assert
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "specific_client_789"), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, "specific_client_789"), Times.Once);
     }
 
     /// <summary>
@@ -202,7 +202,7 @@ public class ClientValidatorTests
         var context = CreateContext("unknown_client");
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "unknown_client"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "unknown_client"))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -224,7 +224,7 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -232,7 +232,7 @@ public class ClientValidatorTests
 
         // Assert
         Assert.Null(error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId), Times.Once);
     }
 
 }
