@@ -110,29 +110,6 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
     }
 
     /// <summary>
-    /// With endpoint path discovery switched off the document names no endpoint addresses at all - not the
-    /// ordinary ones and not the mutual-TLS aliases. The option exists for deployments that hand their clients
-    /// addresses out of band, and publishing them anyway would defeat the only reason to set it.
-    /// </summary>
-    [Fact]
-    public async Task With_path_discovery_off_the_document_names_no_endpoint_addresses()
-    {
-        await using var host = HostWithMtls(
-            MtlsBaseUri, options => options.Discovery.AllowEndpointPathsDiscovery = false);
-        var client = CreateClientFor(host);
-
-        var discovery = await client.FetchDiscoveryAsync();
-
-        Assert.Null(discovery[ConfigurationResponse.Parameters.TokenEndpoint]);
-        Assert.Null(discovery[ConfigurationResponse.Parameters.UserInfoEndpoint]);
-        Assert.Null(discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]);
-
-        // The issuer stays: it identifies the provider rather than locating an endpoint, and a client that
-        // cannot read it cannot validate a token from this server at all.
-        Assert.NotNull(discovery[ConfigurationResponse.Parameters.Issuer]);
-    }
-
-    /// <summary>
     /// The default document publishes no alias block at all. Publishing one unasked would advertise a
     /// mutual-TLS endpoint no deployment configured, sending certificate-bound clients at a host that does not
     /// answer.

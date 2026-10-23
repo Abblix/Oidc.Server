@@ -35,28 +35,19 @@ internal static class MtlsEndpointAliasing
         if (mtlsBaseUri is null)
             return document;
 
-        var named = 0;
         var aliases = new MtlsAliases
         {
-            TokenEndpoint = Alias(document.TokenEndpoint),
-            RevocationEndpoint = Alias(document.RevocationEndpoint),
-            IntrospectionEndpoint = Alias(document.IntrospectionEndpoint),
-            UserInfoEndpoint = Alias(document.UserInfoEndpoint),
-            PushedAuthorizationRequestEndpoint = Alias(document.PushedAuthorizationRequestEndpoint),
-            BackChannelAuthenticationEndpoint = Alias(document.BackChannelAuthenticationEndpoint),
-            DeviceAuthorizationEndpoint = Alias(document.DeviceAuthorizationEndpoint),
+            TokenEndpoint = Rebase(document.TokenEndpoint, mtlsBaseUri),
+            RevocationEndpoint = Rebase(document.RevocationEndpoint, mtlsBaseUri),
+            IntrospectionEndpoint = Rebase(document.IntrospectionEndpoint, mtlsBaseUri),
+            UserInfoEndpoint = Rebase(document.UserInfoEndpoint, mtlsBaseUri),
+            PushedAuthorizationRequestEndpoint = Rebase(document.PushedAuthorizationRequestEndpoint, mtlsBaseUri),
+            BackChannelAuthenticationEndpoint = Rebase(document.BackChannelAuthenticationEndpoint, mtlsBaseUri),
+            DeviceAuthorizationEndpoint = Rebase(document.DeviceAuthorizationEndpoint, mtlsBaseUri),
         };
 
-        return named == 0 ? document : document with { MtlsEndpointAliases = aliases };
-
-        Uri? Alias(Uri? endpoint)
-        {
-            var alias = Rebase(endpoint, mtlsBaseUri);
-            if (alias is not null)
-                named++;
-
-            return alias;
-        }
+        // Compared as a whole, so an alias added to the block counts without being listed here again
+        return aliases == new MtlsAliases() ? document : document with { MtlsEndpointAliases = aliases };
     }
 
     /// <summary>
