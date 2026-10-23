@@ -218,6 +218,21 @@ public sealed class TenantManagerTests : IDisposable
     }
 
     /// <summary>
+    /// A tenant whose issuer the checks refuse on its own, as one whose path holds an empty segment, is refused and
+    /// not stored, and the same tenant at an issuer without one is stored.
+    /// </summary>
+    [Fact]
+    public async Task ATenantAtAnIssuerTheChecksRefuse_IsNotStored()
+    {
+        var refused = await _manager.CreateAsync(Tenant("acme", "https://auth.example.com//t1"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(refused));
+        Assert.Empty(_store.Tenants);
+
+        Stored(await _manager.CreateAsync(Tenant("acme", "https://auth.example.com/t1"), Ct));
+    }
+
+    /// <summary>
     /// A tenant under an id the store holds already is refused as such, whatever else is wrong with it, whether the
     /// manager finds it or the store does.
     /// </summary>

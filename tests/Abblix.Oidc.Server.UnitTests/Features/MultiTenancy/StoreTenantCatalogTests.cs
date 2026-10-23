@@ -175,11 +175,13 @@ public class StoreTenantCatalogTests
     /// <summary>
     /// A tenant the checks refuse is left out and logged by name, and the others are served.
     /// </summary>
-    [Fact]
-    public async Task ATenantTheChecksRefuse_IsLeftOut_AndTheOthersServed()
+    [Theory]
+    [InlineData("https://bro\u200Dken.example.com")]
+    [InlineData("https://auth.example.com//broken")]
+    public async Task ATenantTheChecksRefuse_IsLeftOut_AndTheOthersServed(string brokenIssuer)
     {
         _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
-        _store.Tenants.Add(Stored("broken", "https://bro\u200Dken.example.com"));
+        _store.Tenants.Add(Stored("broken", brokenIssuer));
         var catalog = Catalog();
         var ct = TestContext.Current.CancellationToken;
 
