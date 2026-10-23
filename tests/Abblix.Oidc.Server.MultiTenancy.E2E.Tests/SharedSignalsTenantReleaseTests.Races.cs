@@ -327,6 +327,27 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// A receiver deleting a stream nobody holds, in a tenant that declares streams, is told there is none: a refusal
+    /// by the store the tenant is served at ends the retries.
+    /// </summary>
+    [Fact]
+    public async Task AStreamNobodyHolds_IsAnsweredNotFound_InATenantDeclaringStreams()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartWithADeclaredStreamAsync(store, new FakeTimeProvider());
+
+        // On a thread of its own, since retries that never end would spin on the store held in memory
+        var deleting = Task.Run(
+            () => ClientOf(app, "acme").DeleteAsync($"/tenants/acme{StreamPath}?stream_id=unknown", ct),
+            ct);
+        using var deleted = await deleting.WaitAsync(HeldFor, ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, deleted.StatusCode);
+    }
+
+    /// <summary>
     /// A declared poll stream of a moved tenant is polled at the issuer it moved to.
     /// </summary>
     [Fact]
