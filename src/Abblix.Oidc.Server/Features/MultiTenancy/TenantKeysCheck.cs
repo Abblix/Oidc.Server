@@ -92,7 +92,11 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 [..declarers],
                 $"The key with the thumbprint '{declarers.Key}' is declared by the tenants " +
                 $"{string.Join(", ", declarers.Select(id => $"'{id}'"))}; each tenant signs and decrypts with keys of " +
-                "its own.");
+                "its own.")
+            {
+                PartyMessage = $"the key with the thumbprint '{declarers.Key}' it declares is declared by another " +
+                               "tenant; each tenant signs and decrypts with keys of its own.",
+            };
 
     /// <summary>
     /// A key a tenant declares without every member its key type requires can neither be published nor told apart
@@ -169,7 +173,11 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 [..namers],
                 $"The custodian key '{namers.Key}' is named by the tenants " +
                 $"{string.Join(", ", namers.Select(id => $"'{id}'"))}; " +
-                "each tenant produces with keys of its own.");
+                "each tenant produces with keys of its own.")
+            {
+                PartyMessage = $"the custodian key '{namers.Key}' it names is named by another tenant; each tenant " +
+                               "produces with keys of its own.",
+            };
 
         return unnamed.Concat(shared);
     }

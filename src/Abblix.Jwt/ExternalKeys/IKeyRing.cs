@@ -63,5 +63,7 @@ public interface IKeyRing
     /// what other instances have minted.
     /// </summary>
     /// <param name="cancellationToken">Cancels the refresh.</param>
+    /// <exception cref="InvalidOperationException">A ring minting its keys finds keys adopted where no partition takes
+    /// them, judged before it mints, so nothing is minted.</exception>
     Task RefreshAsync(CancellationToken cancellationToken);
 }

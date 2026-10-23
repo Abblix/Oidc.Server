@@ -40,6 +40,10 @@ public static class ServiceCollectionExtensions
 	/// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
 	/// declaring one, and the request pipeline resolves each request to its tenant with
 	/// <c>app.UseMultiTenancy()</c> before routing and authentication.
+	/// The server refuses a configuration it cannot serve while the host announces its start
+	/// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
+	/// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
+	/// <c>WebHost</c>, is not supported: it would start the server without those checks.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>

@@ -116,8 +116,9 @@ public class DiscoveryControllerMtlsTests
 
     /// <summary>
     /// An endpoint's path is kept exactly as resolved on whichever host it is moved to: a path opening with an empty
-    /// segment stays a path rather than naming a host, and an escaped character stays escaped, so the alias and the
-    /// ordinary endpoint reach the address the tenant is resolved at.
+    /// segment, which no tenant's issuer can give it since such an issuer is refused, still stays a path rather than
+    /// naming a host, and an escaped character stays escaped, so the alias and the ordinary endpoint reach the
+    /// address the tenant is resolved at.
     /// </summary>
     [Theory]
     [InlineData("https://example.com//t1/token", "https://mtls.example.com//t1/token", "https://example.com//t1/token")]

@@ -34,6 +34,8 @@ public class TenantIssuerCheckTests
     [Theory]
     [InlineData("https://auth.example.com")]
     [InlineData("https://Auth.Example.com:443/tenants/acme")]
+    [InlineData("https://auth.example.com/t1")]
+    [InlineData("https://auth.example.com/t1/")]
     public void AnHttpsIssuer_IsAccepted(string issuer)
         => Assert.False(Refused(issuer));
 
@@ -55,6 +57,18 @@ public class TenantIssuerCheckTests
     public void AnIssuerThatIsNoHttpsUrlWithoutQueryOrFragment_IsRefused(string issuer)
         => Assert.True(Refused(issuer));
 
+    /// <summary>
+    /// An issuer whose path holds an empty segment is refused: routing would take the path as it is, while resolving
+    /// an address against the host reads a path opening with one as naming another host (RFC 3986 section 4.2).
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com//t1")]
+    [InlineData("https://auth.example.com/t1//eu")]
+    [InlineData("https://auth.example.com/t1//")]
+    [InlineData("https://auth.example.com//")]
+    public void AnIssuerWithAnEmptyPathSegment_IsRefused(string issuer)
+        => Assert.True(Refused(issuer));
+
     [Fact]
     public void AnHttpIssuer_IsAccepted_WhenTheDeploymentAllowsIt()
         => Assert.False(Refused("http://localhost:5000", allowHttp: true));
@@ -66,13 +80,15 @@ public class TenantIssuerCheckTests
         => Assert.True(Refused(issuer, allowHttp: true));
 
     /// <summary>
-    /// The check is part of what the server registers for its tenants, so an http issuer stops it when its settings
-    /// are read.
+    /// The check is part of what the server registers for its tenants, so an issuer it refuses stops the server when
+    /// its settings are read.
     /// </summary>
-    [Fact]
-    public void TheServerRefusesAnHttpIssuer_WhenItsSettingsAreRead()
+    [Theory]
+    [InlineData("http://localhost:5000")]
+    [InlineData("https://auth.example.com//t1")]
+    public void TheServerRefusesTheIssuer_WhenItsSettingsAreRead(string issuer)
     {
-        using var provider = ServerServing("http://localhost:5000");
+        using var provider = ServerServing(issuer);
 
         Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
     }

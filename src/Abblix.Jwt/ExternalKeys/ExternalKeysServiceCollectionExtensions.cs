@@ -166,10 +166,19 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <exception cref="ArgumentOutOfRangeException"><see cref="MintedKeys.RotateEvery"/> is not positive, or
     /// <see cref="MintedKeys.KeepRetiredFor"/> is negative.</exception>
     /// <remarks>
+    /// <para>
     /// This registers the ring and nothing else. What the ring's keys are then USED for is the caller's
     /// concern: an OpenID Provider publishes them at its JWKS endpoint, a client protects stored sessions with
     /// them. Neither of those belongs here, which is why this lives beside the key material rather than beside
     /// either consumer.
+    /// </para>
+    /// <para>
+    /// The keys adopted into the ring are judged while the host announces its start
+    /// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
+    /// <c>WebApplication</c> do, before the ring mints its first key. A host starting its services without that
+    /// announcement, such as the obsolete <c>WebHost</c>, is not supported: its ring could mint before the adoption
+    /// is judged, and a partition holding a minted key takes no adopted one afterwards.
+    /// </para>
     /// </remarks>
     public static IMintedKeysBuilder AddKeyRing(this IServiceCollection services, MintedKeys policy)
         => services.AddMintedKeyRing(policy);

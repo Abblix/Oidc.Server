@@ -71,6 +71,77 @@ public sealed partial class KeyRingTests
     }
 
     /// <summary>
+    /// A ring refreshed by host code before the host starts judges the adopted keys before it mints, so keys adopted
+    /// into a partition the ring never keeps refuse the refresh with nothing minted.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshBeforeTheStart_WithKeysAdoptedIntoAPartitionTheRingNeverKeeps_IsRefusedBeforeAnyKeyIsMinted()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new FakeStore();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(store);
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.ComposeExternalKeyBackends();
+        services.Configure<KeyRingOptions>(options => options.Partitions = ["acme"]);
+        services.AddKeyRing(new MintedKeys
+        {
+            KeyEncryptionKeyName = KeyEncryptionKeyName,
+            AdoptedKeys = Adopted("initech", [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)]),
+        });
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var ring = provider.GetRequiredService<IKeyRings>().For("acme");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ring.RefreshAsync(ct));
+        Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// Keys adopted into the unnamed partition of a ring whose partitions come and go are served by no partition it
+    /// opens, so the ring refuses to start with them; keys adopted into a named partition wait for it.
+    /// </summary>
+    [Fact]
+    public void KeysAdoptedIntoTheUnnamedPartition_WhenThePartitionsComeAndGo_RefuseTheStart()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (minting, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey));
+        minting.CheckAdoption();
+
+        var (named, _) = RingsKeeping(Keeping(), StubCustodian(_keyEncryptionKey), Adopted("acme", [adopted]));
+        named.CheckAdoption();
+
+        var (unnamed, _) = RingsKeeping(
+            Keeping(), StubCustodian(_keyEncryptionKey), Adopted(KeyRingOptions.DefaultPartition, [adopted]));
+        Assert.Throws<InvalidOperationException>(unnamed.CheckAdoption);
+    }
+
+    /// <summary>
+    /// Keys adopted into a partition the settings do not keep are served by no partition, so the ring refuses to start
+    /// with them; adopted into one they keep, it starts.
+    /// </summary>
+    [Theory]
+    [InlineData("initech")]
+    [InlineData(KeyRingOptions.DefaultPartition)]
+    public void KeysAdoptedIntoAPartitionTheSettingsDoNotKeep_RefuseTheStart(string partition)
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (kept, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted]), "acme", "globex");
+        kept.CheckAdoption();
+
+        var (unkept, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted(partition, [adopted]), "acme", "globex");
+        Assert.Throws<InvalidOperationException>(unkept.CheckAdoption);
+    }
+
+    /// <summary>
     /// One key adopted into two partitions, under any key id and whether the partitions are known at the start or come
     /// and go, refuses the start naming both.
     /// </summary>

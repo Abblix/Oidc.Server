@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 using Xunit;
 
 
@@ -215,6 +216,125 @@ public sealed class TenantManagerTests : IDisposable
 
         Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(claimingTheSameAddress));
         Assert.Single(_store.Tenants);
+    }
+
+    /// <summary>
+    /// A change refused for a conflict with another tenant tells the caller what the check says to one party, which
+    /// names neither tenant, and the host's log names both.
+    /// </summary>
+    [Theory]
+    [InlineData("https://auth.example.com/tenants/x", "https://auth.example.com/tenants/x")]
+    [InlineData("https://auth.example.com/tenants/x", "https://auth.example.com/tenants/x/eu")]
+    [InlineData("https://auth.example.com/tenants/x/eu", "https://auth.example.com/tenants/x")]
+    public async Task AChangeConflictingWithAnotherTenant_IsRefusedWithoutNamingIt(string existing, string changed)
+    {
+        var logger = new RecordingLogger();
+        var manager = ManagerLoggingTo(logger);
+        Stored(await manager.CreateAsync(Tenant("globex", existing), Ct));
+
+        var refused = await manager.CreateAsync(Tenant("acme", changed), Ct);
+
+        Assert.True(refused.TryGetFailure(out var refusal));
+        Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
+        Assert.DoesNotContain("globex", refusal.Message, StringComparison.Ordinal);
+        var conflict = Assert.Single(
+            new TenantDefinitionsCheck().Check(
+                [Tenant("globex", existing), Tenant("acme", changed)],
+                new OidcOptions()));
+        Assert.Contains(Assert.IsType<string>(conflict.PartyMessage), refusal.Message, StringComparison.Ordinal);
+        var logged = Assert.Single(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
+        Assert.Contains("globex", logged.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A conflict a host's own check finds, which says nothing for one party alone, is told to the caller without the
+    /// other tenant either.
+    /// </summary>
+    [Fact]
+    public async Task AConflictAHostsCheckFinds_IsRefusedWithoutNamingTheOtherTenant()
+    {
+        var hostsCheck = new Mock<ITenantsCheck>();
+        hostsCheck
+            .Setup(check => check.Check(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<OidcOptions>()))
+            .Returns((IReadOnlyCollection<TenantDefinition> tenants, OidcOptions _) => tenants.Count > 1
+                ? [new TenantRefusal([..tenants.Select(tenant => tenant.Id)], "acme and globex share a billing account.")]
+                : []);
+        var logger = new RecordingLogger();
+        var manager = ManagerLoggingTo(logger, hostsCheck.Object);
+        Stored(await manager.CreateAsync(Tenant("globex", "https://globex.example.com"), Ct));
+
+        var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
+
+        Assert.True(refused.TryGetFailure(out var refusal));
+        Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
+        Assert.DoesNotContain("globex", refusal.Message, StringComparison.Ordinal);
+        Assert.Single(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
+    }
+
+    /// <summary>
+    /// A refusal of the changed tenant alone is told to the caller as the check gave it, and logs no conflict.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalOfTheChangedTenantAlone_IsToldAsTheCheckGaveIt()
+    {
+        var ownRefusal = new TenantRefusal(["acme"], "acme has no billing account.");
+        var hostsCheck = new Mock<ITenantsCheck>();
+        hostsCheck
+            .Setup(check => check.Check(It.IsAny<IReadOnlyCollection<TenantDefinition>>(), It.IsAny<OidcOptions>()))
+            .Returns((IReadOnlyCollection<TenantDefinition> tenants, OidcOptions _) =>
+                tenants.Any(tenant => tenant.Id == "acme") ? [ownRefusal] : []);
+        var logger = new RecordingLogger();
+        var manager = ManagerLoggingTo(logger, hostsCheck.Object);
+
+        var refused = await manager.CreateAsync(Tenant("acme", "https://acme.example.com"), Ct);
+
+        Assert.True(refused.TryGetFailure(out var refusal));
+        Assert.Equal(ownRefusal.Message, refusal.Message);
+        Assert.DoesNotContain(logger.Entries, entry => entry.EventId == ConflictToldWithoutTheOthers);
+    }
+
+    // The event a refusal told without the other tenants of a conflict is logged under
+    private const int ConflictToldWithoutTheOthers = 10721;
+
+    private TenantManager ManagerLoggingTo(RecordingLogger logger, params ITenantsCheck[] hostsChecks)
+        => new(
+            logger,
+            _store,
+            [new TenantDefinitionsCheck(), ..hostsChecks],
+            _catalog,
+            Options.Create(new OidcOptions()),
+            _store);
+
+    /// <summary>
+    /// Keeps the event id and the text of every entry logged.
+    /// </summary>
+    private sealed class RecordingLogger : ILogger<TenantManager>
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<(int EventId, string Text)> Entries { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Enqueue((eventId.Id, formatter(state, exception)));
+    }
+
+    /// <summary>
+    /// A tenant whose issuer the checks refuse on its own, as one whose path holds an empty segment, is refused and
+    /// not stored, and the same tenant at an issuer without one is stored.
+    /// </summary>
+    [Fact]
+    public async Task ATenantAtAnIssuerTheChecksRefuse_IsNotStored()
+    {
+        var refused = await _manager.CreateAsync(Tenant("acme", "https://auth.example.com//t1"), Ct);
+
+        Assert.Equal(TenantChangeRefusalReason.Invalid, Refused(refused));
+        Assert.Empty(_store.Tenants);
+
+        Stored(await _manager.CreateAsync(Tenant("acme", "https://auth.example.com/t1"), Ct));
     }
 
     /// <summary>

@@ -18,4 +18,11 @@ public sealed partial class TenantManager
         Message = "A change of the tenants is stored, but reading the store again failed, so this instance serves " +
                   "it from its next reading")]
     private partial void LogChangeNotServedYet(Exception exception);
+
+    [LoggerMessage(
+        EventId = LogEvents.MultiTenancy.TenantManager.ConflictToldWithoutTheOthers,
+        Level = LogLevel.Warning,
+        Message = "A change of tenant {TenantId} is refused for a conflict with other tenants, which the refusal " +
+                  "returned does not name: {Refusal}")]
+    private partial void LogConflictToldWithoutTheOthers(string tenantId, string refusal);
 }
