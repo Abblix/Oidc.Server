@@ -256,6 +256,42 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// A receiver updating its declared stream, having read it before the tenant moved and writing after the store
+    /// built for the move wrote the issuer the tenant moved to, keeps that issuer and has its own change applied.
+    /// </summary>
+    [Fact]
+    public async Task AStreamUpdatedAcrossAMove_KeepsTheIssuerTheTenantMovedTo()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        var streams = HeldStore.HoldingTheFirstCreates(0);
+        await using var app = await StartWithADeclaredStreamAsync(store, new FakeTimeProvider(), streams.Store);
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var first = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(first.Issuer.OriginalString, await DeclaredIssuerAsync(app, first, ct));
+
+        var read = streams.HoldTheNextRead();
+        var updating = ClientOf(app, "acme").PatchAsJsonAsync(
+            $"/tenants/acme{StreamPath}",
+            new UpdateStreamRequest { StreamId = "alerts", Description = "updated" },
+            ct);
+        await read.WaitAsync(HeldFor, ct);
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var moved = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(moved.Issuer.OriginalString, await DeclaredIssuerAsync(app, moved, ct));
+
+        streams.ReleaseTheRead();
+        using var updated = await updating;
+
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        var stream = Assert.Single(await StreamsOfAsync(app, moved, ct));
+        Assert.Equal(moved.Issuer.OriginalString, stream.Configuration.Issuer);
+        Assert.Equal("updated", stream.Configuration.Description);
+    }
+
+    /// <summary>
     /// A receiver creating a stream while the store of the tenant's declared streams is replaced by a move has the
     /// stream created: the replaced store refuses the write, and it is made through the replacement.
     /// </summary>
@@ -455,6 +491,8 @@ public sealed partial class SharedSignalsTenantReleaseTests
         private readonly TaskCompletionSource[] _entered;
         private readonly TaskCompletionSource[] _apply;
         private int _creates;
+        private TaskCompletionSource? _readHeld;
+        private readonly TaskCompletionSource _readReleased = Signal();
 
         private HeldStore(int held, CancellationTokenSource? cancelAfterCreate, bool deleteFails)
         {
@@ -480,8 +518,17 @@ public sealed partial class SharedSignalsTenantReleaseTests
                 });
             store
                 .Setup(s => s.FindAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns((string receiverId, string streamId, CancellationToken token) =>
-                    inner.FindAsync(receiverId, streamId, token));
+                .Returns(async (string receiverId, string streamId, CancellationToken token) =>
+                {
+                    var found = await inner.FindAsync(receiverId, streamId, token);
+                    if (Interlocked.Exchange(ref _readHeld, null) is { } held)
+                    {
+                        held.TrySetResult();
+                        await _readReleased.Task.WaitAsync(HeldFor);
+                    }
+
+                    return found;
+                });
             store
                 .Setup(s => s.ListAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns((string receiverId, CancellationToken token) => inner.ListAsync(receiverId, token));
@@ -517,6 +564,19 @@ public sealed partial class SharedSignalsTenantReleaseTests
         public Task CreateEntered => Entered(0);
 
         public Task Entered(int create) => _entered[create].Task;
+
+        /// <summary>
+        /// Holds the next read once it has read the store, until <see cref="ReleaseTheRead"/>; the task completes
+        /// when that read is held.
+        /// </summary>
+        public Task HoldTheNextRead()
+        {
+            var held = Signal();
+            Volatile.Write(ref _readHeld, held);
+            return held.Task;
+        }
+
+        public void ReleaseTheRead() => _readReleased.TrySetResult();
 
         public void Apply() => Apply(0);
 
