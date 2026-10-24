@@ -87,9 +87,8 @@ internal static class SingleIssuer
     public static ITenantCatalog Catalog { get; } = new ServedTenants().Catalog;
 
     /// <summary>
-    /// The server's own catalog, serving the tenant a test describes nothing of, for the settings the license reads:
-    /// it counts a tenant it serves by the tenant's id, as it counts every server a test builds, so the tests of a run
-    /// take one place between them.
+    /// The server's own catalog, serving the tenant a test describes nothing of, which the license counts by the
+    /// tenant's id, as it counts every server a test builds, so the tests of a run take one place between them.
     /// </summary>
     private static readonly ITenantCatalog Licensed = ServingTheTenant();
 

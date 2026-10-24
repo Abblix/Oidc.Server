@@ -245,8 +245,8 @@ public static partial class LicenseChecker
             return (issuer, CancellationToken.None);
 
         var released = own.Released(tenant);
-        if (own.HasServedAt(tenant, issuer))
-            return (tenant.Id, released);
+        if (VouchedId(issuer, tenant, own) is { } id)
+            return (id, released);
 
         // An issuer the server does not vouch for is let go with its tenant, but one the tenant was never served at and
         // first seen after its release would be let go before it was ever counted, so it counts for the life of the
@@ -263,6 +263,14 @@ public static partial class LicenseChecker
     /// <param name="tenant">The tenant served at that issuer.</param>
     /// <param name="catalog">The catalog that tenant was resolved from.</param>
     internal static string? ClientIssuerOf(string issuer, TenantDefinition tenant, ITenantCatalog catalog)
+        => VouchedId(issuer, tenant, catalog);
+
+    /// <summary>
+    /// The id of <paramref name="tenant"/> when the server's own catalog vouches that it serves this creation of the
+    /// tenant at <paramref name="issuer"/>; null for a catalog of the host's own and for an issuer the creation was
+    /// never served at.
+    /// </summary>
+    private static string? VouchedId(string issuer, TenantDefinition tenant, ITenantCatalog catalog)
         => catalog is StoreTenantCatalog own && own.HasServedAt(tenant, issuer) ? tenant.Id : null;
 
     /// <summary>

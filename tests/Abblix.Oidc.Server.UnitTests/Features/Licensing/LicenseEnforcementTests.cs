@@ -648,7 +648,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var catalog = Catalog(store.Object);
         await catalog.RefreshAsync(ct);
         var before = (await catalog.FindByIdAsync("acme", ct))!;
-        CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+        CheckIssuer(TestLicense.Issuer, Resolved(catalog, before));
 
         listed =
         [
@@ -659,8 +659,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         await catalog.RefreshAsync(ct);
         var after = (await catalog.FindByIdAsync("acme", ct))!;
 
-        Assert.Equal(UnlicensedIssuer, CheckIssuer(UnlicensedIssuer, Settings(catalog, after)));
-        Assert.Equal(TestLicense.Issuer, CheckIssuer(TestLicense.Issuer, Settings(catalog, before)));
+        Assert.Equal(UnlicensedIssuer, CheckIssuer(UnlicensedIssuer, Resolved(catalog, after)));
+        Assert.Equal(TestLicense.Issuer, CheckIssuer(TestLicense.Issuer, Resolved(catalog, before)));
     }
 
     [Fact]
@@ -675,7 +675,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var catalog = Catalog(store.Object);
         await catalog.RefreshAsync(ct);
         var served = (await catalog.FindByIdAsync("acme", ct))!;
-        CheckIssuer(TestLicense.Issuer, Settings(catalog, served));
+        CheckIssuer(TestLicense.Issuer, Resolved(catalog, served));
 
         var entered = new TenantDefinition
         {
@@ -685,7 +685,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         };
 
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => CheckIssuer(UnlicensedIssuer, Settings(catalog, entered)));
+            () => CheckIssuer(UnlicensedIssuer, Resolved(catalog, entered)));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 
@@ -705,7 +705,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var time = new FakeTimeProvider();
         var catalog = Catalog(store.Object, time);
         await catalog.RefreshAsync(ct);
-        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        var acme = Resolved(catalog, (await catalog.FindByIdAsync("acme", ct))!);
         CheckIssuer(TestLicense.Issuer, acme);
 
         listed.Clear();
@@ -727,16 +727,16 @@ public sealed class LicenseEnforcementTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var (catalog, time, listed) = await ServedAtAsync(TestLicense.Issuer, ct);
         var before = (await catalog.FindByIdAsync("acme", ct))!;
-        CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+        CheckIssuer(TestLicense.Issuer, Resolved(catalog, before));
 
         listed[0] = AcmeAt(UnlicensedIssuer, "2");
         await catalog.RefreshAsync(ct);
-        Assert.Equal(TestLicense.Issuer, CheckIssuer(TestLicense.Issuer, Settings(catalog, before)));
+        Assert.Equal(TestLicense.Issuer, CheckIssuer(TestLicense.Issuer, Resolved(catalog, before)));
 
         time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => CheckIssuer(TestLicense.Issuer, Settings(catalog, before)));
+            () => CheckIssuer(TestLicense.Issuer, Resolved(catalog, before)));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 
@@ -746,7 +746,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         ArrangeInstallationWithNoLicence();
         var ct = TestContext.Current.CancellationToken;
         var (catalog, time, listed) = await ServedAtAsync(TestLicense.Issuer, ct);
-        CheckIssuer(TestLicense.Issuer, Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!));
+        CheckIssuer(TestLicense.Issuer, Resolved(catalog, (await catalog.FindByIdAsync("acme", ct))!));
 
         listed[0] = AcmeAt(UnlicensedIssuer, "2");
         await catalog.RefreshAsync(ct);
@@ -756,7 +756,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         await catalog.RefreshAsync(ct);
 
         var back = (await catalog.FindByIdAsync("acme", ct))!;
-        Assert.Equal(TestLicense.Issuer, CheckIssuer(TestLicense.Issuer, Settings(catalog, back)));
+        Assert.Equal(TestLicense.Issuer, CheckIssuer(TestLicense.Issuer, Resolved(catalog, back)));
     }
 
     [Fact]
@@ -768,13 +768,13 @@ public sealed class LicenseEnforcementTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var (catalog, time, listed) = await ServedAtAsync(TestLicense.Issuer, ct);
         var before = (await catalog.FindByIdAsync("acme", ct))!;
-        CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+        CheckIssuer(TestLicense.Issuer, Resolved(catalog, before));
 
         listed[0] = AcmeAt(UnlicensedIssuer, "2");
         await catalog.RefreshAsync(ct);
         time.Advance(new OidcOptions().RefreshTenantsEvery);
         await catalog.RefreshAsync(ct);
-        CheckIssuer(TestLicense.Issuer, Settings(catalog, before));
+        CheckIssuer(TestLicense.Issuer, Resolved(catalog, before));
         Assert.Throws<LicenseViolationException>(
             () => LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.Tenant, SingleIssuer.HostCatalog));
 
@@ -786,6 +786,31 @@ public sealed class LicenseEnforcementTests : IDisposable
         // Both places are free again: the tenant's and the one its former address took
         Assert.Equal(ThirdIssuer, LicenseChecker.CheckIssuer(ThirdIssuer, SingleIssuer.Tenant, SingleIssuer.HostCatalog));
         Assert.Equal(UnlicensedIssuer, LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Tenant, SingleIssuer.HostCatalog));
+    }
+
+    /// <summary>
+    /// A client removed through registration at an address its tenant's creation was never served at keeps its place:
+    /// the server does not vouch that this request is the tenant the client was counted with.
+    /// </summary>
+    [Fact]
+    public async Task A_client_removed_at_an_address_its_tenant_is_not_served_at_keeps_the_tenants_place()
+    {
+        ArrangeClientLimitOfTwo();
+        var ct = TestContext.Current.CancellationToken;
+        var (catalog, _, _) = await ServedAtAsync(TestLicense.Issuer, ct);
+        var served = (await catalog.FindByIdAsync("acme", ct))!;
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        CountPastTheMargin(Resolved(catalog, served), removed.ClientInfo);
+
+        var entered = new TenantDefinition
+        {
+            Id = served.Id,
+            Issuer = new Uri(UnlicensedIssuer),
+            Generation = served.Generation,
+        };
+        await RemoveThroughRegistrationAsync(removed, new Served(entered, catalog, UnlicensedIssuer));
+
+        Assert.False(Issues(new ClientInfo("newcomer"), Resolved(catalog, served)));
     }
 
     private static StoredTenant AcmeAt(string issuer, string version)
@@ -819,7 +844,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var time = new FakeTimeProvider();
         var catalog = Catalog(store.Object, time);
         await catalog.RefreshAsync(ct);
-        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        var acme = Resolved(catalog, (await catalog.FindByIdAsync("acme", ct))!);
         CheckIssuer(TestLicense.Issuer, acme);
 
         listed.Clear();
@@ -840,7 +865,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync([Acme("1")]);
         var catalog = Catalog(store.Object);
         await catalog.RefreshAsync(ct);
-        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        var acme = Resolved(catalog, (await catalog.FindByIdAsync("acme", ct))!);
         var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
         CountPastTheMargin(acme, removed.ClientInfo);
 
@@ -880,7 +905,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         store.Setup(s => s.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => listed);
         var catalog = Catalog(store.Object);
         await catalog.RefreshAsync(ct);
-        var acme = Settings(catalog, (await catalog.FindByIdAsync("acme", ct))!);
+        var acme = Resolved(catalog, (await catalog.FindByIdAsync("acme", ct))!);
         foreach (var client in listed[0].Tenant.Clients)
             _ = Issues(client, acme);
         Assert.False(Issues(new ClientInfo("newcomer"), acme));
@@ -990,7 +1015,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     private sealed record Served(TenantDefinition Tenant, ITenantCatalog ResolvedBy, string Issuer);
 
     /// <summary>A request <paramref name="catalog"/> resolved to <paramref name="tenant"/>, served at the licensed issuer.</summary>
-    private static Served Settings(StoreTenantCatalog catalog, TenantDefinition tenant)
+    private static Served Resolved(StoreTenantCatalog catalog, TenantDefinition tenant)
         => new(tenant, catalog, TestLicense.Issuer);
 
     /// <summary>A request to the tenant <paramref name="id"/> a catalog of the host's own resolved.</summary>
