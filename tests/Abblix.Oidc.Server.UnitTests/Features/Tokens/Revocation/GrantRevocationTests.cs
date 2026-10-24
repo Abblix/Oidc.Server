@@ -16,7 +16,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
@@ -90,8 +89,6 @@ public class GrantRevocationTests
     public GrantRevocationTests()
     {
         _registry = new ExpiringRegistry(_clock);
-        var issuer = new Mock<IIssuerProvider>();
-        issuer.Setup(provider => provider.GetIssuer()).Returns(TestConstants.DefaultIssuer);
         var ids = new Mock<ITokenIdGenerator>();
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => "jti_" + ++_next);
         var formatter = new Mock<IAuthServiceJwtFormatter>();
@@ -109,9 +106,9 @@ public class GrantRevocationTests
 
         var options = Options.Create(new OidcOptions());
         _service = new RefreshTokenService(
-            issuer.Object, _clock, ids.Object, formatter.Object, _registry, grants,
-            new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(options)), new FixedSubjectTypeConverter(new SubjectTypeConverter()),
-            options, SingleIssuer.SettingsOf(options), tenantAccessor: SingleIssuer.Accessor);
+            _clock, ids.Object, formatter.Object, _registry, grants,
+            new RefreshTokenRotationPolicy(SingleIssuer.Accessor), new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            options, SingleIssuer.LicensedCatalog, SingleIssuer.Accessor);
         _processor = new RevocationRequestProcessor(_registry, grants, _clock);
 
         var inner = new Mock<IJsonWebTokenValidator>();

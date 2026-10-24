@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
@@ -29,14 +29,14 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
 /// <param name="timeProvider">Dates the instant the device code carries.</param>
-/// <param name="issuerProvider">The issuer a relative verification page is under.</param>
+/// <param name="tenantAccessor">Names the tenant whose issuer a relative verification page is under.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
     IOptionsSnapshot<OidcOptions> options,
     TimeProvider timeProvider,
-    IIssuerProvider issuerProvider) : IDeviceAuthorizationRequestProcessor
+    ITenantAccessor tenantAccessor) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
@@ -101,7 +101,7 @@ public class DeviceAuthorizationRequestProcessor(
     /// </exception>
     private Uri VerificationUri(Uri configured)
     {
-        var issuer = new Uri(issuerProvider.GetIssuer().OriginalString.AppendTrailingSlash());
+        var issuer = new Uri(tenantAccessor.CurrentTenant().Issuer.OriginalString.AppendTrailingSlash());
         var resolved = new Uri(issuer, configured);
 
         if (configured.IsAbsoluteUri)

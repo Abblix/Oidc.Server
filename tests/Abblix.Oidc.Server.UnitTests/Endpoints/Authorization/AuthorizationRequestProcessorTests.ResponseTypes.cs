@@ -17,7 +17,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -137,11 +137,11 @@ public partial class AuthorizationRequestProcessorTests
         var response = await _processor.ProcessAsync(request);
 
         // Encode through the real response encoder. Query (non-JARM) mode means no response JWT is built,
-        // so the JWT builder is never invoked; iss advertising is disabled to keep the issuer provider idle.
+        // so the JWT builder is never invoked; iss advertising is disabled to keep the tenant unasked.
         var metadata = new Mock<IAuthorizationMetadataProvider>(MockBehavior.Strict);
         metadata.SetupGet(m => m.AuthorizationResponseIssParameterSupported).Returns(false);
         var encoder = new AuthorizationResponseEncoder(
-            new Mock<IIssuerProvider>(MockBehavior.Strict).Object,
+            new Mock<ITenantAccessor>(MockBehavior.Strict).Object,
             metadata.Object,
             new Mock<IResponseJwtBuilder>(MockBehavior.Strict).Object);
 

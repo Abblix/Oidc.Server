@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
@@ -53,9 +52,6 @@ public class RefreshTokenServiceTests
 
     public RefreshTokenServiceTests()
     {
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
-
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
@@ -68,16 +64,16 @@ public class RefreshTokenServiceTests
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
         // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new RefreshTokenService(
-            issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
             new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
-            new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(Options.Create(new OidcOptions()))),
+            new RefreshTokenRotationPolicy(SingleIssuer.Accessor),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())), tenantAccessor: SingleIssuer.Accessor);
+            SingleIssuer.LicensedCatalog,
+            SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -114,7 +110,7 @@ public class RefreshTokenServiceTests
     /// - IssuedAt (iat): Current time for new tokens
     /// - NotBefore (nbf): Current time
     /// - ExpiresAt (exp): IssuedAt + AbsoluteExpiresIn
-    /// - Issuer (iss): From IIssuerProvider
+    /// - Issuer (iss): From the tenant the request is served at
     /// - JwtId (jti): Unique token identifier from ITokenIdGenerator
     /// Per RFC 7519 registered claims.
     /// </summary>

@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Security.Claims;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.AspNetCore.Authentication;
@@ -69,7 +68,6 @@ public class SessionPersistenceTests
             accessor.Object,
             terminator.Object,
             _clock,
-            Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == TestTenantAccess.Main),
             Scheme);
     }
 

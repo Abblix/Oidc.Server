@@ -12,7 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -62,24 +62,48 @@ public class SessionManagementServiceTests
         _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
     }
 
-    private SessionManagementService Service(IOptionsSnapshot<OidcOptions> options, IIssuerSettings? issuerSettings = null)
-        => new(options, issuerSettings ?? SingleIssuer.SettingsOf(options), _requestInfoProvider.Object);
+    private SessionManagementService Service(IOptionsSnapshot<OidcOptions> options, ITenantAccessor? tenantAccessor = null)
+        => new(options, tenantAccessor ?? SingleIssuer.Accessor, _requestInfoProvider.Object);
+
+    private static ITenantAccessor ServedAt(string tenantId)
+    {
+        var served = new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = tenantId, Issuer = new Uri("https://auth.example.com/tenants/acme") },
+        };
+        return Mock.Of<ITenantAccessor>(accessor => accessor.Current == served);
+    }
 
     /// <summary>
-    /// The cookie is named as the issuer serving the request names it, which under multi-tenancy is a name of the
-    /// tenant's own rather than the one the whole server configures.
+    /// Tenants sharing a host share its cookies, so each tenant's check-session cookie carries its id after the name
+    /// the server configures.
     /// </summary>
     [Fact]
-    public void GetSessionCookie_IsNamedAsTheIssuerNamesIt()
+    public void GetSessionCookie_CarriesTheTenantsId()
     {
         _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
         _requestInfoProvider.Setup(r => r.PathBase).Returns(string.Empty);
-        var issuerSettings = new Mock<IIssuerSettings>();
-        issuerSettings.Setup(s => s.CheckSessionCookieName).Returns("Abblix.SessionId.acme");
 
-        var cookie = Service(_optionsSnapshot.Object, issuerSettings.Object).GetSessionCookie(SessionPersistence.BrowserSession);
+        var cookie = Service(_optionsSnapshot.Object, ServedAt("acme-eu_1")).GetSessionCookie(SessionPersistence.BrowserSession);
 
-        Assert.Equal("Abblix.SessionId.acme", cookie.Name);
+        Assert.Equal($"{_oidcOptions.CheckSessionCookie.Name}.acme-eu_1", cookie.Name);
+    }
+
+    /// <summary>
+    /// A tenant a catalog of the host's own serves passes none of the server's checks, so one whose id could spell
+    /// another tenant's cookie, or hold what a cookie name cannot, gets no cookie at all.
+    /// </summary>
+    [Theory]
+    [InlineData("acme.eu")]
+    [InlineData("acme;eu")]
+    [InlineData("acme eu")]
+    public void GetSessionCookie_OfATenantThatCannotNameIt_IsRefused(string tenantId)
+    {
+        _requestInfoProvider.Setup(r => r.IsHttps).Returns(true);
+        _requestInfoProvider.Setup(r => r.PathBase).Returns(string.Empty);
+        var service = Service(_optionsSnapshot.Object, ServedAt(tenantId));
+
+        Assert.Throws<InvalidOperationException>(() => service.GetSessionCookie(SessionPersistence.BrowserSession));
     }
 
     /// <summary>

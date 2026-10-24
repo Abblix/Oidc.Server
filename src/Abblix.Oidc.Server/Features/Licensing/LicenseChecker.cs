@@ -9,7 +9,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Telemetry;
 
 namespace Abblix.Oidc.Server.Features.Licensing;
@@ -68,22 +68,23 @@ public static partial class LicenseChecker
     /// Applies the license's terms to the issuer a token is issued under and to the client it is issued to.
     /// </summary>
     /// <param name="issuer">The issuer the token names, checked as <see cref="CheckIssuer"/> checks it.</param>
-    /// <param name="settings">The settings of that issuer.</param>
+    /// <param name="tenant">The tenant the token is issued for.</param>
+    /// <param name="catalog">The catalog that tenant was resolved from.</param>
     /// <param name="clientId">The client the token names as issued to.</param>
     /// <returns>The issuer, when the terms allow both.</returns>
     /// <remarks>
     /// A client is counted where a token is issued to it, by the client and the issuer the token names, so every
     /// client a token is issued to is counted and two tenants registering a client under one id take two places. A
     /// client of a tenant the server's own catalog serves stops counting once the tenant is released, once the tenant's
-    /// definition stops configuring it, or once it is removed through registration. A client counted under any other
-    /// settings stays counted for the life of the process.
+    /// definition stops configuring it, or once it is removed through registration. A client of a tenant a catalog of
+    /// the host's own resolved stays counted for the life of the process.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The issuer is beyond the license's terms, or the client is beyond
     /// its client limit by more than the margin.</exception>
-    public static string CheckLicense(string issuer, IIssuerSettings settings, string clientId)
+    public static string CheckLicense(string issuer, TenantDefinition tenant, ITenantCatalog catalog, string clientId)
     {
         // One answer for the issuer and its client, so a catalog refreshed between the two counts both alike
-        var counted = CountedAs(issuer, settings);
+        var counted = CountedAs(issuer, tenant, catalog);
         CheckCountedIssuer(issuer, counted);
         CheckClient((counted.Key, clientId), counted.Released);
         return issuer;
@@ -224,38 +225,53 @@ public static partial class LicenseChecker
     }
 
     /// <summary>
-    /// What <paramref name="issuer"/> and its clients are counted under, and what lets them go: the tenant the
-    /// server's own settings vouch for, or else the issuer itself, until the server releases that tenant; for settings
-    /// of any other kind, the issuer itself, counted for the life of the process.
+    /// What <paramref name="issuer"/> and its clients are counted under, and what lets them go: the tenant, when the
+    /// server's own catalog vouches that it serves this creation of it at that issuer, or else the issuer itself,
+    /// until the server releases that tenant; for a tenant a catalog of the host's own resolved, the issuer itself,
+    /// counted for the life of the process.
     /// </summary>
     /// <remarks>
-    /// Settings a host registers answer for themselves, and taking their word would let one answer count every
-    /// issuer, or every client of an id, as one.
+    /// Only the server's own sealed catalog is taken at its word: a catalog a host registers answers for itself, and
+    /// taking its word would let one answer count every issuer, or every client of an id, as one. The tenant is a
+    /// definition anybody can build, so it is vouched for by the catalog's own record of the creations it served at
+    /// the issuer, never by its id alone.
     /// </remarks>
-    private static (string Key, CancellationToken Released) CountedAs(string issuer, IIssuerSettings settings)
+    private static (string Key, CancellationToken Released) CountedAs(
+        string issuer,
+        TenantDefinition tenant,
+        ITenantCatalog catalog)
     {
-        if (settings is not ILicensedIssuer own)
+        if (catalog is not StoreTenantCatalog own)
             return (issuer, CancellationToken.None);
 
-        if (own.VouchedId(issuer) is { } tenantId)
-            return (tenantId, own.Released);
+        var released = own.Released(tenant);
+        if (VouchedId(issuer, tenant, own) is { } id)
+            return (id, released);
 
         // An issuer the server does not vouch for is let go with its tenant, but one the tenant was never served at and
         // first seen after its release would be let go before it was ever counted, so it counts for the life of the
         // process
-        var released = own.Released;
         return (issuer, released.IsCancellationRequested ? CancellationToken.None : released);
     }
 
     /// <summary>
-    /// The tenant the clients of <paramref name="issuer"/> are counted with, when the server's own settings vouch
-    /// for it. Null for any other issuer, whose clients are counted with the issuer and are not taken off the count by
-    /// a removal through registration.
+    /// The tenant the clients of <paramref name="issuer"/> are counted with, when the server's own catalog vouches
+    /// that it serves this creation of the tenant there. Null for any other issuer, whose clients are counted with the
+    /// issuer and are not taken off the count by a removal through registration.
     /// </summary>
     /// <param name="issuer">The issuer the tokens of those clients name.</param>
-    /// <param name="settings">The settings of that issuer.</param>
-    internal static string? ClientIssuerOf(string issuer, IIssuerSettings settings)
-        => (settings as ILicensedIssuer)?.VouchedId(issuer);
+    /// <param name="tenant">The tenant served at that issuer.</param>
+    /// <param name="catalog">The catalog that tenant was resolved from.</param>
+    internal static string? ClientIssuerOf(string issuer, TenantDefinition tenant, ITenantCatalog catalog)
+        => VouchedId(issuer, tenant, catalog);
+
+    /// <summary>
+    /// The id of <paramref name="tenant"/> when the server's own catalog vouches that it serves this creation of the
+    /// tenant at <paramref name="issuer"/>; null for a catalog of the host's own and for an issuer the creation was
+    /// never served at.
+    /// </summary>
+    private static string? VouchedId(string issuer, TenantDefinition tenant, ITenantCatalog catalog)
+        => catalog is StoreTenantCatalog own && own.HasServedAt(tenant, issuer) ? tenant.Id : null;
 
     /// <summary>
     /// Takes the clients <paramref name="clientIds"/> of the issuer <paramref name="issuerId"/> off the count, as ones
@@ -328,12 +344,14 @@ public static partial class LicenseChecker
     /// Applies licensing checks to an issuer value.
     /// </summary>
     /// <param name="issuer">The issuer to check against licensing constraints.</param>
-    /// <param name="settings">The settings of that issuer, which tell when it is gone for good and stops counting
-    /// toward the limit, so a deployment whose tenants come and go counts the issuers it serves; settings other than
-    /// those of a tenant the server's own catalog serves are counted by the issuer string and never released.</param>
+    /// <param name="tenant">The tenant served at that issuer.</param>
+    /// <param name="catalog">The catalog that tenant was resolved from, which tells when the tenant is gone for good
+    /// and its issuer stops counting toward the limit, so a deployment whose tenants come and go counts the issuers it
+    /// serves; a tenant a catalog of the host's own resolved is counted by the issuer string and never released.
+    /// </param>
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
-    public static string CheckIssuer(string issuer, IIssuerSettings settings)
-        => CheckCountedIssuer(issuer, CountedAs(issuer, settings));
+    public static string CheckIssuer(string issuer, TenantDefinition tenant, ITenantCatalog catalog)
+        => CheckCountedIssuer(issuer, CountedAs(issuer, tenant, catalog));
 
     private static string CheckCountedIssuer(string issuer, (string Key, CancellationToken Released) counted)
     {

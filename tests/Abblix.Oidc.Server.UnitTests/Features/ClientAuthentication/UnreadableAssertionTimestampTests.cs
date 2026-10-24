@@ -16,7 +16,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
@@ -147,8 +146,7 @@ public class UnreadableAssertionTimestampTests
             requestInfoProvider.Object,
             new FakeTimeProvider(Now),
             replayCache.Object,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri(Issuer)),
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.None })), tenantAccessor: SingleIssuer.Accessor);
+            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = ClientSecurityProfile.None }));
 
         return (authenticator, replayCache);
     }

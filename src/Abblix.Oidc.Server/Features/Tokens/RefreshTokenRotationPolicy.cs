@@ -9,15 +9,15 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
 /// Decides whether a client's refresh tokens rotate, that is, whether renewing one spends it.
 /// </summary>
-/// <param name="issuerSettings">Provides the issuer's default security profile.</param>
-public sealed class RefreshTokenRotationPolicy(IIssuerSettings issuerSettings)
+/// <param name="tenantAccessor">Names the tenant whose default security profile applies.</param>
+public sealed class RefreshTokenRotationPolicy(ITenantAccessor tenantAccessor)
 {
 	/// <summary>
 	/// Whether renewing a refresh token of <paramref name="clientInfo"/> spends the token it renews.
@@ -54,7 +54,7 @@ public sealed class RefreshTokenRotationPolicy(IIssuerSettings issuerSettings)
 	/// tokens are not sender-constrained and the reason for dropping rotation does not hold.
 	/// </remarks>
 	private bool ProfileForbidsRotation(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile).ForbidRefreshTokenRotation &&
+		=> SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile).ForbidRefreshTokenRotation &&
 		   !ReceivesTokensOutsideTheTokenEndpoint(clientInfo);
 
 	/// <summary>

@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -30,13 +30,13 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// registered processor - this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
-/// <param name="issuerSettings">Provides the issuer's default security profile a client inherits when it
+/// <param name="tenantAccessor">Names the tenant whose default security profile a client inherits when it
 /// states none, used to reject implicit and hybrid response types for a client held to a code-only
 /// profile (FAPI 2.0).</param>
 public partial class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
     IEnumerable<IAuthorizationResponseBuilder> processors,
-    IIssuerSettings issuerSettings) : SyncAuthorizationContextValidatorBase
+    ITenantAccessor tenantAccessor) : SyncAuthorizationContextValidatorBase
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts =
         processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);
@@ -69,7 +69,7 @@ public partial class FlowTypeValidator(
         // permits - the profile tightens, the granular whitelist cannot widen it. Checked before the
         // server-support gate so a profiled client gets the profile-specific reason even on a server
         // where Implicit Flow is enabled for other clients.
-        var profile = SecurityProfileRequirements.For(context.ClientInfo, issuerSettings.DefaultSecurityProfile);
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile);
         if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
         {
             LogResponseTypeNotAllowed(Sanitized.Values(responseType));

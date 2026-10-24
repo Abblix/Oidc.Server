@@ -55,7 +55,7 @@ public class DiscoveryControllerMtlsTests
             _optionsMock.Object,
             _endpointResolverMock.Object,
             Mock.Of<ISignedMetadataProvider>(),
-            SingleIssuer.SettingsOf(() => _issuer, _oidcOptions));
+            SingleIssuer.AccessorOf(() => _issuer));
     }
 
     /// <summary>

@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -128,16 +127,13 @@ public class DeviceAuthorizationRequestProcessorTests
             },
         });
 
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(issuer));
-
         var processor = new DeviceAuthorizationRequestProcessor(
             storage.Object,
             deviceCodes.Object,
             userCodes.Object,
             options.Object,
             new FakeTimeProvider(Now),
-            issuerProvider.Object);
+            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri(issuer) }));
 
         var result = await processor.ProcessAsync(new ValidDeviceAuthorizationRequest(
             new DeviceAuthorizationValidationContext(

@@ -9,7 +9,6 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -21,16 +20,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// with the expected issuer, audience, and cryptographic signatures.
 /// </summary>
 /// <param name="validator">The service used to perform the core JWT validation.</param>
-/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT, which is also the
-/// only audience these tokens may name.</param>
-/// <param name="issuerSettings">The settings of that issuer, which tell the license when it stops counting.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
-	IIssuerProvider issuerProvider,
-	IIssuerSettings issuerSettings,
+	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
 	ITenantAccessor tenantAccessor) : IAuthServiceJwtValidator
 {
@@ -72,7 +68,7 @@ public class AuthServiceJwtValidator(
 		// would be judged against no records at all, at every endpoint that reads it
 		if (result.TryGetSuccess(out var token) &&
 		    JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
-		    !RefreshTokenTenant.Names(token.Payload, issuerSettings.KeyPartition))
+		    !RefreshTokenTenant.Names(token.Payload, TenantKey.PartitionOf(tenantAccessor.CurrentTenant())))
 		{
 			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
 		}
@@ -87,10 +83,10 @@ public class AuthServiceJwtValidator(
 	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
 	private Task<bool> ValidateIssuerAsync(string issuer)
 	{
-		var result = issuer == issuerProvider.GetIssuer().OriginalString;
+		var result = issuer == tenantAccessor.CurrentTenant().Issuer.OriginalString;
 		if (result)
 		{
-			LicenseChecker.CheckIssuer(issuer, issuerSettings);
+			LicenseChecker.CheckIssuer(issuer, tenantAccessor.CurrentTenant(), catalog);
 		}
 
 		return Task.FromResult(result);
@@ -117,7 +113,7 @@ public class AuthServiceJwtValidator(
 	/// </remarks>
 	private Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
 	{
-		var issuer = issuerProvider.GetIssuer().OriginalString;
+		var issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString;
 		return Task.FromResult(audiences.Contains(issuer, StringComparer.Ordinal));
 	}
 }

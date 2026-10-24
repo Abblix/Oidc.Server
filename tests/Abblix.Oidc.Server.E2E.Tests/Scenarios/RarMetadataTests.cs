@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,12 +89,13 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var client = CreateClient();
         _ = await FetchDiscoveryAsync(client);
         using var tenant = TestTenant.Enter(Factory.Services);
-        var settings = Factory.Services.GetRequiredService<IIssuerSettings>();
+        var served = Factory.Services.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var catalog = Factory.Services.GetRequiredService<ITenantCatalog>();
 
-        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer, settings));
+        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer, served, catalog));
 
         var ex = Assert.ThrowsAny<InvalidOperationException>(
-            () => LicenseChecker.CheckIssuer("https://attacker.example.com", settings));
+            () => LicenseChecker.CheckIssuer("https://attacker.example.com", served, catalog));
         Assert.Contains("license", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 

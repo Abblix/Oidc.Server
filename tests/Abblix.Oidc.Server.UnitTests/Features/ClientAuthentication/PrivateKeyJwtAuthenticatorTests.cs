@@ -22,7 +22,6 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
 using System.Globalization;
 
@@ -699,8 +698,11 @@ public class PrivateKeyJwtAuthenticatorTests
             logger.Object,
             replayCache.Object,
             serviceProvider,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri("https://issuer.example.com")),
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })),
+            SingleIssuer.AccessorOf(new TestIssuer
+            {
+                Issuer = new Uri("https://issuer.example.com"),
+                DefaultSecurityProfile = profile,
+            }),
             TimeProvider.System);
 
         var mocks = new Mocks

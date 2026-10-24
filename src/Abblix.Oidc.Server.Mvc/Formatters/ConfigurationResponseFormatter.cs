@@ -10,7 +10,7 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -26,7 +26,7 @@ public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
 	IOidcEndpointResolver endpointResolver,
 	ISignedMetadataProvider signedMetadataProvider,
-	IIssuerSettings issuerSettings) : IConfigurationResponseFormatter
+	ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter
 {
 	/// <summary>
 	/// Formats the configuration response by mapping metadata and adding endpoint URLs.
@@ -114,7 +114,7 @@ public class ConfigurationResponseFormatter(
 			AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
 		};
 
-		mvcResponse = MtlsEndpointAliasing.WithMtlsAliases(mvcResponse, issuerSettings.MtlsBaseUri);
+		mvcResponse = MtlsEndpointAliasing.WithMtlsAliases(mvcResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);
 
 		if (options.Value.Discovery.SignedMetadata)
 		{
@@ -135,7 +135,7 @@ public class ConfigurationResponseFormatter(
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
 		       options.Value.EnabledEndpoints.HasFlag(endpoint)
 			? MtlsEndpointAliasing.OnIssuersHost(
-				endpointResolver.Resolve(endpoint), issuer, issuerSettings.MtlsBaseUri)
+				endpointResolver.Resolve(endpoint), issuer, tenantAccessor.CurrentTenant().MtlsBaseUri)
 			: null;
 	}
 }

@@ -11,7 +11,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
@@ -38,15 +37,12 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// allowing operations on the HTTP context of the current request.</param>
 /// <param name="authSessionTerminator">Ends the session a sign-in replaces, for its tokens and its clients.</param>
 /// <param name="clock">Tells when a session is signed in.</param>
-/// <param name="issuerSettings">Names the tenant a session is signed in at, so a session of another tenant is not
-/// read as one of this tenant's.</param>
 /// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
 /// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
 public class AuthenticationSchemeAdapter(
 	IHttpContextAccessor httpContextAccessor,
 	IAuthSessionTerminator authSessionTerminator,
 	TimeProvider clock,
-	IIssuerSettings issuerSettings,
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
 	/// <summary>
@@ -77,13 +73,10 @@ public class AuthenticationSchemeAdapter(
 	/// The tenant serving this request, as the partition of its keys names it; null for a request that reached no
 	/// tenant, such as a page of the host's own.
 	/// </summary>
-	/// <remarks>
-	/// Asked first whether there is a tenant, since the settings of a tenant refuse to answer outside any.
-	/// </remarks>
 	private string? CurrentTenant
-		=> HttpContext.RequestServices.GetRequiredService<ITenantAccessor>().Current is null
-			? null
-			: issuerSettings.KeyPartition;
+		=> HttpContext.RequestServices.GetRequiredService<ITenantAccessor>().Current is { } current
+			? TenantKey.PartitionOf(current.Tenant)
+			: null;
 
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.

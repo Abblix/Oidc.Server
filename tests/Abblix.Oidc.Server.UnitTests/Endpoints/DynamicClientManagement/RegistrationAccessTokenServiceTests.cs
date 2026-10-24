@@ -13,7 +13,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -39,15 +38,12 @@ public class RegistrationAccessTokenServiceTests
 
     public RegistrationAccessTokenServiceTests()
     {
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
-
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
         _service = new RegistrationAccessTokenService(
             _jwtFormatter.Object,
-            issuerProvider.Object,
-            SingleIssuer.Settings,
+            SingleIssuer.Accessor,
+            SingleIssuer.LicensedCatalog,
             Options.Create(new OidcOptions()));
     }
 

@@ -18,7 +18,6 @@ using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -34,8 +33,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="requestInfoProvider">Provider for retrieving request information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
-/// <param name="issuerSettings">Supplies the issuer's default security profile.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
@@ -44,10 +41,8 @@ public partial class ClientSecretJwtAuthenticator(
     IRequestInfoProvider requestInfoProvider,
     TimeProvider clock,
     IReplayCache replayCache,
-    IIssuerProvider issuerProvider,
-    IIssuerSettings issuerSettings,
     ITenantAccessor tenantAccessor)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, issuerSettings, clock)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, tenantAccessor, clock)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
@@ -143,7 +138,7 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        switch (await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), issuer))
+        switch (await clientInfoProvider.TryFindClientAsync(CurrentTenant, issuer))
         {
             case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
                 LogWrongAuthMethod(issuer);

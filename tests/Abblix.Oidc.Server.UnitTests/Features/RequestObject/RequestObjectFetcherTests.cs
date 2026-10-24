@@ -88,7 +88,7 @@ public class RequestObjectFetcherTests
     private RequestObjectFetcher CreateFetcher()
     {
         return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object,
-            SingleIssuer.SettingsOf(_options.Object));
+            SingleIssuer.Accessor);
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);
@@ -295,7 +295,7 @@ public class RequestObjectFetcherTests
     private async Task<Result<AuthorizationRequest, OidcError>> FetchWithUiLocales(JsonNode uiLocales)
     {
         var fetcher = new RequestObjectFetcher(_logger.Object, new JsonSerializationBinder(), _serviceProvider.Object,
-            _options.Object, SingleIssuer.SettingsOf(_options.Object));
+            _options.Object, SingleIssuer.Accessor);
         var originalRequest = new AuthorizationRequest { ClientId = TestConstants.DefaultClientId };
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjoiISJ9.signature";
         var payload = new JsonObject { [RequestParameters.UiLocales] = uiLocales };

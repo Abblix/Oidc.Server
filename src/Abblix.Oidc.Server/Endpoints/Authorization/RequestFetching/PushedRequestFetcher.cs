@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -26,7 +25,6 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="options">
 /// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
-/// <param name="issuerSettings">Provides the issuer's default security profile.</param>
 /// <param name="authorizationRequestStorage">
 /// The storage system used to retrieve pushed authorization request objects.</param>
 /// <param name="clientInfoProvider">
@@ -35,7 +33,6 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
-    IIssuerSettings issuerSettings,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IClientInfoProvider clientInfoProvider,
     IConsumedRequestUriRegistry consumedRequestUris,
@@ -148,7 +145,7 @@ public class PushedRequestFetcher(
             return false;
 
         return clientInfo.RequirePushedAuthorizationRequests ||
-               SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
+               SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
                    .RequirePushedAuthorizationRequests;
     }
 }

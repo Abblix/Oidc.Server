@@ -16,7 +16,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -53,9 +52,6 @@ public class AccessTokenServiceTests
 
     public AccessTokenServiceTests()
     {
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
-
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
@@ -66,13 +62,12 @@ public class AccessTokenServiceTests
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
         // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new AccessTokenService(
-            issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
+            SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys, tenantAccessor: SingleIssuer.Accessor),
             ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
     }
@@ -122,18 +117,15 @@ public class AccessTokenServiceTests
     public async Task CreateAccessToken_CarriesTheSessionEmailWhenTheClaimIsGrantedOtherwise(bool byHostScope)
     {
         const string contactScope = "contact";
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(provider => provider.GetIssuer()).Returns(new Uri(Issuer));
         var tokenIdGenerator = new Mock<ITokenIdGenerator>();
         tokenIdGenerator.Setup(generator => generator.GenerateTokenId()).Returns(TokenId);
         var service = new AccessTokenService(
-            issuerProvider.Object,
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
+            SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys, tenantAccessor: SingleIssuer.Accessor),
             ScopeClaims.Of(new ScopeDefinition(contactScope, IanaClaimTypes.Email)), tenantAccessor: SingleIssuer.Accessor);
         var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
@@ -216,7 +208,7 @@ public class AccessTokenServiceTests
     /// - IssuedAt (iat): Current time
     /// - NotBefore (nbf): Current time
     /// - ExpiresAt (exp): Current time + client's AccessTokenExpiresIn
-    /// - Issuer (iss): From IIssuerProvider
+    /// - Issuer (iss): From the tenant the request is served at
     /// - JwtId (jti): Unique token identifier from ITokenIdGenerator
     /// </summary>
     [Fact]
@@ -632,13 +624,12 @@ public class AccessTokenServiceTests
         var converter = new SubjectTypeConverter(
             new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
         var service = new AccessTokenService(
-            Mock.Of<IIssuerProvider>(),
             new FakeTimeProvider(_currentTime),
             Mock.Of<ITokenIdGenerator>(),
             Mock.Of<IAuthServiceJwtFormatter>(),
             new FixedSubjectTypeConverter(converter),
             Options.Create(new OidcOptions()),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
+            SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys, tenantAccessor: SingleIssuer.Accessor),
             ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
 
@@ -740,20 +731,16 @@ public class AccessTokenServiceTests
             keys.Setup(k => k.GetEncryptionKeys(definition)).Returns(resourceKeys.ToAsyncEnumerable());
         }
 
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
-
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
 
         return new AccessTokenService(
-            issuerProvider.Object,
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
+            SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(manager.Object, keys.Object, tenantAccessor: SingleIssuer.Accessor),
             ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
     }

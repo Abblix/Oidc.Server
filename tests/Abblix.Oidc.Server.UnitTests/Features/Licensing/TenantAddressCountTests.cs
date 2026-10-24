@@ -61,9 +61,9 @@ public sealed class TenantAddressCountTests : IDisposable
         time.Advance(Pause);
         await catalog.RefreshAsync(ct);
 
-        Assert.Equal(B, LicenseChecker.CheckIssuer(B, Settings(catalog, Entered(served, B))));
+        Assert.Equal(B, LicenseChecker.CheckIssuer(B, Entered(served, B), catalog));
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(C, Settings(catalog, Entered(served, C))));
+            () => LicenseChecker.CheckIssuer(C, Entered(served, C), catalog));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 
@@ -79,8 +79,8 @@ public sealed class TenantAddressCountTests : IDisposable
         var catalog = Catalog(listed, time, new SlowClosing(time, closingTakes));
         await catalog.RefreshAsync(ct);
         var before = (await catalog.FindByIdAsync("acme", ct))!;
-        var initech = Settings(catalog, (await catalog.FindByIdAsync("initech", ct))!);
-        LicenseChecker.CheckIssuer(A, Settings(catalog, before));
+        var initech = (await catalog.FindByIdAsync("initech", ct))!;
+        LicenseChecker.CheckIssuer(A, before, catalog);
 
         listed.RemoveAt(1);
         await catalog.RefreshAsync(ct);
@@ -93,9 +93,9 @@ public sealed class TenantAddressCountTests : IDisposable
         time.Advance(Pause - closingTakes);
         await catalog.RefreshAsync(ct);
 
-        Assert.True(initech.Released.IsCancellationRequested);
+        Assert.True(catalog.Released(initech).IsCancellationRequested);
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(A, Settings(catalog, before)));
+            () => LicenseChecker.CheckIssuer(A, before, catalog));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 
@@ -108,7 +108,7 @@ public sealed class TenantAddressCountTests : IDisposable
         var catalog = Catalog(listed, time);
         await catalog.RefreshAsync(ct);
         var before = (await catalog.FindByIdAsync("acme", ct))!;
-        LicenseChecker.CheckIssuer(A, Settings(catalog, before));
+        LicenseChecker.CheckIssuer(A, before, catalog);
 
         listed[0] = At("acme", B, "2");
         await catalog.RefreshAsync(ct);
@@ -118,7 +118,7 @@ public sealed class TenantAddressCountTests : IDisposable
         await catalog.RefreshAsync(ct);
 
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(A, Settings(catalog, before)));
+            () => LicenseChecker.CheckIssuer(A, before, catalog));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 
@@ -131,7 +131,7 @@ public sealed class TenantAddressCountTests : IDisposable
         var catalog = Catalog(listed, time);
         await catalog.RefreshAsync(ct);
         var atA = (await catalog.FindByIdAsync("acme", ct))!;
-        LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+        LicenseChecker.CheckIssuer(A, atA, catalog);
 
         listed[0] = At("acme", B, "2");
         await catalog.RefreshAsync(ct);
@@ -140,17 +140,17 @@ public sealed class TenantAddressCountTests : IDisposable
         listed[0] = At("acme", C, "3");
         await catalog.RefreshAsync(ct);
 
-        Assert.Equal(A, LicenseChecker.CheckIssuer(A, Settings(catalog, atA)));
-        Assert.Equal(B, LicenseChecker.CheckIssuer(B, Settings(catalog, atB)));
+        Assert.Equal(A, LicenseChecker.CheckIssuer(A, atA, catalog));
+        Assert.Equal(B, LicenseChecker.CheckIssuer(B, atB, catalog));
 
         time.Advance(Pause / 2);
         await catalog.RefreshAsync(ct);
-        Assert.Throws<LicenseViolationException>(() => LicenseChecker.CheckIssuer(A, Settings(catalog, atA)));
-        Assert.Equal(B, LicenseChecker.CheckIssuer(B, Settings(catalog, atB)));
+        Assert.Throws<LicenseViolationException>(() => LicenseChecker.CheckIssuer(A, atA, catalog));
+        Assert.Equal(B, LicenseChecker.CheckIssuer(B, atB, catalog));
 
         time.Advance(Pause / 2);
         await catalog.RefreshAsync(ct);
-        Assert.Throws<LicenseViolationException>(() => LicenseChecker.CheckIssuer(B, Settings(catalog, atB)));
+        Assert.Throws<LicenseViolationException>(() => LicenseChecker.CheckIssuer(B, atB, catalog));
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class TenantAddressCountTests : IDisposable
             {
                 try
                 {
-                    LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+                    LicenseChecker.CheckIssuer(A, atA, catalog);
                     return true;
                 }
                 catch (LicenseViolationException)
@@ -178,7 +178,7 @@ public sealed class TenantAddressCountTests : IDisposable
             seen));
         await catalog.RefreshAsync(ct);
         atA = (await catalog.FindByIdAsync("acme", ct))!;
-        LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+        LicenseChecker.CheckIssuer(A, atA, catalog);
 
         listed.RemoveAt(1);
         await catalog.RefreshAsync(ct);
@@ -201,11 +201,11 @@ public sealed class TenantAddressCountTests : IDisposable
         listed[0] = At("acme", A, "2", "g2");
         await catalog.RefreshAsync(ct);
         var g2 = (await catalog.FindByIdAsync("acme", ct))!;
-        LicenseChecker.CheckIssuer(A, Settings(catalog, g2));
+        LicenseChecker.CheckIssuer(A, g2, catalog);
         time.Advance(Pause);
         await catalog.RefreshAsync(ct);
 
-        Assert.Equal(A, LicenseChecker.CheckIssuer(A, Settings(catalog, g1)));
+        Assert.Equal(A, LicenseChecker.CheckIssuer(A, g1, catalog));
     }
 
     [Fact]
@@ -217,7 +217,7 @@ public sealed class TenantAddressCountTests : IDisposable
         var catalog = Catalog(listed, time);
         await catalog.RefreshAsync(ct);
         var atA = (await catalog.FindByIdAsync("acme", ct))!;
-        LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+        LicenseChecker.CheckIssuer(A, atA, catalog);
 
         listed[0] = At("acme", B, "2");
         await catalog.RefreshAsync(ct);
@@ -227,14 +227,14 @@ public sealed class TenantAddressCountTests : IDisposable
         time.Advance(Pause);
         await catalog.RefreshAsync(ct);
 
-        LicenseChecker.CheckIssuer(A, Settings(catalog, atA));
+        LicenseChecker.CheckIssuer(A, atA, catalog);
 
         time.Advance(Pause);
         listed.Add(At("globex", G, "1"));
         await catalog.RefreshAsync(ct);
         var globex = (await catalog.FindByIdAsync("globex", ct))!;
 
-        Assert.Equal(G, LicenseChecker.CheckIssuer(G, Settings(catalog, globex)));
+        Assert.Equal(G, LicenseChecker.CheckIssuer(G, globex, catalog));
     }
 
     [Fact]
@@ -249,7 +249,7 @@ public sealed class TenantAddressCountTests : IDisposable
         listed[0] = At("acme", B, "2");
         await catalog.RefreshAsync(ct);
         var atB = (await catalog.FindByIdAsync("acme", ct))!;
-        LicenseChecker.CheckIssuer(B, Settings(catalog, atB));
+        LicenseChecker.CheckIssuer(B, atB, catalog);
 
         listed[0] = At("acme", C, "3");
         await catalog.RefreshAsync(ct);
@@ -259,14 +259,14 @@ public sealed class TenantAddressCountTests : IDisposable
         time.Advance(Pause);
         await catalog.RefreshAsync(ct);
 
-        LicenseChecker.CheckIssuer(B, Settings(catalog, atB));
+        LicenseChecker.CheckIssuer(B, atB, catalog);
 
         time.Advance(Pause);
         listed.Add(At("globex", G, "1"));
         await catalog.RefreshAsync(ct);
         var globex = (await catalog.FindByIdAsync("globex", ct))!;
 
-        Assert.Equal(G, LicenseChecker.CheckIssuer(G, Settings(catalog, globex)));
+        Assert.Equal(G, LicenseChecker.CheckIssuer(G, globex, catalog));
     }
 
     private static StoredTenant At(string id, string issuer, string version, string generation = "g1")
@@ -291,15 +291,6 @@ public sealed class TenantAddressCountTests : IDisposable
             closings,
             Options.Create(new OidcOptions()),
             time);
-    }
-
-    private static TenantIssuerSettings Settings(StoreTenantCatalog catalog, TenantDefinition tenant)
-    {
-        var served = new TenantContext { Tenant = tenant };
-        return new TenantIssuerSettings(
-            Mock.Of<ITenantAccessor>(accessor => accessor.Current == served),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
-            catalog);
     }
 
     private static TenantDefinition Entered(TenantDefinition served, string issuer)

@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -43,7 +42,6 @@ public class ResponseJwtBuilderTests
     private readonly Mock<IJsonWebTokenCreator> _jwtCreator = new(MockBehavior.Strict);
     private readonly Mock<IClientKeysProvider> _clientKeys = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeys = new(MockBehavior.Strict);
-    private readonly Mock<IIssuerProvider> _issuerProvider = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider;
 
     private readonly ResponseJwtBuilder _builder;
@@ -56,7 +54,6 @@ public class ResponseJwtBuilderTests
     public ResponseJwtBuilderTests()
     {
         _clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_client);
-        _issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
         _timeProvider = new FakeTimeProvider(_now);
         _serviceKeys.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
@@ -70,7 +67,6 @@ public class ResponseJwtBuilderTests
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             clientJwtFormatter,
-            _issuerProvider.Object,
             _timeProvider,
             Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
     }
@@ -206,7 +202,6 @@ public class ResponseJwtBuilderTests
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
                 _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, tenantAccessor: SingleIssuer.Accessor),
-            _issuerProvider.Object,
             _timeProvider,
             options, tenantAccessor: SingleIssuer.Accessor);
 

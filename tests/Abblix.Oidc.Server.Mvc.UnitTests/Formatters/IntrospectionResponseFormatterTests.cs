@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
@@ -40,8 +40,10 @@ public class IntrospectionResponseFormatterTests
 
     private async Task<ActionResult> FormatAsync(IntrospectionSuccess success, string? acceptHeader)
     {
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
+        var tenantAccessor = Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = "main", Issuer = new Uri(Issuer) },
+        });
 
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
@@ -54,7 +56,7 @@ public class IntrospectionResponseFormatterTests
         httpContextAccessor.Setup(a => a.HttpContext).Returns(httpContext);
 
         var formatter = new IntrospectionResponseFormatter(
-            issuerProvider.Object,
+            tenantAccessor,
             _clientJwtFormatter.Object,
             TimeProvider.System,
             options.Object,

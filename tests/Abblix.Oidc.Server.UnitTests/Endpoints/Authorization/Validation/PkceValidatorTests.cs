@@ -44,7 +44,7 @@ public class PkceValidatorTests
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None,
         IAuthorizationValueReuseDetector? reuseDetector = null)
         => new(
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile })),
+            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }),
             reuseDetector ?? Mock.Of<IAuthorizationValueReuseDetector>());
 
     /// <summary>

@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -32,7 +31,6 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// user re-authentication. This service handles the creation and validation of refresh tokens, supporting seamless
 /// and secure user experiences by allowing access tokens to be renewed based on long-lived refresh tokens.
 /// </summary>
-/// <param name="issuerProvider">Provider for the issuer claim in tokens.</param>
 /// <param name="clock">Time provider for token timestamps.</param>
 /// <param name="tokenIdGenerator">Generator for unique token identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
@@ -43,12 +41,11 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// or real) on issuance, and opens it back when authorizing the token.</param>
 /// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
 /// </param>
-/// <param name="issuerSettings">Provides the issuer's licensing state for the token it signs.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's issuer, clock, identifier, format, registry, grant revocation, rotation policy and subject each come from their own service, the server's options carry the service-token policy, and the issuer's settings the licensing state the issuer claim is checked against.")]
+    Justification = "Every dependency is used: the token's clock, identifier, format, registry, grant revocation, rotation policy and subject each come from their own service, the tenant names its issuer, the server's options carry the service-token policy, and the catalog the licensing state the issuer claim is checked against.")]
 public class RefreshTokenService(
-	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
@@ -57,7 +54,7 @@ public class RefreshTokenService(
 	RefreshTokenRotationPolicy rotationPolicy,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
-	IIssuerSettings issuerSettings,
+	ITenantCatalog catalog,
 	ITenantAccessor tenantAccessor) : IRefreshTokenService
 {
 	/// <inheritdoc />
@@ -146,7 +143,11 @@ public class RefreshTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = now,
 				ExpiresAt = expiresAt,
-				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer().OriginalString, issuerSettings, authContext.ClientId),
+				Issuer = LicenseChecker.CheckLicense(
+					tenantAccessor.CurrentTenant().Issuer.OriginalString,
+					tenantAccessor.CurrentTenant(),
+					catalog,
+					authContext.ClientId),
 				GrantId = grantId,
 			},
 		};

@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -64,8 +63,7 @@ public class ProfileClockSkewReachesValidationTests
             new Mock<IRequestInfoProvider>().Object,
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
-            new Mock<IIssuerProvider>().Object,
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })), tenantAccessor: SingleIssuer.Accessor);
+            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = profile }));
 
         await authenticator.TryAuthenticateClientAsync(new ClientRequest
         {
@@ -117,8 +115,7 @@ public class ProfileClockSkewReachesValidationTests
             NullLogger<SoftwareStatementValidator>.Instance,
             tokenValidator.Object,
             options.Object,
-            SingleIssuer.SettingsOf(
-                Options.Create(options.Object.CurrentValue), new TestIssuer { DefaultSecurityProfile = profile }),
+            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = profile }),
             new Mock<ISecureHttpFetcher>().Object);
 
         await validator.ValidateAsync(new ClientRegistrationValidationContext(
@@ -151,9 +148,6 @@ public class ProfileClockSkewReachesValidationTests
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri("https://auth.example.com"));
 
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri("https://auth.example.com"));
-
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
             .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()))
@@ -165,10 +159,9 @@ public class ProfileClockSkewReachesValidationTests
             tokenValidator.Object,
             new Mock<IClientInfoProvider>().Object,
             new Mock<IClientKeysProvider>().Object,
-            issuerProvider.Object,
             serviceKeys.Object,
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = profile })),
-            TimeProvider.System, tenantAccessor: SingleIssuer.Accessor);
+            TimeProvider.System,
+            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = profile }));
 
         await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller);
 
