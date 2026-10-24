@@ -256,26 +256,45 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// A receiver updating its declared stream, having read it before the tenant moved and writing after the store
-    /// built for the move wrote the issuer the tenant moved to, keeps that issuer and has its own change applied.
+    /// A receiver updating or replacing its declared polled stream, having read it before the tenant moved and writing
+    /// after the store built for the move wrote the issuer and the poll address the tenant moved to, keeps both and has
+    /// its own change applied.
     /// </summary>
-    [Fact]
-    public async Task AStreamUpdatedAcrossAMove_KeepsTheIssuerTheTenantMovedTo()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AStreamChangedAcrossAMove_KeepsTheIssuerAndThePollAddressTheTenantMovedTo(bool replace)
     {
         var ct = TestContext.Current.CancellationToken;
         var store = new MemoryTenantStore();
         await store.AddAsync(TenantAt("acme"), ct);
         var streams = HeldStore.HoldingTheFirstCreates(0);
-        await using var app = await StartWithADeclaredStreamAsync(store, new FakeTimeProvider(), streams.Store);
+        await using var app = await StartAsync(
+            store,
+            new FakeTimeProvider(),
+            streams.Store,
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]));
         var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
         var first = (await catalog.FindByIdAsync("acme", ct))!;
         Assert.Equal(first.Issuer.OriginalString, await DeclaredIssuerAsync(app, first, ct));
 
         var read = streams.HoldTheNextRead();
-        var updating = ClientOf(app, "acme").PatchAsJsonAsync(
-            $"/tenants/acme{StreamPath}",
-            new UpdateStreamRequest { StreamId = "alerts", Description = "updated" },
-            ct);
+        var client = ClientOf(app, "acme");
+        var path = $"/tenants/acme{StreamPath}";
+        var changing = replace
+            ? client.PutAsJsonAsync(
+                path,
+                new UpdateStreamRequest
+                {
+                    StreamId = "alerts",
+                    Delivery = new PollDeliveryMethod(),
+                    EventsRequested = [MembershipChanged],
+                    Description = "updated",
+                },
+                ct)
+            : client.PatchAsJsonAsync(path, new UpdateStreamRequest { StreamId = "alerts", Description = "updated" }, ct);
         await read.WaitAsync(HeldFor, ct);
 
         await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
@@ -283,12 +302,14 @@ public sealed partial class SharedSignalsTenantReleaseTests
         Assert.Equal(moved.Issuer.OriginalString, await DeclaredIssuerAsync(app, moved, ct));
 
         streams.ReleaseTheRead();
-        using var updated = await updating;
+        using var changed = await changing;
 
-        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
         var stream = Assert.Single(await StreamsOfAsync(app, moved, ct));
         Assert.Equal(moved.Issuer.OriginalString, stream.Configuration.Issuer);
         Assert.Equal("updated", stream.Configuration.Description);
+        var poll = Assert.IsType<PollDeliveryMethod>(stream.Configuration.Delivery);
+        Assert.StartsWith(moved.Issuer.OriginalString, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -492,7 +513,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         private readonly TaskCompletionSource[] _apply;
         private int _creates;
         private TaskCompletionSource? _readHeld;
-        private readonly TaskCompletionSource _readReleased = Signal();
+        private TaskCompletionSource _readReleased = Signal();
 
         private HeldStore(int held, CancellationTokenSource? cancelAfterCreate, bool deleteFails)
         {
@@ -523,8 +544,9 @@ public sealed partial class SharedSignalsTenantReleaseTests
                     var found = await inner.FindAsync(receiverId, streamId, token);
                     if (Interlocked.Exchange(ref _readHeld, null) is { } held)
                     {
+                        var released = Volatile.Read(ref _readReleased);
                         held.TrySetResult();
-                        await _readReleased.Task.WaitAsync(HeldFor);
+                        await released.Task.WaitAsync(HeldFor);
                     }
 
                     return found;
@@ -566,17 +588,18 @@ public sealed partial class SharedSignalsTenantReleaseTests
         public Task Entered(int create) => _entered[create].Task;
 
         /// <summary>
-        /// Holds the next read once it has read the store, until <see cref="ReleaseTheRead"/>; the task completes
-        /// when that read is held.
+        /// Holds the next read once it has read the store, until the <see cref="ReleaseTheRead"/> that follows; the
+        /// task completes when that read is held.
         /// </summary>
         public Task HoldTheNextRead()
         {
             var held = Signal();
+            Volatile.Write(ref _readReleased, Signal());
             Volatile.Write(ref _readHeld, held);
             return held.Task;
         }
 
-        public void ReleaseTheRead() => _readReleased.TrySetResult();
+        public void ReleaseTheRead() => Volatile.Read(ref _readReleased).TrySetResult();
 
         public void Apply() => Apply(0);
 

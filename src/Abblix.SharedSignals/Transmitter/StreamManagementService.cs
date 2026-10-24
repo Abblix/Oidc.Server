@@ -185,7 +185,9 @@ public sealed class StreamManagementService(
     {
         var updated = current;
         if (delivery is not null)
-            updated = updated with { Delivery = delivery };
+        {
+            updated = updated with { Delivery = StreamDeliveryFactory.Written(current.Delivery, delivery) };
+        }
 
         if (request.EventsRequested is { } requested)
         {
@@ -197,7 +199,9 @@ public sealed class StreamManagementService(
         }
 
         if (request.Description is { } description)
+        {
             updated = updated with { Description = description };
+        }
 
         return updated;
     }
@@ -239,7 +243,7 @@ public sealed class StreamManagementService(
             stream,
             current => current with
             {
-                Delivery = delivery,
+                Delivery = StreamDeliveryFactory.Written(current.Delivery, delivery),
                 EventsRequested = request.EventsRequested,
                 EventsDelivered = StreamConfigurations.DeliveredOf(options, request.EventsRequested),
                 Description = request.Description,
