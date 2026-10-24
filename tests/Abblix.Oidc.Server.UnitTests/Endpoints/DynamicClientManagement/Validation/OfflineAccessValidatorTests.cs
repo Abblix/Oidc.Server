@@ -33,7 +33,7 @@ public class OfflineAccessValidatorTests
     {
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(existing is { } offlineAccess ? new ClientInfo(ClientId) { OfflineAccess = offlineAccess } : null);
         return new OfflineAccessValidator(clients.Object, tenantAccessor: SingleIssuer.Accessor);
     }

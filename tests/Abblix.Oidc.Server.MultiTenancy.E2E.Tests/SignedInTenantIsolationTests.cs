@@ -39,112 +39,43 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// </summary>
 public sealed class SignedInTenantIsolationTests : IAsyncLifetime
 {
-    private const string Host = "https://auth.example.com";
-    private const string Acme = "/tenants/acme";
-    private const string Globex = "/tenants/globex";
-    private const string ClientId = "shared-client-id";
+    private const string Acme = SignedInTenantsHost.Acme;
+    private const string Globex = SignedInTenantsHost.Globex;
     private const string ClientSecret = "shared-client-secret";
     private const string TokenPath = "/connect/token";
-    private const string AuthorizePath = "/connect/authorize";
     private const string EndSessionPath = "/connect/endsession";
-    private const string CodeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-    private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
 
-    private WebApplication? _app;
-    private HttpClient? _http;
+    private SignedInTenantsHost? _host;
 
-    private HttpClient Http => _http!;
+    private HttpClient Http => _host!.Http;
 
     public async ValueTask InitializeAsync()
-    {
-        await TestLicense.Loaded;
-
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-        builder.Services.AddDistributedMemoryCache();
-        builder.Services.AddMemoryCache();
-        builder.Services.AddAuthentication().AddCookie();
-        builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IUserInfoProvider, SignedInUserInfo>();
-        builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(options => options.EnabledEndpoints = OidcEndpoints.Base);
-
-        // The user is signed in and has consented, so the authorization endpoint answers with a code at once
-        builder.Services.Replace(ServiceDescriptor.Singleton<IAuthSessionService, SignedInUser>());
-        builder.Services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider, EverythingConsented>());
-
-        builder.Services.Configure<OidcOptions>(options =>
+        => _host = await SignedInTenantsHost.StartAsync(_ => new ClientInfo(SignedInTenantsHost.ClientId)
         {
-            options.Tenants.Add(Tenant("acme", Acme));
-            options.Tenants.Add(Tenant("globex", Globex));
+            ClientSecrets =
+            [
+                new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) },
+            ],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+            RedirectUris = [new Uri(RedirectUri)],
+            PostLogoutRedirectUris = [new Uri(RedirectUri)],
+            PkceRequired = true,
         });
-
-        _app = builder.Build();
-        _app.UseMultiTenancy();
-        _app.UseCors();
-        _app.UseAuthorization();
-        _app.MapOidcEndpoints();
-
-        await _app.StartAsync(TestContext.Current.CancellationToken);
-
-        _http = _app.GetTestClient();
-        _http.BaseAddress = new Uri(Host);
-    }
 
     public async ValueTask DisposeAsync()
     {
-        _http?.Dispose();
-        if (_app is not null)
-            await _app.DisposeAsync();
+        if (_host is not null)
+            await _host.DisposeAsync();
     }
-
-    private static TenantDefinition Tenant(string id, string path) => new()
-    {
-        Id = id,
-        Issuer = new Uri(Host + path),
-        Clients =
-        [
-            new ClientInfo(ClientId)
-            {
-                ClientSecrets =
-                [
-                    new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(ClientSecret)) },
-                ],
-                TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
-                AllowedGrantTypes = [GrantTypes.AuthorizationCode],
-                RedirectUris = [new Uri(RedirectUri)],
-                PostLogoutRedirectUris = [new Uri(RedirectUri)],
-                PkceRequired = true,
-            },
-        ],
-        LoginUri = new Uri("/login", UriKind.Relative),
-        SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
-    };
 
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response)
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
-    /// <summary>
-    /// The authorization code <paramref name="tenant"/> issues to the client for the signed-in user.
-    /// </summary>
-    private async Task<string> CodeAtAsync(string tenant)
-    {
-        var query = HttpUtility.ParseQueryString(string.Empty);
-        query[AuthorizationRequest.Parameters.ClientId] = ClientId;
-        query[AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code;
-        query[AuthorizationRequest.Parameters.RedirectUri] = RedirectUri;
-        query[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
-        query[AuthorizationRequest.Parameters.Nonce] = "nonce";
-        query[AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge;
-        query[AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256;
-
-        var response = await Http.GetAsync($"{tenant}{AuthorizePath}?{query}", TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.SeeOther, response.StatusCode);
-        return HttpUtility.ParseQueryString(response.Headers.Location!.Query)[ResponseParameters.Code]!;
-    }
+    private Task<string> CodeAtAsync(string tenant) => _host!.CodeAtAsync(tenant, RedirectUri);
 
     private Task<HttpResponseMessage> RedeemAtAsync(string tenant, string code)
         => Http.PostAsync(
@@ -154,8 +85,8 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
                 [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
                 [TokenRequest.Parameters.Code] = code,
                 [TokenRequest.Parameters.RedirectUri] = RedirectUri,
-                [TokenRequest.Parameters.CodeVerifier] = CodeVerifier,
-                [ClientRequest.Parameters.ClientId] = ClientId,
+                [TokenRequest.Parameters.CodeVerifier] = SignedInTenantsHost.CodeVerifier,
+                [ClientRequest.Parameters.ClientId] = SignedInTenantsHost.ClientId,
                 [ClientRequest.Parameters.ClientSecret] = ClientSecret,
             }),
             TestContext.Current.CancellationToken);

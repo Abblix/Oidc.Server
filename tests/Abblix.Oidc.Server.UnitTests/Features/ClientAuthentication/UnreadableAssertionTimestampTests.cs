@@ -116,7 +116,7 @@ public class UnreadableAssertionTimestampTests
         };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
 
         // Hands the token back without reading a single claim of it, which is what leaves the
         // timestamps to be met first by the authenticator.

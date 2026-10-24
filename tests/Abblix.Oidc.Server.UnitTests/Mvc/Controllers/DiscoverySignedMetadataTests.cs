@@ -106,7 +106,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_EmitsPureJws()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
 
         JsonWebKey? capturedEncryptionKey = null;
         _jwtCreatorMock
@@ -131,7 +131,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_PayloadRestatesMetadataWithIssAndNoSelfReference()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;
         _jwtCreatorMock
@@ -163,7 +163,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_NoSigningKeys_Throws()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _formatter.FormatResponseAsync(MinimalResponse()));
@@ -185,7 +185,7 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = true;
         _keysProviderMock
-            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
             .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;

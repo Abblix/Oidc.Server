@@ -86,7 +86,7 @@ public class ClientMayTightenItselfTests
         var clientInfo = new ClientInfo(ClientId) { SecurityProfile = clientProfile };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
 
         var tokenValidator = new Mock<IJsonWebTokenValidator>();
         tokenValidator
@@ -101,7 +101,7 @@ public class ClientMayTightenItselfTests
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
-            .Setup(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
+            .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         var validator = new ClientJwtValidator(

@@ -32,7 +32,7 @@ public class RemoveClientRequestProcessorTests
     private static RemoveClientRequestProcessor ProcessorWhere(bool registrationHeld)
     {
         var clients = new Mock<IClientInfoManager>(MockBehavior.Strict);
-        clients.Setup(c => c.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), Client)).ReturnsAsync(registrationHeld);
+        clients.Setup(c => c.TryRemoveClientAsync(TestTenant.Matched, Client)).ReturnsAsync(registrationHeld);
         return new RemoveClientRequestProcessor(clients.Object, TimeProvider.System, SingleIssuer.Settings, tenantAccessor: SingleIssuer.Accessor,
             issuerProvider: Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == TestConstants.DefaultIssuer));
     }

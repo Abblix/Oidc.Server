@@ -70,7 +70,7 @@ public class ScopeValidatorTests
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
@@ -121,7 +121,7 @@ public class ScopeValidatorTests
         var offlineAccessDefinition = new ScopeDefinition("offline_access", Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
@@ -129,7 +129,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "offline_access", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "offline_access", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = offlineAccessDefinition;
@@ -158,7 +158,7 @@ public class ScopeValidatorTests
     {
         // Arrange
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
@@ -189,7 +189,7 @@ public class ScopeValidatorTests
         var emailDef = new ScopeDefinition("email", Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
@@ -197,7 +197,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "profile", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "profile", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = profileDef;
@@ -205,7 +205,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "email", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "email", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = emailDef;
@@ -239,7 +239,7 @@ public class ScopeValidatorTests
             resourceScopeDef);
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
@@ -247,7 +247,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "api:read", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "api:read", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
@@ -278,7 +278,7 @@ public class ScopeValidatorTests
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
@@ -307,7 +307,7 @@ public class ScopeValidatorTests
         var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
@@ -315,7 +315,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(It.IsAny<TenantDefinition>(), "unknown", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "unknown", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;

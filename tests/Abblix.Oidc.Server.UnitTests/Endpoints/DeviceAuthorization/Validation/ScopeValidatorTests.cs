@@ -35,7 +35,7 @@ public class ScopeValidatorTests
     {
         var scopeManager = new Mock<IScopeManager>();
         scopeManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(scope);

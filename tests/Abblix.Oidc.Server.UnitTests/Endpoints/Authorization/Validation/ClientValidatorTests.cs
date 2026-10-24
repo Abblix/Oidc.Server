@@ -68,7 +68,7 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
@@ -79,7 +79,7 @@ public class ClientValidatorTests
         // Assert
         Assert.Null(result);
         Assert.Same(clientInfo, context.ClientInfo);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId), Times.Once);
     }
 
     /// <summary>
@@ -112,7 +112,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
@@ -124,7 +124,7 @@ public class ClientValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("not authorized", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId), Times.Once);
     }
 
     /// <summary>
@@ -137,7 +137,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), string.Empty))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, string.Empty))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(string.Empty);
@@ -161,7 +161,7 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId2);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId2))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId2))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId2);
@@ -185,7 +185,7 @@ public class ClientValidatorTests
         // Arrange
         const string uppercaseClientId = TestConstants.DefaultClientId;
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), uppercaseClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, uppercaseClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(uppercaseClientId);
@@ -196,7 +196,7 @@ public class ClientValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), uppercaseClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, uppercaseClientId), Times.Once);
     }
 
     /// <summary>
@@ -214,7 +214,7 @@ public class ClientValidatorTests
             AllowedResponseTypes = [[ResponseTypes.Code]]
         };
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
@@ -239,7 +239,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
@@ -284,7 +284,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
@@ -309,7 +309,7 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
@@ -319,7 +319,7 @@ public class ClientValidatorTests
 
         // Assert
         _clientInfoProvider.Verify(
-            p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId),
+            p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId),
             Times.Once);
     }
 
@@ -333,7 +333,7 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(ValidClientId);

@@ -68,7 +68,7 @@ public class LogoutTokenAsSecurityEventTests
         var logoutContext = new LogoutContext(SessionId, SubjectId, Issuer);
 
         subjectTypeConverter
-            .Setup(converter => converter.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
+            .Setup(converter => converter.Convert(TestTenant.Matched, SubjectId, clientInfo))
             .Returns(SubjectId);
 
         JsonWebToken? produced = null;

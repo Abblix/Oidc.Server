@@ -362,7 +362,7 @@ public class LogoutTokenServiceTests
         Assert.NotNull(capturedToken);
         Assert.Equal(SubjectId, capturedToken!.Payload.Subject);
 
-        _subjectTypeConverter.Verify(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo), Times.Once);
+        _subjectTypeConverter.Verify(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo), Times.Once);
     }
 
     /// <summary>
@@ -466,7 +466,7 @@ public class LogoutTokenServiceTests
         var logoutContext = new LogoutContext(string.Empty, SubjectId, Issuer);  // Empty SessionId
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
+            .Setup(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo))
             .Returns(SubjectId);
 
         // Act & Assert
@@ -491,7 +491,7 @@ public class LogoutTokenServiceTests
         var logoutContext = new LogoutContext(string.Empty, SubjectId, Issuer);  // Empty SessionId
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
+            .Setup(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo))
             .Returns(string.Empty);  // Convert returns empty
 
         // Act & Assert
@@ -541,7 +541,7 @@ public class LogoutTokenServiceTests
         JsonWebToken? capturedToken = null;
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), string.Empty, clientInfo))
+            .Setup(c => c.Convert(TestTenant.Matched, string.Empty, clientInfo))
             .Returns(string.Empty);
 
         _jwtFormatter
@@ -598,7 +598,7 @@ public class LogoutTokenServiceTests
         ClientInfo? formattedClient = null;
 
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SubjectId, clientInfo))
+            .Setup(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo))
             .Returns(SubjectId);
 
         _jwtFormatter
@@ -653,7 +653,7 @@ public class LogoutTokenServiceTests
         Action<JsonWebToken> captureToken)
     {
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), logoutContext.SubjectId, clientInfo))
+            .Setup(c => c.Convert(TestTenant.Matched, logoutContext.SubjectId, clientInfo))
             .Returns(logoutContext.SubjectId);
 
         _jwtFormatter

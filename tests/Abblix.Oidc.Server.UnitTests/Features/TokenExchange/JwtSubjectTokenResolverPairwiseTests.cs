@@ -56,7 +56,7 @@ public class JwtSubjectTokenResolverPairwiseTests
             SectorIdentifier = "sector.example.com",
         };
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(_pairwiseClient);
 
         _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter), _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
