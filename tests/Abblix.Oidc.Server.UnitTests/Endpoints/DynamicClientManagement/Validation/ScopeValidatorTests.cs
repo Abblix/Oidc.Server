@@ -62,12 +62,12 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "openid", out def))
+            .Setup(m => m.TryGet(TestTenant.Matched, "openid", out def))
             .Returns(true);
 
         ScopeDefinition? def2 = new(Scopes.Profile);
         _scopeManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "profile", out def2))
+            .Setup(m => m.TryGet(TestTenant.Matched, "profile", out def2))
             .Returns(true);
 
         var result = await _validator.ValidateAsync(CreateContext(["openid", "profile"]));
@@ -79,7 +79,7 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "openid", out def))
+            .Setup(m => m.TryGet(TestTenant.Matched, "openid", out def))
             .Returns(true);
 
         var result = await _validator.ValidateAsync(CreateContext(["openid", "unknown_scope"]));

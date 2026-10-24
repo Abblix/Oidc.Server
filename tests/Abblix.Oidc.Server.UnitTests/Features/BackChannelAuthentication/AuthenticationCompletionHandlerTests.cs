@@ -134,7 +134,7 @@ public partial class AuthenticationCompletionHandlerTests
     {
         var converter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         converter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Setup(c => c.Convert(TestTenant.Matched, It.IsAny<string>(), It.IsAny<ClientInfo>()))
             .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         return converter.Object;

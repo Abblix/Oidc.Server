@@ -137,7 +137,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -178,7 +178,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -352,7 +352,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), "unknown_client"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "unknown_client"))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -396,7 +396,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(clientInfo);
 
         // Act

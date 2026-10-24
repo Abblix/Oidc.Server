@@ -63,7 +63,7 @@ public class ScopeValidatorTests
         {
             var scopeDef = new ScopeDefinition(scope);
             _scopeManager
-                .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), scope, out It.Ref<ScopeDefinition?>.IsAny))
+                .Setup(m => m.TryGet(TestTenant.Matched, scope, out It.Ref<ScopeDefinition?>.IsAny))
                 .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
                 {
                     def = scopeDef;
@@ -108,7 +108,7 @@ public class ScopeValidatorTests
 
         // Don't setup TryGet for "invalid_scope", so it returns false by default
         _scopeManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "invalid_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, "invalid_scope", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(false);
 
         // Act
@@ -136,9 +136,9 @@ public class ScopeValidatorTests
         await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
-        _scopeManager.Verify(m => m.TryGet(It.IsAny<TenantDefinition>(), TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet(It.IsAny<TenantDefinition>(), "profile", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet(It.IsAny<TenantDefinition>(), "email", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, "profile", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, "email", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scope: ["admin"]);
 
         _scopeManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), "admin", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, "admin", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(false);
 
         // Act
@@ -262,7 +262,7 @@ public class ScopeValidatorTests
 
         // Assert
         _scopeManager.Verify(
-            m => m.TryGet(It.IsAny<TenantDefinition>(), "read", out It.Ref<ScopeDefinition?>.IsAny),
+            m => m.TryGet(TestTenant.Matched, "read", out It.Ref<ScopeDefinition?>.IsAny),
             Times.Once);
     }
 }

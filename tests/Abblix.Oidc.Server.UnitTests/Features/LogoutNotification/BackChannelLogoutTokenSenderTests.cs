@@ -243,9 +243,11 @@ public class BackChannelLogoutTokenSenderTests
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>(async (req, _) =>
-                capturedContent = await req.Content!.ReadAsStringAsync())
-            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
+            .Returns(async (HttpRequestMessage req, CancellationToken _) =>
+            {
+                capturedContent = await req.Content!.ReadAsStringAsync();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
 
         // Act
         await sender.SendBackChannelLogoutAsync(clientInfo, logoutToken);
@@ -564,9 +566,11 @@ public class BackChannelLogoutTokenSenderTests
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>(async (req, _) =>
-                capturedContent = await req.Content!.ReadAsStringAsync())
-            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
+            .Returns(async (HttpRequestMessage req, CancellationToken _) =>
+            {
+                capturedContent = await req.Content!.ReadAsStringAsync();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
 
         // Act
         await sender.SendBackChannelLogoutAsync(clientInfo, logoutToken);
@@ -717,9 +721,11 @@ public class BackChannelLogoutTokenSenderTests
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>(async (req, _) =>
-                capturedContent = await req.Content!.ReadAsStringAsync())
-            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
+            .Returns(async (HttpRequestMessage req, CancellationToken _) =>
+            {
+                capturedContent = await req.Content!.ReadAsStringAsync();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
 
         // Act
         await sender.SendBackChannelLogoutAsync(clientInfo, logoutToken);

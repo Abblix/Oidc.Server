@@ -70,7 +70,7 @@ public class RegisterClientRequestProcessorTests
     public async Task ARegistrationTheStoreKeeps_IsAnsweredWithItsToken()
     {
         _clients
-            .Setup(c => c.TryAddClientAsync(It.IsAny<TenantDefinition>(), It.Is<RegisteredClient>(r =>
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.Is<RegisteredClient>(r =>
                 r.ClientInfo.ClientId == "client-1" && r.RegistrationAccessTokenId == "jti-1")))
             .ReturnsAsync(true);
 
@@ -86,7 +86,7 @@ public class RegisterClientRequestProcessorTests
     [Fact]
     public async Task ARegistrationTheStoreDoesNotKeep_IsRefused()
     {
-        _clients.Setup(c => c.TryAddClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>())).ReturnsAsync(false);
+        _clients.Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>())).ReturnsAsync(false);
 
         var result = await Processor().ProcessAsync(Request());
 

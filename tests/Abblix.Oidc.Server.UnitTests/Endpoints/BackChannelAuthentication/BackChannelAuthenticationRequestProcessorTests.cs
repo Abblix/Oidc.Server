@@ -60,7 +60,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         // A public client, so the session's subject is what the client sees. The pairwise direction is the
         // shared comparison's own business and is covered where it lives.
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Setup(c => c.Convert(TestTenant.Matched, It.IsAny<string>(), It.IsAny<ClientInfo>()))
             .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         _storage

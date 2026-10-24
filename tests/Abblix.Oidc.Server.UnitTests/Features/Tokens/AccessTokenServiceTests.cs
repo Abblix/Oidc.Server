@@ -736,7 +736,7 @@ public class AccessTokenServiceTests
         {
             var definition = new ResourceDefinition(uri);
             var captured = definition;
-            manager.Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), uri, out captured)).Returns(true);
+            manager.Setup(m => m.TryGet(TestTenant.Matched, uri, out captured)).Returns(true);
             keys.Setup(k => k.GetEncryptionKeys(definition)).Returns(resourceKeys.ToAsyncEnumerable());
         }
 

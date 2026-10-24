@@ -99,7 +99,7 @@ public class ResourceValidatorTests
             new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
 
         _resourceManager
-            .Setup(rm => rm.TryGet(It.IsAny<TenantDefinition>(), resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(rm => rm.TryGet(TestTenant.Matched, resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri uri, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
@@ -171,7 +171,7 @@ public class ResourceValidatorTests
         var unknownResource = new Uri("https://unknown.example.com");
 
         _resourceManager
-            .Setup(rm => rm.TryGet(It.IsAny<TenantDefinition>(), unknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(rm => rm.TryGet(TestTenant.Matched, unknownResource, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri uri, out ResourceDefinition? def) =>
             {
                 def = null;
@@ -204,7 +204,7 @@ public class ResourceValidatorTests
         var definition2 = new ResourceDefinition(resource2, new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
 
         _resourceManager
-            .Setup(rm => rm.TryGet(It.IsAny<TenantDefinition>(), resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(rm => rm.TryGet(TestTenant.Matched, resource1, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri uri, out ResourceDefinition? def) =>
             {
                 def = definition1;
@@ -212,7 +212,7 @@ public class ResourceValidatorTests
             }));
 
         _resourceManager
-            .Setup(rm => rm.TryGet(It.IsAny<TenantDefinition>(), resource2, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(rm => rm.TryGet(TestTenant.Matched, resource2, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri uri, out ResourceDefinition? def) =>
             {
                 def = definition2;
@@ -246,7 +246,7 @@ public class ResourceValidatorTests
             new ScopeDefinition("email", Array.Empty<string>()));
 
         _resourceManager
-            .Setup(rm => rm.TryGet(It.IsAny<TenantDefinition>(), resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(rm => rm.TryGet(TestTenant.Matched, resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri uri, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
@@ -279,7 +279,7 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(resourceUri, new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()));
 
         _resourceManager
-            .Setup(rm => rm.TryGet(It.IsAny<TenantDefinition>(), resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(rm => rm.TryGet(TestTenant.Matched, resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri uri, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;

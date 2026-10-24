@@ -49,7 +49,7 @@ public class JwtSubjectTokenResolverTests
         // resolver never opens 'sub'. Returning no client from the lookup drives that pass-through path (a converter
         // with no pairwise settings would pass through anyway), keeping these tests decoupled from licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((ClientInfo?)null);
 
         _resolver = new JwtSubjectTokenResolver(

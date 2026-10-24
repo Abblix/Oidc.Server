@@ -34,7 +34,7 @@ public class UpdateClientRequestProcessorTests
     {
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
-            .Setup(m => m.TryUpdateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
+            .Setup(m => m.TryUpdateClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
             .Callback((TenantDefinition _, RegisteredClient _, RegisteredClient updated) => onSave(updated))
             .ReturnsAsync(registrationHeld);
 
@@ -197,7 +197,7 @@ public class UpdateClientRequestProcessorTests
 
         // Assert
         manager.Verify(
-            m => m.TryUpdateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
+            m => m.TryUpdateClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
             Times.Never);
     }
 

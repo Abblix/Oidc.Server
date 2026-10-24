@@ -120,7 +120,7 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1, new ScopeDefinition("read"));
 
         _resourceManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
@@ -152,7 +152,7 @@ public class ResourceValidatorTests
         var scopes = new[] { Scopes.OpenId };
 
         _resourceManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = null;
@@ -183,7 +183,7 @@ public class ResourceValidatorTests
         var scopes = new[] { Scopes.OpenId };
 
         _resourceManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = null;
@@ -214,7 +214,7 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1, new ScopeDefinition("read"));
 
         _resourceManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
@@ -246,7 +246,7 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1, new ScopeDefinition("read"));
 
         _resourceManager
-            .Setup(m => m.TryGet(It.IsAny<TenantDefinition>(), Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
@@ -260,7 +260,7 @@ public class ResourceValidatorTests
 
         // Assert
         _resourceManager.Verify(
-            m => m.TryGet(It.IsAny<TenantDefinition>(), Resource1, out It.Ref<ResourceDefinition?>.IsAny),
+            m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny),
             Times.Once);
     }
 }

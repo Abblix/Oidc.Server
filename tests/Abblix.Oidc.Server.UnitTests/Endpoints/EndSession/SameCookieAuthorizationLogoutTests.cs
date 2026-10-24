@@ -149,7 +149,7 @@ public class SameCookieAuthorizationLogoutTests
 
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((TenantDefinition _, string clientId) => Client(clientId));
         services.Replace(ServiceDescriptor.Singleton(clients.Object));
 

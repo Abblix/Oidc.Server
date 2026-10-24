@@ -60,7 +60,7 @@ public class UserClaimsProviderTests
         // proves the converter was consulted rather than passing on a value production could have copied.
         var subjectTypeConverter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<TenantDefinition>(), SessionSubject, It.IsAny<ClientInfo>()))
+            .Setup(c => c.Convert(TestTenant.Matched, SessionSubject, It.IsAny<ClientInfo>()))
             .Returns(ClientFacingSubject);
 
         _provider = new UserClaimsProvider(

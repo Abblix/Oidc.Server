@@ -55,10 +55,10 @@ public class ResponseJwtBuilderTests
 
     public ResponseJwtBuilderTests()
     {
-        _clientInfoProvider.Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId)).ReturnsAsync(_client);
+        _clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_client);
         _issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
         _timeProvider = new FakeTimeProvider(_now);
-        _serviceKeys.Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
+        _serviceKeys.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
@@ -249,7 +249,7 @@ public class ResponseJwtBuilderTests
         var signingKeyRs384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
 
         _serviceKeys
-            .Setup(p => p.GetSigningKeys(It.IsAny<TenantDefinition>(), true))
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
             .Returns(new[] { _signingKeyRs256, signingKeyRs384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();
