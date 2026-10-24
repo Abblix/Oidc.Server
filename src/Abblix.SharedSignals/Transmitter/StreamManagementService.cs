@@ -156,23 +156,30 @@ public sealed class StreamManagementService(
             return NoSuchStream<StreamConfiguration>(request.StreamId);
         }
 
-        var delivery = default(StreamDeliveryMethod);
-        if (request.Delivery is { } proposedDelivery)
+        Func<StreamDeliveryMethod?> delivery = () => null;
+        if (request.Delivery is { } proposed)
         {
-            var accepted = _deliveries.Create(proposedDelivery, stream.StreamId);
+            var accepted = _deliveries.Create(proposed, stream.StreamId);
             if (accepted.Body is not { } created)
             {
                 return StreamDeliveryFactory.RefusalOf(accepted);
             }
 
-            delivery = created;
+            delivery = () => Minted(proposed, stream.StreamId, created);
         }
 
         return await SaveConfigurationAsync(
             stream,
-            current => Updated(current, request, delivery),
+            current => Updated(current, request, delivery()),
             cancellationToken);
     }
+
+    /// <summary>
+    /// The delivery a write attempt stores for <paramref name="proposed"/>, minted for that attempt, so a poll address
+    /// follows a tenant that moved after the request read the stream.
+    /// </summary>
+    private StreamDeliveryMethod Minted(StreamDeliveryMethod proposed, string streamId, StreamDeliveryMethod accepted)
+        => _deliveries.Create(proposed, streamId).Body ?? accepted;
 
     /// <summary>
     /// <paramref name="current"/> with the members <paramref name="request"/> carries changed, and the others as
@@ -226,14 +233,14 @@ public sealed class StreamManagementService(
             return NoSuchStream<StreamConfiguration>(request.StreamId);
         }
 
-        if (request.Delivery is null)
+        if (request.Delivery is not { } proposed)
         {
             return ManagementResult<StreamConfiguration>.BadRequest(
                 "A replacement carries the full receiver-supplied set, and a stream cannot exist "
                 + "without a delivery method (SSF 1.0 Section 8.1.1.4).");
         }
 
-        var accepted = _deliveries.Create(request.Delivery, stream.StreamId);
+        var accepted = _deliveries.Create(proposed, stream.StreamId);
         if (accepted.Body is not { } delivery)
         {
             return StreamDeliveryFactory.RefusalOf(accepted);
@@ -243,7 +250,7 @@ public sealed class StreamManagementService(
             stream,
             current => current with
             {
-                Delivery = delivery,
+                Delivery = Minted(proposed, stream.StreamId, delivery),
                 EventsRequested = request.EventsRequested,
                 EventsDelivered = StreamConfigurations.DeliveredOf(options, request.EventsRequested),
                 Description = request.Description,

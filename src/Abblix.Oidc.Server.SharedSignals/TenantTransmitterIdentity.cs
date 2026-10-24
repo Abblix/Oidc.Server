@@ -37,8 +37,8 @@ public sealed class TenantTransmitterIdentity(
     /// <remarks>
     /// The issuer the tenant is served at now, which the server's own catalog tells for a request resolved before
     /// the tenant moved: an address minted under the issuer it left would be written into the stream and answer
-    /// nothing. A catalog of the host's own, or a creation the catalog no longer serves, leaves the issuer the
-    /// request was resolved to.
+    /// nothing. A catalog of the host's own, or a creation the catalog has no definition in force for (as
+    /// <see cref="StoreTenantCatalog.InForce"/> answers), leaves the issuer the request was resolved to.
     /// </remarks>
     public Uri EndpointsBase
         => (catalog is StoreTenantCatalog own && own.InForce(Tenant) is { } inForce ? inForce : Tenant).Issuer;

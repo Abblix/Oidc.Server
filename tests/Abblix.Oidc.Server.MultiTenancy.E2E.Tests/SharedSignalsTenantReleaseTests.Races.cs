@@ -260,17 +260,22 @@ public sealed partial class SharedSignalsTenantReleaseTests
     /// A receiver updating or replacing its declared stream, having read it before the tenant moved and writing after
     /// the store built for the move wrote the issuer the tenant moved to, keeps that issuer, has its own change applied,
     /// and is polled at an address under the issuer the tenant moved to, whether the stream polled before or the
-    /// change asks for polling.
+    /// change asks for polling, and whether the move lands before the change minted its address or after it, while
+    /// the write re-reads the stream.
     /// </summary>
     [Theory]
-    [InlineData(false, false, true)]
-    [InlineData(false, true, true)]
-    [InlineData(true, true, true)]
-    [InlineData(true, true, false)]
+    [InlineData(false, false, true, 0)]
+    [InlineData(false, true, true, 0)]
+    [InlineData(true, true, true, 0)]
+    [InlineData(true, true, false, 0)]
+    [InlineData(false, true, true, 1)]
+    [InlineData(true, true, true, 1)]
+    [InlineData(true, true, false, 1)]
     public async Task AStreamChangedAcrossAMove_KeepsTheIssuerAndThePollAddressTheTenantMovedTo(
         bool replace,
         bool asksForPolling,
-        bool declaredPolled)
+        bool declaredPolled,
+        int readsBeforeTheMove)
     {
         var ct = TestContext.Current.CancellationToken;
         var store = new MemoryTenantStore();
@@ -294,7 +299,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         var first = (await catalog.FindByIdAsync("acme", ct))!;
         Assert.Equal(first.Issuer.OriginalString, await DeclaredIssuerAsync(app, first, ct));
 
-        var read = streams.HoldTheNextRead();
+        var read = streams.HoldTheNextRead(skip: readsBeforeTheMove);
         var client = ClientOf(app, "acme");
         var path = $"/tenants/acme{StreamPath}";
         var change = new UpdateStreamRequest
@@ -567,6 +572,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         private int _creates;
         private TaskCompletionSource? _readHeld;
         private TaskCompletionSource _readReleased = Signal();
+        private int _readsToPass;
 
         private HeldStore(int held, CancellationTokenSource? cancelAfterCreate, bool deleteFails)
         {
@@ -595,7 +601,9 @@ public sealed partial class SharedSignalsTenantReleaseTests
                 .Returns(async (string receiverId, string streamId, CancellationToken token) =>
                 {
                     var found = await inner.FindAsync(receiverId, streamId, token);
-                    if (Interlocked.Exchange(ref _readHeld, null) is { } held)
+                    if (Volatile.Read(ref _readHeld) is not null &&
+                        Interlocked.Decrement(ref _readsToPass) < 0 &&
+                        Interlocked.Exchange(ref _readHeld, null) is { } held)
                     {
                         var released = Volatile.Read(ref _readReleased);
                         held.TrySetResult();
@@ -641,13 +649,14 @@ public sealed partial class SharedSignalsTenantReleaseTests
         public Task Entered(int create) => _entered[create].Task;
 
         /// <summary>
-        /// Holds the next read once it has read the store, until the <see cref="ReleaseTheRead"/> that follows; the
-        /// task completes when that read is held.
+        /// Holds the read that follows <paramref name="skip"/> more reads, once it has read the store, until the
+        /// <see cref="ReleaseTheRead"/> that follows; the task completes when that read is held.
         /// </summary>
-        public Task HoldTheNextRead()
+        public Task HoldTheNextRead(int skip = 0)
         {
             var held = Signal();
             Volatile.Write(ref _readReleased, Signal());
+            Volatile.Write(ref _readsToPass, skip);
             Volatile.Write(ref _readHeld, held);
             return held.Task;
         }
