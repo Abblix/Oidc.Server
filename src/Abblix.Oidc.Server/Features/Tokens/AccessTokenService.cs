@@ -48,7 +48,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// decides whether the session's email address travels in the token.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
+    Justification = "Every dependency is used: the token's clock, identifier, format and subject each come from their own service, the tenant names its issuer, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
 internal class AccessTokenService(
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
