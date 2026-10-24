@@ -16,7 +16,6 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -56,13 +55,9 @@ public class RevocationCutoffCheckerClientSubjectTests
 
     private IRevocationCutoffChecker Checker(SubjectTypeConverter? converter = null)
     {
-        var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer);
-
         return new RevocationCutoffChecker(
             NullLogger<RevocationCutoffChecker>.Instance,
             _cutoffs.Object,
-            issuers.Object,
             Options.Create(new OidcOptions()),
             _clients.Object,
             new FixedSubjectTypeConverter(converter ?? new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor);

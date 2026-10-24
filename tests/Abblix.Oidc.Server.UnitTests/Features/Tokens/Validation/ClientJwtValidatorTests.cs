@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -49,7 +48,6 @@ public class ClientJwtValidatorTests
     {
         var logger = new Mock<ILogger<ClientJwtValidator>>();
         var requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
@@ -61,7 +59,6 @@ public class ClientJwtValidatorTests
             .Returns(new[] { _serverDecryptionKey }.ToAsyncEnumerable());
 
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(RequestUri));
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
 
         _validator = new ClientJwtValidator(
             logger.Object,
@@ -69,10 +66,9 @@ public class ClientJwtValidatorTests
             _tokenValidator.Object,
             _clientInfoProvider.Object,
             _clientKeysProvider.Object,
-            issuerProvider.Object,
             _serviceKeysProvider.Object,
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())),
-            TimeProvider.System, tenantAccessor: SingleIssuer.Accessor);
+            TimeProvider.System,
+            SingleIssuer.Accessor);
     }
 
     /// <summary>

@@ -9,7 +9,6 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -27,13 +26,10 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-/// <param name="issuerSettings">The settings of that tenant, naming the partition of its keys a refresh token
-/// names.</param>
 public class AuthServiceJwtFormatter(
 	IJsonWebTokenCreator jwtCreator,
 	IAuthServiceKeysProvider serviceKeysProvider,
-	ITenantAccessor tenantAccessor,
-	IIssuerSettings issuerSettings) : IAuthServiceJwtFormatter
+	ITenantAccessor tenantAccessor) : IAuthServiceJwtFormatter
 {
 	/// <inheritdoc />
 	/// <remarks>
@@ -43,7 +39,7 @@ public class AuthServiceJwtFormatter(
 	public async Task<string> FormatAsync(JsonWebToken token, ServiceJwtEncryption encryption)
 	{
 		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken))
-			RefreshTokenTenant.Name(token.Payload, issuerSettings.KeyPartition);
+			RefreshTokenTenant.Name(token.Payload, TenantKey.PartitionOf(tenantAccessor.CurrentTenant()));
 
 		// The signing algorithm and any pinned signing-key id live in the token header, placed there by the
 		// issuing service from its ServiceTokens.<Type>.Signing settings. The signer restamps the header kid

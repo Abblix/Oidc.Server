@@ -45,7 +45,7 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        _validator = new FlowTypeValidator(logger.Object, processors, SingleIssuer.SettingsOf(ProfileOptions()));
+        _validator = new FlowTypeValidator(logger.Object, processors, SingleIssuer.AccessorOf(ProfileOptions().Value));
     }
 
     private static IOptions<TestIssuer> ProfileOptions(
@@ -394,7 +394,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.SettingsOf(ProfileOptions()));
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.AccessorOf(ProfileOptions().Value));
 
         // Client is configured to allow the implicit response type, so without the server-level
         // gate the request would proceed past ResponseTypeAllowed.
@@ -428,7 +428,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.SettingsOf(ProfileOptions()));
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.AccessorOf(ProfileOptions().Value));
 
         var context = CreateContext(hybridResponseType, [hybridResponseType]);
 
@@ -575,7 +575,7 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.SettingsOf(ProfileOptions()));
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.AccessorOf(ProfileOptions().Value));
         var context = CreateContext(
             [ResponseTypes.Code, ResponseTypes.Token],
             [[ResponseTypes.Code, ResponseTypes.Token]]);
@@ -698,7 +698,7 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        return new FlowTypeValidator(logger.Object, processors, SingleIssuer.SettingsOf(ProfileOptions(defaultProfile)));
+        return new FlowTypeValidator(logger.Object, processors, SingleIssuer.AccessorOf(ProfileOptions(defaultProfile).Value));
     }
 
     /// <summary>
@@ -746,7 +746,7 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.None),
         ];
-        return new FlowTypeValidator(logger.Object, processors, SingleIssuer.SettingsOf(ProfileOptions()));
+        return new FlowTypeValidator(logger.Object, processors, SingleIssuer.AccessorOf(ProfileOptions().Value));
     }
 
     /// <summary>

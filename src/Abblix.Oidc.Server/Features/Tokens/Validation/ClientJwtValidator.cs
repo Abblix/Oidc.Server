@@ -9,7 +9,6 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -36,30 +35,25 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="tokenValidator">The service used to perform core JWT validation.</param>
 /// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
-/// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
-/// <param name="issuerSettings">Carries the security profile every client is held to, and the default
-/// a client without one of its own falls back to.</param>
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the issuer's settings carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
+    Justification = "Every dependency is used: two resolve the client and its keys, one the server's own keys, and the tenant carries the server's address and the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
-    IIssuerProvider issuerProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
-    IIssuerSettings issuerSettings,
     TimeProvider timeProvider,
     ITenantAccessor tenantAccessor) : IClientJwtValidator
 {
     private SecurityProfileRequirements Profile
-        => SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile);
+        => SecurityProfileRequirements.Resolve(tenantAccessor.CurrentTenant().DefaultSecurityProfile);
 
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
@@ -156,7 +150,7 @@ public partial class ClientJwtValidator(
             }
 
             var refusal = SecurityProfileRequirements
-                .For(context.ClientInfo, issuerSettings.DefaultSecurityProfile)
+                .For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
                 .ClockSkewOrDefault()
                 .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
 
@@ -181,7 +175,7 @@ public partial class ClientJwtValidator(
     private Task<bool> ValidateAudience(IEnumerable<string> audiences)
     {
         var requestUri = requestInfoProvider.RequestUri.OriginalString;
-        var issuer = issuerProvider.GetIssuer().OriginalString;
+        var issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString;
 
         var materializedAudiences = audiences.Materialize();
         var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);

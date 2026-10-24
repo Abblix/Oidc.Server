@@ -160,9 +160,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
-        services.AddSingleton(new Mock<IIssuerProvider>().Object);
-        services.AddSingleton(SingleIssuer.Settings);
-        services.AddSingleton(SingleIssuer.AccessorOf(() => new TestIssuer()));
+        services.AddSingleton(SingleIssuer.Accessor);
         services.AddSingleton(Mock.Of<ITenantCatalog>());
         services.AddSingleton(new Mock<IReplayCache>().Object);
 
@@ -198,9 +196,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
-        services.AddSingleton(new Mock<IIssuerProvider>().Object);
-        services.AddSingleton(SingleIssuer.SettingsOf(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }));
-        services.AddSingleton(SingleIssuer.AccessorOf(() => new TestIssuer()));
+        services.AddSingleton(SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }));
         services.AddSingleton(Mock.Of<ITenantCatalog>());
         services.AddSingleton(new Mock<IReplayCache>().Object);
 

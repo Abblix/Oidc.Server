@@ -10,7 +10,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -23,17 +22,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 /// <param name="clientInfoManager">Store used to remove the client record.</param>
 /// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
-/// <param name="issuerSettings">The settings of the issuer the client is removed from, whose license count it leaves.
-/// </param>
+/// <param name="catalog">The catalog the tenant the client is removed from was resolved from, which its license
+/// count is kept by.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-/// <param name="issuerProvider">The issuer the tokens of the client named, which its license count is kept under.
-/// </param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    IIssuerSettings issuerSettings,
-    ITenantAccessor tenantAccessor,
-    IIssuerProvider issuerProvider) : IRemoveClientRequestProcessor
+    ITenantCatalog catalog,
+    ITenantAccessor tenantAccessor) : IRemoveClientRequestProcessor
 {
     /// <summary>
     /// Deletes the addressed client and returns the recorded removal timestamp.
@@ -45,10 +41,11 @@ public class RemoveClientRequestProcessor(
 
         // Only the registration this request was authenticated against: one rotated meanwhile is left
         // to whoever holds the rotated token.
-        if (!await clientInfoManager.TryRemoveClientAsync(tenantAccessor.CurrentTenant(), request.Client))
+        var tenant = tenantAccessor.CurrentTenant();
+        if (!await clientInfoManager.TryRemoveClientAsync(tenant, request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
-        if (LicenseChecker.ClientIssuerOf(issuerProvider.GetIssuer().OriginalString, issuerSettings) is { } issuerId)
+        if (LicenseChecker.ClientIssuerOf(tenant.Issuer.OriginalString, tenant, catalog) is { } issuerId)
             LicenseChecker.ReleaseClients(issuerId, [clientId]);
 
         return new RemoveClientSuccessfulResponse(

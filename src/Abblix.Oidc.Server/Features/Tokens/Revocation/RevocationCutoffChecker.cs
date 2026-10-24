@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -63,7 +62,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </remarks>
 /// <param name="logger">Records a refusal, so a revoked token is distinguishable from an expired one.</param>
 /// <param name="cutoffRegistry">The registry of subject- and session-level revocation cutoffs.</param>
-/// <param name="issuerProvider">Names this server, so a cutoff is only measured against tokens it minted.</param>
 /// <param name="options">Carries the tolerance the comparison allows for clock differences.</param>
 /// <param name="clientInfoProvider">Resolves the client a token names, so a pairwise pseudonym can be opened
 /// back into the subject a host would revoke.</param>
@@ -72,7 +70,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 public partial class RevocationCutoffChecker(
     ILogger<RevocationCutoffChecker> logger,
     IRevocationCutoffRegistry cutoffRegistry,
-    IIssuerProvider issuerProvider,
     IOptions<OidcOptions> options,
     IClientInfoProvider clientInfoProvider,
     ISubjectTypeConverter subjectTypeConverter,
@@ -176,7 +173,7 @@ public partial class RevocationCutoffChecker(
     /// absence says the token came from somewhere that does not follow our conventions.
     /// </remarks>
     private bool IsOurOwnToken(JsonWebTokenPayload payload)
-        => payload.Issuer is { Length: > 0 } issuer && issuer == issuerProvider.GetIssuer().OriginalString;
+        => payload.Issuer is { Length: > 0 } issuer && issuer == tenantAccessor.CurrentTenant().Issuer.OriginalString;
 
     /// <summary>
     /// The subject a host would name when revoking, recovered from what the token carries.

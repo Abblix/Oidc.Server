@@ -82,7 +82,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = BuildProvider();
         EnterTenant(provider, Acme);
 
-        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer().OriginalString);
+        Assert.Equal(AcmeIssuer, provider.GetRequiredService<ITenantAccessor>().CurrentTenant().Issuer.OriginalString);
     }
 
     /// <summary>
@@ -357,19 +357,18 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A request that reached the server without a tenant has no issuer of its own; answering with the host
-    /// would mint tokens every tenant on it accepts.
+    /// A request that reached the server without a tenant has no tenant to serve it, so neither its issuer nor its
+    /// settings: answering with the host's would mint tokens every tenant on it accepts.
     /// </summary>
     [Fact]
-    public void WithoutATenant_TheIssuerIsRefused()
+    public void WithoutATenant_TheTenantIsRefused()
     {
         using var provider = BuildProvider();
         EnterTenant(provider, null);
 
-        var issuerProvider = provider.GetRequiredService<IIssuerProvider>();
+        var tenantAccessor = provider.GetRequiredService<ITenantAccessor>();
 
-        var refusal = Assert.Throws<InvalidOperationException>(() => issuerProvider.GetIssuer());
-        Assert.Contains("not resolved to a tenant", refusal.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(() => tenantAccessor.CurrentTenant());
     }
 
     [Fact]
@@ -387,7 +386,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
         EnterTenant(provider, acme);
 
-        Assert.Same(acme.Resources, provider.GetRequiredService<IIssuerSettings>().Resources);
+        Assert.Same(acme.Resources, provider.GetRequiredService<ITenantAccessor>().CurrentTenant().Resources);
     }
 
     [Fact]
@@ -462,18 +461,6 @@ public partial class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains("The generation 'a.b' of tenant 'acme'", refusal.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void WithoutATenant_TheSettingsAreRefused()
-    {
-        using var provider = BuildProvider();
-        EnterTenant(provider, null);
-
-        var settings = provider.GetRequiredService<IIssuerSettings>();
-
-        var refusal = Assert.Throws<InvalidOperationException>(() => settings.Resources);
-        Assert.Contains("outside any tenant", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -582,7 +569,7 @@ public partial class MultiTenancyRegistrationTests
 
         Assert.False(TenantRequirement.IsUnmet(context));
         Assert.Same(Acme, TenantRequirement.CurrentTenant(context)?.Tenant);
-        Assert.Equal(AcmeIssuer, provider.GetRequiredService<IIssuerProvider>().GetIssuer().OriginalString);
+        Assert.Equal(AcmeIssuer, provider.GetRequiredService<ITenantAccessor>().CurrentTenant().Issuer.OriginalString);
     }
 
     private sealed class FixedTenantAccessor(TenantDefinition tenant) : ITenantAccessor

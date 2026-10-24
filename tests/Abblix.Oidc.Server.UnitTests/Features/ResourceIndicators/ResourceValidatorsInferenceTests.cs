@@ -63,7 +63,7 @@ public class ResourceValidatorsInferenceTests
             ],
         });
         var resourceManager = SingleIssuer.ResourceManager();
-        var inference = new ResourceInference(SingleIssuer.SettingsOf(options));
+        var inference = new ResourceInference(SingleIssuer.AccessorOf(options));
         var client = new ClientInfo(ClientId);
 
         switch (endpoint)
@@ -178,7 +178,7 @@ public class ResourceValidatorsInferenceTests
 
         var error = await new TokenResourceValidator(
                 SingleIssuer.ResourceManager(),
-                new ResourceInference(SingleIssuer.SettingsOf(options)), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
+                new ResourceInference(SingleIssuer.AccessorOf(options)), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
             .ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
@@ -211,7 +211,7 @@ public class ResourceValidatorsInferenceTests
 
         var error = await new TokenResourceValidator(
                 SingleIssuer.ResourceManager(),
-                new ResourceInference(SingleIssuer.SettingsOf(options)), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
+                new ResourceInference(SingleIssuer.AccessorOf(options)), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
             .ValidateAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);

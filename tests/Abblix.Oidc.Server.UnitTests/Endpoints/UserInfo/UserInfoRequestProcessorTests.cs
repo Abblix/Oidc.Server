@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -31,17 +31,15 @@ public class UserInfoRequestProcessorTests
 {
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
-    private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IUserClaimsProvider> _userClaimsProvider;
     private readonly UserInfoRequestProcessor _processor;
 
     public UserInfoRequestProcessorTests()
     {
-        _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);
         _processor = new UserInfoRequestProcessor(
-            _issuerProvider.Object,
-            SingleIssuer.Settings,
+            SingleIssuer.Accessor,
+            SingleIssuer.LicensedCatalog,
             _userClaimsProvider.Object);
     }
 
@@ -101,9 +99,6 @@ public class UserInfoRequestProcessorTests
                 validRequest.ClientInfo))
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -153,7 +148,6 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = Issuer;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
@@ -163,9 +157,6 @@ public class UserInfoRequestProcessorTests
                 validRequest.ClientInfo))
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -181,37 +172,6 @@ public class UserInfoRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies processor calls issuer provider to get issuer.
-    /// Tests that GetIssuer is called.
-    /// </summary>
-    [Fact]
-    public async Task ProcessAsync_ShouldCallIssuerProvider()
-    {
-        // Arrange
-        var validRequest = CreateValidUserInfoRequest();
-        var userClaims = CreateUserClaims();
-        var issuer = Issuer;
-
-        _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(
-                It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
-                It.IsAny<ICollection<string>>(),
-                It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
-                It.IsAny<ClientInfo>()))
-            .ReturnsAsync(userClaims);
-
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
-
-        // Act
-        await _processor.ProcessAsync(validRequest);
-
-        // Assert
-        _issuerProvider.Verify(p => p.GetIssuer(), Times.Once);
-    }
-
-    /// <summary>
     /// Verifies processor returns user claims in response.
     /// Tests that claims from provider are included in response.
     /// </summary>
@@ -221,7 +181,6 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = Issuer;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
@@ -231,9 +190,6 @@ public class UserInfoRequestProcessorTests
                 It.IsAny<ClientInfo>()))
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -255,7 +211,6 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = Issuer;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
@@ -265,9 +220,6 @@ public class UserInfoRequestProcessorTests
                 It.IsAny<ClientInfo>()))
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -298,9 +250,6 @@ public class UserInfoRequestProcessorTests
                 It.IsAny<ClientInfo>()))
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         var result = await _processor.ProcessAsync(validRequest);
@@ -320,7 +269,6 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = Issuer;
         ICollection<string>? capturedScopes = null;
 
         _userClaimsProvider
@@ -333,9 +281,6 @@ public class UserInfoRequestProcessorTests
                 (_, scopes, _, _) => capturedScopes = scopes)
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -355,7 +300,6 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = Issuer;
         Abblix.Oidc.Server.Features.UserAuthentication.AuthSession? capturedSession = null;
 
         _userClaimsProvider
@@ -368,9 +312,6 @@ public class UserInfoRequestProcessorTests
                 (session, _, _, _) => capturedSession = session)
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);
@@ -382,11 +323,11 @@ public class UserInfoRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies processor does not call issuer provider when claims are null.
-    /// Tests optimization: no need to get issuer if returning error.
+    /// Verifies processor refuses without asking which tenant the request is served at when claims are null:
+    /// an error carries no issuer, so the license is not consulted for it.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_WhenUserClaimsNull_ShouldNotCallIssuerProvider()
+    public async Task ProcessAsync_WhenUserClaimsNull_ShouldNotAskTheTenant()
     {
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
@@ -399,11 +340,19 @@ public class UserInfoRequestProcessorTests
                 It.IsAny<ClientInfo>()))
             .ReturnsAsync((JsonObject?)null);
 
+        var tenantAccessor = new Mock<ITenantAccessor>(MockBehavior.Strict);
+        var processor = new UserInfoRequestProcessor(
+            tenantAccessor.Object,
+            SingleIssuer.LicensedCatalog,
+            _userClaimsProvider.Object);
+
         // Act
-        await _processor.ProcessAsync(validRequest);
+        var result = await processor.ProcessAsync(validRequest);
 
         // Assert
-        _issuerProvider.VerifyNoOtherCalls();
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+        tenantAccessor.VerifyNoOtherCalls();
     }
 
     /// <summary>
@@ -420,7 +369,6 @@ public class UserInfoRequestProcessorTests
         var validRequest2 = CreateValidUserInfoRequest();
         var userClaims2 = new JsonObject { ["sub"] = "user_2", ["name"] = "User Two" };
 
-        var issuer = Issuer;
 
         _userClaimsProvider
             .SetupSequence(p => p.GetUserClaimsAsync(
@@ -431,9 +379,6 @@ public class UserInfoRequestProcessorTests
             .ReturnsAsync(userClaims1)
             .ReturnsAsync(userClaims2);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         var result1 = await _processor.ProcessAsync(validRequest1);
@@ -456,7 +401,6 @@ public class UserInfoRequestProcessorTests
         // Arrange
         var validRequest = CreateValidUserInfoRequest();
         var userClaims = CreateUserClaims();
-        var issuer = Issuer;
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
@@ -466,9 +410,6 @@ public class UserInfoRequestProcessorTests
                 It.IsAny<ClientInfo>()))
             .ReturnsAsync(userClaims);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(issuer));
 
         // Act
         await _processor.ProcessAsync(validRequest);

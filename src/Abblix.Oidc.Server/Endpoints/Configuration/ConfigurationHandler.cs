@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Microsoft.Extensions.Options;
@@ -29,8 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 	Justification = "Configuration handler legitimately requires multiple specialized metadata providers to assemble comprehensive OIDC discovery document")]
 public sealed class ConfigurationHandler(
 	IOptionsSnapshot<OidcOptions> options,
-	IIssuerProvider issuerProvider,
-	IIssuerSettings issuerSettings,
+	ITenantAccessor tenantAccessor,
+	ITenantCatalog catalog,
 	ILogoutNotifier logoutNotifier,
 	IClientAuthenticator clientAuthenticator,
 	IAuthorizationMetadataProvider authorizationMetadata,
@@ -52,7 +52,7 @@ public sealed class ConfigurationHandler(
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
 	public Task<ConfigurationResponse> HandleAsync() => Task.FromResult(new ConfigurationResponse
 	{
-		Issuer = Licensed(issuerProvider.GetIssuer()),
+		Issuer = Licensed(tenantAccessor.CurrentTenant()),
 
 		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
@@ -126,11 +126,11 @@ public sealed class ConfigurationHandler(
 	});
 
 	/// <summary>
-	/// The issuer, once the license has counted it as written.
+	/// The issuer of <paramref name="tenant"/>, once the license has counted it as written.
 	/// </summary>
-	private Uri Licensed(Uri issuer)
+	private Uri Licensed(TenantDefinition tenant)
 	{
-		LicenseChecker.CheckIssuer(issuer.OriginalString, issuerSettings);
-		return issuer;
+		LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
+		return tenant.Issuer;
 	}
 }

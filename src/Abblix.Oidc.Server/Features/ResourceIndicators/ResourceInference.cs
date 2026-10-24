@@ -7,13 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
 /// <summary>
-/// Infers the resource a request is meant for from the scopes it asks for, where the issuer serving it says so in
-/// <see cref="IIssuerSettings.InferResourceFromScope"/>.
+/// Infers the resource a request is meant for from the scopes it asks for, where the tenant serving it says so in
+/// <see cref="TenantDefinition.InferResourceFromScope"/>.
 /// </summary>
 /// <remarks>
 /// RFC 9068 section 3: "If a "scope" parameter is present in the request, the authorization server SHOULD use it to
@@ -21,8 +21,8 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 /// "scope" parameter refer to different default resource indicator values, the authorization server SHOULD reject
 /// the request with "invalid_scope"". A scope refers to the registered resources whose definitions declare it.
 /// </remarks>
-/// <param name="settings">The settings of the issuer serving the request, holding its resources.</param>
-public sealed class ResourceInference(IIssuerSettings settings)
+/// <param name="tenantAccessor">Names the tenant serving the request, which holds its resources.</param>
+public sealed class ResourceInference(ITenantAccessor tenantAccessor)
 {
     /// <summary>
     /// The resource the requested scopes refer to.
@@ -41,7 +41,8 @@ public sealed class ResourceInference(IIssuerSettings settings)
         resource = null;
         errorDescription = null;
 
-        if (!settings.InferResourceFromScope || settings.Resources is not { Length: > 0 } definitions)
+        var tenant = tenantAccessor.CurrentTenant();
+        if (!tenant.InferResourceFromScope || tenant.Resources is not { Length: > 0 } definitions)
             return true;
 
         var requested = scopes.ToHashSet(StringComparer.Ordinal);

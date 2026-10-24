@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -29,15 +29,23 @@ namespace Abblix.Oidc.Server.Features.SessionManagement;
 /// to check and maintain the session state between the client and the server.
 /// </summary>
 /// <param name="options">The options for configuring the OpenID Connect session management service.</param>
-/// <param name="issuerSettings">Names the session cookie of the issuer serving the request.</param>
+/// <param name="tenantAccessor">Names the tenant whose session cookie is read and written.</param>
 /// <param name="requestInfoProvider">The provider for accessing request-related information, such as whether
 /// the current request is over HTTPS and the request's base path.</param>
 public class SessionManagementService(
     IOptionsSnapshot<OidcOptions> options,
-    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor,
     IRequestInfoProvider requestInfoProvider) : ISessionManagementService
 {
     private const string CookieNamePlaceHolder = "\"{{cookieName}}\"";
+
+    /// <summary>
+    /// The configured name with the tenant's id after it, since tenants sharing a host share its cookies and each
+    /// would otherwise overwrite the session the others' check-session pages read. A tenant's id holds only
+    /// characters a cookie name may hold.
+    /// </summary>
+    private string CheckSessionCookieName
+        => $"{options.Value.CheckSessionCookie.Name}.{TenantKey.IdOf(tenantAccessor.CurrentTenant())}";
 
     /// <summary>
     /// Indicates whether session management functionality is enabled based on the configured endpoints.
@@ -64,7 +72,7 @@ public class SessionManagementService(
         var path = cookieOptions.Path;
 
         return new Cookie(
-            issuerSettings.CheckSessionCookieName,
+            CheckSessionCookieName,
             new()
             {
                 HttpOnly = false,
@@ -114,7 +122,7 @@ public class SessionManagementService(
         using (var reader = new StreamReader(stream, Encoding.UTF8))
             htmlTemplate = await reader.ReadToEndAsync();
 
-        var cookieName = issuerSettings.CheckSessionCookieName;
+        var cookieName = CheckSessionCookieName;
         var htmlContent = htmlTemplate.Replace(
             CookieNamePlaceHolder,
             JavaScriptStringEncode(cookieName, true));

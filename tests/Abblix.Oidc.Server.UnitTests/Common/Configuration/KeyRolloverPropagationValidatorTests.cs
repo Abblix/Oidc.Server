@@ -43,7 +43,7 @@ public class KeyRolloverPropagationValidatorTests
         services.AddOptions<OidcOptions>().Configure(options =>
             options.KeyRolloverPropagation = TimeSpan.FromSeconds(-1));
         services.AddJsonWebTokens();
-        services.AddSingleton(SingleIssuer.Settings);
+        services.AddSingleton(SingleIssuer.Accessor);
         services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();

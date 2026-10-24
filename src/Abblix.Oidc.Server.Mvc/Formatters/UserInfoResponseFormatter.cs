@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
-    IIssuerProvider issuerProvider,
+    ITenantAccessor tenantAccessor,
     IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
 {
     /// <summary>
@@ -54,7 +54,7 @@ public class UserInfoResponseFormatter(
             onFailure: error => Task.FromResult(
                 error.Format(
                     StatusCodes.Status401Unauthorized,
-                    issuerProvider.GetIssuer().OriginalString,
+                    tenantAccessor.CurrentTenant().Issuer.OriginalString,
                     DPoPAlgorithms.Allowed,
                     advertiseBearer: true)));
     }

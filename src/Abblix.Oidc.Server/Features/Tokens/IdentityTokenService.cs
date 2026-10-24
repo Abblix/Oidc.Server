@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -28,8 +28,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// OpenID Connect specifications. It integrates additional security by incorporating claims for token integrity
 /// verification.
 /// </summary>
-/// <param name="issuerProvider">Provides the issuer URL, used in the 'iss' claim of the identity token.</param>
-/// <param name="issuerSettings">The settings of the issuer, which tell the license when it stops counting.</param>
+/// <param name="tenantAccessor">Names the tenant whose issuer the 'iss' claim of the identity token names.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
 /// token.</param>
 /// <param name="jwtFormatter">Handles the formatting and signing of the JSON Web Token, ensuring it meets
@@ -39,8 +39,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
 /// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
 internal class IdentityTokenService(
-	IIssuerProvider issuerProvider,
-	IIssuerSettings issuerSettings,
+	ITenantAccessor tenantAccessor,
+	ITenantCatalog catalog,
 	TimeProvider clock,
 	IClientJwtFormatter jwtFormatter,
 	IUserClaimsProvider userClaimsProvider,
@@ -134,7 +134,11 @@ internal class IdentityTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
-				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer().OriginalString, issuerSettings, authContext.ClientId),
+				Issuer = LicenseChecker.CheckLicense(
+					tenantAccessor.CurrentTenant().Issuer.OriginalString,
+					tenantAccessor.CurrentTenant(),
+					catalog,
+					authContext.ClientId),
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,

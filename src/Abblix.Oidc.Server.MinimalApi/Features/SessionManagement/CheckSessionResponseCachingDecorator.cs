@@ -8,7 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
 
@@ -20,9 +20,10 @@ namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 public class CheckSessionResponseCachingDecorator(
     ICheckSessionResponseFormatter inner,
     ICheckSessionResponseCache<IResult> cache,
-    IIssuerSettings issuer) : ICheckSessionResponseFormatter
+    ITenantAccessor tenantAccessor,
+    ITenantCatalog catalog) : ICheckSessionResponseFormatter
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(CheckSessionResponse response)
-        => cache.GetOrAddAsync(response.CacheKey, () => inner.FormatResponseAsync(response), issuer.Released);
+        => cache.GetOrAddAsync(response.CacheKey, () => inner.FormatResponseAsync(response), StoreTenantCatalog.ReleasedOf(catalog, tenantAccessor.CurrentTenant()));
 }
