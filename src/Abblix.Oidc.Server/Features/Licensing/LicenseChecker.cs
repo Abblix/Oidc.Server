@@ -267,8 +267,8 @@ public static partial class LicenseChecker
 
     /// <summary>
     /// The id of <paramref name="tenant"/> when the server's own catalog vouches that it serves this creation of the
-    /// tenant at <paramref name="issuer"/>; null for a catalog of the host's own and for an issuer the creation was
-    /// never served at.
+    /// tenant at <paramref name="issuer"/>; null for a catalog of the host's own and for an issuer
+    /// <see cref="StoreTenantCatalog.HasServedAt"/> does not vouch for.
     /// </summary>
     private static string? VouchedId(string issuer, TenantDefinition tenant, ITenantCatalog catalog)
         => catalog is StoreTenantCatalog own && own.HasServedAt(tenant, issuer) ? tenant.Id : null;

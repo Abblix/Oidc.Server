@@ -813,6 +813,29 @@ public sealed class LicenseEnforcementTests : IDisposable
         Assert.False(Issues(new ClientInfo("newcomer"), Resolved(catalog, served)));
     }
 
+    /// <summary>
+    /// The clients counted at an address the server does not vouch for are counted with that address, and a removal
+    /// through registration there does not take them off the count.
+    /// </summary>
+    [Fact]
+    public async Task A_client_removed_at_an_address_it_was_counted_with_keeps_its_place()
+    {
+        ArrangeClientLimitOfTwo();
+        var ct = TestContext.Current.CancellationToken;
+        var (catalog, _, _) = await ServedAtAsync(TestLicense.Issuer, ct);
+        var served = (await catalog.FindByIdAsync("acme", ct))!;
+        var entered = new Served(
+            new TenantDefinition { Id = served.Id, Issuer = new Uri(UnlicensedIssuer), Generation = served.Generation },
+            catalog,
+            UnlicensedIssuer);
+        var removed = new RegisteredClient(new ClientInfo("client-0"), "jti");
+        CountPastTheMargin(entered, removed.ClientInfo);
+
+        await RemoveThroughRegistrationAsync(removed, entered);
+
+        Assert.False(Issues(new ClientInfo("newcomer"), entered));
+    }
+
     private static StoredTenant AcmeAt(string issuer, string version)
         => new(new TenantDefinition { Id = "acme", Issuer = new Uri(issuer), Generation = "g1" }, version);
 
