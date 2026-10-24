@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -38,6 +39,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="serviceProvider">Resolves the mode-specific grant processors and the redeemer that judges an
 /// authenticated request before it is exchanged for tokens. The redeemer is internal and registered by
 /// <c>AddBackChannelAuthentication</c>, so a provider built without that call cannot construct the handler.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
@@ -46,6 +48,7 @@ public class BackChannelAuthenticationGrantHandler(
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
+    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
     // Resolved rather than injected: the redeemer is internal, and a public constructor cannot name it.
@@ -111,7 +114,7 @@ public class BackChannelAuthenticationGrantHandler(
             return refusal;
 
         // Try to retrieve the corresponding backchannel authentication request from storage
-        var authenticationRequest = await storage.TryGetAsync(request.AuthenticationRequestId);
+        var authenticationRequest = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), request.AuthenticationRequestId);
 
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch
@@ -179,14 +182,14 @@ public class BackChannelAuthenticationGrantHandler(
         if (expiresIn <= TimeSpan.Zero)
         {
             // Request has expired, remove it
-            await storage.TryRemoveAsync(authenticationRequestId);
+            await storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
             return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
         }
 
         // The instant before which this client is told to slow down, under a key of its own.
         // Absence means it may ask now.
         var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
-        var pollKey = keyFactory.BackChannelAuthenticationNextPollKey(authenticationRequestId);
+        var pollKey = keyFactory.BackChannelAuthenticationNextPollKey(tenantAccessor.CurrentTenant(), authenticationRequestId);
         var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
 
         var now = timeProvider.GetUtcNow();
@@ -197,7 +200,7 @@ public class BackChannelAuthenticationGrantHandler(
         // path writes the request, so there is nothing for a poll to overwrite. The same method the long
         // poll hands its re-read to, so a client that waits and a client that asks again are answered by
         // one piece of code.
-        if (await storage.TryGetAsync(authenticationRequestId) is
+        if (await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId) is
             { Status: not BackChannelAuthenticationStatus.Pending } advanced)
         {
             return await ProcessUpdatedRequest(
@@ -259,7 +262,7 @@ public class BackChannelAuthenticationGrantHandler(
             return null;
         }
 
-        var updatedRequest = await storage.TryGetAsync(authenticationRequestId);
+        var updatedRequest = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
         return await ProcessUpdatedRequest(
             updatedRequest, authenticationRequestId, clientInfo);
     }

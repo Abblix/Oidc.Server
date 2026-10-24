@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
@@ -39,6 +40,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// entry.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options containing polling interval settings.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class DeviceCodeGrantHandler(
     ILogger<DeviceCodeGrantHandler> logger,
     IDeviceAuthorizationStorage storage,
@@ -46,7 +48,8 @@ public partial class DeviceCodeGrantHandler(
     IEntityStorageKeyFactory keyFactory,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
-    IOptions<OidcOptions> options) : IAuthorizationGrantHandler
+    IOptions<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
 {
     /// <inheritdoc />
     public IEnumerable<string> GrantTypesSupported
@@ -67,7 +70,7 @@ public partial class DeviceCodeGrantHandler(
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.DeviceCode);
         }
 
-        var deviceRequest = await storage.TryGetByDeviceCodeAsync(request.DeviceCode);
+        var deviceRequest = await storage.TryGetByDeviceCodeAsync(tenantAccessor.CurrentTenant(), request.DeviceCode);
 
         // A single clock read shared by the expiry gate and the remaining lifetime given to the poll
         // schedule, so the two never disagree and the entry cannot be written with a lifetime that has
@@ -127,12 +130,12 @@ public partial class DeviceCodeGrantHandler(
             // the token endpoint and those three cannot disagree about the instant a device code stops
             // being usable - one expression rather than two comparisons kept in step by hand.
             case { } when !deviceRequest.HasLifetimeLeft(now, out _):
-                await storage.RemoveAsync(deviceCode);
+                await storage.RemoveAsync(tenantAccessor.CurrentTenant(), deviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
             // User has authorized the device - claim the authorization
             case { Status: DeviceAuthorizationStatus.Authorized }
-                when !await storage.TryRemoveAsync(deviceCode, deviceRequest.UserCode):
+                when !await storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), deviceCode, deviceRequest.UserCode):
 
                 // Removed through the store's claim protocol, which is what keeps two polls from both
                 // being told they took the authorized grant, however many processes are polling. The
@@ -237,14 +240,14 @@ public partial class DeviceCodeGrantHandler(
 
                 // The instant lives in a key of its own, so noting it cannot write anything the
                 // approval owns. Absence means the client may ask now.
-                var pollKey = keyFactory.DeviceAuthorizationNextPollKey(deviceCode);
+                var pollKey = keyFactory.DeviceAuthorizationNextPollKey(tenantAccessor.CurrentTenant(), deviceCode);
                 var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
                 var asked = nextPollAt is { } earliest && now < earliest;
 
                 // The approval may have landed since the read this decision is made on. Reading once more
                 // is about the answer being current, not about keeping the approval safe: nothing on this
                 // path writes the record, so there is nothing for a poll to overwrite.
-                if (await storage.TryGetByDeviceCodeAsync(deviceCode) is
+                if (await storage.TryGetByDeviceCodeAsync(tenantAccessor.CurrentTenant(), deviceCode) is
                     { Status: not DeviceAuthorizationStatus.Pending } advanced)
                 {
                     return await DecideAsync(deviceCode, clientInfo, advanced, now);
@@ -275,7 +278,7 @@ public partial class DeviceCodeGrantHandler(
 
             // User denied the request
             case { Status: DeviceAuthorizationStatus.Denied }:
-                await storage.RemoveAsync(deviceCode);
+                await storage.RemoveAsync(tenantAccessor.CurrentTenant(), deviceCode);
                 return new OidcError(
                     ErrorCodes.AccessDenied,
                     "The user denied the authorization request.");

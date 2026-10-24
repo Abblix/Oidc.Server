@@ -9,6 +9,7 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
@@ -66,15 +67,16 @@ public partial class RollingHmacNonceService(
     private const int NonceBytes = sizeof(long) + TagLengthBytes;
 
     /// <inheritdoc/>
-    public async Task<string> IssueAsync(CancellationToken cancellationToken = default)
+    public async Task<string> IssueAsync(TenantDefinition tenant, CancellationToken cancellationToken = default)
     {
         var timestamp = timeProvider.GetUtcNow().ToUnixTimeSeconds();
-        var tag = await ComputeTagAsync(timestamp, cancellationToken);
+        var tag = await ComputeTagAsync(tenant, timestamp, cancellationToken);
         return BuildNonceString(tag, timestamp);
     }
 
     /// <inheritdoc/>
     public async Task<NonceValidationFailure?> ValidateAsync(
+        TenantDefinition tenant,
         string nonce,
         CancellationToken cancellationToken = default)
     {
@@ -117,7 +119,7 @@ public partial class RollingHmacNonceService(
             return NonceValidationFailure.OutOfWindow;
         }
 
-        var expected = await ComputeTagAsync(timestamp, cancellationToken);
+        var expected = await ComputeTagAsync(tenant, timestamp, cancellationToken);
         if (!VerifyTag(expected, decoded))
         {
             LogValidationFailed(NonceValidationFailure.BadSignature);
@@ -134,10 +136,10 @@ public partial class RollingHmacNonceService(
     /// the timestamp, Validate recomputes the expected tag and compares it
     /// constant-time against the one carried by the inbound nonce.
     /// </summary>
-    private async Task<byte[]> ComputeTagAsync(long timestamp, CancellationToken cancellationToken)
+    private async Task<byte[]> ComputeTagAsync(TenantDefinition tenant, long timestamp, CancellationToken cancellationToken)
     {
         var bucket = BucketIndex(timestamp, options.CurrentValue.DPoP.Nonce.RotationInterval);
-        var secret = await GetOrCreateSecretAsync(bucket, cancellationToken);
+        var secret = await GetOrCreateSecretAsync(tenant, bucket, cancellationToken);
         return ComputeTagSync(secret, timestamp);
     }
 
@@ -204,9 +206,9 @@ public partial class RollingHmacNonceService(
     /// lives three rotation intervals so a secret remains usable for verification across the entire
     /// <see cref="NonceOptions.AcceptanceWindow"/>.
     /// </summary>
-    private async Task<byte[]> GetOrCreateSecretAsync(long bucket, CancellationToken cancellationToken)
+    private async Task<byte[]> GetOrCreateSecretAsync(TenantDefinition tenant, long bucket, CancellationToken cancellationToken)
     {
-        var key = keyFactory.NonceSecretKey(bucket);
+        var key = keyFactory.NonceSecretKey(tenant, bucket);
         var stored = await storage.GetAsync<Storages.Proto.NonceSecret>(key, removeOnRetrieval: false, cancellationToken);
         if (stored is { Value.Length: SecretLengthBytes })
             return stored.Value.ToByteArray();

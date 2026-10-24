@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
@@ -25,9 +27,10 @@ public interface ILogoutConfirmationStore
     /// while it stands answers with the same value, so a request arriving while the end user reads the page
     /// cannot void the answer they are about to give.
     /// </summary>
+    /// <param name="tenant">The tenant the session belongs to.</param>
     /// <param name="sessionId">The session the end user is being asked about.</param>
     /// <returns>The value, unguessable and good until it is answered or expires.</returns>
-    Task<string> IssueAsync(string sessionId);
+    Task<string> IssueAsync(TenantDefinition tenant, string sessionId);
 
     /// <summary>
     /// Answers whether <paramref name="confirmation"/> is the value <paramref name="sessionId"/> was asked with,
@@ -35,6 +38,7 @@ public interface ILogoutConfirmationStore
     /// given. Two identical answers arriving together can both be told they took it; each of them asked to end
     /// the same session, which is what happens.
     /// </summary>
+    /// <param name="tenant">The tenant the session belongs to.</param>
     /// <param name="sessionId">The session the request would end.</param>
     /// <param name="confirmation">The value the request presented.</param>
     /// <returns><c>true</c> when the end user answered this session's question; <c>false</c> when that session has
@@ -45,5 +49,5 @@ public interface ILogoutConfirmationStore
     /// user is asked again, and a fresh question replaces whatever stood before. A logout that asks twice costs a
     /// click; one that acts on an answer somebody else's browser gave, or on one already spent, costs the session.
     /// </remarks>
-    Task<bool> RedeemLogoutConfirmationAsync(string sessionId, string confirmation);
+    Task<bool> RedeemLogoutConfirmationAsync(TenantDefinition tenant, string sessionId, string confirmation);
 }

@@ -65,7 +65,7 @@ public class DPoPUserInfoValidatorTests
             Mock.Of<ILogger<DPoPUserInfoValidator>>(),
             _proofValidator.Object,
             _nonceService.Object,
-            _options.Object);
+            _options.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     [Fact]
@@ -253,12 +253,12 @@ public class DPoPUserInfoValidatorTests
 
     private void SetupNonceIssue() =>
         _nonceService
-            .Setup(n => n.IssueAsync(It.IsAny<CancellationToken>()))
+            .Setup(n => n.IssueAsync(TestTenant.Matched, It.IsAny<CancellationToken>()))
             .ReturnsAsync(FreshNonce);
 
     private void SetupNonceValidate(string nonce, NonceValidationFailure? failure) =>
         _nonceService
-            .Setup(n => n.ValidateAsync(nonce, It.IsAny<CancellationToken>()))
+            .Setup(n => n.ValidateAsync(TestTenant.Matched, nonce, It.IsAny<CancellationToken>()))
             .ReturnsAsync(failure);
 
     private static void AssertNonceChallenge(OidcError? error)

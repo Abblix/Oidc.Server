@@ -45,14 +45,14 @@ public class AuthorizationValueReuseDetectorTests
         var detector = CreateDetector(TimeSpan.FromMinutes(5));
 
         // A value not yet recorded is fresh; after recording, the same value is flagged as reused.
-        Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
-        await detector.RecordAsync("c1", CodeChallenge, "value-1");
-        Assert.True(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1"));
+        await detector.RecordAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1");
+        Assert.True(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1"));
 
         // A different value, a different kind, and a different client are all independent.
-        Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-2"));
-        Assert.False(await detector.IsReusedAsync("c1", Nonce, "value-1"));
-        Assert.False(await detector.IsReusedAsync("c2", CodeChallenge, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-2"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", Nonce, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c2", CodeChallenge, "value-1"));
     }
 
     [Fact]
@@ -60,10 +60,10 @@ public class AuthorizationValueReuseDetectorTests
     {
         var detector = CreateDetector(interval: null);
 
-        await detector.RecordAsync("c1", CodeChallenge, "value-1");
+        await detector.RecordAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1");
 
         // Nothing is recorded and nothing is flagged while detection is off.
-        Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1"));
     }
 
 }

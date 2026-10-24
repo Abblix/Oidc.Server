@@ -108,7 +108,7 @@ public class UserCodeRateLimiterTests
     {
         await Fail(2);
 
-        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -131,7 +131,7 @@ public class UserCodeRateLimiterTests
     {
         await Fail(failures);
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), retryAfter.RetryAfter);
@@ -159,7 +159,7 @@ public class UserCodeRateLimiterTests
     {
         await Fail(failures);
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(spent, retryAfter.RetryAfter >= TimeSpan.FromMinutes(5));
@@ -187,7 +187,7 @@ public class UserCodeRateLimiterTests
         _time.Advance(TimeSpan.FromMinutes(2));
         await Fail(4);
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // Five minutes of life from the first attempt, two of them already gone.
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
@@ -215,7 +215,7 @@ public class UserCodeRateLimiterTests
         await Fail(4);
         _time.Advance(TimeSpan.FromMilliseconds(500));
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromMilliseconds(1500), retryAfter.RetryAfter);
@@ -237,7 +237,7 @@ public class UserCodeRateLimiterTests
         _time.Advance(TimeSpan.FromSeconds(10));
         await Fail(1);
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // Two seconds from the fourth failure, which has only just happened.
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
@@ -253,7 +253,7 @@ public class UserCodeRateLimiterTests
         await Fail(3);
         _time.Advance(TimeSpan.FromSeconds(1));
 
-        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -264,7 +264,7 @@ public class UserCodeRateLimiterTests
     {
         await Fail(5);
 
-        Assert.Null(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -274,9 +274,9 @@ public class UserCodeRateLimiterTests
     public async Task AVerifiedCode_ForgetsItsFailures()
     {
         await Fail(5);
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -287,10 +287,10 @@ public class UserCodeRateLimiterTests
     public async Task TheRecordsOfACode_NameItOnlyByFingerprint()
     {
         await Fail(4);
-        await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
         await Fail(1);
-        await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         Assert.Contains(_logs.Entries,
             entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeRateLimited);
@@ -314,11 +314,11 @@ public class UserCodeRateLimiterTests
     public async Task AVerifiedCode_CountsTheFailuresThatComeAfter()
     {
         await Fail(5);
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         await Fail(3);
 
-        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -332,11 +332,11 @@ public class UserCodeRateLimiterTests
     public async Task AVerifiedCode_DoesNotForgetTheAddressBudget()
     {
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.True(retryAfter.RetryAfter > TimeSpan.Zero);
@@ -351,9 +351,9 @@ public class UserCodeRateLimiterTests
     public async Task TheAddressCapIsReachedAtTheConfiguredCount(int failures, bool refused)
     {
         for (var i = 0; i < failures; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
-        var result = await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier);
 
         Assert.Equal(refused, result is not null);
     }
@@ -375,9 +375,9 @@ public class UserCodeRateLimiterTests
         _time.Advance(TimeSpan.FromSeconds(secondsIn));
 
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
-        var result = await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier);
+        var result = await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(secondsLeft), retryAfter.RetryAfter);
@@ -395,9 +395,9 @@ public class UserCodeRateLimiterTests
         _time.Advance(TimeSpan.FromSeconds(secondsIn));
 
         for (var i = 0; i < 3; i++)
-            await limiter.RecordFailureAsync($"CODE-{i:0000}", $"203.0.113.{i + 1}");
+            await limiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", $"203.0.113.{i + 1}");
 
-        var result = await limiter.CheckAsync(OtherUserCode, "198.51.100.23");
+        var result = await limiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, "198.51.100.23");
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(secondsLeft), retryAfter.RetryAfter);
@@ -412,7 +412,7 @@ public class UserCodeRateLimiterTests
         await Fail(5);
         _time.Advance(CodeLifetime - OneTick);
 
-        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -424,7 +424,7 @@ public class UserCodeRateLimiterTests
         await Fail(5);
         _time.Advance(CodeLifetime + OneTick);
 
-        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -434,10 +434,10 @@ public class UserCodeRateLimiterTests
     public async Task AVerifiedCode_StaysForgivenForTheCodesWholeLife()
     {
         await Fail(5);
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
         _time.Advance(CodeLifetime - OneTick);
 
-        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -456,7 +456,7 @@ public class UserCodeRateLimiterTests
     public async Task AVerifiedCode_ForgetsItsFailures_EvenWhenItsHistoryOutlivesTheRecordNamingIt()
     {
         await Fail(5);
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // Failures in the life just started, written late enough in it to outlive the record that named it.
         _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
@@ -464,9 +464,9 @@ public class UserCodeRateLimiterTests
 
         // Past the record's own end, while those failures are still stored.
         _time.Advance(TimeSpan.FromMinutes(2));
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        Assert.Null(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -482,18 +482,18 @@ public class UserCodeRateLimiterTests
     [Fact]
     public async Task ASpentCode_StaysSpent_AfterTheRecordNamingItsLifeWouldHaveExpired()
     {
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        await _rateLimiter.RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // Late in the life the verification started, so the rungs outlast a record kept for one lifetime.
         _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
         await Fail(5);
 
-        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
 
         // Past that record's own end, with the rungs it names still stored.
         _time.Advance(TimeSpan.FromMinutes(2));
 
-        Assert.NotNull(await _rateLimiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -503,11 +503,11 @@ public class UserCodeRateLimiterTests
     public async Task TheAddressCap_HoldsForTheWholeWindow()
     {
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
         _time.Advance(RateLimitWindow - OneTick);
 
-        Assert.NotNull(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -519,11 +519,11 @@ public class UserCodeRateLimiterTests
         var limiter = LimiterWith(options => options.MaxFailedAttemptsPerWindow = 3);
 
         for (var i = 0; i < 3; i++)
-            await limiter.RecordFailureAsync($"CODE-{i:0000}", $"203.0.113.{i + 1}");
+            await limiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", $"203.0.113.{i + 1}");
 
         _time.Advance(RateLimitWindow - OneTick);
 
-        Assert.NotNull(await limiter.CheckAsync(OtherUserCode, "198.51.100.23"));
+        Assert.NotNull(await limiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, "198.51.100.23"));
     }
 
     /// <summary>
@@ -539,9 +539,9 @@ public class UserCodeRateLimiterTests
         });
 
         for (var i = 0; i < UserCodeRateLimiter.AttemptLadderLength; i++)
-            await limiter.RecordFailureAsync(UserCode, $"203.0.113.{i + 1}");
+            await limiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, $"203.0.113.{i + 1}");
 
-        Assert.NotNull(await limiter.CheckAsync(UserCode, "198.51.100.23"));
+        Assert.NotNull(await limiter.CheckAsync(SingleIssuer.Tenant, UserCode, "198.51.100.23"));
     }
 
     /// <summary>
@@ -556,10 +556,10 @@ public class UserCodeRateLimiterTests
     public async Task ReadingTheCap_DoesNotSpendIt()
     {
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
-        Assert.NotNull(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
-        Assert.NotNull(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier));
+        Assert.NotNull(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -570,11 +570,11 @@ public class UserCodeRateLimiterTests
     public async Task ANewWindow_LetsAttemptsThroughAgain()
     {
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
         _time.Advance(TimeSpan.FromMinutes(1));
 
-        Assert.Null(await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -592,13 +592,13 @@ public class UserCodeRateLimiterTests
     public async Task FailuresPastTheCap_AreStillReported()
     {
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
         // Two past the cap rather than one, so the row needs the overflow itself: with one, a later edit
         // that fills the ladder one short would leave it testing the ordinary path and still passing.
         _logs.Entries.Clear();
-        await _rateLimiter.RecordFailureAsync("CODE-OVER-1", ClientIdentifier);
-        await _rateLimiter.RecordFailureAsync("CODE-OVER-2", ClientIdentifier);
+        await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, "CODE-OVER-1", ClientIdentifier);
+        await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, "CODE-OVER-2", ClientIdentifier);
 
         Assert.Equal(
             2,
@@ -613,9 +613,9 @@ public class UserCodeRateLimiterTests
     public async Task TheAddressCapBelongsToOneAddress()
     {
         for (var i = 0; i < 10; i++)
-            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, $"CODE-{i:0000}", ClientIdentifier);
 
-        Assert.Null(await _rateLimiter.CheckAsync(OtherUserCode, "198.51.100.23"));
+        Assert.Null(await _rateLimiter.CheckAsync(SingleIssuer.Tenant, OtherUserCode, "198.51.100.23"));
     }
 
     /// <summary>
@@ -638,9 +638,9 @@ public class UserCodeRateLimiterTests
 
         // Enough failures that the doubling has passed the ceiling.
         for (var i = 0; i < 10; i++)
-            await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+            await limiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await limiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(10), retryAfter.RetryAfter);
@@ -658,9 +658,9 @@ public class UserCodeRateLimiterTests
             options.MaxFailuresBeforeBackoff = UserCodeRateLimiter.AttemptLadderLength + 1;
         });
 
-        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        Assert.NotNull(await limiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.NotNull(await limiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -671,9 +671,9 @@ public class UserCodeRateLimiterTests
     {
         var limiter = LimiterWith(options => options.MaxFailuresBeforeBackoff = 2);
 
-        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        Assert.Null(await limiter.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await limiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -691,9 +691,9 @@ public class UserCodeRateLimiterTests
 
         // The fifth failure earns four seconds, above the ceiling.
         for (var i = 0; i < 5; i++)
-            await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+            await limiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
+        var result = await limiter.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromMilliseconds(2500), retryAfter.RetryAfter);
@@ -706,14 +706,14 @@ public class UserCodeRateLimiterTests
     public async Task GuessingAtOneCode_IsReportedFromTheFailureThatStartsItsPause()
     {
         // Distinct sources, so only the count against the code can raise the report.
-        await _rateLimiter.RecordFailureAsync(UserCode, "203.0.113.1");
-        await _rateLimiter.RecordFailureAsync(UserCode, "203.0.113.2");
+        await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, "203.0.113.1");
+        await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, "203.0.113.2");
 
         Assert.DoesNotContain(
             _logs.Entries,
             entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
 
-        await _rateLimiter.RecordFailureAsync(UserCode, "203.0.113.3");
+        await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, "203.0.113.3");
 
         Assert.Contains(
             _logs.Entries,
@@ -733,9 +733,9 @@ public class UserCodeRateLimiterTests
         // Reported for the source rather than for the code, so the two counts differ where a swap shows.
         var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 3);
 
-        await limiter.RecordFailureAsync(OtherUserCode, ClientIdentifier);
-        await limiter.RecordFailureAsync(OtherUserCode, ClientIdentifier);
-        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, OtherUserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var report = Assert.Single(
             _logs.Entries,
@@ -765,7 +765,7 @@ public class UserCodeRateLimiterTests
     private async Task Fail(int times)
     {
         for (var i = 0; i < times; i++)
-            await _rateLimiter.RecordFailureAsync(UserCode, ClientIdentifier);
+            await _rateLimiter.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
     }
 
     /// <summary>
@@ -796,9 +796,9 @@ public class UserCodeRateLimiterTests
     {
         var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
 
-        await limiter.RecordUnknownCodeAsync(null);
+        await limiter.RecordUnknownCodeAsync(SingleIssuer.Tenant, null);
 
-        var underThatName = await limiter.CheckAsync(UserCode, UserCodeRateLimiter.SourceNotSeen);
+        var underThatName = await limiter.CheckAsync(SingleIssuer.Tenant, UserCode, UserCodeRateLimiter.SourceNotSeen);
 
         Assert.NotNull(underThatName);
         Assert.Contains(
@@ -825,9 +825,9 @@ public class UserCodeRateLimiterTests
         var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
         _logs.Entries.Clear();
 
-        await limiter.RecordFailureAsync(userCode, clientIdentifier);
-        await limiter.CheckAsync(userCode, clientIdentifier);
-        await limiter.RecordSuccessAsync(userCode, clientIdentifier);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, userCode, clientIdentifier);
+        await limiter.CheckAsync(SingleIssuer.Tenant, userCode, clientIdentifier);
+        await limiter.RecordSuccessAsync(SingleIssuer.Tenant, userCode, clientIdentifier);
 
         int[] naming =
         [

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Utils;
@@ -92,13 +93,13 @@ public partial class UserCodeRateLimiter(
     private static string SourceOf(string? clientIdentifier) => clientIdentifier ?? SourceNotSeen;
 
     /// <inheritdoc />
-    public async Task<UserCodeRateLimited?> CheckAsync([Credential] string userCode, string? clientIdentifier)
+    public async Task<UserCodeRateLimited?> CheckAsync(TenantDefinition tenant, [Credential] string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        var life = await CurrentLifeAsync(userCode);
-        var (attempts, firstAttemptAt, lastAttemptAt) = await FindHighestAttemptAsync(userCode, life);
+        var life = await CurrentLifeAsync(tenant, userCode);
+        var (attempts, firstAttemptAt, lastAttemptAt) = await FindHighestAttemptAsync(tenant, userCode, life);
 
         // Every guess this code allows is spent, so there is nothing left to wait for: what the client is
         // told covers the rest of the code's life. The first attempt happened after the code was issued, so
@@ -128,7 +129,7 @@ public partial class UserCodeRateLimiter(
         var source = SourceOf(clientIdentifier);
         var capReached = await storage.GetAsync<RateLimitAttempt>(
             keyFactory.AddressRateLimitAttemptKey(
-                source, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
+                tenant, source, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
             removeOnRetrieval: false);
 
         if (capReached != null)
@@ -142,7 +143,7 @@ public partial class UserCodeRateLimiter(
         // the per-code count never sees it, because it never submits one value twice, and the per-address
         // count never sees it either.
         var budgetSpent = await storage.GetAsync<RateLimitAttempt>(
-            keyFactory.FailedAttemptKey(window, deviceAuthOptions.MaxFailedAttemptsPerWindow),
+            keyFactory.FailedAttemptKey(tenant, window, deviceAuthOptions.MaxFailedAttemptsPerWindow),
             removeOnRetrieval: false);
 
         if (budgetSpent != null)
@@ -155,18 +156,18 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordUnknownCodeAsync(string? clientIdentifier)
+    public async Task RecordUnknownCodeAsync(TenantDefinition tenant, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
         // No per-code count: there is no code. Charging this to the value that was typed would count the
         // one thing a guesser never repeats, and would let it spend the allowance of a code issued later.
-        await RecordAgainstSourceAndBudgetAsync(SourceOf(clientIdentifier), now, deviceAuthOptions);
+        await RecordAgainstSourceAndBudgetAsync(tenant, SourceOf(clientIdentifier), now, deviceAuthOptions);
     }
 
     /// <inheritdoc />
-    public async Task RecordFailureAsync([Credential] string userCode, string? clientIdentifier)
+    public async Task RecordFailureAsync(TenantDefinition tenant, [Credential] string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -174,10 +175,10 @@ public partial class UserCodeRateLimiter(
         // Read before the claim, so an attempt whose claim began before a verification started the next
         // life lands in the life it read - the one being left behind - rather than on top of an empty
         // ladder it never saw. That attempt is then not counted, the code having just been verified.
-        var life = await CurrentLifeAsync(userCode);
+        var life = await CurrentLifeAsync(tenant, userCode);
 
         var attempts = await ClaimAttemptAsync(
-            rung => keyFactory.UserCodeRateLimitAttemptKey(userCode, life, rung),
+            rung => keyFactory.UserCodeRateLimitAttemptKey(tenant, userCode, life, rung),
             AttemptLadderLength,
             now,
             // Every rung outlives the code it belongs to: the lifetime is counted from this attempt, which
@@ -193,7 +194,7 @@ public partial class UserCodeRateLimiter(
             LogUserCodeBlocked(fingerprints.Of(userCode), BackoffAfter(attempts, deviceAuthOptions), attempts);
 
         var source = SourceOf(clientIdentifier);
-        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(source, now, deviceAuthOptions);
+        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(tenant, source, now, deviceAuthOptions);
 
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
@@ -211,18 +212,19 @@ public partial class UserCodeRateLimiter(
     /// apart from the per-code ladder.
     /// </remarks>
     private async Task<int> RecordAgainstSourceAndBudgetAsync(
+        TenantDefinition tenant,
         string source, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
     {
         var window = WindowOf(now, deviceAuthOptions);
 
         var addressAttempts = await ClaimAttemptAsync(
-            rung => keyFactory.AddressRateLimitAttemptKey(source, window, rung),
+            rung => keyFactory.AddressRateLimitAttemptKey(tenant, source, window, rung),
             deviceAuthOptions.MaxAddressFailuresPerWindow,
             now,
             deviceAuthOptions.RateLimitRetention);
 
         await ClaimAttemptAsync(
-            rung => keyFactory.FailedAttemptKey(window, rung),
+            rung => keyFactory.FailedAttemptKey(tenant, window, rung),
             deviceAuthOptions.MaxFailedAttemptsPerWindow,
             now,
             deviceAuthOptions.RateLimitRetention);
@@ -231,7 +233,7 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordSuccessAsync([Credential] string userCode, string? clientIdentifier)
+    public async Task RecordSuccessAsync(TenantDefinition tenant, [Credential] string userCode, string? clientIdentifier)
     {
         // The verified code leaves its attempt history behind by starting a new life, and nothing is removed:
         // the reader finds the highest rung by halving the range, so it may not meet a gap. The records left
@@ -256,7 +258,7 @@ public partial class UserCodeRateLimiter(
         // first, a reader finds the ladder of the life before any verification - empty - and hands out the whole
         // allowance a second time, minutes after telling the client to wait the rest of the code's life.
         await storage.SetAsync(
-            keyFactory.UserCodeRateLimitGenerationKey(userCode),
+            keyFactory.UserCodeRateLimitGenerationKey(tenant, userCode),
             new RateLimitGeneration { Id = Guid.NewGuid().ToString("N") },
             new StorageOptions
             {
@@ -270,10 +272,10 @@ public partial class UserCodeRateLimiter(
     /// Which life of this code its attempt records belong to, named by the verification that started it.
     /// Nothing written means no verification has, which is the life before any.
     /// </summary>
-    private async Task<string> CurrentLifeAsync([Credential] string userCode)
+    private async Task<string> CurrentLifeAsync(TenantDefinition tenant, [Credential] string userCode)
     {
         var started = await storage.GetAsync<RateLimitGeneration>(
-            keyFactory.UserCodeRateLimitGenerationKey(userCode), removeOnRetrieval: false);
+            keyFactory.UserCodeRateLimitGenerationKey(tenant, userCode), removeOnRetrieval: false);
 
         return started?.Id is { Length: > 0 } id ? id : BeforeAnyVerification;
     }
@@ -336,14 +338,14 @@ public partial class UserCodeRateLimiter(
     /// none - which forgives attempts against a value nobody can verify any more.
     /// </remarks>
     private async Task<(int Attempts, DateTimeOffset? FirstAt, DateTimeOffset? LastAt)>
-        FindHighestAttemptAsync([Credential] string userCode, string life)
+        FindHighestAttemptAsync(TenantDefinition tenant, [Credential] string userCode, string life)
     {
         // The first rung decides whether there is anything to search for at all, and its absence is the
         // ordinary case: every verification of a correct code asks this question with nothing on record.
         // Halving an empty range costs as many reads as a full one, which would put that cost on the path
         // people actually take.
         var first = await storage.GetAsync<RateLimitAttempt>(
-            keyFactory.UserCodeRateLimitAttemptKey(userCode, life, 1), removeOnRetrieval: false);
+            keyFactory.UserCodeRateLimitAttemptKey(tenant, userCode, life, 1), removeOnRetrieval: false);
 
         if (first == null)
             return (0, null, null);
@@ -356,7 +358,7 @@ public partial class UserCodeRateLimiter(
         {
             var middle = low + (high - low) / 2;
             var attempt = await storage.GetAsync<RateLimitAttempt>(
-                keyFactory.UserCodeRateLimitAttemptKey(userCode, life, middle),
+                keyFactory.UserCodeRateLimitAttemptKey(tenant, userCode, life, middle),
                 removeOnRetrieval: false);
 
             if (attempt != null)

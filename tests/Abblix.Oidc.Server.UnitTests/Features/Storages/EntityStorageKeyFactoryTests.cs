@@ -8,6 +8,7 @@
 
 using System;
 using System.Linq;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Xunit;
@@ -26,13 +27,53 @@ public class EntityStorageKeyFactoryTests
 {
     private static readonly IEntityStorageKeyFactory Factory = new EntityStorageKeyFactory();
 
+    /// <summary>
+    /// Every key the factory builds is in the space of the tenant it is built for, so two tenants storing the same
+    /// entity never meet in the one storage they share. Each method of the factory is asked, a method added later
+    /// included.
+    /// </summary>
+    [Fact]
+    public void EveryKey_IsInTheSpaceOfTheTenantItIsBuiltFor()
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
+        var methods = typeof(IEntityStorageKeyFactory).GetMethods();
+        Assert.NotEmpty(methods);
+
+        foreach (var method in methods)
+        {
+            var arguments = method.GetParameters().Skip(1).Select(parameter => SampleOf(parameter.ParameterType)).ToArray();
+            var atAcme = (string)method.Invoke(Factory, [acme, .. arguments])!;
+            var atGlobex = (string)method.Invoke(Factory, [globex, .. arguments])!;
+
+            Assert.StartsWith(TenantKey.Of(acme, string.Empty), atAcme, StringComparison.Ordinal);
+            Assert.StartsWith(TenantKey.Of(globex, string.Empty), atGlobex, StringComparison.Ordinal);
+        }
+    }
+
+    private static object SampleOf(Type type)
+    {
+        if (type == typeof(string))
+            return "x";
+        if (type == typeof(int))
+            return 1;
+        if (type == typeof(long))
+            return 1L;
+        if (type == typeof(Uri))
+            return new Uri("https://client.example.com/request");
+        if (type == typeof(RevocationScope))
+            return RevocationScope.Subject;
+
+        throw new ArgumentOutOfRangeException(nameof(type), type, "No sample value for this parameter type in this test.");
+    }
+
     [Theory]
     [InlineData(RevocationScope.Subject, "Abblix.Oidc.Server:Revoked:subject:user_42")]
     [InlineData(RevocationScope.Session, "Abblix.Oidc.Server:Revoked:session:user_42")]
     [InlineData(RevocationScope.ClientSubject, "Abblix.Oidc.Server:Revoked:client-subject:user_42")]
     public void RevocationCutoffKey_HasTheNameLiveRecordsAreHeldUnder(RevocationScope scope, string expected)
     {
-        Assert.Equal(expected, Factory.RevocationCutoffKey(scope, "user_42"));
+        Assert.Equal(TenantKey.Of(SingleIssuer.Tenant, expected), Factory.RevocationCutoffKey(SingleIssuer.Tenant, scope, "user_42"));
     }
 
     /// <summary>
@@ -58,12 +99,12 @@ public class EntityStorageKeyFactoryTests
     public void ARequestKey_IsNeverSpelledLikeAScheduleKey(string awkward, string plain)
     {
         Assert.NotEqual(
-            Factory.DeviceAuthorizationRequestKey(awkward),
-            Factory.DeviceAuthorizationNextPollKey(plain));
+            Factory.DeviceAuthorizationRequestKey(SingleIssuer.Tenant, awkward),
+            Factory.DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, plain));
 
         Assert.NotEqual(
-            Factory.BackChannelAuthenticationRequestKey(awkward),
-            Factory.BackChannelAuthenticationNextPollKey(plain));
+            Factory.BackChannelAuthenticationRequestKey(SingleIssuer.Tenant, awkward),
+            Factory.BackChannelAuthenticationNextPollKey(SingleIssuer.Tenant, plain));
     }
 
     /// <summary>
@@ -78,12 +119,12 @@ public class EntityStorageKeyFactoryTests
     public void AReplayRecord_IsNeverSpelledLikeARequestKey()
     {
         Assert.NotEqual(
-            Factory.DeviceAuthorizationRequestKey("Reuse:code_challenge:a-hash"),
-            Factory.AuthorizationValueReuseKey("Device", "code_challenge", "a-hash"));
+            Factory.DeviceAuthorizationRequestKey(SingleIssuer.Tenant, "Reuse:code_challenge:a-hash"),
+            Factory.AuthorizationValueReuseKey(SingleIssuer.Tenant, "Device", "code_challenge", "a-hash"));
 
         Assert.NotEqual(
-            Factory.BackChannelAuthenticationRequestKey("Reuse:code_challenge:a-hash"),
-            Factory.AuthorizationValueReuseKey("CIBA", "code_challenge", "a-hash"));
+            Factory.BackChannelAuthenticationRequestKey(SingleIssuer.Tenant, "Reuse:code_challenge:a-hash"),
+            Factory.AuthorizationValueReuseKey(SingleIssuer.Tenant, "CIBA", "code_challenge", "a-hash"));
     }
 
     /// <summary>
@@ -95,7 +136,7 @@ public class EntityStorageKeyFactoryTests
     {
         var requestUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
 
-        Assert.NotEqual(Factory.AuthorizationRequestKey(requestUri), Factory.ConsumedRequestUriKey(requestUri));
+        Assert.NotEqual(Factory.AuthorizationRequestKey(SingleIssuer.Tenant, requestUri), Factory.ConsumedRequestUriKey(SingleIssuer.Tenant, requestUri));
     }
 
     /// <summary>
@@ -109,14 +150,14 @@ public class EntityStorageKeyFactoryTests
     {
         var keys = new[]
         {
-            Factory.AddressRateLimitAttemptKey("a1", 2, 3),
-            Factory.AddressRateLimitAttemptKey("a", 12, 3),
-            Factory.AddressRateLimitAttemptKey("a:1", 2, 3),
-            Factory.AddressRateLimitAttemptKey("a", 1, 23),
-            Factory.AddressRateLimitAttemptKey("::1", 5, 1),
-            Factory.AddressRateLimitAttemptKey("::1:5", 1, 1),
-            Factory.AddressRateLimitAttemptKey("x:Attempt:1", 2, 3),
-            Factory.AddressRateLimitAttemptKey("x", 1, 2),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "a1", 2, 3),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "a", 12, 3),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "a:1", 2, 3),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "a", 1, 23),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "::1", 5, 1),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "::1:5", 1, 1),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "x:Attempt:1", 2, 3),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, "x", 1, 2),
         };
 
         Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
@@ -132,20 +173,20 @@ public class EntityStorageKeyFactoryTests
 
         var keys = new[]
         {
-            Factory.DeviceAuthorizationRequestKey(identifier),
-            Factory.DeviceAuthorizationNextPollKey(identifier),
-            Factory.BackChannelAuthenticationRequestKey(identifier),
-            Factory.BackChannelAuthenticationNextPollKey(identifier),
-            Factory.DeviceAuthorizationUserCodeKey(identifier),
-            Factory.UserCodeRateLimitAttemptKey(identifier, life: "a-life", attempt: 1),
-            Factory.AddressRateLimitAttemptKey(identifier, 1, 1),
-            Factory.AuthorizedGrantKey(identifier),
-            Factory.JsonWebTokenStatusKey(identifier),
-            Factory.AuthorizationValueReuseKey(identifier, "code_challenge", "a-hash"),
-            Factory.SessionClientsGenerationKey(identifier),
-            Factory.SessionClientKey(identifier, identifier, 1),
-            Factory.SessionClientMarkerKey(identifier, identifier, identifier),
-            Factory.SessionClientsRenewalKey(identifier, identifier),
+            Factory.DeviceAuthorizationRequestKey(SingleIssuer.Tenant, identifier),
+            Factory.DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, identifier),
+            Factory.BackChannelAuthenticationRequestKey(SingleIssuer.Tenant, identifier),
+            Factory.BackChannelAuthenticationNextPollKey(SingleIssuer.Tenant, identifier),
+            Factory.DeviceAuthorizationUserCodeKey(SingleIssuer.Tenant, identifier),
+            Factory.UserCodeRateLimitAttemptKey(SingleIssuer.Tenant, identifier, life: "a-life", attempt: 1),
+            Factory.AddressRateLimitAttemptKey(SingleIssuer.Tenant, identifier, 1, 1),
+            Factory.AuthorizedGrantKey(SingleIssuer.Tenant, identifier),
+            Factory.JsonWebTokenStatusKey(SingleIssuer.Tenant, identifier),
+            Factory.AuthorizationValueReuseKey(SingleIssuer.Tenant, identifier, "code_challenge", "a-hash"),
+            Factory.SessionClientsGenerationKey(SingleIssuer.Tenant, identifier),
+            Factory.SessionClientKey(SingleIssuer.Tenant, identifier, identifier, 1),
+            Factory.SessionClientMarkerKey(SingleIssuer.Tenant, identifier, identifier, identifier),
+            Factory.SessionClientsRenewalKey(SingleIssuer.Tenant, identifier, identifier),
         };
 
         Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
@@ -161,7 +202,7 @@ public class EntityStorageKeyFactoryTests
         var scopes = Enum.GetValues<RevocationScope>();
         Assert.NotEmpty(scopes);
 
-        var keys = scopes.Select(scope => Factory.RevocationCutoffKey(scope, "user_42")).ToArray();
+        var keys = scopes.Select(scope => Factory.RevocationCutoffKey(SingleIssuer.Tenant, scope, "user_42")).ToArray();
 
         // Distinct, because two scopes sharing a name would let a session revocation refuse a subject's
         // tokens, or the reverse - a collision no test of a single scope can see.
@@ -177,7 +218,7 @@ public class EntityStorageKeyFactoryTests
     {
         var unknown = (RevocationScope)int.MaxValue;
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => Factory.RevocationCutoffKey(unknown, "user_42"));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Factory.RevocationCutoffKey(SingleIssuer.Tenant, unknown, "user_42"));
     }
 
     /// <summary>
@@ -191,14 +232,14 @@ public class EntityStorageKeyFactoryTests
 
         string[] keys =
         [
-            Factory.AuthorizedGrantKey(credential),
-            Factory.BackChannelAuthenticationRequestKey(credential),
-            Factory.BackChannelAuthenticationNextPollKey(credential),
-            Factory.DeviceAuthorizationRequestKey(credential),
-            Factory.DeviceAuthorizationNextPollKey(credential),
-            Factory.DeviceAuthorizationUserCodeKey(credential),
-            Factory.UserCodeRateLimitAttemptKey(credential, "life", 1),
-            Factory.UserCodeRateLimitGenerationKey(credential),
+            Factory.AuthorizedGrantKey(SingleIssuer.Tenant, credential),
+            Factory.BackChannelAuthenticationRequestKey(SingleIssuer.Tenant, credential),
+            Factory.BackChannelAuthenticationNextPollKey(SingleIssuer.Tenant, credential),
+            Factory.DeviceAuthorizationRequestKey(SingleIssuer.Tenant, credential),
+            Factory.DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, credential),
+            Factory.DeviceAuthorizationUserCodeKey(SingleIssuer.Tenant, credential),
+            Factory.UserCodeRateLimitAttemptKey(SingleIssuer.Tenant, credential, "life", 1),
+            Factory.UserCodeRateLimitGenerationKey(SingleIssuer.Tenant, credential),
         ];
 
         Assert.All(keys, key => Assert.DoesNotContain(credential, key, StringComparison.OrdinalIgnoreCase));
@@ -221,28 +262,28 @@ public class EntityStorageKeyFactoryTests
     {
         var key = method switch
         {
-            nameof(IEntityStorageKeyFactory.AuthorizedGrantKey) => Factory.AuthorizedGrantKey(Credential),
-            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationRequestKey) => Factory.BackChannelAuthenticationRequestKey(Credential),
-            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationNextPollKey) => Factory.BackChannelAuthenticationNextPollKey(Credential),
-            nameof(IEntityStorageKeyFactory.DeviceAuthorizationRequestKey) => Factory.DeviceAuthorizationRequestKey(Credential),
-            nameof(IEntityStorageKeyFactory.DeviceAuthorizationNextPollKey) => Factory.DeviceAuthorizationNextPollKey(Credential),
-            nameof(IEntityStorageKeyFactory.DeviceAuthorizationUserCodeKey) => Factory.DeviceAuthorizationUserCodeKey(Credential),
-            nameof(IEntityStorageKeyFactory.UserCodeRateLimitGenerationKey) => Factory.UserCodeRateLimitGenerationKey(Credential),
+            nameof(IEntityStorageKeyFactory.AuthorizedGrantKey) => Factory.AuthorizedGrantKey(SingleIssuer.Tenant, Credential),
+            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationRequestKey) => Factory.BackChannelAuthenticationRequestKey(SingleIssuer.Tenant, Credential),
+            nameof(IEntityStorageKeyFactory.BackChannelAuthenticationNextPollKey) => Factory.BackChannelAuthenticationNextPollKey(SingleIssuer.Tenant, Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationRequestKey) => Factory.DeviceAuthorizationRequestKey(SingleIssuer.Tenant, Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationNextPollKey) => Factory.DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, Credential),
+            nameof(IEntityStorageKeyFactory.DeviceAuthorizationUserCodeKey) => Factory.DeviceAuthorizationUserCodeKey(SingleIssuer.Tenant, Credential),
+            nameof(IEntityStorageKeyFactory.UserCodeRateLimitGenerationKey) => Factory.UserCodeRateLimitGenerationKey(SingleIssuer.Tenant, Credential),
             _ => throw new ArgumentOutOfRangeException(nameof(method), method, "No such key method in this test"),
         };
 
-        Assert.Equal(expected, key);
+        Assert.Equal(TenantKey.Of(SingleIssuer.Tenant, expected), key);
     }
 
     [Fact]
     public void AnAttemptKeyOfAUserCode_IsItsDigestUnderTheEntryName()
         => Assert.Equal(
-            "Abblix.Oidc.Server:RateLimit:UserCode:" + CredentialDigest + ":life:Attempt:1",
-            Factory.UserCodeRateLimitAttemptKey(Credential, "life", 1));
+            TenantKey.Of(SingleIssuer.Tenant, "Abblix.Oidc.Server:RateLimit:UserCode:" + CredentialDigest + ":life:Attempt:1"),
+            Factory.UserCodeRateLimitAttemptKey(SingleIssuer.Tenant, Credential, "life", 1));
 
     [Fact]
     public void DifferentCredentials_GetDifferentKeys()
-        => Assert.NotEqual(Factory.AuthorizedGrantKey("code-a"), Factory.AuthorizedGrantKey("code-b"));
+        => Assert.NotEqual(Factory.AuthorizedGrantKey(SingleIssuer.Tenant, "code-a"), Factory.AuthorizedGrantKey(SingleIssuer.Tenant, "code-b"));
 
     private const string Credential = "SplxlOBeZQQYbYS6WxSbIA";
 

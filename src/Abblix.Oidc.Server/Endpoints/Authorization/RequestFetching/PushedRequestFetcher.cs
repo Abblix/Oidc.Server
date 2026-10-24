@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -16,7 +17,6 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 
@@ -95,11 +95,11 @@ public class PushedRequestFetcher(
         // continuation. Single-use is still enforced - by the cache TTL upper bound and,
         // when the flow completes, by PushedAuthorizationRequestProcessorDecorator, which
         // consumes the request_uri carried forward below once a code or token is issued.
-        var requestObject = await authorizationRequestStorage.TryGetAsync(requestUrn, shouldRemove: false);
+        var requestObject = await authorizationRequestStorage.TryGetAsync(tenantAccessor.CurrentTenant(), requestUrn, shouldRemove: false);
 
         // A page of a flow that already ended with a code, as a refresh of the page made
         if (requestObject?.OriginRequestUri is { } originRequestUri &&
-            await consumedRequestUris.IsConsumedAsync(originRequestUri))
+            await consumedRequestUris.IsConsumedAsync(tenantAccessor.CurrentTenant(), originRequestUri))
         {
             return ErrorFactory.InvalidRequestUri($"The request by {requestUrn} has already been used");
         }

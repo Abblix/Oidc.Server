@@ -58,7 +58,7 @@ public class PkceValidatorTests
         // Arrange
         var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
         reuseDetector
-            .Setup(d => d.IsReusedAsync(ClientId, It.IsAny<string>(), CodeChallengeS256))
+            .Setup(d => d.IsReusedAsync(TestTenant.Matched, ClientId, It.IsAny<string>(), CodeChallengeS256))
             .ReturnsAsync(true);
         var validator = CreateValidator(reuseDetector: reuseDetector.Object);
         var context = CreateContext(

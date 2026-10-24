@@ -61,7 +61,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     private readonly IPollScheduleStore _pollSchedule = NewPollSchedule();
 
     private static readonly string PollKey =
-        new EntityStorageKeyFactory().BackChannelAuthenticationNextPollKey(AuthReqId);
+        new EntityStorageKeyFactory().BackChannelAuthenticationNextPollKey(SingleIssuer.Tenant, AuthReqId);
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
@@ -94,7 +94,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
-            serviceProvider);
+            serviceProvider, tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -125,8 +125,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         IBackChannelRequestStorage storage,
         StubAuthorizationDetailsPolicy? policy = null) : IKeyedServiceProvider
     {
-        private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
-        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage);
+        private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage, tenantAccessor: SingleIssuer.Accessor);
+        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage, tenantAccessor: SingleIssuer.Accessor);
         private readonly IBackChannelGrantProcessor _pushProcessor = new PushModeGrantProcessor();
 
         private readonly BackChannelGrantRedeemer _redeemer = new(
@@ -201,7 +201,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
-        _storage.Verify(s => s.TryGetAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -241,8 +241,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -254,7 +254,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ClientId, grant.Context.ClientId);
 
         // Verify the request was removed from storage
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -289,8 +289,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
                 new JsonArray(new JsonObject { ["type"] = "account_information" }),
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -299,7 +299,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         // Refused before the request is consumed: an irreversible removal is not spent on a grant that
         // was never going to be issued.
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), AuthReqId), Times.Never);
     }
 
     /// <summary>
@@ -331,8 +331,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
                 new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await handler.AuthorizeAsync(
             new TokenRequest { AuthenticationRequestId = AuthReqId },
@@ -378,8 +378,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
                 new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await handler.AuthorizeAsync(
             new TokenRequest { AuthenticationRequestId = AuthReqId },
@@ -412,8 +412,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
                 new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await handler.AuthorizeAsync(
             new TokenRequest { AuthenticationRequestId = AuthReqId },
@@ -423,7 +423,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
         Assert.Same(authRequest.RequestedAuthorizationDetails, policy.LastRequested);
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     private AuthorizedGrant GrantWithDetails(JsonArray details)
@@ -441,7 +441,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            CreateMockServiceProvider(_storage.Object, policy));
+            CreateMockServiceProvider(_storage.Object, policy), tenantAccessor: SingleIssuer.Accessor);
 
     /// <summary>
     /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
@@ -454,7 +454,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -473,7 +473,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     public async Task RequestNotFound_CarryingAPastInstant_IsStillAnInvalidGrant()
     {
         var authReqId = ExpiringIdentifier.Compose(AuthReqId, _currentTime.AddMinutes(-1));
-        _storage.Setup(s => s.TryGetAsync(authReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, authReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         var result = await _handler.AuthorizeAsync(
             new TokenRequest { AuthenticationRequestId = authReqId },
@@ -506,7 +506,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending  // Changed to Pending
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
@@ -542,7 +542,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending,
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(5), TimeSpan.FromMinutes(5));
 
         // Act
@@ -558,7 +558,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         // The authentication itself is untouched, so nothing a poll does can overwrite a completion.
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -587,7 +587,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending,
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
 
         // Act
@@ -621,13 +621,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         // The id the storage hands out, which is what the client polls with and the key the read is watched at
         var authReqId = await CibaStorageOver(RealStorage(cache)).StoreAsync(
+            SingleIssuer.Tenant,
             new BackChannelAuthenticationRequest(grant, _currentTime.AddMinutes(5))
             {
                 Status = BackChannelAuthenticationStatus.Pending,
             },
             TimeSpan.FromMinutes(5));
 
-        var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(authReqId);
+        var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(SingleIssuer.Tenant, authReqId);
         var watched = new LetsAnotherCallerIn(RealStorage(cache), requestKey);
         var requests = CibaStorageOver(watched.Storage);
 
@@ -635,9 +636,9 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         watched.OnNextReadOf(async () =>
         {
             var completing = CibaStorageOver(RealStorage(cache));
-            var request = await completing.TryGetAsync(authReqId);
+            var request = await completing.TryGetAsync(SingleIssuer.Tenant, authReqId);
             request!.Status = BackChannelAuthenticationStatus.Authenticated;
-            await completing.UpdateAsync(authReqId, request, TimeSpan.FromMinutes(5));
+            await completing.UpdateAsync(SingleIssuer.Tenant, authReqId, request, TimeSpan.FromMinutes(5));
         });
 
         // Act: the real poll, through the handler the token endpoint calls.
@@ -651,7 +652,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ClientId, issued.Context.ClientId);
 
         // And the request is spent, so a second poll cannot be answered with the same grant.
-        Assert.Null(await CibaStorageOver(RealStorage(cache)).TryGetAsync(authReqId));
+        Assert.Null(await CibaStorageOver(RealStorage(cache)).TryGetAsync(SingleIssuer.Tenant, authReqId));
     }
 
     private static IEntityStorage RealStorage(IDistributedCache cache)
@@ -681,7 +682,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            new TestServiceProvider(requests));
+            new TestServiceProvider(requests), tenantAccessor: SingleIssuer.Accessor);
 
     /// <summary>
     /// Verifies that when the authentication request is still pending (user hasn't authenticated yet)
@@ -705,7 +706,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         };
 
         // Nothing seeded: no instant means the client may ask now.
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -737,7 +738,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending,
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(5));
 
         // Act
@@ -768,7 +769,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Denied
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -790,7 +791,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = null };
 
-        _storage.Setup(s => s.TryGetAsync(null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -822,14 +823,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -852,14 +853,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert - TryRemoveAsync should never be called
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -886,8 +887,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -922,7 +923,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending,
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime, TimeSpan.FromMinutes(5));
 
         // Act
@@ -956,8 +957,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -965,7 +966,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -992,8 +993,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -1001,7 +1002,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -1028,7 +1029,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -1036,7 +1037,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -1059,6 +1060,6 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
-        _storage.Verify(s => s.TryGetAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 }

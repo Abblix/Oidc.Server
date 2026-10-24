@@ -45,8 +45,8 @@ public sealed class TenantScopeTests : IDisposable
     private IRevocationCutoffRegistry Cutoffs => _provider.GetRequiredService<IRevocationCutoffRegistry>();
 
     /// <summary>
-    /// A revocation made within a tenant's scope, with no request at all, lands in that tenant's space: its
-    /// requests see it, another tenant's do not.
+    /// A revocation made within a tenant's scope, with no request at all, lands in that tenant's space: the tenant
+    /// finds it, another tenant does not.
     /// </summary>
     [Fact]
     public async Task AWorkOfOneTenantOutsideAnyRequest_KeepsToThatTenant()
@@ -56,11 +56,8 @@ public sealed class TenantScopeTests : IDisposable
         using (TenantScope.Enter(Acme))
             await Revoker.RevokeSubjectAsync(Subject, cancellationToken: cancellationToken);
 
-        using (TenantScope.Enter(Acme))
-            Assert.NotNull(await Cutoffs.GetCutoffAsync(RevocationScope.Subject, Subject, cancellationToken));
-
-        using (TenantScope.Enter(Globex))
-            Assert.Null(await Cutoffs.GetCutoffAsync(RevocationScope.Subject, Subject, cancellationToken));
+        Assert.NotNull(await Cutoffs.GetCutoffAsync(Acme, RevocationScope.Subject, Subject, cancellationToken));
+        Assert.Null(await Cutoffs.GetCutoffAsync(Globex, RevocationScope.Subject, Subject, cancellationToken));
     }
 
     [Fact]

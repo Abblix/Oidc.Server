@@ -534,7 +534,7 @@ public class ScopeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, "unknown", out It.Ref<ScopeDefinition?>.IsAny), Times.Never);
+        _scopeManager.Verify(m => m.TryGet(It.IsAny<TenantDefinition>(), "unknown", out It.Ref<ScopeDefinition?>.IsAny), Times.Never);
     }
 
     /// <summary>

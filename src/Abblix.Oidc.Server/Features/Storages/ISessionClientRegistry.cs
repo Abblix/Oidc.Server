@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -35,17 +37,20 @@ public interface ISessionClientRegistry
     /// expire a fixed time after its first client would end a long session without telling the clients that
     /// signed in to it early.
     /// </remarks>
+    /// <param name="tenant">The tenant the session belongs to.</param>
     /// <param name="sessionId">The session the client signed in to.</param>
     /// <param name="clientId">The client.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
-    Task AddClientAsync(string sessionId, string clientId, CancellationToken cancellationToken = default);
+    Task AddClientAsync(TenantDefinition tenant, string sessionId, string clientId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The clients recorded for a session, each once.
     /// </summary>
+    /// <param name="tenant">The tenant the session belongs to.</param>
     /// <param name="sessionId">The session.</param>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <returns>The recorded client identifiers; empty when none are recorded or the records have expired.</returns>
     Task<IReadOnlyCollection<string>> GetClientsAsync(
+        TenantDefinition tenant,
         string sessionId, CancellationToken cancellationToken = default);
 }

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -77,21 +78,22 @@ public partial class SessionClientRegistry(
 
     /// <inheritdoc />
     public async Task AddClientAsync(
+        TenantDefinition tenant,
         string sessionId, string clientId, CancellationToken cancellationToken = default)
     {
         for (var attempt = 0; attempt < MaxGenerationAttempts; attempt++)
         {
-            var generation = await CurrentOrNewGenerationAsync(sessionId, cancellationToken);
-            await RecordAsync(sessionId, generation, clientId, cancellationToken);
+            var generation = await CurrentOrNewGenerationAsync(tenant, sessionId, cancellationToken);
+            await RecordAsync(tenant, sessionId, generation, clientId, cancellationToken);
 
             // A generation that ended while the record was being written leaves the client in records no reader
             // reaches any more, so the client is recorded again under the generation that replaces it.
             var current = await storage.GetAsync<Proto.SessionClientsGeneration>(
-                keyFactory.SessionClientsGenerationKey(sessionId), false, cancellationToken);
+                keyFactory.SessionClientsGenerationKey(tenant, sessionId), false, cancellationToken);
 
             if (current?.Id == generation.Id)
             {
-                await RenewWhenDueAsync(sessionId, current, cancellationToken);
+                await RenewWhenDueAsync(tenant, sessionId, current, cancellationToken);
                 return;
             }
         }
@@ -99,10 +101,11 @@ public partial class SessionClientRegistry(
 
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<string>> GetClientsAsync(
+        TenantDefinition tenant,
         string sessionId, CancellationToken cancellationToken = default)
     {
         var generation = await storage.GetAsync<Proto.SessionClientsGeneration>(
-            keyFactory.SessionClientsGenerationKey(sessionId), false, cancellationToken);
+            keyFactory.SessionClientsGenerationKey(tenant, sessionId), false, cancellationToken);
 
         if (generation == null)
             return [];
@@ -114,7 +117,7 @@ public partial class SessionClientRegistry(
         for (var position = 1; position <= MaxClientsPerSession; position++)
         {
             var recorded = await storage.GetAsync<Proto.SessionClient>(
-                keyFactory.SessionClientKey(sessionId, generation.Id, position), false, cancellationToken);
+                keyFactory.SessionClientKey(tenant, sessionId, generation.Id, position), false, cancellationToken);
 
             if (recorded == null)
                 break;
@@ -136,9 +139,10 @@ public partial class SessionClientRegistry(
     /// The session's current generation, started when there is none.
     /// </summary>
     private async Task<Proto.SessionClientsGeneration> CurrentOrNewGenerationAsync(
+        TenantDefinition tenant,
         string sessionId, CancellationToken cancellationToken)
     {
-        var key = keyFactory.SessionClientsGenerationKey(sessionId);
+        var key = keyFactory.SessionClientsGenerationKey(tenant, sessionId);
         var current = await storage.GetAsync<Proto.SessionClientsGeneration>(key, false, cancellationToken);
         if (current != null)
             return current;
@@ -154,7 +158,7 @@ public partial class SessionClientRegistry(
                 key, started, new StorageOptions { AbsoluteExpiration = expiresAt }, cancellationToken))
         {
             // A generation just started lasts as long as a renewal would make it
-            await NoteRenewedAsync(sessionId, started, expiresAt, cancellationToken);
+            await NoteRenewedAsync(tenant, sessionId, started, expiresAt, cancellationToken);
             return started;
         }
 
@@ -167,12 +171,13 @@ public partial class SessionClientRegistry(
     /// Records a client in one generation of a session's list, unless it is already recorded there.
     /// </summary>
     private async Task RecordAsync(
+        TenantDefinition tenant,
         string sessionId,
         Proto.SessionClientsGeneration generation,
         string clientId,
         CancellationToken cancellationToken)
     {
-        var markerKey = keyFactory.SessionClientMarkerKey(sessionId, generation.Id, clientId);
+        var markerKey = keyFactory.SessionClientMarkerKey(tenant, sessionId, generation.Id, clientId);
         if (await storage.GetAsync<Proto.SessionClient>(markerKey, false, cancellationToken) != null)
             return;
 
@@ -187,13 +192,13 @@ public partial class SessionClientRegistry(
             AbsoluteExpiration = startedEnd > keptUntil ? startedEnd : keptUntil,
         };
         var record = new Proto.SessionClient { ClientId = clientId };
-        var highestTaken = await FindHighestTakenPositionAsync(sessionId, generation.Id, cancellationToken);
+        var highestTaken = await FindHighestTakenPositionAsync(tenant, sessionId, generation.Id, cancellationToken);
 
         // From there upward, because another caller may have claimed the same position between the search and
         // the claim.
         for (var position = highestTaken + 1; position <= MaxClientsPerSession; position++)
         {
-            var positionKey = keyFactory.SessionClientKey(sessionId, generation.Id, position);
+            var positionKey = keyFactory.SessionClientKey(tenant, sessionId, generation.Id, position);
             if (!await storage.TrySetIfAbsentAsync(positionKey, record, storageOptions, cancellationToken))
             {
                 // Somebody claimed this position first. What they wrote decides whether this client is already
@@ -220,9 +225,10 @@ public partial class SessionClientRegistry(
     /// is made again by the next authorization rather than waiting a retention.
     /// </remarks>
     private async Task RenewWhenDueAsync(
+        TenantDefinition tenant,
         string sessionId, Proto.SessionClientsGeneration generation, CancellationToken cancellationToken)
     {
-        var renewalKey = keyFactory.SessionClientsRenewalKey(sessionId, generation.Id);
+        var renewalKey = keyFactory.SessionClientsRenewalKey(tenant, sessionId, generation.Id);
         if (await storage.GetAsync<Proto.SessionClientsGeneration>(renewalKey, false, cancellationToken) != null)
             return;
 
@@ -230,22 +236,22 @@ public partial class SessionClientRegistry(
         var storageOptions = new StorageOptions { AbsoluteExpiration = keptUntil };
         for (var position = 1; position <= MaxClientsPerSession; position++)
         {
-            var positionKey = keyFactory.SessionClientKey(sessionId, generation.Id, position);
+            var positionKey = keyFactory.SessionClientKey(tenant, sessionId, generation.Id, position);
             var recorded = await storage.GetAsync<Proto.SessionClient>(positionKey, false, cancellationToken);
             if (recorded == null)
                 break;
 
             await storage.TryExtendAsync(positionKey, storageOptions, cancellationToken);
             await storage.TryExtendAsync(
-                keyFactory.SessionClientMarkerKey(sessionId, generation.Id, recorded.ClientId),
+                keyFactory.SessionClientMarkerKey(tenant, sessionId, generation.Id, recorded.ClientId),
                 storageOptions,
                 cancellationToken);
         }
 
         await storage.TryExtendAsync(
-            keyFactory.SessionClientsGenerationKey(sessionId), storageOptions, cancellationToken);
+            keyFactory.SessionClientsGenerationKey(tenant, sessionId), storageOptions, cancellationToken);
 
-        await NoteRenewedAsync(sessionId, generation, keptUntil, cancellationToken);
+        await NoteRenewedAsync(tenant, sessionId, generation, keptUntil, cancellationToken);
     }
 
     /// <summary>
@@ -257,12 +263,13 @@ public partial class SessionClientRegistry(
     /// writes before it took does not carry the note past the point a renewal is due.
     /// </remarks>
     private Task NoteRenewedAsync(
+        TenantDefinition tenant,
         string sessionId,
         Proto.SessionClientsGeneration generation,
         DateTimeOffset keptUntil,
         CancellationToken cancellationToken)
         => storage.SetAsync(
-            keyFactory.SessionClientsRenewalKey(sessionId, generation.Id),
+            keyFactory.SessionClientsRenewalKey(tenant, sessionId, generation.Id),
             generation,
             new StorageOptions { AbsoluteExpiration = keptUntil - options.Value.SessionClientsRetention },
             cancellationToken);
@@ -277,6 +284,7 @@ public partial class SessionClientRegistry(
     /// above the ones already taken, nothing is removed, and no record is written to expire before its generation.
     /// </remarks>
     private async Task<int> FindHighestTakenPositionAsync(
+        TenantDefinition tenant,
         string sessionId, string generation, CancellationToken cancellationToken)
     {
         var (low, high) = (1, MaxClientsPerSession);
@@ -285,7 +293,7 @@ public partial class SessionClientRegistry(
         {
             var middle = low + (high - low) / 2;
             var recorded = await storage.GetAsync<Proto.SessionClient>(
-                keyFactory.SessionClientKey(sessionId, generation, middle), false, cancellationToken);
+                keyFactory.SessionClientKey(tenant, sessionId, generation, middle), false, cancellationToken);
 
             if (recorded != null)
             {

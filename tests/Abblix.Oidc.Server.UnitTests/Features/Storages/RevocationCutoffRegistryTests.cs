@@ -51,16 +51,16 @@ public class RevocationCutoffRegistryTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private string Key => _keys.RevocationCutoffKey(RevocationScope.Subject, Principal);
+    private string Key => _keys.RevocationCutoffKey(SingleIssuer.Tenant, RevocationScope.Subject, Principal);
 
     private RevocationCutoffRegistry Registry(IEntityStorage? storage = null) => new(storage ?? _storage, _keys);
 
-    private Task<DateTimeOffset?> CutoffAsync() => Registry().GetCutoffAsync(RevocationScope.Subject, Principal, Ct);
+    private Task<DateTimeOffset?> CutoffAsync() => Registry().GetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Ct);
 
     [Fact]
     public async Task A_first_cutoff_is_recorded()
     {
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Earlier, await CutoffAsync());
     }
@@ -68,8 +68,8 @@ public class RevocationCutoffRegistryTests
     [Fact]
     public async Task A_later_cutoff_replaces_an_earlier_one()
     {
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -80,8 +80,8 @@ public class RevocationCutoffRegistryTests
     [Fact]
     public async Task An_earlier_cutoff_arriving_later_changes_nothing()
     {
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -94,9 +94,9 @@ public class RevocationCutoffRegistryTests
     public async Task An_earlier_cutoff_racing_a_later_one_into_an_empty_record_leaves_the_later()
     {
         var racing = new LetsAnotherCallerIn(_storage, Key);
-        racing.OnNextReadOf(() => Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
+        racing.OnNextReadOf(() => Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
 
-        await Registry(racing.Storage).SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry(racing.Storage).SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -108,11 +108,11 @@ public class RevocationCutoffRegistryTests
     [Fact]
     public async Task An_earlier_cutoff_racing_a_later_one_over_an_older_record_leaves_the_later()
     {
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier.AddHours(-1), ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier.AddHours(-1), ExpiresAt, Ct);
         var racing = new LetsAnotherCallerIn(_storage, Key);
-        racing.OnNextReadOf(() => Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
+        racing.OnNextReadOf(() => Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
 
-        await Registry(racing.Storage).SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry(racing.Storage).SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -124,11 +124,11 @@ public class RevocationCutoffRegistryTests
     [Fact]
     public async Task A_later_cutoff_racing_an_earlier_one_is_recorded()
     {
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier.AddHours(-1), ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier.AddHours(-1), ExpiresAt, Ct);
         var racing = new LetsAnotherCallerIn(_storage, Key);
-        racing.OnNextReadOf(() => Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct));
+        racing.OnNextReadOf(() => Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct));
 
-        await Registry(racing.Storage).SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
+        await Registry(racing.Storage).SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -142,8 +142,8 @@ public class RevocationCutoffRegistryTests
     {
         var firstExpiry = Later.AddDays(1);
         var repeatedExpiry = Later.AddDays(2);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, firstExpiry, Ct);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, repeatedExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, firstExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, repeatedExpiry, Ct);
 
         _time.SetUtcNow(firstExpiry.AddMinutes(1));
 
@@ -158,8 +158,8 @@ public class RevocationCutoffRegistryTests
     {
         var longExpiry = Later.AddDays(2);
         var shortExpiry = Later.AddDays(1);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, longExpiry, Ct);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, shortExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, longExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, shortExpiry, Ct);
 
         _time.SetUtcNow(shortExpiry.AddMinutes(1));
 
@@ -174,8 +174,8 @@ public class RevocationCutoffRegistryTests
     {
         var firstExpiry = Later.AddDays(1);
         var laterExpiry = Later.AddDays(2);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, firstExpiry, Ct);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, laterExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, firstExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, laterExpiry, Ct);
 
         _time.SetUtcNow(firstExpiry.AddMinutes(1));
         Assert.Equal(Later, await CutoffAsync());
@@ -193,7 +193,7 @@ public class RevocationCutoffRegistryTests
     {
         await _cache.SetAsync(Key, NonCanonicalCutoff(Earlier), new DistributedCacheEntryOptions(), Ct);
 
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct);
 
         Assert.Equal(Later, await CutoffAsync());
     }
@@ -210,7 +210,7 @@ public class RevocationCutoffRegistryTests
             new StorageOptions { AbsoluteExpiration = ExpiresAt },
             Ct);
 
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, ExpiresAt, Ct);
 
         Assert.Equal(Earlier, await CutoffAsync());
     }
@@ -232,7 +232,7 @@ public class RevocationCutoffRegistryTests
             Ct);
 
         var shorterExpiry = Earlier.AddDays(31);
-        await Registry().SetCutoffAsync(RevocationScope.Subject, Principal, Earlier, shorterExpiry, Ct);
+        await Registry().SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Earlier, shorterExpiry, Ct);
 
         _time.SetUtcNow(shorterExpiry.AddDays(1));
 
@@ -260,7 +260,7 @@ public class RevocationCutoffRegistryTests
             .ReturnsAsync(false);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Registry(storage.Object).SetCutoffAsync(RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
+            () => Registry(storage.Object).SetCutoffAsync(SingleIssuer.Tenant, RevocationScope.Subject, Principal, Later, ExpiresAt, Ct));
     }
 
     /// <summary>

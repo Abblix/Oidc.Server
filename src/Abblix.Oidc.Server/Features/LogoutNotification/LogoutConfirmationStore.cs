@@ -10,6 +10,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Utils;
@@ -30,11 +31,11 @@ public sealed class LogoutConfirmationStore(
     IOptions<OidcOptions> options) : ILogoutConfirmationStore
 {
     /// <inheritdoc />
-    public async Task<string> IssueAsync(string sessionId)
+    public async Task<string> IssueAsync(TenantDefinition tenant, string sessionId)
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
-        var key = keyFactory.LogoutConfirmationKey(sessionId);
+        var key = keyFactory.LogoutConfirmationKey(tenant, sessionId);
 
         // Asking again is the same question. Anyone can make a browser reach the logout address, so issuing a
         // fresh value here would let a request arriving while the end user reads the page void the answer they
@@ -57,7 +58,7 @@ public sealed class LogoutConfirmationStore(
     }
 
     /// <inheritdoc />
-    public async Task<bool> RedeemLogoutConfirmationAsync(string sessionId, string confirmation)
+    public async Task<bool> RedeemLogoutConfirmationAsync(TenantDefinition tenant, string sessionId, string confirmation)
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
@@ -66,7 +67,7 @@ public sealed class LogoutConfirmationStore(
         if (confirmation.Length == 0)
             return false;
 
-        var key = keyFactory.LogoutConfirmationKey(sessionId);
+        var key = keyFactory.LogoutConfirmationKey(tenant, sessionId);
         var outstanding = await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false);
 
         if (outstanding == null || !Matches(outstanding.Confirmation, confirmation))

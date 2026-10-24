@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -25,6 +26,7 @@ public interface IAuthorizationCodeService
     /// The authorization code is a temporary code that the client exchanges for an access token, typically after
     /// the user has authenticated and authorized the request.
     /// </summary>
+    /// <param name="tenant">The tenant the authorization code belongs to.</param>
     /// <param name="authorizedGrant">An object encapsulating the result of the authorization grant, including
     /// user authentication session and authorization context details.</param>
     /// <param name="authorizationCodeExpiresIn">The duration after which the generated authorization code will expire.</param>
@@ -32,6 +34,7 @@ public interface IAuthorizationCodeService
     /// is intended for single-use and has a limited lifetime, after which it must be exchanged for an access token
     /// or considered invalid.</returns>
     Task<string> GenerateAuthorizationCodeAsync(
+        TenantDefinition tenant,
         AuthorizedGrant authorizedGrant,
         TimeSpan authorizationCodeExpiresIn);
 
@@ -40,10 +43,11 @@ public interface IAuthorizationCodeService
     /// and granting access based on the code provided. This method verifies the code's validity, ensuring it
     /// matches a previously issued code and has not expired or been used.
     /// </summary>
+    /// <param name="tenant">The tenant the authorization code belongs to.</param>
     /// <param name="authorizationCode">The authorization code to be validated and processed for granting access.</param>
     /// <returns>A task that asynchronously returns a <see cref="Result{AuthorizedGrant, AuthError}"/> representing the outcome
     /// of the authorization process, including any access tokens or refresh tokens issued as part of the grant.</returns>
-    Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode);
+    Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(TenantDefinition tenant, string authorizationCode);
 
     /// <summary>
     /// Atomically removes an authorization code from storage and returns the grant it held, in a
@@ -68,6 +72,7 @@ public interface IAuthorizationCodeService
     /// expose.
     /// </para>
     /// </summary>
+    /// <param name="tenant">The tenant the authorization code belongs to.</param>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
     /// <returns>
     /// The grant when this caller won the claim; an <c>invalid_grant</c> <see cref="OidcError"/>
@@ -81,18 +86,20 @@ public interface IAuthorizationCodeService
     /// already used to issue tokens (a sequential reuse), which the caller treats as a reuse to be
     /// rejected and whose tokens are revoked.
     /// </remarks>
-    Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode);
+    Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(TenantDefinition tenant, string authorizationCode);
 
     /// <summary>
     /// Updates the authorization grant result based on a specific authorization code and expiration time.
     /// This method allows the authorization grant to be updated with new information or tokens as needed.
     /// </summary>
+    /// <param name="tenant">The tenant the authorization code belongs to.</param>
     /// <param name="authorizationCode">The authorization code associated with the grant result to update.</param>
     /// <param name="authorizedGrant">The updated authorization grant result containing the latest
     /// authentication and authorization details.</param>
     /// <param name="authorizationCodeExpiresIn">The duration after which the updated authorization code will expire.</param>
     /// <returns>A task representing the asynchronous operation of updating the authorization grant result.</returns>
     Task UpdateAuthorizationGrantAsync(
+        TenantDefinition tenant,
         string authorizationCode,
         AuthorizedGrant authorizedGrant,
         TimeSpan authorizationCodeExpiresIn);

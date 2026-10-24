@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -25,7 +26,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 
@@ -68,7 +68,7 @@ public class EndSessionRequestProcessorTests
                     SingleIssuer.LicensedCatalog,
                     SingleIssuer.Accessor),
                 Options.Create(_options)),
-            _confirmationStore.Object);
+            _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static EndSessionRequest CreateEndSessionRequest(
@@ -108,7 +108,8 @@ public class EndSessionRequestProcessorTests
     }
 
     /// <summary>
-    /// The clients each session has on record, as the tests set them up.
+    /// The clients each session of the test's tenant has on record, as the tests set them up; a session of any other
+    /// tenant has none.
     /// </summary>
     private sealed class RecordedSessionClients : ISessionClientRegistry
     {
@@ -116,19 +117,21 @@ public class EndSessionRequestProcessorTests
 
         public void Record(string sessionId, string clientId)
         {
-            if (!_clients.TryGetValue(sessionId, out var clients))
-                _clients[sessionId] = clients = [];
+            var key = TenantKey.Of(SingleIssuer.Tenant, sessionId);
+            if (!_clients.TryGetValue(key, out var clients))
+                _clients[key] = clients = [];
 
             clients.Add(clientId);
         }
 
-        public Task AddClientAsync(string sessionId, string clientId, CancellationToken cancellationToken = default)
+        public Task AddClientAsync(
+            TenantDefinition tenant, string sessionId, string clientId, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("Ending a session never records a client.");
 
         public Task<IReadOnlyCollection<string>> GetClientsAsync(
-            string sessionId, CancellationToken cancellationToken = default)
+            TenantDefinition tenant, string sessionId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyCollection<string>>(
-                _clients.TryGetValue(sessionId, out var clients) ? [..clients] : []);
+                _clients.TryGetValue(TenantKey.Of(tenant, sessionId), out var clients) ? [..clients] : []);
     }
 
     /// <summary>

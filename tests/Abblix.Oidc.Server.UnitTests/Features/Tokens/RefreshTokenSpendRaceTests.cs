@@ -57,7 +57,7 @@ public class RefreshTokenSpendRaceTests
                 new MemoryDistributedCache(
                     Options.Create(new MemoryDistributedCacheOptions { Clock = new StoreClock(_time) })),
                 new ProtobufSerializer()),
-            keyFactory.JsonWebTokenStatusKey(PresentedTokenId));
+            keyFactory.JsonWebTokenStatusKey(SingleIssuer.Tenant, PresentedTokenId));
         var registry = new TokenRegistry(storage.Storage, keyFactory);
         var service = CreateService(registry, _time);
         var presented = PresentedToken();
@@ -69,7 +69,7 @@ public class RefreshTokenSpendRaceTests
 
         Assert.True(secondServed);
         Assert.False(firstServed);
-        Assert.Equal(JsonWebTokenStatus.Revoked, await registry.GetStatusAsync(GrantId));
+        Assert.Equal(JsonWebTokenStatus.Revoked, await registry.GetStatusAsync(SingleIssuer.Tenant, GrantId));
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public class RefreshTokenSpendRaceTests
     private static async Task<bool> RenewAsync(
         TokenRegistry registry, RefreshTokenService service, JsonWebToken presented)
     {
-        Assert.Equal(JsonWebTokenStatus.Unknown, await registry.GetStatusAsync(PresentedTokenId));
+        Assert.Equal(JsonWebTokenStatus.Unknown, await registry.GetStatusAsync(SingleIssuer.Tenant, PresentedTokenId));
 
         var client = Client();
         Assert.NotNull(await service.CreateRefreshTokenAsync(

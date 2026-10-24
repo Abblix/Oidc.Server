@@ -53,7 +53,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         _cutoffs
             .Setup(c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                TestTenant.Matched, It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
     }
 
@@ -75,7 +75,7 @@ public class RevocationCutoffCheckerSessionTests
 
     private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)
         => _cutoffs
-            .Setup(c => c.GetCutoffAsync(scope, principal, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCutoffAsync(TestTenant.Matched, scope, principal, It.IsAny<CancellationToken>()))
             .ReturnsAsync(cutoff);
 
     private static AuthSession Session(DateTimeOffset? authenticatedAt = null)
@@ -240,7 +240,7 @@ public class RevocationCutoffCheckerSessionTests
 
         // The subject scope is never reached, which is what says the session arm answered first.
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(It.IsAny<TenantDefinition>(), RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -307,10 +307,10 @@ public class RevocationCutoffCheckerSessionTests
         // exact argument, so a cutoff planted under another principal is never consulted and the planting
         // proves nothing. Assert that this session's own principal is what was asked about.
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(TestTenant.Matched, RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
             Times.Once);
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, somebodyElse, It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(It.IsAny<TenantDefinition>(), RevocationScope.Subject, somebodyElse, It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -325,7 +325,7 @@ public class RevocationCutoffCheckerSessionTests
 
         await Checker().IsSessionRefusedAsync(Session());
 
-        _clients.Verify(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()), Times.Never);
+        _clients.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     private static string PrincipalOf(RevocationScope scope) => scope switch

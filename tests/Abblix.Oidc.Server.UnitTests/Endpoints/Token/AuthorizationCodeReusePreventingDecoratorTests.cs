@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -46,7 +47,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
 
     public AuthorizationCodeReusePreventingDecoratorTests()
         => _decorator = new AuthorizationCodeReusePreventingDecorator(
-            _inner.Object, _tokenRegistry.Object, _codeService.Object);
+            _inner.Object, _tokenRegistry.Object, _codeService.Object, tenantAccessor: SingleIssuer.Accessor);
 
     private static ValidTokenRequest CreateRequest(AuthorizedGrant grant)
     {
@@ -73,7 +74,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
     {
         // Arrange
         _codeService
-            .Setup(s => s.RemoveAuthorizationCodeAsync(Code))
+            .Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "Authorization code is invalid"));
 
         // Act
@@ -95,9 +96,9 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         // Arrange
         var expiresAt = DateTimeOffset.UnixEpoch.AddHours(1);
         var issued = new[] { new TokenInfo("access-jti", expiresAt), new TokenInfo("refresh-jti", expiresAt) };
-        _codeService.Setup(s => s.RemoveAuthorizationCodeAsync(Code)).ReturnsAsync(CreateGrant(issued));
+        _codeService.Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code)).ReturnsAsync(CreateGrant(issued));
         _tokenRegistry
-            .Setup(r => r.SetStatusAsync(It.IsAny<string>(), JsonWebTokenStatus.Revoked, expiresAt))
+            .Setup(r => r.SetStatusAsync(TestTenant.Matched, It.IsAny<string>(), JsonWebTokenStatus.Revoked, expiresAt))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -106,8 +107,8 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        _tokenRegistry.Verify(r => r.SetStatusAsync("access-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
-        _tokenRegistry.Verify(r => r.SetStatusAsync("refresh-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
+        _tokenRegistry.Verify(r => r.SetStatusAsync(TestTenant.Matched, "access-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
+        _tokenRegistry.Verify(r => r.SetStatusAsync(TestTenant.Matched, "refresh-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
         _inner.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 
@@ -119,7 +120,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
     public async Task FreshClaim_DelegatesToInnerProcessor()
     {
         // Arrange
-        _codeService.Setup(s => s.RemoveAuthorizationCodeAsync(Code)).ReturnsAsync(CreateGrant());
+        _codeService.Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code)).ReturnsAsync(CreateGrant());
         var innerError = new OidcError(ErrorCodes.InvalidGrant, "inner-marker");
         _inner.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>())).ReturnsAsync(innerError);
 
@@ -151,6 +152,6 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal("inner-marker", error.ErrorDescription);
-        _codeService.Verify(s => s.RemoveAuthorizationCodeAsync(It.IsAny<string>()), Times.Never);
+        _codeService.Verify(s => s.RemoveAuthorizationCodeAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 }

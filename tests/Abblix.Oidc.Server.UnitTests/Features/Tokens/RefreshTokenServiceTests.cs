@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
@@ -269,7 +270,7 @@ public class RefreshTokenServiceTests
         await _service.TrySpendAsync(oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            r => r.TrySetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -302,7 +303,7 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry))
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry))
             .ReturnsAsync(true);
 
         // Act
@@ -310,7 +311,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         _tokenRegistry.Verify(
-            r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry),
+            r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry),
             Times.Once);
     }
 
@@ -371,7 +372,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         _tokenRegistry.Verify(
-            r => r.TrySetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -762,13 +763,13 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         await _service.TrySpendAsync(oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            registry => registry.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             supersedesTheOldToken ? Times.Once() : Times.Never());
     }
 
@@ -807,7 +808,7 @@ public class RefreshTokenServiceTests
         await _service.TrySpendAsync(oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            registry => registry.TrySetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -836,13 +837,13 @@ public class RefreshTokenServiceTests
             },
         };
         _tokenRegistry
-            .Setup(r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         await _service.TrySpendAsync(oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            registry => registry.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             Times.Once());
     }
 
@@ -887,13 +888,13 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         await _service.TrySpendAsync(oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            registry => registry.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             Times.Once());
     }
 
@@ -925,13 +926,13 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         await _service.TrySpendAsync(oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            registry => registry.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             supersedesTheOldToken ? Times.Once() : Times.Never());
     }
 
@@ -984,16 +985,16 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.TrySetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(false);
         _tokenRegistry
-            .Setup(r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
         Assert.False(await _service.TrySpendAsync(oldToken, clientInfo));
 
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
+            r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
     }
 

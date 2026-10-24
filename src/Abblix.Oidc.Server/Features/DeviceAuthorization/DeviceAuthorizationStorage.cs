@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
@@ -34,7 +35,7 @@ public partial class DeviceAuthorizationStorage(
     TimeProvider timeProvider) : IDeviceAuthorizationStorage
 {
     /// <inheritdoc />
-    public async Task StoreAsync([Credential] string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
+    public async Task StoreAsync(TenantDefinition tenant, [Credential] string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
         // Persist the absolute expiry so a regularly-polling client cannot extend the code: the token
         // endpoint derives the remaining cache TTL from this fixed instant instead of resetting the full
@@ -45,39 +46,39 @@ public partial class DeviceAuthorizationStorage(
 
         // Store the request by device code (primary key for client polling)
         await storage.SetAsync(
-            keyFactory.DeviceAuthorizationRequestKey(deviceCode),
+            keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode),
             request,
             options);
 
         // The user code leads to the record by its storage key, never by the device code: the device code
         // redeems the tokens once the user approves, and a value is read by more than the key list is.
         await storage.SetAsync(
-            keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode),
-            ReferenceTo(deviceCode).Key,
+            keyFactory.DeviceAuthorizationUserCodeKey(tenant, request.UserCode),
+            ReferenceTo(tenant, deviceCode).Key,
             options);
     }
 
     /// <inheritdoc />
-    public Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync([Credential] string deviceCode)
-        => TryGetAsync(ReferenceTo(deviceCode));
+    public Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync(TenantDefinition tenant, [Credential] string deviceCode)
+        => TryGetAsync(tenant, ReferenceTo(tenant, deviceCode));
 
     /// <inheritdoc />
-    public Task<DeviceAuthorizationRequest?> TryGetAsync(DeviceAuthorizationReference reference)
+    public Task<DeviceAuthorizationRequest?> TryGetAsync(TenantDefinition tenant, DeviceAuthorizationReference reference)
         => storage.GetAsync<DeviceAuthorizationRequest>(reference.Key, removeOnRetrieval: false);
 
     /// <inheritdoc />
     public async Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request)?>
-        TryGetByUserCodeAsync([Credential] string userCode)
+        TryGetByUserCodeAsync(TenantDefinition tenant, [Credential] string userCode)
     {
         var key = await storage.GetAsync<string>(
-            keyFactory.DeviceAuthorizationUserCodeKey(userCode),
+            keyFactory.DeviceAuthorizationUserCodeKey(tenant, userCode),
             removeOnRetrieval: false);
 
         if (key == null)
             return null;
 
         var reference = new DeviceAuthorizationReference(key);
-        var request = await TryGetAsync(reference);
+        var request = await TryGetAsync(tenant, reference);
         if (request == null)
             return null;
 
@@ -85,7 +86,7 @@ public partial class DeviceAuthorizationStorage(
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync(DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn)
+    public Task UpdateAsync(TenantDefinition tenant, DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
         // record's fixed ExpiresAt (RFC 8628 section 3.2) and gates on expiry first, so polling cannot extend the
@@ -96,11 +97,11 @@ public partial class DeviceAuthorizationStorage(
             new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
     }
 
-    private DeviceAuthorizationReference ReferenceTo(string deviceCode)
-        => new(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
+    private DeviceAuthorizationReference ReferenceTo(TenantDefinition tenant, string deviceCode)
+        => new(keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode));
 
     /// <inheritdoc />
-    public async Task RemoveAsync([Credential] string deviceCode)
+    public async Task RemoveAsync(TenantDefinition tenant, [Credential] string deviceCode)
     {
         // The secondary index is best-effort here for the same reason it is in TryRemoveAsync: it is not
         // what the caller asked for. The token endpoint calls this from its expired and denied arms and
@@ -112,10 +113,10 @@ public partial class DeviceAuthorizationStorage(
         // AFTER this, so a refusal at this line leaves both keys in place and the removal still runs.
         // What they share is the reason for guarding: the index is never the caller's question, and its
         // store deciding otherwise must not become the caller's answer.
-        var request = await TryGetByDeviceCodeAsync(deviceCode);
+        var request = await TryGetByDeviceCodeAsync(tenant, deviceCode);
         if (request != null)
         {
-            var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode);
+            var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(tenant, request.UserCode);
             try
             {
                 await storage.RemoveAsync(userCodeKey);
@@ -131,7 +132,7 @@ public partial class DeviceAuthorizationStorage(
         // reporting otherwise would leave a live record behind a call that looked like it worked. The
         // caller does see a fault where it expected a grant error, which is the cost, and it is a cost
         // over a record that is expired or denied rather than one carrying an approval.
-        await storage.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
+        await storage.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode));
     }
 
     /// <summary>
@@ -169,6 +170,7 @@ public partial class DeviceAuthorizationStorage(
     /// the delete has already happened at the server.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
     /// <param name="userCode">The user code of THAT request, used to find its secondary index entry.
     /// Nothing here checks the two belong together, so a caller passing a code from a different request
@@ -187,10 +189,10 @@ public partial class DeviceAuthorizationStorage(
     /// not be the removed request's, and it carries its own expiry either way.
     /// </para>
     /// </returns>
-    public async Task<bool> TryRemoveAsync([Credential] string deviceCode, [Credential] string userCode)
+    public async Task<bool> TryRemoveAsync(TenantDefinition tenant, [Credential] string deviceCode, [Credential] string userCode)
     {
         var claimed = await storage.GetAsync<DeviceAuthorizationRequest>(
-            keyFactory.DeviceAuthorizationRequestKey(deviceCode),
+            keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode),
             removeOnRetrieval: true);
 
         var removed = claimed != null;
@@ -212,7 +214,7 @@ public partial class DeviceAuthorizationStorage(
         // an operator has no way to learn the store refused a write at all.
         try
         {
-            await storage.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
+            await storage.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(tenant, userCode));
         }
         catch (Exception exception)
         {

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
 
@@ -28,17 +29,18 @@ public class BackChannelRequestStorage(
 	/// Asynchronously stores a backchannel authentication request and generates a unique identifier for it.
 	/// This method also sets an expiration duration for the stored request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="authenticationRequest">The backchannel authentication request to store.</param>
 	/// <param name="expiresIn">The duration after which the stored request will expire.</param>
 	/// <returns>
 	/// A task that returns the unique ID of the stored authentication request.
 	/// </returns>
-	public async Task<string> StoreAsync(BackChannelAuthenticationRequest authenticationRequest, TimeSpan expiresIn)
+	public async Task<string> StoreAsync(TenantDefinition tenant, BackChannelAuthenticationRequest authenticationRequest, TimeSpan expiresIn)
 	{
 		var authenticationRequestId = authenticationRequestIdGenerator.GenerateAuthenticationRequestId();
 
 		await storage.SetAsync(
-			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
+			keyFactory.BackChannelAuthenticationRequestKey(tenant, authenticationRequestId),
 			authenticationRequest,
 			new() { AbsoluteExpirationRelativeToNow = expiresIn });
 
@@ -48,19 +50,20 @@ public class BackChannelRequestStorage(
 	/// <summary>
 	/// Tries to retrieve a backchannel authentication request by its unique identifier.
 	/// </summary>
+	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to retrieve.</param>
 	/// <returns>
 	/// A task that returns the authentication request if found;
 	/// otherwise, null.
 	/// </returns>
-	public Task<BackChannelAuthenticationRequest?> TryGetAsync([Credential] string authenticationRequestId)
+	public Task<BackChannelAuthenticationRequest?> TryGetAsync(TenantDefinition tenant, [Credential] string authenticationRequestId)
 	{
 		// A status read must NOT consume the request. The CIBA grant handler calls this on every poll/ping
 		// to inspect the status and only redeems once, via TryRemoveAsync, on successful token issuance.
 		// Consuming here made every successful poll/ping fail with invalid_grant and let a slow_down poll or
 		// a wrong-client lookup destroy a still-pending authentication.
 		return storage.GetAsync<BackChannelAuthenticationRequest>(
-			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
+			keyFactory.BackChannelAuthenticationRequestKey(tenant, authenticationRequestId),
 			removeOnRetrieval: false);
 	}
 
@@ -68,17 +71,19 @@ public class BackChannelRequestStorage(
 	/// Updates an existing backchannel authentication request in storage.
 	/// Used in ping mode to update request status when user completes authentication.
 	/// </summary>
+	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="requestId">The unique identifier of the authentication request to update.</param>
 	/// <param name="request">The updated authentication request data.</param>
 	/// <param name="expiresIn">The duration after which the request expires.</param>
 	/// <returns>A task that completes when the request is updated in storage.</returns>
 	public Task UpdateAsync(
+		TenantDefinition tenant,
 		string requestId,
 		BackChannelAuthenticationRequest request,
 		TimeSpan expiresIn)
 	{
 		return storage.SetAsync(
-			keyFactory.BackChannelAuthenticationRequestKey(requestId),
+			keyFactory.BackChannelAuthenticationRequestKey(tenant, requestId),
 			request,
 			new() { AbsoluteExpirationRelativeToNow = expiresIn });
 	}
@@ -98,6 +103,7 @@ public class BackChannelRequestStorage(
 	/// here.
 	/// </para>
 	/// </summary>
+	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
 	/// A task that returns the authentication request when this caller removed it and still held its own
@@ -106,10 +112,10 @@ public class BackChannelRequestStorage(
 	/// nobody to lose to, its outcome being the request gone with nobody able to be told they took it. A
 	/// store call that fails after the removal raises instead of answering.
 	/// </returns>
-	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync([Credential] string authenticationRequestId)
+	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync(TenantDefinition tenant, [Credential] string authenticationRequestId)
 	{
 		return storage.GetAsync<BackChannelAuthenticationRequest>(
-			keyFactory.BackChannelAuthenticationRequestKey(authenticationRequestId),
+			keyFactory.BackChannelAuthenticationRequestKey(tenant, authenticationRequestId),
 			removeOnRetrieval: true);
 	}
 }

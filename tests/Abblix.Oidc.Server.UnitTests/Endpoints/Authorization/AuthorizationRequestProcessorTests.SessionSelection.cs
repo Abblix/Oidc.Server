@@ -355,6 +355,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(CreateConsents());
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
@@ -385,6 +386,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(CreateConsents());
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
@@ -413,6 +415,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(CreateConsents());
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
@@ -518,6 +521,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
@@ -554,6 +558,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
@@ -588,6 +593,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");

@@ -45,19 +45,19 @@ public class PingModeGrantProcessorTests
         _request = new BackChannelAuthenticationRequest(new AuthorizedGrant(session, context), fixedTime.AddMinutes(5));
 
         _storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        _processor = new PingModeGrantProcessor(_storage.Object);
+        _processor = new PingModeGrantProcessor(_storage.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     [Fact]
     public async Task Process_ConsumesAuthReqIdFromStorage()
     {
-        _storage.Setup(s => s.TryRemoveAsync(AuthRequestId)).ReturnsAsync(_request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId)).ReturnsAsync(_request);
 
         var result = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(_request.AuthorizedGrant, grant);
-        _storage.Verify(s => s.TryRemoveAsync(AuthRequestId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId), Times.Once);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class PingModeGrantProcessorTests
     {
         // First retrieval consumes the entry; the second sees nothing in storage and must fail
         // rather than re-issue tokens for the same single-use auth_req_id.
-        _storage.SetupSequence(s => s.TryRemoveAsync(AuthRequestId))
+        _storage.SetupSequence(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId))
             .ReturnsAsync(_request)
             .ReturnsAsync((BackChannelAuthenticationRequest?)null);
 

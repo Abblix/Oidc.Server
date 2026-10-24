@@ -64,7 +64,7 @@ public sealed class TenantStreamStore(IStreamStore inner, ITenantAccessor tenant
     public Task<bool> DeleteAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
         => inner.DeleteAsync(Own(receiverId), streamId, cancellationToken);
 
-    private string Own(string receiverId) => TenantKey.Of(tenantAccessor, receiverId);
+    private string Own(string receiverId) => TenantKey.Of(tenantAccessor.CurrentTenant(), receiverId);
 
     private StreamState Owned(StreamState stream) => stream with { ReceiverId = Own(stream.ReceiverId) };
 

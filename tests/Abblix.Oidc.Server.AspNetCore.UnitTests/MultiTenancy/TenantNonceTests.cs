@@ -32,15 +32,8 @@ public sealed class TenantNonceTests : IDisposable
 
     private INonceService Nonces => _provider.GetRequiredService<INonceService>();
 
-    private void Enter(string tenantId)
-    {
-        var context = new DefaultHttpContext();
-        context.Features.Set(new TenantContext
-        {
-            Tenant = new TenantDefinition { Id = tenantId, Issuer = new Uri($"https://auth.example.com/tenants/{tenantId}") },
-        });
-        _provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
-    }
+    private static TenantDefinition Tenant(string tenantId)
+        => new() { Id = tenantId, Issuer = new Uri($"https://auth.example.com/tenants/{tenantId}") };
 
     /// <summary>
     /// Each tenant signs its nonces with a secret of its own, so one tenant's nonce is not proof of freshness at
@@ -51,13 +44,11 @@ public sealed class TenantNonceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        Enter("acme");
-        var nonce = await Nonces.IssueAsync(cancellationToken);
+        var nonce = await Nonces.IssueAsync(Tenant("acme"), cancellationToken);
 
-        Enter("globex");
-        Assert.Equal(NonceValidationFailure.BadSignature, await Nonces.ValidateAsync(nonce, cancellationToken));
-
-        Enter("acme");
-        Assert.Null(await Nonces.ValidateAsync(nonce, cancellationToken));
+        Assert.Equal(
+            NonceValidationFailure.BadSignature,
+            await Nonces.ValidateAsync(Tenant("globex"), nonce, cancellationToken));
+        Assert.Null(await Nonces.ValidateAsync(Tenant("acme"), nonce, cancellationToken));
     }
 }

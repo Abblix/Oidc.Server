@@ -59,9 +59,9 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task TheIssuedValue_AnswersItsSession()
     {
-        var confirmation = await _store.IssueAsync(SessionId);
+        var confirmation = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, confirmation));
     }
 
     /// <summary>
@@ -71,10 +71,10 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AnAnsweredQuestion_IsSpent()
     {
-        var confirmation = await _store.IssueAsync(SessionId);
+        var confirmation = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, confirmation));
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, confirmation));
     }
 
     /// <summary>
@@ -84,11 +84,11 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AnAnswerFromAnotherSession_IsNotAnAnswer()
     {
-        var mine = await _store.IssueAsync(SessionId);
-        await _store.IssueAsync(AnotherSessionId);
+        var mine = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
+        await _store.IssueAsync(SingleIssuer.Tenant, AnotherSessionId);
 
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(AnotherSessionId, mine));
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, mine));
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, AnotherSessionId, mine));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, mine));
     }
 
     /// <summary>
@@ -102,10 +102,10 @@ public class LogoutConfirmationStoreTests
     [InlineData(" ")]
     public async Task AValueNobodyIssued_IsNotAnAnswer(string confirmation)
     {
-        var outstanding = await _store.IssueAsync(SessionId);
+        var outstanding = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, outstanding));
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, confirmation));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, outstanding));
     }
 
     /// <summary>
@@ -118,7 +118,7 @@ public class LogoutConfirmationStoreTests
         var storage = HoldingOneRecord(new LogoutConfirmation { Confirmation = string.Empty });
         var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
 
-        Assert.False(await store.RedeemLogoutConfirmationAsync(SessionId, string.Empty));
+        Assert.False(await store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, string.Empty));
     }
 
     /// <summary>
@@ -128,9 +128,9 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task ASessionNobodyAsked_HasNoAnswer()
     {
-        var confirmation = await _store.IssueAsync(SessionId);
+        var confirmation = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(AnotherSessionId, confirmation));
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, AnotherSessionId, confirmation));
     }
 
     /// <summary>
@@ -141,11 +141,11 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AskingAgain_IsTheSameQuestion()
     {
-        var first = await _store.IssueAsync(SessionId);
-        var second = await _store.IssueAsync(SessionId);
+        var first = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
+        var second = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
         Assert.Equal(first, second);
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, first));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, first));
     }
 
     /// <summary>
@@ -154,14 +154,14 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AskingAfterAnAnswer_IssuesAfresh()
     {
-        var answered = await _store.IssueAsync(SessionId);
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, answered));
+        var answered = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, answered));
 
-        var next = await _store.IssueAsync(SessionId);
+        var next = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
         Assert.NotEqual(answered, next);
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, answered));
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, next));
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, answered));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, next));
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public class LogoutConfirmationStoreTests
         var storage = HoldingOneRecord(new LogoutConfirmation { Confirmation = "the-standing-question" });
         var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
 
-        Assert.Equal("the-standing-question", await store.IssueAsync(SessionId));
+        Assert.Equal("the-standing-question", await store.IssueAsync(SingleIssuer.Tenant, SessionId));
     }
 
     /// <summary>
@@ -190,19 +190,19 @@ public class LogoutConfirmationStoreTests
     {
         // The shipped lifetime, which no row waits out, so this half stays answerable while its sibling goes
         // stale. Setting one here would say a number that only has to be large.
-        var stillGood = await _store.IssueAsync(SessionId);
+        var stillGood = await _store.IssueAsync(SingleIssuer.Tenant, SessionId);
 
         // The same store, so the only difference between the two halves is how long the question was good for.
         _options.LogoutConfirmationLifetime = Margin;
-        var goneStale = await _store.IssueAsync(AnotherSessionId);
+        var goneStale = await _store.IssueAsync(SingleIssuer.Tenant, AnotherSessionId);
 
         // One margin past the end of the short question and nowhere near the end of the long one.
         await Task.Delay(Margin + Margin, TestContext.Current.CancellationToken);
 
         // The control: the delay alone does not make an answer stop counting, so the refusal below is the
         // lifetime and not the wait.
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, stillGood));
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(AnotherSessionId, goneStale));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, stillGood));
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, AnotherSessionId, goneStale));
     }
 
     /// <summary>
@@ -214,7 +214,7 @@ public class LogoutConfirmationStoreTests
     {
         _options.LogoutConfirmationLifetime = TimeSpan.Zero;
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _store.IssueAsync(SessionId));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _store.IssueAsync(SingleIssuer.Tenant, SessionId));
     }
 
     /// <summary>

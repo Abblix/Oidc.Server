@@ -8,8 +8,8 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -44,7 +44,7 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
             ? ceiling
             : expiresAt;
 
-        await tokenRegistry.SetStatusAsync(grantId, JsonWebTokenStatus.Revoked, revokedUntil);
+        await tokenRegistry.SetStatusAsync(tenantAccessor.CurrentTenant(), grantId, JsonWebTokenStatus.Revoked, revokedUntil);
     }
 
     /// <summary>

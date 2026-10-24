@@ -30,9 +30,14 @@ public static class TestTenant
     /// <remarks>
     /// Synchronous on purpose: a scope entered inside an async method ends for its caller when the method returns.
     /// </remarks>
-    public static TenantScope Enter(IServiceProvider services)
-        => TenantScope.Enter(services.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants.Single(
-            tenant => tenant.Id == TestTenantSettings.TenantId));
+    public static TenantScope Enter(IServiceProvider services) => TenantScope.Enter(Of(services));
+
+    /// <summary>
+    /// The test host's tenant, as its settings declare it.
+    /// </summary>
+    public static TenantDefinition Of(IServiceProvider services)
+        => services.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants.Single(
+            tenant => tenant.Id == TestTenantSettings.TenantId);
 
     /// <summary>
     /// Serves the suite's tenant from a host a test builds itself, signing with <paramref name="signingKeys"/>.

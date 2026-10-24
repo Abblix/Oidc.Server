@@ -85,46 +85,6 @@ public partial class MultiTenancyRegistrationTests
         Assert.Equal(AcmeIssuer, provider.GetRequiredService<ITenantAccessor>().CurrentTenant().Issuer.OriginalString);
     }
 
-    /// <summary>
-    /// A host wrapping the storage the server resolves takes the tenants' form away, so startup refuses it and says
-    /// where its own storage goes instead.
-    /// </summary>
-    [Fact]
-    public async Task AStorageDecoratedAfterTheServer_IsRefused_NamingTheSharedKey()
-    {
-        var services = new ServiceCollection().AddServerStorage();
-        services.ServeTenants(options => options.Tenants.Add(Acme));
-        services.Decorate<IEntityStorage, PassThroughStorage>();
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Contains(nameof(TenantServiceKeys.Shared), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
-    }
-
-    /// <summary>A host's own storage wrapper, adding nothing.</summary>
-    private sealed class PassThroughStorage(IEntityStorage inner) : IEntityStorage
-    {
-        public Task SetAsync<T>(string key, T value, StorageOptions options, System.Threading.CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, System.Threading.CancellationToken? token = null)
-            => inner.GetAsync<T>(key, removeOnRetrieval, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, System.Threading.CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, System.Threading.CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(
-            string key, StorageOptions options, System.Threading.CancellationToken? token = null)
-            => inner.TryExtendAsync(key, options, token);
-
-        public Task RemoveAsync(string key, System.Threading.CancellationToken? token = null)
-            => inner.RemoveAsync(key, token);
-    }
-
     public static TheoryData<TenantDefinition, string> TenantsTheServersChecksRefuse => new()
     {
         {
@@ -268,24 +228,6 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A storage put in place of the one the server resolves takes the tenants' form away, and every tenant would
-    /// then read the others' data - so startup refuses it, naming the service.
-    /// </summary>
-    [Fact]
-    public async Task AStorageReplacedAfterTheServer_IsRefusedAtStartup()
-    {
-        var services = new ServiceCollection().AddServerStorage();
-        services.ServeTenants(options => options.Tenants.Add(Acme));
-        services.Replace(ServiceDescriptor.Singleton<IEntityStorage, DistributedCacheStorage>());
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Contains(
-            $"{nameof(IEntityStorage)} resolves to {nameof(DistributedCacheStorage)}",
-            await HostStartup.RefusalAsync(provider),
-            StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// A budget of an enabled endpoint is checked as well, named with its key.
     /// </summary>
     [Fact]
@@ -346,14 +288,6 @@ public partial class MultiTenancyRegistrationTests
         using var provider = new ServiceCollection().AddServerStorage().ServeTenants().BuildServiceProvider();
 
         await HostStartup.StartingAsync(provider);
-    }
-
-    [Fact]
-    public void TheStorageTheServerResolves_IsKeptPerTenant()
-    {
-        using var provider = BuildProvider();
-
-        Assert.IsType<TenantEntityStorage>(provider.GetRequiredService<IEntityStorage>());
     }
 
     /// <summary>

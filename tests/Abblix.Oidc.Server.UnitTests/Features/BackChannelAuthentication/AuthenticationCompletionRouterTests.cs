@@ -45,12 +45,12 @@ public class AuthenticationCompletionRouterTests
     public async Task CompleteAsync_RoutesByTheStoredClient_AndRefusesAGrantForAnother()
     {
         var storage = new Mock<IBackChannelRequestStorage>();
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(RequestingClient));
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(RequestFor(RequestingClient));
 
         BackChannelAuthenticationRequest? written = null;
         storage
-            .Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()))
-            .Callback((string _, BackChannelAuthenticationRequest record, TimeSpan _) => written = record)
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, string _, BackChannelAuthenticationRequest record, TimeSpan _) => written = record)
             .Returns(Task.CompletedTask);
 
         var clients = new Mock<IClientInfoProvider>();
@@ -78,7 +78,7 @@ public class AuthenticationCompletionRouterTests
         Assert.NotNull(written);
         Assert.Equal(BackChannelAuthenticationStatus.Denied, written.Status);
         Assert.Equal(RequestingClient, written.AuthorizedGrant.Context.ClientId);
-        clients.Verify(c => c.TryFindClientAsync(TestTenant.Matched, AnotherClient), Times.Never);
+        clients.Verify(c => c.TryFindClientAsync(It.IsAny<TenantDefinition>(), AnotherClient), Times.Never);
     }
 
     /// <summary>
@@ -90,9 +90,9 @@ public class AuthenticationCompletionRouterTests
     {
         var storage = new Mock<IBackChannelRequestStorage>();
         var stored = RequestFor(RequestingClient);
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(stored);
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(stored);
         storage
-            .Setup(s => s.UpdateAsync(AuthReqId, stored, It.IsAny<TimeSpan>()))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, It.IsAny<TimeSpan>()))
             .Returns(Task.CompletedTask);
 
         var router = RouterOver(storage, BackchannelTokenDeliveryModes.Poll);
@@ -100,7 +100,7 @@ public class AuthenticationCompletionRouterTests
         await router.DenyAsync(AuthReqId, TimeSpan.FromMinutes(5));
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, stored.Status);
-        storage.Verify(s => s.UpdateAsync(AuthReqId, stored, It.IsAny<TimeSpan>()), Times.Once);
+        storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, It.IsAny<TimeSpan>()), Times.Once);
     }
 
     /// <summary>
@@ -111,7 +111,7 @@ public class AuthenticationCompletionRouterTests
     public async Task DenyAsync_WhenNothingIsStored_Refuses()
     {
         var storage = new Mock<IBackChannelRequestStorage>();
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
@@ -125,13 +125,13 @@ public class AuthenticationCompletionRouterTests
     public async Task DenyAsync_WhenTheClientIsUnknown_Refuses()
     {
         var storage = new Mock<IBackChannelRequestStorage>();
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
 
         storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -143,7 +143,7 @@ public class AuthenticationCompletionRouterTests
     public async Task CompleteAsync_WhenTheClientIsUnknown_Refuses()
     {
         var storage = new Mock<IBackChannelRequestStorage>();
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
@@ -159,7 +159,7 @@ public class AuthenticationCompletionRouterTests
     public async Task CompleteAsync_WhenNothingIsStored_RefusesAsNotPendingBeforeLookingForTheClient()
     {
         var storage = new Mock<IBackChannelRequestStorage>();
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)

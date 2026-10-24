@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -49,10 +50,10 @@ public class ConfirmationValidatorTests
         // Only the value this session was asked with is an answer; anything else was never issued, belongs to
         // another session, or has been spent.
         _confirmationStore
-            .Setup(s => s.RedeemLogoutConfirmationAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.RedeemLogoutConfirmationAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(false);
         _confirmationStore
-            .Setup(s => s.RedeemLogoutConfirmationAsync(CurrentSessionId, IssuedConfirmation))
+            .Setup(s => s.RedeemLogoutConfirmationAsync(TestTenant.Matched, CurrentSessionId, IssuedConfirmation))
             .ReturnsAsync(true);
     }
 
@@ -121,7 +122,7 @@ public class ConfirmationValidatorTests
         Assert.False(await AsksTheEndUserAsync(CreateContext(confirmation: IssuedConfirmation)));
 
         _confirmationStore.Verify(
-            s => s.RedeemLogoutConfirmationAsync(CurrentSessionId, IssuedConfirmation), Times.Once);
+            s => s.RedeemLogoutConfirmationAsync(TestTenant.Matched, CurrentSessionId, IssuedConfirmation), Times.Once);
     }
 
     /// <summary>
@@ -221,7 +222,7 @@ public class ConfirmationValidatorTests
             hintSubject: "user-a")));
 
         _confirmationStore.Verify(
-            s => s.RedeemLogoutConfirmationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            s => s.RedeemLogoutConfirmationAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>

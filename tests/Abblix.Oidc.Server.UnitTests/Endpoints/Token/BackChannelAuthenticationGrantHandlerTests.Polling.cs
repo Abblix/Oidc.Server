@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -63,6 +64,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             timeProvider,
             options,
             serviceProvider,
+            SingleIssuer.Accessor,
             statusNotifier.Object);
 
         var clientInfo = new ClientInfo(ClientId)
@@ -89,12 +91,12 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         // that answers a completion already on record - and authenticated on the read that follows the
         // notification. Anything else would be a completion that had already landed, which this handler
         // answers without waiting at all, and then there would be no wait for this row to be about.
-        storage.SetupSequence(s => s.TryGetAsync(AuthReqId))
+        storage.SetupSequence(s => s.TryGetAsync(TestTenant.Matched, AuthReqId))
             .ReturnsAsync(pendingRequest)
             .ReturnsAsync(pendingRequest)
             .ReturnsAsync(authenticatedRequest);
 
-        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Simulate immediate status change notification (authenticated within 100ms)
         statusNotifier
@@ -104,7 +106,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authenticatedRequest);
+        storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authenticatedRequest);
 
         // Act
         var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -120,7 +122,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Times.Once);
 
         // Verify storage removal in poll mode
-        storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -154,6 +156,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             timeProvider,
             options,
             serviceProvider,
+            SingleIssuer.Accessor,
             statusNotifier.Object);
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
@@ -168,8 +171,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending
         };
 
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
-        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(pendingRequest);
+        storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Simulate timeout (no status change within 30 seconds)
         statusNotifier
@@ -219,8 +222,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(pendingRequest);
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -262,7 +265,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
-            serviceProvider); // Status notifier is null
+            serviceProvider, tenantAccessor: SingleIssuer.Accessor); // Status notifier is null
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
@@ -276,8 +279,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending
         };
 
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
-        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(pendingRequest);
+        storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -321,6 +324,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             timeProvider,
             options,
             serviceProvider,
+            SingleIssuer.Accessor,
             statusNotifier.Object);
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
@@ -335,8 +339,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Pending
         };
 
-        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(pendingRequest);
-        storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(pendingRequest);
+        storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         statusNotifier
             .Setup(n => n.WaitForStatusChangeAsync(
@@ -383,7 +387,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.Contains("must not poll", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
         // The stored grant is neither read nor consumed: a client that must not poll cannot reach it at all.
-        _storage.Verify(s => s.TryGetAsync(It.IsAny<string>()), Times.Never);
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 }

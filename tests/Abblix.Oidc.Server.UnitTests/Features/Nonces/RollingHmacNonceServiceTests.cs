@@ -83,9 +83,9 @@ public class RollingHmacNonceServiceTests
     public async Task IssueThenValidate_AtSameInstant_Succeeds()
     {
         var (svc, _, _) = BuildService();
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
 
-        var failure = await svc.ValidateAsync(nonce, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Null(failure);
     }
@@ -95,7 +95,7 @@ public class RollingHmacNonceServiceTests
     {
         var (svc, _, _) = BuildService();
 
-        var failure = await svc.ValidateAsync("not-a-real-nonce!!", Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, "not-a-real-nonce!!", Ct);
 
         Assert.Equal(NonceValidationFailure.Malformed, failure);
     }
@@ -105,7 +105,7 @@ public class RollingHmacNonceServiceTests
     {
         var (svc, _, _) = BuildService();
 
-        var failure = await svc.ValidateAsync(string.Empty, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, string.Empty, Ct);
 
         Assert.Equal(NonceValidationFailure.Malformed, failure);
     }
@@ -116,10 +116,10 @@ public class RollingHmacNonceServiceTests
         var window = TimeSpan.FromMinutes(5);
         var (svc, time, _) = BuildService(acceptanceWindow: window);
 
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
         time.Advance(window + TimeSpan.FromSeconds(1));
 
-        var failure = await svc.ValidateAsync(nonce, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Equal(NonceValidationFailure.OutOfWindow, failure);
     }
@@ -146,8 +146,8 @@ public class RollingHmacNonceServiceTests
             startTime: Anchor,
             acceptanceWindow: window);
 
-        var futureNonce = await mintee.IssueAsync(Ct);
-        var failure = await validator.ValidateAsync(futureNonce, Ct);
+        var futureNonce = await mintee.IssueAsync(SingleIssuer.Tenant, Ct);
+        var failure = await validator.ValidateAsync(SingleIssuer.Tenant, futureNonce, Ct);
 
         Assert.Equal(NonceValidationFailure.OutOfWindow, failure);
     }
@@ -156,12 +156,12 @@ public class RollingHmacNonceServiceTests
     public async Task ValidateAsync_TamperedTag_ReturnsBadSignature()
     {
         var (svc, _, _) = BuildService();
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
 
         // Flip one base64url character somewhere in the tag region (last bytes).
         var tampered = nonce[..^2] + (nonce[^2] == 'a' ? "b" : "a") + nonce[^1..];
 
-        var failure = await svc.ValidateAsync(tampered, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, tampered, Ct);
 
         Assert.Equal(NonceValidationFailure.BadSignature, failure);
     }
@@ -179,8 +179,8 @@ public class RollingHmacNonceServiceTests
         var (issuer, _, _) = BuildService(sharedCache: sharedCache);
         var (verifier, _, _) = BuildService(sharedCache: sharedCache);
 
-        var nonce = await issuer.IssueAsync(Ct);
-        var failure = await verifier.ValidateAsync(nonce, Ct);
+        var nonce = await issuer.IssueAsync(SingleIssuer.Tenant, Ct);
+        var failure = await verifier.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Null(failure);
     }
@@ -193,8 +193,8 @@ public class RollingHmacNonceServiceTests
         var (issuer, _, _) = BuildService();
         var (verifier, _, _) = BuildService();
 
-        var nonce = await issuer.IssueAsync(Ct);
-        var failure = await verifier.ValidateAsync(nonce, Ct);
+        var nonce = await issuer.IssueAsync(SingleIssuer.Tenant, Ct);
+        var failure = await verifier.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Equal(NonceValidationFailure.BadSignature, failure);
     }
@@ -209,10 +209,10 @@ public class RollingHmacNonceServiceTests
         var window = TimeSpan.FromMinutes(5);
         var (svc, time, _) = BuildService(rotationInterval: rotation, acceptanceWindow: window);
 
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
         time.Advance(rotation + TimeSpan.FromSeconds(30));
 
-        var failure = await svc.ValidateAsync(nonce, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Null(failure);
     }
@@ -267,11 +267,11 @@ public class RollingHmacNonceServiceTests
         }
 
         var loser = Build(LostRaceStorage(winner));
-        var nonce = await loser.IssueAsync(Ct);
+        var nonce = await loser.IssueAsync(SingleIssuer.Tenant, Ct);
 
         var verifier = Build(LostRaceStorage(winner));
-        await verifier.IssueAsync(Ct);
-        Assert.Null(await verifier.ValidateAsync(nonce, Ct));
+        await verifier.IssueAsync(SingleIssuer.Tenant, Ct);
+        Assert.Null(await verifier.ValidateAsync(SingleIssuer.Tenant, nonce, Ct));
     }
 
     [Fact]
@@ -282,12 +282,12 @@ public class RollingHmacNonceServiceTests
         // independently.
         var (svc, time, _) = BuildService();
 
-        var first = await svc.IssueAsync(Ct);
+        var first = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
         time.Advance(TimeSpan.FromSeconds(1));
-        var second = await svc.IssueAsync(Ct);
+        var second = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
 
         Assert.NotEqual(first, second);
-        Assert.Null(await svc.ValidateAsync(first, Ct));
-        Assert.Null(await svc.ValidateAsync(second, Ct));
+        Assert.Null(await svc.ValidateAsync(SingleIssuer.Tenant, first, Ct));
+        Assert.Null(await svc.ValidateAsync(SingleIssuer.Tenant, second, Ct));
     }
 }

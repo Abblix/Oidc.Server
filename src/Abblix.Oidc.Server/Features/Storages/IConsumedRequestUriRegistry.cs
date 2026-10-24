@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -22,13 +24,15 @@ public interface IConsumedRequestUriRegistry
     /// <summary>
     /// Records that the flow begun with <paramref name="requestUri"/> has ended.
     /// </summary>
+    /// <param name="tenant">The tenant the request URI belongs to.</param>
     /// <param name="requestUri">The URN the flow began with.</param>
     /// <param name="expiresAt">When no page of the flow can be presented any more.</param>
-    Task MarkConsumedAsync(Uri requestUri, DateTimeOffset expiresAt);
+    Task MarkConsumedAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt);
 
     /// <summary>
     /// Whether the flow begun with <paramref name="requestUri"/> has ended.
     /// </summary>
+    /// <param name="tenant">The tenant the request URI belongs to.</param>
     /// <param name="requestUri">The URN the flow began with.</param>
-    Task<bool> IsConsumedAsync(Uri requestUri);
+    Task<bool> IsConsumedAsync(TenantDefinition tenant, Uri requestUri);
 }

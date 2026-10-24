@@ -44,7 +44,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["payment_initiation"],
             deliverable: true);
 
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
         await CreatePushModeHandler(cutoffs: Cutoffs(sessionRefused, grantRefused)).CompleteAuthenticationAsync(
@@ -61,7 +61,7 @@ public partial class AuthenticationCompletionHandlerTests
                 BackchannelTokenDeliveryModes.Push),
             Times.Once);
         _notificationService.VerifyNoOtherCalls();
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -81,7 +81,7 @@ public partial class AuthenticationCompletionHandlerTests
             deliverable: true);
         request.AuthorizedGrant = request.AuthorizedGrant with { AuthorizedAt = hostSetIt ? hostMoment : null };
 
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
         AuthorizedGrant? asked = null;
@@ -109,7 +109,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["payment_initiation"],
             deliverable: true);
 
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
         var fault = new InvalidOperationException("the cutoff store is unavailable");
@@ -127,7 +127,7 @@ public partial class AuthenticationCompletionHandlerTests
         // The store's own fault, not one the handler made up: it is what the host has to diagnose the outage by.
         Assert.Same(fault, thrown);
         _tokenRequestProcessor.VerifyNoOtherCalls();
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         _notificationService.Verify(
             n => n.SendAsync(
                 It.IsAny<Uri>(),

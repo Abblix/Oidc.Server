@@ -33,7 +33,7 @@ public class NonceValidatorTests
 
     public NonceValidatorTests()
     {
-        _validator = new NonceValidator(Mock.Of<IAuthorizationValueReuseDetector>());
+        _validator = new NonceValidator(Mock.Of<IAuthorizationValueReuseDetector>(), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -90,9 +90,9 @@ public class NonceValidatorTests
         // Arrange
         var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
         reuseDetector
-            .Setup(d => d.IsReusedAsync(ClientId, It.IsAny<string>(), ValidNonce))
+            .Setup(d => d.IsReusedAsync(TestTenant.Matched, ClientId, It.IsAny<string>(), ValidNonce))
             .ReturnsAsync(true);
-        var validator = new NonceValidator(reuseDetector.Object);
+        var validator = new NonceValidator(reuseDetector.Object, tenantAccessor: SingleIssuer.Accessor);
         var context = CreateContext([ResponseTypes.Code], nonce: ValidNonce);
 
         // Act

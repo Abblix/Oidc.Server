@@ -49,8 +49,8 @@ public class DeviceAuthorizationStorageTests
     public DeviceAuthorizationStorageTests()
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(TestTenant.Matched, DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(TestTenant.Matched, UserCode)).Returns(UserCodeKey);
 
         _serializer.Setup(s => s.Serialize(It.IsAny<DeviceAuthorizationRequest>())).Returns([1, 2, 3]);
         _serializer.Setup(s => s.Serialize(It.IsAny<string>())).Returns([4, 5, 6]);
@@ -83,7 +83,7 @@ public class DeviceAuthorizationStorageTests
     {
         var request = new DeviceAuthorizationRequest("client", ["openid"], null, UserCode);
 
-        await _storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(15));
+        await _storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, request, TimeSpan.FromMinutes(15));
 
         Assert.Equal(_now + TimeSpan.FromMinutes(15), request.ExpiresAt);
     }
@@ -105,7 +105,7 @@ public class DeviceAuthorizationStorageTests
                 (_, _, opts, _) => captured = opts)
             .Returns(Task.CompletedTask);
 
-        await _storage.UpdateAsync(new DeviceAuthorizationReference(RequestKey), request, TimeSpan.FromMinutes(3));
+        await _storage.UpdateAsync(SingleIssuer.Tenant, new DeviceAuthorizationReference(RequestKey), request, TimeSpan.FromMinutes(3));
 
         Assert.NotNull(captured);
         Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
@@ -142,7 +142,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.True(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
         // And the code really is gone, which is what makes the answer true rather than merely reassuring.
         Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
@@ -203,7 +203,7 @@ public class DeviceAuthorizationStorageTests
         await cache.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
         await cache.SetAsync(UserCodeKey, [4, 5, 6], new(), TestContext.Current.CancellationToken);
 
-        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.True(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
         Assert.Null(await cache.GetAsync(RequestKey, TestContext.Current.CancellationToken));
         Assert.Null(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
@@ -221,7 +221,7 @@ public class DeviceAuthorizationStorageTests
 
         await cache.SetAsync(UserCodeKey, [4, 5, 6], new(), TestContext.Current.CancellationToken);
 
-        Assert.False(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.False(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
         Assert.NotNull(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
     }
@@ -254,7 +254,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        await storage.RemoveAsync(DeviceCode);
+        await storage.RemoveAsync(SingleIssuer.Tenant, DeviceCode);
 
         Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
         Assert.Equal(1, failing.Attempts);
@@ -285,7 +285,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        await storage.RemoveAsync(DeviceCode);
+        await storage.RemoveAsync(SingleIssuer.Tenant, DeviceCode);
 
         var entry = Assert.Single(log.Entries);
         Assert.Equal(LogLevel.Warning, entry.Level);
@@ -312,7 +312,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(DeviceCode));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(SingleIssuer.Tenant, DeviceCode));
     }
 
     /// <summary>
@@ -336,22 +336,22 @@ public class DeviceAuthorizationStorageTests
         var storage = StorageOver(entities);
         var request = NewRequest(_now.AddMinutes(10));
 
-        await storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(10));
+        await storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, request, TimeSpan.FromMinutes(10));
 
-        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(SingleIssuer.Tenant, DeviceCode));
 
-        var found = await storage.TryGetByUserCodeAsync(UserCode);
+        var found = await storage.TryGetByUserCodeAsync(SingleIssuer.Tenant, UserCode);
         Assert.NotNull(found);
         Assert.Equal(RequestKey, found.Value.Reference.Key);
         Assert.Equal(UserCode, found.Value.Request.UserCode);
 
         // Twice, because the lookup must not consume what it finds: the verification service makes this
         // call to show the confirmation page and again to act on the answer, with the same user code.
-        Assert.NotNull(await storage.TryGetByUserCodeAsync(UserCode));
+        Assert.NotNull(await storage.TryGetByUserCodeAsync(SingleIssuer.Tenant, UserCode));
 
-        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.True(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
-        Assert.Null(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+        Assert.Null(await storage.TryGetByDeviceCodeAsync(SingleIssuer.Tenant, DeviceCode));
 
         // The index entry itself, read straight from the store. Asking by user code again would answer
         // null as soon as the RECORD went, whatever became of the index - the lookup follows one to the
@@ -379,7 +379,7 @@ public class DeviceAuthorizationStorageTests
             new EntityStorageKeyFactory(),
             new FakeTimeProvider(_now));
 
-        await storage.StoreAsync(DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        await storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
 
         var deviceCode = System.Text.Encoding.UTF8.GetBytes(DeviceCode);
         Assert.NotEmpty(cache.Written);
@@ -400,8 +400,8 @@ public class DeviceAuthorizationStorageTests
         IEntityStorage entities, RecordingLoggerFactory? log = null)
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(TestTenant.Matched, DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(TestTenant.Matched, UserCode)).Returns(UserCodeKey);
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),

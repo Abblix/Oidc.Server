@@ -100,7 +100,7 @@ public class PkceValidator(
 
 		// A code_challenge must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on,
 		// reject a value this client already used for a previously issued authorization code.
-		if (await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
+		if (await reuseDetector.IsReusedAsync(tenantAccessor.CurrentTenant(), context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
 		{
 			return context.InvalidRequest("The PKCE code_challenge must be unique per authorization request");
 		}

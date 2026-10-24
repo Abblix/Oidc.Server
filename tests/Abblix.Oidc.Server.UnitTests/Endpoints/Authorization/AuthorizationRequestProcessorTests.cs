@@ -81,7 +81,7 @@ public partial class AuthorizationRequestProcessorTests
         // exercised end-to-end through the processor - granted scopes/resources that exceed the
         // request must throw before the grant is built.
         _sessionClients
-            .Setup(r => r.GetClientsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetClientsAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         _processor = ProcessorWith(new ConsentConstraintEnforcer(
@@ -102,7 +102,7 @@ public partial class AuthorizationRequestProcessorTests
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             _timeProvider,
             [
-                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(), tenantAccessor: SingleIssuer.Accessor),
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ],

@@ -8,10 +8,10 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -48,7 +48,7 @@ public class ConfirmationValidator(
         // rather than of the value: a question issued for another session, one already answered and one that
         // expired all lead to the same place below, which is that the end user is asked again.
         if (context.Request.Confirmation is { } confirmation &&
-            await confirmationStore.RedeemLogoutConfirmationAsync(authSession.SessionId, confirmation))
+            await confirmationStore.RedeemLogoutConfirmationAsync(tenantAccessor.CurrentTenant(), authSession.SessionId, confirmation))
         {
             return null;
         }

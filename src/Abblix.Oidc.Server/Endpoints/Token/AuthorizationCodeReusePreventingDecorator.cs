@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
@@ -46,10 +47,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
 /// <param name="authorizationCodeService">
 /// The service responsible for managing the lifecycle of authorization codes.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthorizationCodeReusePreventingDecorator(
     ITokenRequestProcessor processor,
     ITokenRegistry tokenRegistry,
-    IAuthorizationCodeService authorizationCodeService): ITokenRequestProcessor
+    IAuthorizationCodeService authorizationCodeService,
+    ITenantAccessor tenantAccessor): ITokenRequestProcessor
 {
     /// <summary>
     /// Processes a valid token request, including revoking existing tokens if necessary and registering new tokens.
@@ -71,7 +74,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         // validators have already checked client binding and PKCE, so a failed validation never
         // reaches here and never burns the code - but two concurrent redemptions of a valid code
         // now contend for a single claim instead of both passing a stale "not yet used" check.
-        var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
+        var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(tenantAccessor.CurrentTenant(), code);
 
         // The code did not come back. The claim answers with the grant only when this caller ran the
         // protocol to the end with its own claim still in the store, so everything short of that arrives
@@ -95,7 +98,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         {
             foreach (var (jwtId, expiresAt) in issuedTokens)
             {
-                await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+                await tokenRegistry.SetStatusAsync(tenantAccessor.CurrentTenant(), jwtId, JsonWebTokenStatus.Revoked, expiresAt);
             }
 
             return new OidcError(
@@ -125,6 +128,7 @@ public class AuthorizationCodeReusePreventingDecorator(
             if (issuedTokensList.Count > 0)
             {
                 await authorizationCodeService.UpdateAuthorizationGrantAsync(
+                    tenantAccessor.CurrentTenant(),
                     code,
                     request.AuthorizedGrant with { IssuedTokens = issuedTokensList.ToArray() },
                     request.ClientInfo.AuthorizationCodeExpiresIn);

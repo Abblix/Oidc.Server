@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
@@ -21,7 +22,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// synchronous validation.
 /// Refer to RFC 6749 and OpenID Connect Core 1.0 for more details on authorization request parameters.
 /// </summary>
-public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
+public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector,
+    ITenantAccessor tenantAccessor) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Validates the nonce in the authorization request as per OpenID Connect Core 1.0 specifications.
@@ -57,7 +59,7 @@ public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector) : IA
         // A nonce must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on, reject a
         // value this client already used for a previously issued authorization code.
         if (request.Nonce is { } nonce && !string.IsNullOrEmpty(nonce) &&
-            await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.Nonce, nonce))
+            await reuseDetector.IsReusedAsync(tenantAccessor.CurrentTenant(), context.ClientInfo.ClientId, Parameters.Nonce, nonce))
         {
             return context.InvalidRequest("The nonce must be unique per authorization request");
         }

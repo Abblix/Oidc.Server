@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -25,8 +26,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// the recorded <c>plain</c> / <c>S256</c> / <c>S512</c> method.
 /// </summary>
 /// <param name="authorizationCodeService">Persists, looks up and removes authorization codes.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthorizationCodeGrantHandler(
-    IAuthorizationCodeService authorizationCodeService) : IAuthorizationGrantHandler
+    IAuthorizationCodeService authorizationCodeService,
+    ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
 {
     /// <summary>
     /// Provides the grant type this handler supports, which is the OAuth 2.0 'authorization_code' grant type.
@@ -61,7 +64,7 @@ public class AuthorizationCodeGrantHandler(
         }
 
         // Validates the authorization code and retrieves the authorization context associated with the code.
-        var result = await authorizationCodeService.AuthorizeByCodeAsync(request.Code);
+        var result = await authorizationCodeService.AuthorizeByCodeAsync(tenantAccessor.CurrentTenant(), request.Code);
         if (result.TryGetFailure(out var error))
         {
             return error;

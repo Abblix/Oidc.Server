@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -79,7 +80,7 @@ public class DeviceCodeGrantHandlerTests
             new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
-            options);
+            options, tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -130,8 +131,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -142,7 +143,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(UserId, grant.AuthSession.Subject);
         Assert.Equal(ClientId, grant.Context.ClientId);
 
-        _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
@@ -171,8 +172,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -185,7 +186,7 @@ public class DeviceCodeGrantHandlerTests
         // 3.5 has the client stop polling on any code other than authorization_pending or slow_down, and
         // the user-denial refusal beside this one removes first for the same reason - but it depends on the
         // order of the arms, which nothing else here would notice being changed.
-        _storage.Verify(storage => storage.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
@@ -212,8 +213,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -250,8 +251,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -298,8 +299,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -331,8 +332,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await handler.AuthorizeAsync(
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
@@ -377,8 +378,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await handler.AuthorizeAsync(
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
@@ -410,8 +411,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await handler.AuthorizeAsync(
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
@@ -419,7 +420,7 @@ public class DeviceCodeGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
-        _storage.Verify(storage => storage.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
@@ -449,7 +450,7 @@ public class DeviceCodeGrantHandlerTests
                     UserCodeLength = 8,
                     VerificationUri = new Uri("https://example.com/device"),
                 },
-            }));
+            }), tenantAccessor: SingleIssuer.Accessor);
 
     private AuthorizedGrant GrantWith(JsonArray authorizationDetails)
         => new(
@@ -483,8 +484,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -494,7 +495,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
         Assert.Contains("already used", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
@@ -508,7 +509,7 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -529,7 +530,7 @@ public class DeviceCodeGrantHandlerTests
     public async Task DeviceCodeNotFound_IsAnsweredByTheExpiryItCarries(int secondsLeft, string expectedError)
     {
         var deviceCode = ExpiringIdentifier.Compose(DeviceCode, _currentTime.AddSeconds(secondsLeft));
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(deviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, deviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         var result = await _handler.AuthorizeAsync(
             new TokenRequest { DeviceCode = deviceCode },
@@ -572,8 +573,8 @@ public class DeviceCodeGrantHandlerTests
         // must answer the same, and a row asserting only the endpoint would let the two drift apart.
         Assert.False(deviceRequest.HasLifetimeLeft(_currentTime, out _));
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -582,7 +583,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
 
         // The code is taken out of storage rather than left for the next poll to refuse again.
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 
     /// <summary>
@@ -609,9 +610,10 @@ public class DeviceCodeGrantHandlerTests
 
         Assert.True(deviceRequest.HasLifetimeLeft(_currentTime, out _));
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
         _storage
             .Setup(s => s.UpdateAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(),
                 It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest>(),
                 It.IsAny<TimeSpan>()))
@@ -641,7 +643,7 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
@@ -671,9 +673,9 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
-        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
         await _pollSchedule.SetNextPollAtAsync(pollKey, nextPollAt, TimeSpan.FromMinutes(15));
 
         // Act
@@ -688,7 +690,7 @@ public class DeviceCodeGrantHandlerTests
 
         // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -710,7 +712,7 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -720,12 +722,12 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
         Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
         Assert.Equal(_currentTime + _pollingInterval, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
 
         // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -746,8 +748,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -757,7 +759,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
         Assert.Contains("denied", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 
     /// <summary>
@@ -770,7 +772,7 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = null };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -795,14 +797,14 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -831,8 +833,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -864,9 +866,9 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
-        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
         await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime, TimeSpan.FromMinutes(15));
 
         // Act
@@ -894,9 +896,9 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
-        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
         await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(15));
 
         // Act
@@ -924,8 +926,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddSeconds(-1),
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -933,9 +935,9 @@ public class DeviceCodeGrantHandlerTests
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -962,9 +964,9 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = expiresAt,
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
-        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
         await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
 
         // Act: asked early, so the instant is pushed - one interval past where it stands is past expiry.
@@ -1007,7 +1009,7 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(pending);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(pending);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -1017,7 +1019,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
 
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -1039,7 +1041,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         TimeSpan capturedTtl = default;
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // The span now reaches the poll schedule rather than the request, so that is where it is read.
         var schedule = new Mock<IPollScheduleStore>(MockBehavior.Loose);
@@ -1066,7 +1068,7 @@ public class DeviceCodeGrantHandlerTests
                     UserCodeLength = 8,
                     VerificationUri = new Uri("https://example.com/device"),
                 },
-            }));
+            }), tenantAccessor: SingleIssuer.Accessor);
 
         // Act
         var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -1114,8 +1116,8 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Options;
 
@@ -20,7 +21,8 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// </summary>
 public class PushedAuthorizationRequestProcessor(
     IAuthorizationRequestStorage storage,
-    IOptionsSnapshot<OidcOptions> options) : IPushedAuthorizationRequestProcessor
+    IOptionsSnapshot<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : IPushedAuthorizationRequestProcessor
 {
     /// <summary>
     /// Asynchronously processes a valid pushed authorization request by storing it and returning a response
@@ -30,5 +32,5 @@ public class PushedAuthorizationRequestProcessor(
     /// <returns>A task that resolves to an <see cref="AuthorizationResponse"/> containing
     /// the request URI and expiration information.</returns>
     public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
-        => await storage.StoreAsync(request.Model, options.Value.PushedAuthorizationRequestExpiresIn);
+        => await storage.StoreAsync(tenantAccessor.CurrentTenant(), request.Model, options.Value.PushedAuthorizationRequestExpiresIn);
 }

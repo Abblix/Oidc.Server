@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -39,8 +40,8 @@ public class AuthorizationCodeServiceTests
 
         // Setup key factory to return expected key format
         _keyFactory
-            .Setup(kf => kf.AuthorizedGrantKey(It.IsAny<string>()))
-            .Returns<string>(code => $"Abblix.Oidc.Server:Grant:{code}");
+            .Setup(kf => kf.AuthorizedGrantKey(TestTenant.Matched, It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((_, code) => $"Abblix.Oidc.Server:Grant:{code}");
 
         _service = new AuthorizationCodeService(
             _codeGenerator.Object,
@@ -89,7 +90,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        var result = await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         Assert.Equal(expectedCode, result);
@@ -119,7 +120,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         _codeGenerator.Verify(g => g.GenerateAuthorizationCode(), Times.Once);
@@ -153,7 +154,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         Assert.Equal($"Abblix.Oidc.Server:Grant:{code}", capturedKey);
@@ -187,7 +188,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         Assert.Same(grant, capturedGrant);
@@ -221,7 +222,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         Assert.NotNull(capturedOptions);
@@ -254,9 +255,9 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var code1 = await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
-        var code2 = await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
-        var code3 = await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        var code1 = await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
+        var code2 = await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
+        var code3 = await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         Assert.NotEqual(code1, code2);
@@ -283,7 +284,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _service.AuthorizeByCodeAsync(code);
+        var result = await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -308,7 +309,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync((AuthorizedGrant?)null);
 
         // Act
-        var result = await _service.AuthorizeByCodeAsync(code);
+        var result = await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -333,7 +334,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync((AuthorizedGrant?)null);
 
         // Act
-        var result = await _service.AuthorizeByCodeAsync(code);
+        var result = await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         var error = result.GetFailure();
@@ -358,7 +359,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync((AuthorizedGrant?)null);
 
         // Act
-        var result = await _service.AuthorizeByCodeAsync(code);
+        var result = await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         var error = result.GetFailure();
@@ -387,7 +388,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync(grant);
 
         // Act
-        await _service.AuthorizeByCodeAsync(code);
+        await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.False(capturedRemoveOnRetrieval);
@@ -412,7 +413,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync(grant);
 
         // Act
-        await _service.AuthorizeByCodeAsync(code);
+        await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         _storage.Verify(
@@ -449,7 +450,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync(grant);
 
         // Act
-        var result = await _service.RemoveAuthorizationCodeAsync(code);
+        var result = await _service.RemoveAuthorizationCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.True(capturedRemoveOnRetrieval);
@@ -475,7 +476,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync((AuthorizedGrant?)null);
 
         // Act
-        var result = await _service.RemoveAuthorizationCodeAsync(code);
+        var result = await _service.RemoveAuthorizationCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -503,7 +504,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync(CreateGrant());
 
         // Act
-        await _service.RemoveAuthorizationCodeAsync(code);
+        await _service.RemoveAuthorizationCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.Equal($"Abblix.Oidc.Server:Grant:{code}", capturedKey);
@@ -533,7 +534,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.UpdateAuthorizationGrantAsync(code, updatedGrant, expiresIn);
+        await _service.UpdateAuthorizationGrantAsync(SingleIssuer.Tenant, code, updatedGrant, expiresIn);
 
         // Assert
         Assert.Same(updatedGrant, capturedGrant);
@@ -563,7 +564,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.UpdateAuthorizationGrantAsync(code, grant, expiresIn);
+        await _service.UpdateAuthorizationGrantAsync(SingleIssuer.Tenant, code, grant, expiresIn);
 
         // Assert
         Assert.Equal($"Abblix.Oidc.Server:Grant:{code}", capturedKey);
@@ -593,7 +594,7 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.UpdateAuthorizationGrantAsync(code, grant, expiresIn);
+        await _service.UpdateAuthorizationGrantAsync(SingleIssuer.Tenant, code, grant, expiresIn);
 
         // Assert
         Assert.NotNull(capturedOptions);
@@ -622,8 +623,8 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.UpdateAuthorizationGrantAsync(code, originalGrant, expiresIn);
-        await _service.UpdateAuthorizationGrantAsync(code, updatedGrant, expiresIn);
+        await _service.UpdateAuthorizationGrantAsync(SingleIssuer.Tenant, code, originalGrant, expiresIn);
+        await _service.UpdateAuthorizationGrantAsync(SingleIssuer.Tenant, code, updatedGrant, expiresIn);
 
         // Assert
         _storage.Verify(
@@ -669,9 +670,9 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync(grant);
 
         // Act
-        var generatedCode = await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
-        var authorizeResult = await _service.AuthorizeByCodeAsync(generatedCode);
-        var removeResult = await _service.RemoveAuthorizationCodeAsync(generatedCode);
+        var generatedCode = await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
+        var authorizeResult = await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, generatedCode);
+        var removeResult = await _service.RemoveAuthorizationCodeAsync(SingleIssuer.Tenant, generatedCode);
 
         // Assert
         Assert.Equal(code, generatedCode);
@@ -703,7 +704,7 @@ public class AuthorizationCodeServiceTests
             .ReturnsAsync((AuthorizedGrant?)null);
 
         // Act
-        var result = await _service.AuthorizeByCodeAsync(code);
+        var result = await _service.AuthorizeByCodeAsync(SingleIssuer.Tenant, code);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -738,8 +739,8 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
-        await _service.GenerateAuthorizationCodeAsync(grant, expiresIn);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, expiresIn);
 
         // Assert
         Assert.Equal(2, keys.Count);
@@ -777,8 +778,8 @@ public class AuthorizationCodeServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.GenerateAuthorizationCodeAsync(grant, shortExpiration);
-        await _service.GenerateAuthorizationCodeAsync(grant, longExpiration);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, shortExpiration);
+        await _service.GenerateAuthorizationCodeAsync(SingleIssuer.Tenant, grant, longExpiration);
 
         // Assert
         Assert.Equal(2, expirations.Count);

@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
@@ -71,9 +72,10 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
-            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capture.Grant = grant)
+            .Callback<TenantDefinition, AuthorizedGrant, TimeSpan>((_, grant, _) => capture.Grant = grant)
             .ReturnsAsync("code");
 
         return capture;
