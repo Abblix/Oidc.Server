@@ -21,9 +21,11 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </remarks>
 /// <param name="tenantAccessor">Names the tenant of the current request or scope.</param>
 /// <param name="options">The transmitter's options, read for the path of the key set address.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which tells where it is served now.</param>
 public sealed class TenantTransmitterIdentity(
     ITenantAccessor tenantAccessor,
-    SharedSignalsTransmitterOptions options) : ITransmitterIdentity
+    SharedSignalsTransmitterOptions options,
+    ITenantCatalog catalog) : ITransmitterIdentity
 {
     /// <inheritdoc />
     public string Issuer => Tenant.Issuer.OriginalString;
@@ -32,7 +34,14 @@ public sealed class TenantTransmitterIdentity(
     public Uri? JwksUri => options.JwksUri is { } jwksUri ? Under(jwksUri.PathAndQuery) : null;
 
     /// <inheritdoc />
-    public Uri EndpointsBase => Tenant.Issuer;
+    /// <remarks>
+    /// The issuer the tenant is served at now, which the server's own catalog tells for a request resolved before
+    /// the tenant moved: an address minted under the issuer it left would be written into the stream and answer
+    /// nothing. A catalog of the host's own, or a creation the catalog no longer serves, leaves the issuer the
+    /// request was resolved to.
+    /// </remarks>
+    public Uri EndpointsBase
+        => (catalog is StoreTenantCatalog own && own.InForce(Tenant) is { } inForce ? inForce : Tenant).Issuer;
 
     /// <inheritdoc />
     public bool Serves => tenantAccessor.Current is not null;
