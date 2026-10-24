@@ -92,15 +92,6 @@ internal sealed class StreamDeliveryFactory(ReceiverAddressPolicy addressPolicy,
                 "Only a refusal is re-typed here, and this status is not one.");
 
     /// <summary>
-    /// The delivery a change writes over <paramref name="stored"/>: <paramref name="accepted"/>, unless both poll,
-    /// when the stored one stays. The poll address is this transmitter's, minted under the issuer the stream is
-    /// served at, so a change that read the stream before its tenant moved would write back the address the tenant
-    /// left, where the receiver can no longer poll.
-    /// </summary>
-    public static StreamDeliveryMethod Written(StreamDeliveryMethod stored, StreamDeliveryMethod accepted)
-        => accepted is PollDeliveryMethod && stored is PollDeliveryMethod ? stored : accepted;
-
-    /// <summary>
     /// The receiver-visible delivery for a proposal: push keeps the receiver's endpoint, poll
     /// gets this transmitter's own URL - the "endpoint_url value is supplied by the
     /// Transmitter" (SSF 1.0 Section 8.1.1.1) - and an absent proposal means poll. Null when

@@ -298,8 +298,8 @@ public class StreamManagementServiceTests
 
     /// <summary>
     /// An update or a replacement that loses its write to another writer applies the receiver's members to the stream
-    /// as the other writer left it, so what that writer changed in the transmitter's half, such as the issuer and the
-    /// poll address of a tenant that moved, is kept rather than written back from the first read.
+    /// as the other writer left it, so what that writer changed in the transmitter's half, such as the issuer of a
+    /// tenant that moved, is kept rather than written back from the first read.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -308,7 +308,6 @@ public class StreamManagementServiceTests
     {
         var ct = TestContext.Current.CancellationToken;
         const string movedIssuer = "https://moved.example.com";
-        var movedPoll = new Uri("https://moved.example.com/ssf/poll/moved");
         var options = DefaultOptions();
         var inner = new InMemoryStreamStore();
         var otherWriterDone = false;
@@ -334,14 +333,7 @@ public class StreamManagementServiceTests
                 otherWriterDone = true;
                 var current = (await inner.FindAsync(stream.ReceiverId, stream.StreamId, token))!;
                 Assert.True(await inner.UpdateAsync(
-                    current with
-                    {
-                        Configuration = current.Configuration with
-                        {
-                            Issuer = movedIssuer,
-                            Delivery = new PollDeliveryMethod(movedPoll),
-                        },
-                    },
+                    current with { Configuration = current.Configuration with { Issuer = movedIssuer } },
                     token));
                 return await inner.UpdateAsync(stream, token);
             });
@@ -362,7 +354,6 @@ public class StreamManagementServiceTests
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
         var stored = (await inner.FindAsync(Receiver, request.StreamId, ct))!.Configuration;
         Assert.Equal(movedIssuer, stored.Issuer);
-        Assert.Equal(movedPoll, Assert.IsType<PollDeliveryMethod>(stored.Delivery).EndpointUrl);
         Assert.Equal([TypeB], stored.EventsRequested);
         Assert.Equal([TypeB], stored.EventsDelivered);
         Assert.Equal(movedIssuer, changed.Body!.Issuer);

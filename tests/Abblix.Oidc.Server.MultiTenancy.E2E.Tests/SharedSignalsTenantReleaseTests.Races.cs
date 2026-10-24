@@ -16,6 +16,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -256,14 +257,20 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// A receiver updating or replacing its declared polled stream, having read it before the tenant moved and writing
-    /// after the store built for the move wrote the issuer and the poll address the tenant moved to, keeps both and has
-    /// its own change applied.
+    /// A receiver updating or replacing its declared stream, having read it before the tenant moved and writing after
+    /// the store built for the move wrote the issuer the tenant moved to, keeps that issuer, has its own change applied,
+    /// and is polled at an address under the issuer the tenant moved to, whether the stream polled before or the
+    /// change asks for polling.
     /// </summary>
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AStreamChangedAcrossAMove_KeepsTheIssuerAndThePollAddressTheTenantMovedTo(bool replace)
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    [InlineData(true, true, false)]
+    public async Task AStreamChangedAcrossAMove_KeepsTheIssuerAndThePollAddressTheTenantMovedTo(
+        bool replace,
+        bool asksForPolling,
+        bool declaredPolled)
     {
         var ct = TestContext.Current.CancellationToken;
         var store = new MemoryTenantStore();
@@ -275,7 +282,14 @@ public sealed partial class SharedSignalsTenantReleaseTests
             streams.Store,
             declare: server => server.AddConfiguredStreams(
                 "acme",
-                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]));
+                [
+                    new ConfiguredStream
+                    {
+                        ReceiverId = ReceiverId,
+                        StreamId = "alerts",
+                        PushEndpointUrl = declaredPolled ? null : new Uri(PushEndpoint),
+                    },
+                ]));
         var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
         var first = (await catalog.FindByIdAsync("acme", ct))!;
         Assert.Equal(first.Issuer.OriginalString, await DeclaredIssuerAsync(app, first, ct));
@@ -283,18 +297,14 @@ public sealed partial class SharedSignalsTenantReleaseTests
         var read = streams.HoldTheNextRead();
         var client = ClientOf(app, "acme");
         var path = $"/tenants/acme{StreamPath}";
-        var changing = replace
-            ? client.PutAsJsonAsync(
-                path,
-                new UpdateStreamRequest
-                {
-                    StreamId = "alerts",
-                    Delivery = new PollDeliveryMethod(),
-                    EventsRequested = [MembershipChanged],
-                    Description = "updated",
-                },
-                ct)
-            : client.PatchAsJsonAsync(path, new UpdateStreamRequest { StreamId = "alerts", Description = "updated" }, ct);
+        var change = new UpdateStreamRequest
+        {
+            StreamId = "alerts",
+            Delivery = asksForPolling ? new PollDeliveryMethod() : null,
+            EventsRequested = replace ? [MembershipChanged] : null,
+            Description = "updated",
+        };
+        var changing = replace ? client.PutAsJsonAsync(path, change, ct) : client.PatchAsJsonAsync(path, change, ct);
         await read.WaitAsync(HeldFor, ct);
 
         await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
@@ -309,6 +319,49 @@ public sealed partial class SharedSignalsTenantReleaseTests
         Assert.Equal(moved.Issuer.OriginalString, stream.Configuration.Issuer);
         Assert.Equal("updated", stream.Configuration.Description);
         var poll = Assert.IsType<PollDeliveryMethod>(stream.Configuration.Delivery);
+        Assert.StartsWith(moved.Issuer.OriginalString, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A stream a receiver created asks for polling again after its tenant moved, and is polled at an address under the
+    /// issuer the tenant moved to rather than the one it left.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AStreamAskingForPollingAfterAMove_IsPolledWhereTheTenantMoved(bool replace)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(store, new FakeTimeProvider());
+        using var created = await ClientOf(app, "acme").PostAsJsonAsync(
+            $"/tenants/acme{StreamPath}",
+            new CreateStreamRequest { EventsRequested = [MembershipChanged] },
+            ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var streamId = (await created.Content.ReadFromJsonAsync<StreamConfiguration>(ct))!.StreamId;
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var moved = (await catalog.FindByIdAsync("acme", ct))!;
+        var client = app.GetTestClient();
+        client.BaseAddress = new Uri(MovedHost);
+        client.DefaultRequestHeaders.Add("X-Test-Issuer", moved.Issuer.OriginalString);
+        client.DefaultRequestHeaders.Add("X-Test-Subject", ReceiverId);
+        var change = new UpdateStreamRequest
+        {
+            StreamId = streamId,
+            Delivery = new PollDeliveryMethod(),
+            EventsRequested = [MembershipChanged],
+        };
+        var path = $"/tenants/acme{StreamPath}";
+        using var changed = replace
+            ? await client.PutAsJsonAsync(path, change, ct)
+            : await client.PatchAsJsonAsync(path, change, ct);
+
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(await StreamsOfAsync(app, moved, ct)).Configuration.Delivery);
         Assert.StartsWith(moved.Issuer.OriginalString, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
     }
 
