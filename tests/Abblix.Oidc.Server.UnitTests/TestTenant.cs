@@ -18,10 +18,10 @@ namespace Abblix.Oidc.Server.UnitTests;
 public static class TestTenant
 {
     /// <summary>
-    /// Matches the test's own tenant by its id and no other, so a caller handing a double another tenant, or one it
-    /// kept from an earlier call, gets nothing back and its test fails. Matched by id because a tenant read through
-    /// the server is a new definition on each read.
+    /// Matches the test's own tenant by its id and no other, so a caller handing a double a tenant with another id
+    /// gets nothing back and its test fails. Matched by id because a tenant read through the server is a new
+    /// definition on each read.
     /// </summary>
     public static TenantDefinition Matched => Match.Create<TenantDefinition>(
-        tenant => tenant != null && string.Equals(tenant.Id, TestIssuer.TenantId, StringComparison.Ordinal));
+        tenant => string.Equals(tenant.Id, TestIssuer.TenantId, StringComparison.Ordinal));
 }

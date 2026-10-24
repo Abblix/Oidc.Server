@@ -11,23 +11,13 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json.Nodes;
 using System.Web;
-using Abblix.Jwt;
-using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.LogoutNotification;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
-using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Features.UserInfo;
-using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.Model;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
@@ -35,119 +25,55 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
 /// <summary>
-/// Two tenants each registering a client under the same id, and a user signed in to both with that client: a logout
-/// at one tenant notifies that tenant's client alone, over the front channel and the back channel.
+/// Two tenants each registering a client under the same id, and a user signed in to both: a logout at one tenant
+/// notifies that tenant's client alone, over the front channel and the back channel, and only when that client
+/// authorized in the user's session there.
 /// </summary>
 public sealed class LogoutNotificationTenantIsolationTests : IAsyncLifetime
 {
-    private const string Host = "https://auth.example.com";
-    private const string Acme = "/tenants/acme";
-    private const string Globex = "/tenants/globex";
-    private const string ClientId = "shared-client-id";
-    private const string AuthorizePath = "/connect/authorize";
+    private const string Acme = SignedInTenantsHost.Acme;
+    private const string Globex = SignedInTenantsHost.Globex;
     private const string EndSessionPath = "/connect/endsession";
-    private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri both tenants' clients register; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
 
     private readonly RecordingLogoutTokenSender _backChannel = new();
-    private WebApplication? _app;
-    private HttpClient? _http;
+    private SignedInTenantsHost? _host;
 
-    private HttpClient Http => _http!;
+    private HttpClient Http => _host!.Http;
 
     public async ValueTask InitializeAsync()
-    {
-        await TestLicense.Loaded;
-
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-        builder.Services.AddDistributedMemoryCache();
-        builder.Services.AddMemoryCache();
-        builder.Services.AddAuthentication().AddCookie();
-        builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IUserInfoProvider, SignedInUserInfo>();
-        builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(options => options.EnabledEndpoints = OidcEndpoints.Base);
-        builder.Services.AddFrontChannelLogout();
-        builder.Services.AddBackChannelLogout();
-
-        // The user is signed in and has consented, so the authorization endpoint answers with a code at once
-        builder.Services.Replace(ServiceDescriptor.Singleton<IAuthSessionService, SignedInUser>());
-        builder.Services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider, EverythingConsented>());
-        builder.Services.Replace(ServiceDescriptor.Singleton<ILogoutTokenSender>(_backChannel));
-
-        builder.Services.Configure<OidcOptions>(options =>
-        {
-            options.Tenants.Add(Tenant("acme", Acme));
-            options.Tenants.Add(Tenant("globex", Globex));
-        });
-
-        _app = builder.Build();
-        _app.UseMultiTenancy();
-        _app.UseCors();
-        _app.UseAuthorization();
-        _app.MapOidcEndpoints();
-
-        await _app.StartAsync(TestContext.Current.CancellationToken);
-
-        _http = _app.GetTestClient();
-        _http.BaseAddress = new Uri(Host);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _http?.Dispose();
-        if (_app is not null)
-            await _app.DisposeAsync();
-    }
-
-    private static TenantDefinition Tenant(string id, string path) => new()
-    {
-        Id = id,
-        Issuer = new Uri(Host + path),
-        Clients =
-        [
-            new ClientInfo(ClientId)
+        => _host = await SignedInTenantsHost.StartAsync(
+            tenantId => new ClientInfo(SignedInTenantsHost.ClientId)
             {
                 TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
                 AllowedGrantTypes = [GrantTypes.AuthorizationCode],
                 RedirectUris = [new Uri(RedirectUri)],
                 PostLogoutRedirectUris = [new Uri(RedirectUri)],
                 PkceRequired = true,
-                FrontChannelLogout = new FrontChannelLogoutOptions(FrontChannelOf(id)),
-                BackChannelLogout = new BackChannelLogoutOptions(BackChannelOf(id)),
+                FrontChannelLogout = new FrontChannelLogoutOptions(FrontChannelOf(tenantId)),
+                BackChannelLogout = new BackChannelLogoutOptions(BackChannelOf(tenantId)),
             },
-        ],
-        LoginUri = new Uri("/login", UriKind.Relative),
-        SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
-    };
+            services =>
+            {
+                services.AddFrontChannelLogout();
+                services.AddBackChannelLogout();
+                services.Replace(ServiceDescriptor.Singleton<ILogoutTokenSender>(_backChannel));
+            });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_host is not null)
+            await _host.DisposeAsync();
+    }
 
     private static Uri FrontChannelOf(string tenantId) => new($"https://{tenantId}.client.example.com/front-logout");
 
     private static Uri BackChannelOf(string tenantId) => new($"https://{tenantId}.client.example.com/back-logout");
 
-    /// <summary>
-    /// The client of <paramref name="tenant"/> authorizes in the user's session there, which is what puts it among
-    /// the clients a logout of that session notifies.
-    /// </summary>
-    private async Task AuthorizeAtAsync(string tenant)
-    {
-        var query = HttpUtility.ParseQueryString(string.Empty);
-        query[AuthorizationRequest.Parameters.ClientId] = ClientId;
-        query[AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code;
-        query[AuthorizationRequest.Parameters.RedirectUri] = RedirectUri;
-        query[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
-        query[AuthorizationRequest.Parameters.Nonce] = "nonce";
-        query[AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge;
-        query[AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256;
-
-        var response = await Http.GetAsync($"{tenant}{AuthorizePath}?{query}", TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.SeeOther, response.StatusCode);
-        Assert.NotNull(HttpUtility.ParseQueryString(response.Headers.Location!.Query)[ResponseParameters.Code]);
-    }
+    private Task AuthorizeAtAsync(string tenant) => _host!.CodeAtAsync(tenant, RedirectUri);
 
     /// <summary>
     /// Logs out at <paramref name="tenant"/> as a deployment's own page does: the first request is answered with the
@@ -156,7 +82,7 @@ public sealed class LogoutNotificationTenantIsolationTests : IAsyncLifetime
     private async Task<HttpResponseMessage> LogOutAtAsync(string tenant)
     {
         var query = HttpUtility.ParseQueryString(string.Empty);
-        query[EndSessionRequest.Parameters.ClientId] = ClientId;
+        query[EndSessionRequest.Parameters.ClientId] = SignedInTenantsHost.ClientId;
         query[EndSessionRequest.Parameters.PostLogoutRedirectUri] = RedirectUri;
 
         var asked = await Http.GetAsync($"{tenant}{EndSessionPath}?{query}", TestContext.Current.CancellationToken);
@@ -182,10 +108,29 @@ public sealed class LogoutNotificationTenantIsolationTests : IAsyncLifetime
         using var loggedOut = await LogOutAtAsync(Acme);
 
         var page = await loggedOut.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(loggedOut.IsSuccessStatusCode, $"/endsession failed: {(int)loggedOut.StatusCode} {loggedOut.Headers.Location} {page}");
+        Assert.True(
+            loggedOut.IsSuccessStatusCode,
+            $"/endsession failed: {(int)loggedOut.StatusCode} {loggedOut.Headers.Location} {page}");
         Assert.Contains(FrontChannelOf("acme").OriginalString, page, StringComparison.Ordinal);
         Assert.DoesNotContain(FrontChannelOf("globex").OriginalString, page, StringComparison.Ordinal);
         Assert.Equal([BackChannelOf("acme")], _backChannel.Notified);
+    }
+
+    /// <summary>
+    /// A logout at a tenant whose client never authorized in the user's session there notifies nobody, though the
+    /// other tenant's client of the same id authorized in that session.
+    /// </summary>
+    [Fact]
+    public async Task ALogoutAtATenantWhoseClientNeverAuthorized_NotifiesNobody()
+    {
+        await AuthorizeAtAsync(Globex);
+
+        using var loggedOut = await LogOutAtAsync(Acme);
+
+        var page = await loggedOut.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(FrontChannelOf("acme").OriginalString, page, StringComparison.Ordinal);
+        Assert.DoesNotContain(FrontChannelOf("globex").OriginalString, page, StringComparison.Ordinal);
+        Assert.Empty(_backChannel.Notified);
     }
 
     /// <summary>

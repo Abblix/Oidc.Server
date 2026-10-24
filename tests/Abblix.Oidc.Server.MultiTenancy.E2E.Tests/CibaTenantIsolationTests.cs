@@ -200,38 +200,46 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
             () => CompleteAsync(authenticationRequestId, acme, globex));
         await Assert.ThrowsAnyAsync<InvalidOperationException>(
             () => CompleteAsync(authenticationRequestId, acme, null));
-        Assert.Empty(_deliveries.Endpoints);
+        Assert.Empty(_deliveries.Received);
 
         await CompleteAsync(authenticationRequestId, acme, acme);
 
-        Assert.Equal([NotificationEndpointOf("acme")], _deliveries.Endpoints);
+        var delivery = Assert.Single(_deliveries.Received);
+        Assert.Equal(NotificationEndpointOf("acme"), delivery.Endpoint);
+        Assert.False(string.IsNullOrEmpty(delivery.Payload["access_token"]?.GetValue<string>()));
+        Assert.Null(delivery.Payload["error"]);
     }
 
     /// <summary>
-    /// The end user is always reachable on their device, so a decoupled authentication can start.
+    /// The end user the request names is always reachable on their device, so a decoupled authentication can start.
     /// </summary>
     private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
     {
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
             ValidBackChannelAuthenticationRequest request)
-            => Task.FromResult<Result<AuthSession, OidcError>>(
-                new AuthSession(LoginHint, Guid.NewGuid().ToString("N"), clock.GetUtcNow(), "local"));
+            => Task.FromResult<Result<AuthSession, OidcError>>(new AuthSession(
+                request.Model.LoginHint!, Guid.NewGuid().ToString("N"), clock.GetUtcNow(), "local"));
     }
 
+    /// <summary>What the server posted to a client's notification endpoint, and where.</summary>
+    private sealed record Delivery(Uri Endpoint, JsonObject Payload);
+
     /// <summary>
-    /// Stands in for the clients' notification endpoints: answers 200 to every POST and keeps where it went.
+    /// Stands in for the clients' notification endpoints: answers 200 to every POST and keeps where it went and what
+    /// it carried.
     /// </summary>
     private sealed class NotificationRecorder : HttpMessageHandler
     {
-        private readonly System.Collections.Concurrent.ConcurrentQueue<Uri> _endpoints = new();
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Delivery> _received = new();
 
-        public IEnumerable<Uri> Endpoints => _endpoints;
+        public IEnumerable<Delivery> Received => _received;
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            _endpoints.Enqueue(request.RequestUri!);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            var payload = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
+            _received.Enqueue(new Delivery(request.RequestUri!, payload));
+            return new HttpResponseMessage(HttpStatusCode.OK);
         }
     }
 }
