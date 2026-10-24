@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
@@ -95,8 +94,6 @@ public class RefreshTokenSpendRaceTests
 
     private static RefreshTokenService CreateService(ITokenRegistry registry, TimeProvider time)
     {
-        var issuer = new Mock<IIssuerProvider>();
-        issuer.Setup(provider => provider.GetIssuer()).Returns(TestConstants.DefaultIssuer);
         var ids = new Mock<ITokenIdGenerator>();
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => Guid.NewGuid().ToString("N"));
         var formatter = new Mock<IAuthServiceJwtFormatter>();
@@ -106,16 +103,16 @@ public class RefreshTokenSpendRaceTests
         var options = Options.Create(new OidcOptions());
 
         return new RefreshTokenService(
-            issuer.Object,
             time,
             ids.Object,
             formatter.Object,
             registry,
             new GrantRevocation(registry, Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
-            new RefreshTokenRotationPolicy(SingleIssuer.SettingsOf(options)),
+            new RefreshTokenRotationPolicy(SingleIssuer.Accessor),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options,
-            SingleIssuer.SettingsOf(options), tenantAccessor: SingleIssuer.Accessor);
+            SingleIssuer.LicensedCatalog,
+            SingleIssuer.Accessor);
     }
 
     private static ClientInfo Client() => new(ClientId)

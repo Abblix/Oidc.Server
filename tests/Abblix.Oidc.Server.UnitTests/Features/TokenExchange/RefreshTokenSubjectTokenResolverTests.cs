@@ -239,13 +239,10 @@ public class RefreshTokenSubjectTokenResolverTests
         inner
             .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<ValidationParameters>()))
             .ReturnsAsync(NewRefreshJwt());
-        var issuerProvider = Mock.Of<Abblix.Oidc.Server.Features.Issuer.IIssuerProvider>(
-            provider => provider.GetIssuer() == TestConstants.DefaultIssuer);
         var resolver = new RefreshTokenSubjectTokenResolver(
             new AuthServiceJwtValidator(
                 inner.Object,
-                issuerProvider,
-                SingleIssuer.Settings,
+                SingleIssuer.LicensedCatalog,
                 Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
                 SingleIssuer.Accessor),
             _refreshTokenService.Object,

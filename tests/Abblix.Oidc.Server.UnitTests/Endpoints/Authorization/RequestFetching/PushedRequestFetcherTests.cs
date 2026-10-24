@@ -47,10 +47,10 @@ public class PushedRequestFetcherTests
 
         return new PushedRequestFetcher(
             snapshot.Object,
-            SingleIssuer.SettingsOf(snapshot.Object, new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }),
             _storage.Object,
             _clientInfoProvider.Object,
-            _consumedRequestUris.Object, tenantAccessor: SingleIssuer.Accessor);
+            _consumedRequestUris.Object,
+            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }));
     }
 
     private static AuthorizationRequest CreateRequest() => new()

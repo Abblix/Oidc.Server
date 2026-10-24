@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -32,8 +31,6 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// authorization details and the authentication of requests using these tokens. Utilizes issuer information,
 /// current time, unique token identifiers, and JWT formatting to generate secure and compliant access tokens.
 /// </summary>
-/// <param name="issuerProvider">The provider responsible for determining the issuer (iss) claim in the token,
-/// which identifies the authorization server that issued the token.</param>
 /// <param name="clock">The service used to obtain the current time, ensuring accurate token expiration and
 /// issuance timestamps.</param>
 /// <param name="tokenIdGenerator">The service responsible for generating unique identifiers (jti) for each token,
@@ -44,23 +41,21 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// or real) on issuance, and opens it back when authenticating the token.</param>
 /// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
 /// </param>
-/// <param name="issuerSettings">The settings of the issuer serving the request, naming the resource a token is
-/// issued for when the request names none.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
 /// token can be encrypted to the resource it is minted for.</param>
 /// <param name="scopeClaims">Names the claims the user-information endpoint asks the host's provider for, which
 /// decides whether the session's email address travels in the token.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's issuer, clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the issuer's settings its default resource, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
+    Justification = "Every dependency is used: the token's clock, identifier, format and subject each come from their own service, the tenant names its issuer, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
 internal class AccessTokenService(
-	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter serviceJwtFormatter,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
-	IIssuerSettings issuerSettings,
+	ITenantCatalog catalog,
 	IAudienceKeyResolver audienceKeys,
 	IScopeClaimsProvider scopeClaims,
 	ITenantAccessor tenantAccessor) : IAccessTokenService
@@ -131,7 +126,11 @@ internal class AccessTokenService(
 				ExpiresAt = expiresNoLaterThan is { } latest && latest < issuedAt + clientInfo.AccessTokenExpiresIn
 					? latest
 					: issuedAt + clientInfo.AccessTokenExpiresIn,
-				Issuer = LicenseChecker.CheckLicense(issuerProvider.GetIssuer().OriginalString, issuerSettings, authContext.ClientId),
+				Issuer = LicenseChecker.CheckLicense(
+					tenantAccessor.CurrentTenant().Issuer.OriginalString,
+					tenantAccessor.CurrentTenant(),
+					catalog,
+					authContext.ClientId),
 				GrantId = grantId,
 			},
 		};
@@ -150,7 +149,7 @@ internal class AccessTokenService(
 
 		// The audience is settled once, before anything reads it, so the payload below and the encryption
 		// policy further down agree on who this token is for instead of each deriving its own answer.
-		var audienceContext = authContext.WithDefaultResource(issuerSettings.DefaultResourceIndicator);
+		var audienceContext = authContext.WithDefaultResource(tenantAccessor.CurrentTenant().DefaultResourceIndicator);
 		audienceContext.ApplyTo(accessToken.Payload);
 
 		if (options.Value.FilterAuthorizationDetailsByLocation)

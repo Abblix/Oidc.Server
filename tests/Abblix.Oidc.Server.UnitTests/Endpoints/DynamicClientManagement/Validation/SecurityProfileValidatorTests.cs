@@ -28,7 +28,7 @@ public class SecurityProfileValidatorTests
 {
     private static SecurityProfileValidator CreateValidator(
         ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => new(SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile })));
+        => new(SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }));
 
     private static ClientRegistrationValidationContext CreateContext(string[][] responseTypes)
     {

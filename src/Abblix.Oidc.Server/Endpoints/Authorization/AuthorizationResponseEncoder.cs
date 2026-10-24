@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using P = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
@@ -21,11 +21,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// response parameters into a signed/encrypted <c>response</c> JWT and resolves the delivery mode.
 /// Mutates the response in place; the transport layer only maps the encoded response onto the wire.
 /// </summary>
-/// <param name="issuerProvider">Supplies the <c>iss</c> value (RFC 9207).</param>
+/// <param name="tenantAccessor">Names the tenant whose issuer is the <c>iss</c> value (RFC 9207).</param>
 /// <param name="authorizationMetadata">Tells whether <c>iss</c> is advertised/emitted.</param>
 /// <param name="responseJwtBuilder">Builds the JARM <c>response</c> JWT.</param>
 public class AuthorizationResponseEncoder(
-	IIssuerProvider issuerProvider,
+	ITenantAccessor tenantAccessor,
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IResponseJwtBuilder responseJwtBuilder) : IAuthorizationResponseEncoder
 {
@@ -73,7 +73,7 @@ public class AuthorizationResponseEncoder(
 	/// The <c>iss</c> value to place on the response, or null when the server does not advertise it.
 	/// </summary>
 	private string? Issuer => authorizationMetadata.AuthorizationResponseIssParameterSupported
-		? issuerProvider.GetIssuer().OriginalString
+		? tenantAccessor.CurrentTenant().Issuer.OriginalString
 		: null;
 
 	/// <summary>

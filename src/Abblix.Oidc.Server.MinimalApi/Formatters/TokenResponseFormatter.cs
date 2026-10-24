@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using TokenRequest = Abblix.Oidc.Server.Model.TokenRequest;
@@ -23,8 +23,8 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// Formats token endpoint results as <see cref="IResult"/>: a JSON token response on success, or the RFC-compliant
 /// OAuth error (status, JSON envelope, WWW-Authenticate challenge, DPoP-Nonce) on failure.
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer used as the realm on client-authentication challenges.</param>
-public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResponseFormatter
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(TokenRequest request, Result<TokenIssued, OidcError> response)
@@ -52,7 +52,7 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
     {
         // The shared policy owns the status codes: invalid_client -> 401 with a Basic challenge (RFC 6749 section 5.2),
         // everything else -> 400 with the JSON envelope.
-        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer().OriginalString);
+        var result = error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString);
 
         // RFC 9449 section 8: a use_dpop_nonce error MUST carry the fresh nonce on a DPoP-Nonce header. section 8.2 asks such
         // responses to be uncacheable; the endpoint-level no-cache filter (see MapOidcEndpoints) covers that.

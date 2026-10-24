@@ -10,7 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -28,13 +28,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="logger">Records why an assertion was refused.</param>
 /// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
 /// <param name="timeProvider">Provides the current time the assertion's age is measured against.</param>
-/// <param name="issuerSettings">Carries the issuer's default security profile, which a client without one of its
+/// <param name="tenantAccessor">Names the tenant whose default security profile a client without one of its
 /// own falls back to.</param>
 internal sealed partial class JwtBearerAssertionPolicy(
 	ILogger logger,
 	IJwtBearerIssuerProvider issuerProvider,
 	TimeProvider timeProvider,
-	IIssuerSettings issuerSettings)
+	ITenantAccessor tenantAccessor)
 {
 	/// <summary>
 	/// Default secure algorithms allowed for JWT signatures when not configured per issuer.
@@ -73,7 +73,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// tightened by whatever the client names for itself.
 	/// </summary>
 	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile);
+		=> SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile);
 
 	/// <summary>
 	/// Validates that the JWT assertion carries an 'exp' (expiration) claim. RFC 7523 Section 3

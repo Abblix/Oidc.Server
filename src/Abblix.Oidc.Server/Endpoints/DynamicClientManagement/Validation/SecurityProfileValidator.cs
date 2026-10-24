@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -23,8 +23,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// inherits the default profile of the issuer it registers with, its tenant's
 /// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/>.
 /// </summary>
-/// <param name="issuerSettings">Provides the issuer's default profile a registered client inherits.</param>
-public class SecurityProfileValidator(IIssuerSettings issuerSettings) : SyncClientRegistrationContextValidator
+/// <param name="tenantAccessor">Names the tenant whose default profile a registered client inherits.</param>
+public class SecurityProfileValidator(ITenantAccessor tenantAccessor) : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error describing how the requested response types
@@ -36,7 +36,7 @@ public class SecurityProfileValidator(IIssuerSettings issuerSettings) : SyncClie
         var violations = SecurityProfileConsistency.FindViolations(
             context.Request.ResponseTypes,
             context.Request.TokenEndpointAuthMethod,
-            SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile));
+            SecurityProfileRequirements.Resolve(tenantAccessor.CurrentTenant().DefaultSecurityProfile));
 
         return violations.Count == 0
             ? null

@@ -14,7 +14,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.RandomGenerators;
@@ -81,9 +80,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
     private static Func<string, Task> Issuer(string kind)
     {
         var client = new ClientInfo("settings");
-        var issuerProvider = Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == new Uri(TestLicense.Issuer));
         var options = Options.Create(new OidcOptions());
-        var settings = SingleIssuer.SettingsOf(options);
         var clock = new FakeTimeProvider(new DateTimeOffset(2024, 1, 15, 12, 0, 0, TimeSpan.Zero));
         var tokenIds = Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "jti");
         var serviceFormatter = new Mock<IAuthServiceJwtFormatter>();
@@ -97,13 +94,12 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
         {
             case AccessToken:
                 var access = new AccessTokenService(
-                    issuerProvider,
                     clock,
                     tokenIds,
                     serviceFormatter.Object,
                     new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
-                    settings,
+                    SingleIssuer.LicensedCatalog,
                     new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>(), tenantAccessor: SingleIssuer.Accessor),
                     ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
                 return clientId => access.CreateAccessTokenAsync(session, Context(clientId), client, grantId: null, null);
@@ -122,22 +118,22 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                         It.IsAny<ClientInfo>()))
                     .ReturnsAsync(new JsonObject());
                 var identity = new IdentityTokenService(
-                    issuerProvider, settings, clock, clientFormatter.Object, claims.Object, options);
+                    SingleIssuer.Accessor, SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object, options);
                 return clientId => identity.CreateIdentityTokenAsync(
                     session, Context(clientId), client, includeUserClaims: false, authorizationCode: null, accessToken: null);
 
             case RefreshToken:
                 var refresh = new RefreshTokenService(
-                    issuerProvider,
                     clock,
                     tokenIds,
                     serviceFormatter.Object,
                     Mock.Of<ITokenRegistry>(),
                     new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
-                    new RefreshTokenRotationPolicy(settings),
+                    new RefreshTokenRotationPolicy(SingleIssuer.Accessor),
                     new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
-                    settings, tenantAccessor: SingleIssuer.Accessor);
+                    SingleIssuer.LicensedCatalog,
+                    SingleIssuer.Accessor);
                 return clientId => refresh.CreateRefreshTokenAsync(session, Context(clientId), client, null, "grant");
 
             default:

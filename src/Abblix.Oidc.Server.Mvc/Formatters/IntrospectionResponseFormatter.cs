@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -29,14 +29,14 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// when the client registered <c>introspection_signed_response_alg</c> and requests it via
 /// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701).
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer identifier for error responses and the JWT <c>iss</c> claim.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the JWT introspection response.</param>
 /// <param name="clock">Supplies the current time for the JWT <c>iat</c> claim.</param>
 /// <param name="options">Supplies the default content-encryption algorithm for JWT introspection responses.</param>
 /// <param name="httpContextAccessor">Provides the current request so the formatter can honor the <c>Accept</c>
 /// header negotiation defined by RFC 9701 section 4.</param>
 public class IntrospectionResponseFormatter(
-    IIssuerProvider issuerProvider,
+    ITenantAccessor tenantAccessor,
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider clock,
     IOptionsSnapshot<OidcOptions> options,
@@ -55,7 +55,7 @@ public class IntrospectionResponseFormatter(
         return response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer().OriginalString)));
+                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
     }
 
     private async Task<ActionResult> FormatSuccessAsync(IntrospectionSuccess success)
@@ -88,7 +88,7 @@ public class IntrospectionResponseFormatter(
             Payload =
             {
                 IssuedAt = now,
-                Issuer = issuerProvider.GetIssuer().OriginalString,
+                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
 
                 // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The

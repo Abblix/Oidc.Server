@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
@@ -20,24 +19,24 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// </summary>
 /// <param name="logger">Reports a client whose notification failed.</param>
 /// <param name="sessionClients">Supplies the clients recorded for the session.</param>
-/// <param name="issuerProvider">Supplies the issuer the notifications name.</param>
 /// <param name="clientInfoProvider">Resolves each recorded client.</param>
 /// <param name="logoutNotifier">Delivers the notification to one client.</param>
-/// <param name="issuerSettings">The settings of the issuer the client is registered with, which the license counts it under.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts its issuer by.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class SessionLogoutNotifier(
     ILogger<SessionLogoutNotifier> logger,
     ISessionClientRegistry sessionClients,
-    IIssuerProvider issuerProvider,
     IClientInfoProvider clientInfoProvider,
     ILogoutNotifier logoutNotifier,
-    IIssuerSettings issuerSettings,
+    ITenantCatalog catalog,
     ITenantAccessor tenantAccessor) : ISessionLogoutNotifier
 {
     /// <inheritdoc />
     public async Task<LogoutContext> NotifyClientsAsync(string sessionId, string subject)
     {
-        var context = new LogoutContext(sessionId, subject, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings));
+        var tenant = tenantAccessor.CurrentTenant();
+        var context = new LogoutContext(
+            sessionId, subject, LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog));
 
         // Every notification is awaited, so the back-channel POST is actually sent before the request ends.
         var tasks = new List<Task>();

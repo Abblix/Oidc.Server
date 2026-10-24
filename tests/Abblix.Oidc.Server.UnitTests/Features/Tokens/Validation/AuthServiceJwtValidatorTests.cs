@@ -13,7 +13,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -45,16 +44,13 @@ public class AuthServiceJwtValidatorTests
     {
         _jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
-
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(ExpectedIssuer));
 
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
-            issuerProvider.Object,
-            SingleIssuer.Settings,
-            _serviceKeysProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+            SingleIssuer.LicensedCatalog,
+            _serviceKeysProvider.Object,
+            SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -697,14 +693,15 @@ public class AuthServiceJwtValidatorTests
         string type,
         bool accepted)
     {
-        var settings = new Mock<IIssuerSettings>();
-        settings.SetupGet(s => s.KeyPartition).Returns("acme~g2");
+        var served = new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = "acme", Issuer = TestConstants.DefaultIssuer, Generation = "g2" },
+        };
         var validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
-            Mock.Of<IIssuerProvider>(),
-            settings.Object,
+            SingleIssuer.HostCatalog,
             _serviceKeysProvider.Object,
-            SingleIssuer.Accessor);
+            Mock.Of<ITenantAccessor>(accessor => accessor.Current == served));
 
         var token = CreateValidToken();
         token.Header.Type = type;

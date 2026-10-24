@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
@@ -63,7 +63,7 @@ public class AuthorizationResponseFormatterTests
     [MemberData(nameof(PagesAUserIsSentTo))]
     public async Task AUser_IsSentToThePageTheIssuerDeclares(string page, CoreAuthorizationResponse response)
     {
-        var formatter = Formatter(new PagesOf(IssuerPages));
+        var formatter = Formatter(PagesOf(IssuerPages));
 
         var sent = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(Request, response));
 
@@ -74,7 +74,7 @@ public class AuthorizationResponseFormatterTests
     [Fact]
     public async Task WithoutARegistrationPage_ASignUpGoesToTheIssuersSignInPage()
     {
-        var formatter = Formatter(new PagesOf(IssuerPages) { RegistrationUri = null });
+        var formatter = Formatter(PagesOf(IssuerPages, registration: false));
 
         var sent = await HttpResultRunner.RunAsync(
             await formatter.FormatResponseAsync(Request, new RegistrationRequired(Request)));
@@ -101,45 +101,48 @@ public class AuthorizationResponseFormatterTests
         };
 
         await HttpResultRunner.RunAsync(
-            await Formatter(new PagesOf(IssuerPages), cookies).FormatResponseAsync(request, success));
+            await Formatter(PagesOf(IssuerPages), cookies).FormatResponseAsync(request, success));
 
         Assert.Equal([persistence], cookies.Asked);
     }
 
     /// <summary>
-    /// A formatter reading the pages from <paramref name="issuerSettings"/>, the settings of the request's tenant.
+    /// A formatter serving <paramref name="tenant"/>, the tenant of the request, whose pages it reads.
     /// </summary>
     private static AuthorizationResponseFormatter Formatter(
-        IIssuerSettings issuerSettings,
+        TenantDefinition tenant,
         ISessionManagementService? sessionManagement = null)
     {
         var options = new OidcOptions();
 
         return new AuthorizationResponseFormatter(
             Options.Create(options),
-            issuerSettings,
+            new ServedBy(tenant),
             new StoresEveryRequest(),
             sessionManagement ?? new NoSessionManagement(),
             new NoParameters(),
             new HttpContextAccessor());
     }
 
-    private sealed record PagesOf(string Base) : IIssuerSettings
+    /// <summary>
+    /// A tenant whose interaction pages are under <paramref name="baseAddress"/>, its registration page among
+    /// them unless <paramref name="registration"/> is false.
+    /// </summary>
+    private static TenantDefinition PagesOf(string baseAddress, bool registration = true) => new()
     {
-        public string Id => string.Empty;
-        public string KeyPartition => string.Empty;
-        public CancellationToken Released => CancellationToken.None;
-        public ResourceDefinition[]? Resources => null;
-        public Uri? DefaultResourceIndicator => null;
-        public bool InferResourceFromScope => false;
-        public Uri? AccountSelectionUri { get; init; } = new(Base + "account-selection");
-        public Uri? ConsentUri { get; init; } = new(Base + "consent");
-        public Uri? InteractionUri { get; init; } = new(Base + "interaction");
-        public Uri? LoginUri { get; init; } = new(Base + "login");
-        public Uri? RegistrationUri { get; init; } = new(Base + "registration");
-        public ClientSecurityProfile DefaultSecurityProfile => ClientSecurityProfile.None;
-        public string CheckSessionCookieName => "session";
-        public Uri? MtlsBaseUri => null;
+        Id = "main",
+        Issuer = new Uri("https://auth.example.com"),
+        AccountSelectionUri = new Uri(baseAddress + "account-selection"),
+        ConsentUri = new Uri(baseAddress + "consent"),
+        InteractionUri = new Uri(baseAddress + "interaction"),
+        LoginUri = new Uri(baseAddress + "login"),
+        RegistrationUri = registration ? new Uri(baseAddress + "registration") : null,
+    };
+
+    /// <summary>Tells every request it is served by <paramref name="tenant"/>.</summary>
+    private sealed class ServedBy(TenantDefinition tenant) : ITenantAccessor
+    {
+        public TenantContext Current { get; } = new() { Tenant = tenant };
     }
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage

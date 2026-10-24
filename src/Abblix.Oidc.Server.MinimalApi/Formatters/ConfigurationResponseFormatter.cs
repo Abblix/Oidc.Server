@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -30,7 +30,7 @@ public class ConfigurationResponseFormatter(
     IHttpContextAccessor httpContextAccessor,
     LinkGenerator linkGenerator,
     ISignedMetadataProvider signedMetadataProvider,
-    IIssuerSettings issuerSettings) : IConfigurationResponseFormatter
+    ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(EndpointResponse response)
@@ -114,7 +114,7 @@ public class ConfigurationResponseFormatter(
             AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
         };
 
-        modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, issuerSettings.MtlsBaseUri);
+        modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);
 
         if (options.Value.Discovery.SignedMetadata)
         {
@@ -138,6 +138,6 @@ public class ConfigurationResponseFormatter(
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
         var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
         return url is null ? null : MtlsEndpointAliasing.OnIssuersHost(
-            new Uri(url, UriKind.Absolute), issuer, issuerSettings.MtlsBaseUri);
+            new Uri(url, UriKind.Absolute), issuer, tenantAccessor.CurrentTenant().MtlsBaseUri);
     }
 }

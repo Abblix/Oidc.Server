@@ -13,9 +13,9 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -50,7 +50,7 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, tenantAccessor: SingleIssuer.Accessor, SingleIssuer.Settings);
+        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, SingleIssuer.Accessor);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
@@ -93,18 +93,19 @@ public class AuthServiceJwtFormatterTests
     /// issues refresh tokens the server accepts; any other token is left as it is.
     /// </summary>
     [Theory]
-    [InlineData(JwtTypes.RefreshToken, "acme~g2")]
-    [InlineData("application/" + JwtTypes.RefreshToken, "acme~g2")]
+    [InlineData(JwtTypes.RefreshToken, TestIssuer.TenantId + "~g2")]
+    [InlineData("application/" + JwtTypes.RefreshToken, TestIssuer.TenantId + "~g2")]
     [InlineData(JwtTypes.RegistrationAccessToken, null)]
     public async Task FormatAsync_NamesTheTenantAndCreation_InARefreshTokenOnly(string type, string? named)
     {
-        var settings = new Mock<IIssuerSettings>();
-        settings.SetupGet(s => s.KeyPartition).Returns("acme~g2");
+        var created = new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, Generation = "g2" },
+        };
         var formatter = new AuthServiceJwtFormatter(
             _jwtCreator.Object,
             _keysProvider.Object,
-            SingleIssuer.Accessor,
-            settings.Object);
+            Mock.Of<ITenantAccessor>(accessor => accessor.Current == created));
 
         var token = TokenWith();
         token.Header.Type = type;

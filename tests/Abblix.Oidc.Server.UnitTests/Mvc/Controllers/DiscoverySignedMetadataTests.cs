@@ -62,7 +62,7 @@ public class DiscoverySignedMetadataTests
             _optionsMock.Object,
             _endpointResolverMock.Object,
             new SignedMetadataProvider(_jwtCreatorMock.Object, _keysProviderMock.Object, _clock, tenantAccessor: SingleIssuer.Accessor),
-            SingleIssuer.SettingsOf(_optionsMock.Object));
+            SingleIssuer.Accessor);
     }
 
     /// <summary>

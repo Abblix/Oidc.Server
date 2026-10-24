@@ -16,7 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -27,21 +27,19 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
-/// <param name="issuerSettings">Supplies the issuer's default security profile.</param>
+/// <param name="tenantAccessor">Names the tenant whose issuer a profile-governed assertion must name and whose
+/// default security profile applies.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
-    IIssuerProvider issuerProvider,
-    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor,
     TimeProvider timeProvider) : IClientAuthenticator
 {
     /// <summary>
-    /// The settings of the issuer serving the request, exposed so a derived authenticator counts the client it
-    /// finds against the license under that issuer.
+    /// The tenant the request is served at, exposed so a derived authenticator looks the client up there.
     /// </summary>
-    protected IIssuerSettings IssuerSettings => issuerSettings;
+    protected TenantDefinition CurrentTenant => tenantAccessor.CurrentTenant();
 
     /// <summary>
     /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
@@ -77,7 +75,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// against, so the two cannot disagree.
     /// </summary>
     protected SecurityProfileRequirements DefaultProfileRequirements
-        => SecurityProfileRequirements.Resolve(issuerSettings.DefaultSecurityProfile);
+        => SecurityProfileRequirements.Resolve(tenantAccessor.CurrentTenant().DefaultSecurityProfile);
 
     /// <summary>
     /// Answers whether the assertion's timestamps sit inside the window the profile governing THIS
@@ -98,7 +96,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     private bool TimestampsSatisfyTheClientsOwnProfile(AssertionTimestamps timestamps, ClientInfo clientInfo)
     {
         var refusal = SecurityProfileRequirements
-            .For(clientInfo, issuerSettings.DefaultSecurityProfile)
+            .For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
             .ClockSkewOrDefault()
             .WhyRefused(
                 timeProvider.GetUtcNow(),
@@ -127,13 +125,13 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// </remarks>
     private bool AudienceSatisfiesTheProfile(JsonWebToken token, ClientInfo clientInfo)
     {
-        if (!SecurityProfileRequirements.For(clientInfo, issuerSettings.DefaultSecurityProfile)
+        if (!SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
                 .RequireIssuerAudienceInClientAssertion)
         {
             return true;
         }
 
-        var issuerIdentifier = issuerProvider.GetIssuer().OriginalString;
+        var issuerIdentifier = tenantAccessor.CurrentTenant().Issuer.OriginalString;
         var audiences = token.Payload.Audiences.ToArray();
         if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
         {

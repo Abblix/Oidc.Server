@@ -14,7 +14,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -26,17 +26,15 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
-/// <param name="issuerSettings">Supplies the issuer's default security profile.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
     IReplayCache replayCache,
     IServiceProvider serviceProvider,
-    IIssuerProvider issuerProvider,
-    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor,
     TimeProvider timeProvider)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, issuerSettings, timeProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, tenantAccessor, timeProvider)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.

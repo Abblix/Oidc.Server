@@ -10,7 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Microsoft.Extensions.Options;
@@ -22,8 +22,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class RegistrationAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
-    IIssuerProvider issuerProvider,
-    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor,
+    ITenantCatalog catalog,
     IOptions<OidcOptions> options) : IRegistrationAccessTokenService
 {
     /// <summary>
@@ -37,7 +37,8 @@ public class RegistrationAccessTokenService(
     public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
     {
         var signing = options.Value.ServiceTokens.RegistrationAccessToken.Signing;
-        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings);
+        var tenant = tenantAccessor.CurrentTenant();
+        var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 
         var token = new JsonWebToken
         {

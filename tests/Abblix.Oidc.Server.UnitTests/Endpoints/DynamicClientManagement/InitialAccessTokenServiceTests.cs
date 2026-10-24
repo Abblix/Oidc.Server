@@ -13,7 +13,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -31,22 +30,15 @@ public class InitialAccessTokenServiceTests
     private static readonly DateTimeOffset FixedIssuedAt = new(2026, 3, 12, 10, 0, 0, TimeSpan.Zero);
 
     private readonly Mock<IAuthServiceJwtFormatter> _jwtFormatter;
-    private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly InitialAccessTokenService _service;
 
     public InitialAccessTokenServiceTests()
     {
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
-        _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(TestConstants.DefaultIssuer.OriginalString));
-
         _service = new InitialAccessTokenService(
             _jwtFormatter.Object,
-            _issuerProvider.Object,
-            SingleIssuer.Settings,
+            SingleIssuer.Accessor,
+            SingleIssuer.LicensedCatalog,
             Options.Create(new OidcOptions()));
     }
 

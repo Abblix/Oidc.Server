@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
@@ -32,7 +31,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
-    IIssuerSettings issuerSettings,
+    ITenantAccessor tenantAccessor,
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IParametersProvider parametersProvider,
@@ -45,25 +44,25 @@ public class AuthorizationResponseFormatter(
         {
             case AccountSelectionRequired:
                 return await RedirectAsync(
-                    issuerSettings.AccountSelectionUri.NotNull(nameof(TenantDefinition.AccountSelectionUri)), response.Model);
+                    tenantAccessor.CurrentTenant().AccountSelectionUri.NotNull(nameof(TenantDefinition.AccountSelectionUri)), response.Model);
 
             case ConsentRequired:
                 return await RedirectAsync(
-                    issuerSettings.ConsentUri.NotNull(nameof(TenantDefinition.ConsentUri)), response.Model);
+                    tenantAccessor.CurrentTenant().ConsentUri.NotNull(nameof(TenantDefinition.ConsentUri)), response.Model);
 
             case InteractionRequired:
                 return await RedirectAsync(
-                    issuerSettings.InteractionUri.NotNull(nameof(TenantDefinition.InteractionUri)), response.Model);
+                    tenantAccessor.CurrentTenant().InteractionUri.NotNull(nameof(TenantDefinition.InteractionUri)), response.Model);
 
             case LoginRequired:
                 return await RedirectAsync(
-                    issuerSettings.LoginUri.NotNull(nameof(TenantDefinition.LoginUri)), response.Model);
+                    tenantAccessor.CurrentTenant().LoginUri.NotNull(nameof(TenantDefinition.LoginUri)), response.Model);
 
             // prompt=create: a dedicated registration UI when configured, otherwise the login UI - the original
             // request parameters travel in the redirect so a combined page can still branch on them.
             case RegistrationRequired:
                 return await RedirectAsync(
-                    issuerSettings.RegistrationUri ?? issuerSettings.LoginUri.NotNull(nameof(TenantDefinition.LoginUri)),
+                    tenantAccessor.CurrentTenant().RegistrationUri ?? tenantAccessor.CurrentTenant().LoginUri.NotNull(nameof(TenantDefinition.LoginUri)),
                     response.Model);
 
             // JARM (*.jwt): success and error alike deliver the single packed response JWT. Matched first so any

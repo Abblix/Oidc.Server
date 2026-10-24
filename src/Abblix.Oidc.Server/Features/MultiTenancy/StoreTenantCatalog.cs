@@ -225,7 +225,7 @@ public sealed partial class StoreTenantCatalog(
     /// The token <see cref="Released"/> gives when <paramref name="catalog"/> is this server's own; none that is ever
     /// canceled for a catalog of the host's own, which this server cannot tell a tenant is gone from.
     /// </summary>
-    internal static CancellationToken ReleasedOf(ITenantCatalog catalog, TenantDefinition tenant)
+    public static CancellationToken ReleasedOf(ITenantCatalog catalog, TenantDefinition tenant)
         => catalog is StoreTenantCatalog own ? own.Released(tenant) : CancellationToken.None;
 
     /// <summary>
