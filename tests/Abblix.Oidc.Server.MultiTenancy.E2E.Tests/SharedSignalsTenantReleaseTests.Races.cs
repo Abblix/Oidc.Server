@@ -16,6 +16,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -256,6 +257,120 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// A receiver updating or replacing its declared stream, having read it before the tenant moved and writing after
+    /// the store built for the move wrote the issuer the tenant moved to, keeps that issuer, has its own change applied,
+    /// and is polled at an address under the issuer the tenant moved to, whether the stream polled before or the
+    /// change asks for polling, and whether the move lands before the change minted its address or after it, while
+    /// the write re-reads the stream.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, true, 0)]
+    [InlineData(false, true, true, 0)]
+    [InlineData(true, true, true, 0)]
+    [InlineData(true, true, false, 0)]
+    [InlineData(false, true, true, 1)]
+    [InlineData(true, true, true, 1)]
+    [InlineData(true, true, false, 1)]
+    public async Task AStreamChangedAcrossAMove_KeepsTheIssuerAndThePollAddressTheTenantMovedTo(
+        bool replace,
+        bool asksForPolling,
+        bool declaredPolled,
+        int readsBeforeTheMove)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        var streams = HeldStore.HoldingTheFirstCreates(0);
+        await using var app = await StartAsync(
+            store,
+            new FakeTimeProvider(),
+            streams.Store,
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [
+                    new ConfiguredStream
+                    {
+                        ReceiverId = ReceiverId,
+                        StreamId = "alerts",
+                        PushEndpointUrl = declaredPolled ? null : new Uri(PushEndpoint),
+                    },
+                ]));
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var first = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(first.Issuer.OriginalString, await DeclaredIssuerAsync(app, first, ct));
+
+        var read = streams.HoldTheNextRead(skip: readsBeforeTheMove);
+        var client = ClientOf(app, "acme");
+        var path = $"/tenants/acme{StreamPath}";
+        var change = new UpdateStreamRequest
+        {
+            StreamId = "alerts",
+            Delivery = asksForPolling ? new PollDeliveryMethod() : null,
+            EventsRequested = replace ? [MembershipChanged] : null,
+            Description = "updated",
+        };
+        var changing = replace ? client.PutAsJsonAsync(path, change, ct) : client.PatchAsJsonAsync(path, change, ct);
+        await read.WaitAsync(HeldFor, ct);
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var moved = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(moved.Issuer.OriginalString, await DeclaredIssuerAsync(app, moved, ct));
+
+        streams.ReleaseTheRead();
+        using var changed = await changing;
+
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        var stream = Assert.Single(await StreamsOfAsync(app, moved, ct));
+        Assert.Equal(moved.Issuer.OriginalString, stream.Configuration.Issuer);
+        Assert.Equal("updated", stream.Configuration.Description);
+        var poll = Assert.IsType<PollDeliveryMethod>(stream.Configuration.Delivery);
+        Assert.StartsWith(moved.Issuer.OriginalString, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A stream a receiver created asks for polling again after its tenant moved, and is polled at an address under the
+    /// issuer the tenant moved to rather than the one it left.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AStreamAskingForPollingAfterAMove_IsPolledWhereTheTenantMoved(bool replace)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(store, new FakeTimeProvider());
+        using var created = await ClientOf(app, "acme").PostAsJsonAsync(
+            $"/tenants/acme{StreamPath}",
+            new CreateStreamRequest { EventsRequested = [MembershipChanged] },
+            ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var streamId = (await created.Content.ReadFromJsonAsync<StreamConfiguration>(ct))!.StreamId;
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var moved = (await catalog.FindByIdAsync("acme", ct))!;
+        var client = app.GetTestClient();
+        client.BaseAddress = new Uri(MovedHost);
+        client.DefaultRequestHeaders.Add("X-Test-Issuer", moved.Issuer.OriginalString);
+        client.DefaultRequestHeaders.Add("X-Test-Subject", ReceiverId);
+        var change = new UpdateStreamRequest
+        {
+            StreamId = streamId,
+            Delivery = new PollDeliveryMethod(),
+            EventsRequested = [MembershipChanged],
+        };
+        var path = $"/tenants/acme{StreamPath}";
+        using var changed = replace
+            ? await client.PutAsJsonAsync(path, change, ct)
+            : await client.PatchAsJsonAsync(path, change, ct);
+
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(await StreamsOfAsync(app, moved, ct)).Configuration.Delivery);
+        Assert.StartsWith(moved.Issuer.OriginalString, Assert.IsType<Uri>(poll.EndpointUrl).OriginalString, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A receiver creating a stream while the store of the tenant's declared streams is replaced by a move has the
     /// stream created: the replaced store refuses the write, and it is made through the replacement.
     /// </summary>
@@ -455,6 +570,9 @@ public sealed partial class SharedSignalsTenantReleaseTests
         private readonly TaskCompletionSource[] _entered;
         private readonly TaskCompletionSource[] _apply;
         private int _creates;
+        private TaskCompletionSource? _readHeld;
+        private TaskCompletionSource _readReleased = Signal();
+        private int _readsToPass;
 
         private HeldStore(int held, CancellationTokenSource? cancelAfterCreate, bool deleteFails)
         {
@@ -480,8 +598,20 @@ public sealed partial class SharedSignalsTenantReleaseTests
                 });
             store
                 .Setup(s => s.FindAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns((string receiverId, string streamId, CancellationToken token) =>
-                    inner.FindAsync(receiverId, streamId, token));
+                .Returns(async (string receiverId, string streamId, CancellationToken token) =>
+                {
+                    var found = await inner.FindAsync(receiverId, streamId, token);
+                    if (Volatile.Read(ref _readHeld) is not null &&
+                        Interlocked.Decrement(ref _readsToPass) < 0 &&
+                        Interlocked.Exchange(ref _readHeld, null) is { } held)
+                    {
+                        var released = Volatile.Read(ref _readReleased);
+                        held.TrySetResult();
+                        await released.Task.WaitAsync(HeldFor);
+                    }
+
+                    return found;
+                });
             store
                 .Setup(s => s.ListAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns((string receiverId, CancellationToken token) => inner.ListAsync(receiverId, token));
@@ -517,6 +647,21 @@ public sealed partial class SharedSignalsTenantReleaseTests
         public Task CreateEntered => Entered(0);
 
         public Task Entered(int create) => _entered[create].Task;
+
+        /// <summary>
+        /// Holds the read that follows <paramref name="skip"/> more reads, once it has read the store, until the
+        /// <see cref="ReleaseTheRead"/> that follows; the task completes when that read is held.
+        /// </summary>
+        public Task HoldTheNextRead(int skip = 0)
+        {
+            var held = Signal();
+            Volatile.Write(ref _readReleased, Signal());
+            Volatile.Write(ref _readsToPass, skip);
+            Volatile.Write(ref _readHeld, held);
+            return held.Task;
+        }
+
+        public void ReleaseTheRead() => Volatile.Read(ref _readReleased).TrySetResult();
 
         public void Apply() => Apply(0);
 
