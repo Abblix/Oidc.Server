@@ -13,7 +13,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -55,7 +54,6 @@ public class TokenStatusValidatorDecoratorTests
     private readonly Mock<ITokenRegistry> _registry = new(MockBehavior.Strict);
     private readonly Mock<IRevocationCutoffRegistry> _cutoffs = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clients = new(MockBehavior.Strict);
-    private readonly Mock<IIssuerProvider> _issuers = new(MockBehavior.Strict);
     private readonly Mock<IJsonWebTokenValidator> _inner = new(MockBehavior.Strict);
     private readonly TokenStatusValidatorDecorator _decorator;
 
@@ -63,8 +61,6 @@ public class TokenStatusValidatorDecoratorTests
     {
         // The real converter, not a mock: what has to hold is that a pairwise pseudonym opens back into the
         // subject a host revoked, and a stub told to return the right answer proves nothing about that.
-        _issuers.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
-
         _decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
@@ -367,7 +363,6 @@ public class TokenStatusValidatorDecoratorTests
     private IRevocationCutoffChecker CutoffChecker(TimeSpan skew) => new RevocationCutoffChecker(
         NullLogger<RevocationCutoffChecker>.Instance,
         _cutoffs.Object,
-        _issuers.Object,
         Options.Create(new OidcOptions { RevocationCutoffSkew = skew }),
         _clients.Object,
         SubjectConverter, tenantAccessor: SingleIssuer.Accessor);

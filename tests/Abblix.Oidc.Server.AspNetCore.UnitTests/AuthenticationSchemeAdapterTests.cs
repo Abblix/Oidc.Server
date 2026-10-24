@@ -10,7 +10,6 @@ using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.LogoutNotification;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.AspNetCore.Authentication;
@@ -32,7 +31,7 @@ public class AuthenticationSchemeAdapterTests
 	private readonly AuthenticationSchemeAdapter _adapter;
 	private readonly List<string> _calls = [];
 
-	private static readonly IIssuerSettings ServedByMain = Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == TestTenantAccess.Main);
+	private readonly ServedTenant _servedTenant = new();
 
 	public AuthenticationSchemeAdapterTests()
 	{
@@ -46,7 +45,7 @@ public class AuthenticationSchemeAdapterTests
 			.Callback((string sessionId, string subject) => _calls.Add($"terminate {sessionId} {subject}"))
 			.ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
 
-		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, _clock, ServedByMain, Scheme);
+		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, _clock, Scheme);
 	}
 
 	private static AuthSession Session(JsonObject? additionalClaims = null, string identityProvider = "TestProvider") => new(
@@ -83,7 +82,7 @@ public class AuthenticationSchemeAdapterTests
 				? AuthenticateResult.NoResult()
 				: AuthenticateResult.Success(new AuthenticationTicket(captured, capturedProps, Scheme)));
 
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 
 		await _adapter.SignInAsync(input);
 
@@ -99,7 +98,7 @@ public class AuthenticationSchemeAdapterTests
 		authService
 			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
 			.ReturnsAsync(AuthenticateResult.Success(new AuthenticationTicket(principal, null, Scheme)));
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 	}
 
 	private void SetupSignIn()
@@ -111,7 +110,7 @@ public class AuthenticationSchemeAdapterTests
 		authService
 			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
 			.ReturnsAsync(AuthenticateResult.NoResult());
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 	}
 
 	/// <summary>
@@ -130,7 +129,7 @@ public class AuthenticationSchemeAdapterTests
 			.ReturnsAsync(() => written is null
 				? AuthenticateResult.NoResult()
 				: AuthenticateResult.Success(new AuthenticationTicket(written, Scheme)));
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 	}
 
 	// ---------- Signing in over a session ----------
@@ -187,7 +186,7 @@ public class AuthenticationSchemeAdapterTests
 		refusing
 			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
 			.ThrowsAsync(new InvalidOperationException("the scheme refused"));
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(refusing.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(refusing.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 
 		await Assert.ThrowsAsync<InvalidOperationException>(
 			() => _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" }));
@@ -264,7 +263,7 @@ public class AuthenticationSchemeAdapterTests
 		signingOut
 			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
 			.Returns(Task.CompletedTask);
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(signingOut.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(signingOut.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 
 		await _adapter.SignOutAsync();
 		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
@@ -372,7 +371,7 @@ public class AuthenticationSchemeAdapterTests
 		signingOut.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme)).ReturnsAsync(arrived);
 		signingOut.Setup(x => x.SignOutAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<AuthenticationProperties>()))
 			.Returns(Task.CompletedTask);
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(signingOut.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(signingOut.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 
 		await _adapter.SignOutAsync();
 
@@ -397,7 +396,7 @@ public class AuthenticationSchemeAdapterTests
 			.SetupSequence(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
 			.ThrowsAsync(new InvalidOperationException("the scheme refused"))
 			.Returns(Task.CompletedTask);
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(refuseOnce.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(refuseOnce.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 
 		await Assert.ThrowsAsync<InvalidOperationException>(
 			() => _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" }));
@@ -421,9 +420,9 @@ public class AuthenticationSchemeAdapterTests
 		authService
 			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), It.IsAny<string>()))
 			.ReturnsAsync(AuthenticateResult.NoResult());
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 		var other = new AuthenticationSchemeAdapter(
-			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, ServedByMain, otherScheme);
+			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, otherScheme);
 
 		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
 		var result = await other.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
@@ -584,14 +583,29 @@ public class AuthenticationSchemeAdapterTests
 	], Scheme));
 
 	/// <summary>
-	/// The adapter of a request served by tenant acme, its tenant named as the partition of its keys.
+	/// The adapter of a request served by tenant acme.
 	/// </summary>
-	private AuthenticationSchemeAdapter AtAcme() => new(
-		_httpContextAccessor.Object,
-		Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict),
-		_clock,
-		Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == "acme"),
-		Scheme);
+	private AuthenticationSchemeAdapter AtAcme()
+	{
+		_servedTenant.Serve("acme");
+		return new AuthenticationSchemeAdapter(
+			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, Scheme);
+	}
+
+	/// <summary>
+	/// The tenant each request of a test is served by, which the test changes.
+	/// </summary>
+	private sealed class ServedTenant : ITenantAccessor
+	{
+		public TenantContext? Current { get; private set; } = Of(TestTenantAccess.Main);
+
+		public void Serve(string tenantId) => Current = Of(tenantId);
+
+		private static TenantContext Of(string tenantId) => new()
+		{
+			Tenant = new TenantDefinition { Id = tenantId, Issuer = new Uri($"https://auth.example.com/{tenantId}") },
+		};
+	}
 
 	/// <summary>
 	/// A cookie naming no tenant was written before sessions named theirs, so a tenant
@@ -628,19 +642,15 @@ public class AuthenticationSchemeAdapterTests
 		SetupCookie();
 		await AtAcme().SignInAsync(Session());
 
+		_servedTenant.Serve("globex");
 		var globex = new AuthenticationSchemeAdapter(
-			_httpContextAccessor.Object,
-			Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict),
-			_clock,
-			Mock.Of<IIssuerSettings>(settings => settings.KeyPartition == "globex"),
-			Scheme);
+			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), _clock, Scheme);
 
 		Assert.Null(await globex.AuthenticateAsync());
 	}
 
 	/// <summary>
-	/// A request outside every tenant has no session, whatever cookie it brings, and cannot sign one in, even with
-	/// issuer settings of the host's own that answer outside any tenant.
+	/// A request outside every tenant has no session, whatever cookie it brings, and cannot sign one in.
 	/// </summary>
 	[Fact]
 	public async Task OutsideEveryTenant_NoSessionIsReadAndNoneSignedIn()
@@ -783,7 +793,7 @@ public class AuthenticationSchemeAdapterTests
 			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
 			.ReturnsAsync(AuthenticateResult.Success(
 				new AuthenticationTicket(new ClaimsPrincipal(identity), properties, Scheme)));
-		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton(TestTenantAccess.UnderMain).BuildServiceProvider();
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).AddSingleton<ITenantAccessor>(_servedTenant).BuildServiceProvider();
 
 		var result = await _adapter.AuthenticateAsync();
 

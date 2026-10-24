@@ -9,7 +9,6 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -25,14 +24,12 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JARM response JWT.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier placed in the <c>iss</c> claim.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
 /// <param name="options">Supplies the JARM response-JWT lifetime (<c>exp</c> window).</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IClientJwtFormatter clientJwtFormatter,
-    IIssuerProvider issuerProvider,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     ITenantAccessor tenantAccessor) : IResponseJwtBuilder
@@ -60,7 +57,7 @@ public class ResponseJwtBuilder(
             {
                 IssuedAt = now,
                 ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
-                Issuer = issuerProvider.GetIssuer().OriginalString,
+                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
             },
         };

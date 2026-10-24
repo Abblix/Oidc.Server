@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// <see cref="ErrorCodes.InvalidToken"/> if no claims are produced for the subject.
 /// </summary>
 public class UserInfoRequestProcessor(
-	IIssuerProvider issuerProvider,
-	IIssuerSettings issuerSettings,
+	ITenantAccessor tenantAccessor,
+	ITenantCatalog catalog,
 	IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
 {
 	/// <summary>
@@ -49,7 +49,8 @@ public class UserInfoRequestProcessor(
 		if (userInfo == null)
 			return new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found");
 
-		var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer().OriginalString, issuerSettings);
+		var tenant = tenantAccessor.CurrentTenant();
+		var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}
 }

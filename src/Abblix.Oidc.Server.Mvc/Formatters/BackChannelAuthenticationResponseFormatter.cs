@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// authentication response, encapsulating success or error scenarios as defined by OAuth 2.0 standards.
 /// </summary>
 public class BackChannelAuthenticationResponseFormatter(
-    IIssuerProvider issuerProvider) : IBackChannelAuthenticationResponseFormatter
+    ITenantAccessor tenantAccessor) : IBackChannelAuthenticationResponseFormatter
 {
     /// <summary>
     /// This method transforms the back-channel authentication response into a suitable HTTP response,
@@ -85,6 +85,6 @@ public class BackChannelAuthenticationResponseFormatter(
             ? TokenTypes.Basic
             : TokenTypes.Bearer;
 
-        return $"{scheme} realm=\"{issuerProvider.GetIssuer().OriginalString}\"";
+        return $"{scheme} realm=\"{tenantAccessor.CurrentTenant().Issuer.OriginalString}\"";
     }
 }

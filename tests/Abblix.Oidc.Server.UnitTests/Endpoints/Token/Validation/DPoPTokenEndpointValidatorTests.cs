@@ -70,7 +70,7 @@ public class DPoPTokenEndpointValidatorTests
             _proofValidator.Object,
             _nonceService.Object,
             _options.Object,
-            SingleIssuer.SettingsOf(() => _issuer, _opts));
+            SingleIssuer.AccessorOf(() => _issuer));
     }
 
     [Fact]

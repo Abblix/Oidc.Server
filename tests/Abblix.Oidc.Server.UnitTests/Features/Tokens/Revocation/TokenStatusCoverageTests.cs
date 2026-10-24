@@ -15,7 +15,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -108,9 +107,6 @@ public class TokenStatusCoverageTests
                 It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
 
-        var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer);
-
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
@@ -137,7 +133,6 @@ public class TokenStatusCoverageTests
             new RevocationCutoffChecker(
                 NullLogger<RevocationCutoffChecker>.Instance,
                 cutoffs.Object,
-                issuers.Object,
                 Options.Create(new OidcOptions()),
                 clients.Object,
                 new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor),

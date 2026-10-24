@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -57,7 +56,6 @@ public sealed class IssuerSpellingTests : IDisposable
             [options.Value.ToTenant()],
             new OidcOptions { AllowHttpIssuer = allowHttp }));
 
-        var issuerProvider = Mock.Of<IIssuerProvider>(provider => provider.GetIssuer() == options.Value.Issuer);
         var formatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
         JsonWebToken? issued = null;
         formatter
@@ -66,15 +64,15 @@ public sealed class IssuerSpellingTests : IDisposable
             .ReturnsAsync("token");
 
         var service = new AccessTokenService(
-            issuerProvider,
             new FakeTimeProvider(),
             Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "token-id"),
             formatter.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.HostCatalogSettingsOf(() => options.Value),
+            SingleIssuer.HostCatalog,
             new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>(), tenantAccessor: SingleIssuer.Accessor),
-            ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
+            ScopeClaims.Of(),
+            SingleIssuer.AccessorOf(options));
 
         await service.CreateAccessTokenAsync(
             new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -88,7 +86,10 @@ public sealed class IssuerSpellingTests : IDisposable
 
         // The license already counts the issuer as configured, so another spelling of it is a second issuer
         var refusal = Assert.Throws<LicenseViolationException>(
-            () => LicenseChecker.CheckIssuer(new Uri(configured).ToString(), SingleIssuer.HostCatalogSettingsOf(() => options.Value)));
+            () => LicenseChecker.CheckIssuer(
+                new Uri(configured).ToString(),
+                options.Value.ToTenant(),
+                SingleIssuer.HostCatalog));
         Assert.Equal(LicenseRefusalReasons.IssuerLimit, refusal.Reason);
     }
 }

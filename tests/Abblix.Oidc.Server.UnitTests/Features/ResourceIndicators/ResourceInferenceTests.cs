@@ -24,7 +24,7 @@ public class ResourceInferenceTests
     private static readonly Uri Orders = new("https://orders.example.com");
     private static readonly Uri Billing = new("https://billing.example.com");
 
-    private static ResourceInference Inference(bool infer) => new(SingleIssuer.SettingsOf(Options.Create(
+    private static ResourceInference Inference(bool infer) => new(SingleIssuer.AccessorOf(Options.Create(
         new TestIssuer
         {
             InferResourceFromScope = infer,

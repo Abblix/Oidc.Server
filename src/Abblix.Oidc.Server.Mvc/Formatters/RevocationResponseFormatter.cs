@@ -8,7 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -21,9 +21,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for responses to token revocation requests.
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer identifier used as the realm value on
-/// <c>WWW-Authenticate</c> challenges for client-authentication failures.</param>
-public class RevocationResponseFormatter(IIssuerProvider issuerProvider) : IRevocationResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevocationResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a token revocation request.
@@ -43,6 +42,6 @@ public class RevocationResponseFormatter(IIssuerProvider issuerProvider) : IRevo
             onSuccess: _ => new OkResult(),
             // RFC 7009 section 2.2.1 defers to RFC 6749 section 5.2 for error semantics, so the shared formatter
             // applies: invalid_client becomes a 401 with a Basic challenge, other errors stay 400.
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer().OriginalString)));
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
     }
 }

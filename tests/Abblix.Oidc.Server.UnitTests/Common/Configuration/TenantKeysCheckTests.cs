@@ -219,7 +219,7 @@ public class TenantKeysCheckTests
     {
         var services = new ServiceCollection();
         services.AddOptions();
-        services.AddSingleton(Mock.Of<IIssuerSettings>());
+        services.AddSingleton(SingleIssuer.Accessor);
         configure?.Invoke(services);
         services.AddAuthServiceJwt();
         return services.BuildServiceProvider();

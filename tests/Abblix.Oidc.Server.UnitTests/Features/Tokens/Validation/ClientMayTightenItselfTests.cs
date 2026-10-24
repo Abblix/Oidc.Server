@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
@@ -96,9 +95,6 @@ public class ClientMayTightenItselfTests
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(Issuer));
 
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(new Uri(Issuer));
-
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
             .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()))
@@ -110,10 +106,9 @@ public class ClientMayTightenItselfTests
             tokenValidator.Object,
             clientInfoProvider.Object,
             new Mock<IClientKeysProvider>().Object,
-            issuerProvider.Object,
             serviceKeys.Object,
-            SingleIssuer.SettingsOf(Options.Create(new TestIssuer { DefaultSecurityProfile = deploymentProfile })),
-            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(Now),
+            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = deploymentProfile }));
 
         return await validator.ValidateAsync("header.payload.signature", TokenTypePolicy.CheckedByCaller, options);
     }

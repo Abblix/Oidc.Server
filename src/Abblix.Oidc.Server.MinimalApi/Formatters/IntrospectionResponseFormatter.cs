@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701); the OAuth error otherwise.
 /// </summary>
 public class IntrospectionResponseFormatter(
-    IIssuerProvider issuerProvider,
+    ITenantAccessor tenantAccessor,
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider clock,
     IOptionsSnapshot<OidcOptions> options,
@@ -40,7 +40,7 @@ public class IntrospectionResponseFormatter(
         => response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer().OriginalString)));
+                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
 
     private async Task<IResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
@@ -67,7 +67,7 @@ public class IntrospectionResponseFormatter(
             Payload =
             {
                 IssuedAt = now,
-                Issuer = issuerProvider.GetIssuer().OriginalString,
+                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
 
                 // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The

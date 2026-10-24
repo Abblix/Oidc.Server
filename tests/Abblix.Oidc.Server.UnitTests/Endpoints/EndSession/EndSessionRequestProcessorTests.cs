@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -40,7 +39,6 @@ public class EndSessionRequestProcessorTests
 
     private readonly Mock<ILogger<EndSessionRequestProcessor>> _logger;
     private readonly Mock<IAuthSessionService> _authSessionService;
-    private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<ILogoutNotifier> _logoutNotifier;
     private readonly Mock<ITokenRevoker> _tokenRevoker;
@@ -53,7 +51,6 @@ public class EndSessionRequestProcessorTests
     {
         _logger = new Mock<ILogger<EndSessionRequestProcessor>>();
         _authSessionService = new Mock<IAuthSessionService>(MockBehavior.Strict);
-        _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _logoutNotifier = new Mock<ILogoutNotifier>(MockBehavior.Strict);
         _tokenRevoker = new Mock<ITokenRevoker>(MockBehavior.Strict);
@@ -66,10 +63,10 @@ public class EndSessionRequestProcessorTests
                 new SessionLogoutNotifier(
                     NullLogger<SessionLogoutNotifier>.Instance,
                     _sessionClients,
-                    _issuerProvider.Object,
                     _clientInfoProvider.Object,
                     _logoutNotifier.Object,
-                    SingleIssuer.Settings, tenantAccessor: SingleIssuer.Accessor),
+                    SingleIssuer.LicensedCatalog,
+                    SingleIssuer.Accessor),
                 Options.Create(_options)),
             _confirmationStore.Object);
     }
@@ -153,9 +150,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         // Act
         var result = await _processor.ProcessAsync(request);
@@ -189,9 +183,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _tokenRevoker
             .Setup(r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()))
@@ -226,9 +217,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         // Act
         var result = await _processor.ProcessAsync(request);
@@ -342,9 +330,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
@@ -388,9 +373,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
@@ -437,9 +419,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
@@ -481,9 +460,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
@@ -530,9 +506,6 @@ public class EndSessionRequestProcessorTests
             .Callback(() => callOrder.Add("signout"))
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
@@ -550,46 +523,6 @@ public class EndSessionRequestProcessorTests
         Assert.Equal(2, callOrder.Count);
         Assert.Equal("signout", callOrder[0]);
         Assert.Equal("notify", callOrder[1]);
-    }
-
-    /// <summary>
-    /// Verifies issuer is retrieved for logout context.
-    /// IssuerProvider should be called to get issuer.
-    /// </summary>
-    [Fact]
-    public async Task ProcessAsync_ShouldRetrieveIssuerForLogoutContext()
-    {
-        // Arrange
-        var request = CreateValidEndSessionRequest();
-        var authSession = CreateAuthSession("user_123", "session_123", "client_1");
-
-        var client1 = new ClientInfo("client_1");
-
-        _authSessionService
-            .Setup(s => s.AuthenticateAsync())
-            .ReturnsAsync(authSession);
-
-        _authSessionService
-            .Setup(s => s.SignOutAsync())
-            .Returns(Task.CompletedTask);
-
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
-            .ReturnsAsync(client1);
-
-        _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Returns(Task.CompletedTask);
-
-        // Act
-        await _processor.ProcessAsync(request);
-
-        // Assert
-        _issuerProvider.Verify(p => p.GetIssuer(), Times.Once);
     }
 
     /// <summary>
@@ -641,9 +574,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
@@ -684,9 +614,6 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(new Uri(Issuer));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))

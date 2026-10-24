@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -64,13 +63,9 @@ public class RevocationCutoffCheckerSessionTests
     /// </summary>
     private IRevocationCutoffChecker Checker(TimeSpan? skew = null)
     {
-        var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer);
-
         return new RevocationCutoffChecker(
             NullLogger<RevocationCutoffChecker>.Instance,
             _cutoffs.Object,
-            issuers.Object,
             Options.Create(skew is { } configured
                 ? new OidcOptions { RevocationCutoffSkew = configured }
                 : new OidcOptions()),

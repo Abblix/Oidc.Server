@@ -38,59 +38,33 @@ internal static class SingleIssuer
     /// <summary>A request of the tenant a test describes nothing of.</summary>
     public static ITenantAccessor Accessor => AccessorOf(() => Default);
 
-    public static IIssuerSettings Settings => SettingsOf(new TestIssuer());
+    /// <summary>A request of the tenant <paramref name="issuer"/> describes.</summary>
+    public static ITenantAccessor AccessorOf(TestIssuer issuer) => AccessorOf(() => issuer);
 
-    public static IIssuerSettings SettingsOf(TestIssuer issuer) => SettingsOf(() => issuer);
+    /// <summary>A request of the tenant <paramref name="issuer"/> describes.</summary>
+    public static ITenantAccessor AccessorOf(IOptions<TestIssuer> issuer) => AccessorOf(() => issuer.Value);
 
-    public static IIssuerSettings SettingsOf(IOptions<TestIssuer> issuer) => SettingsOf(() => issuer.Value);
-
-    public static IIssuerSettings SettingsOf(IOptionsMonitor<TestIssuer> issuer) => SettingsOf(() => issuer.CurrentValue);
-
-    /// <summary>
-    /// The settings of the tenant <paramref name="current"/> describes at the moment they are read.
-    /// </summary>
-    public static IIssuerSettings SettingsOf(Func<TestIssuer> current)
-        => SettingsOf(current, new OidcOptions());
+    /// <summary>A request of the tenant <paramref name="issuer"/> describes as it reads at each question.</summary>
+    public static ITenantAccessor AccessorOf(IOptionsMonitor<TestIssuer> issuer) => AccessorOf(() => issuer.CurrentValue);
 
     /// <summary>
-    /// The settings of the tenant <paramref name="issuer"/> describes, or of a bare one, on a server set up by
-    /// <paramref name="server"/>.
+    /// A request of the tenant <paramref name="current"/> describes, its definition built again from the settings
+    /// at each question, so a changed setting is served as a changed definition would be.
     /// </summary>
-    public static IIssuerSettings SettingsOf(IOptions<OidcOptions> server, TestIssuer? issuer = null)
-    {
-        var tenant = issuer ?? new TestIssuer();
-        return SettingsOf(() => tenant, server.Value);
-    }
+    public static ITenantAccessor AccessorOf(Func<TestIssuer> current) => new CurrentTenant(current);
 
     /// <summary>
-    /// The settings of a bare tenant whose keys <paramref name="custodianKeys"/> names, on a server set up by
-    /// <paramref name="server"/>.
+    /// The server's own catalog, serving the tenant a test describes nothing of, which the license vouches for and
+    /// counts by the tenant's id, as it counts every server a test builds, so the tests of a run take one place
+    /// between them.
     /// </summary>
-    public static IIssuerSettings SettingsOf(IOptions<OidcOptions> server, CustodianHeldKeys custodianKeys)
-        => SettingsOf(server, new TestIssuer { CustodianKeys = custodianKeys });
+    public static ITenantCatalog LicensedCatalog => Licensed;
 
     /// <summary>
-    /// The settings of the tenant <paramref name="current"/> describes, on a server set up by
-    /// <paramref name="server"/>, both read at each use.
+    /// A catalog of the host's own: the license cannot vouch for a tenant it resolved, and counts it by the issuer each
+    /// token names.
     /// </summary>
-    public static IIssuerSettings SettingsOf(Func<TestIssuer> current, OidcOptions server)
-        => new TenantIssuerSettings(
-            AccessorOf(current),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == server),
-            Licensed);
-
-    /// <summary>
-    /// The settings of the tenant <paramref name="current"/> describes, resolved by a catalog of the host's own: the
-    /// license cannot vouch for such a tenant, and counts it by the issuer each token names.
-    /// </summary>
-    public static IIssuerSettings HostCatalogSettingsOf(Func<TestIssuer> current)
-        => new TenantIssuerSettings(
-            AccessorOf(current),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()),
-            Mock.Of<ITenantCatalog>());
-
-    /// <summary>The settings of a bare tenant a catalog of the host's own resolved.</summary>
-    public static IIssuerSettings HostCatalogSettings => HostCatalogSettingsOf(() => new TestIssuer());
+    public static ITenantCatalog HostCatalog { get; } = Mock.Of<ITenantCatalog>();
 
     public static ScopeManager ScopeManager() => new(LocalOf<Dictionary<string, ScopeDefinition>>());
 
@@ -100,12 +74,6 @@ internal static class SingleIssuer
     /// The server's own subject type converter, issuing each tenant's subjects with the pairwise key it declares.
     /// </summary>
     public static ISubjectTypeConverter SubjectTypes() => new IssuerSubjectTypeConverter(LocalOf<SubjectTypeConverter>());
-
-    /// <summary>
-    /// A request of the tenant <paramref name="current"/> describes, its definition built again from the settings
-    /// at each question, so a changed setting is served as a changed definition would be.
-    /// </summary>
-    public static ITenantAccessor AccessorOf(Func<TestIssuer> current) => new CurrentTenant(current);
 
     /// <summary>
     /// A value kept for each tenant, built again once the tenant's definition hands out other objects.

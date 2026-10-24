@@ -50,8 +50,6 @@ public static class TenantServiceCollectionExtensions
         services.TryAddSingleton<IKeyRingPartitions, TenantKeyRingPartitions>();
 
         services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
-        services.TryAddSingleton<IIssuerProvider, TenantIssuerProvider>();
-        services.TryAddSingleton<IIssuerSettings, TenantIssuerSettings>();
 
         // Transient, so each service holding values gets its own holder
         services.TryAddTransient(typeof(IIssuerLocal<>), typeof(TenantIssuerLocal<>));

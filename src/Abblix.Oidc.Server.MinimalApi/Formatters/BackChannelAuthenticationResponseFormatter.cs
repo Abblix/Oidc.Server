@@ -8,7 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -22,8 +22,8 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// Formats CIBA backchannel authentication results as <see cref="IResult"/>: a JSON success response, a 401 with a
 /// <c>WWW-Authenticate</c> challenge matching the client's scheme, a 403, or a 400 with the JSON error envelope.
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer used as the realm on client-authentication challenges.</param>
-public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerProvider)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class BackChannelAuthenticationResponseFormatter(ITenantAccessor tenantAccessor)
     : IBackChannelAuthenticationResponseFormatter
 {
     /// <inheritdoc />
@@ -61,6 +61,6 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
             ? TokenTypes.Basic
             : TokenTypes.Bearer;
 
-        return $"{scheme} realm=\"{issuerProvider.GetIssuer().OriginalString}\"";
+        return $"{scheme} realm=\"{tenantAccessor.CurrentTenant().Issuer.OriginalString}\"";
     }
 }

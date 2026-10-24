@@ -25,7 +25,6 @@ using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -70,8 +69,7 @@ public class ClientSecretJwtAuthenticatorTests
             _requestInfoProvider.Object,
             _clock,
             _replayCache.Object,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == new Uri("https://issuer.example.com")),
-            SingleIssuer.SettingsOf(Options.Create(new OidcOptions())), tenantAccessor: SingleIssuer.Accessor);
+            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri("https://issuer.example.com") }));
     }
 
     /// <summary>
