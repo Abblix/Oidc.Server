@@ -9,7 +9,8 @@
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
-/// Names a stored device authorization without carrying its device code: the key the record is stored under.
+/// Names a stored device authorization without carrying its device code: the key the record is stored under, and
+/// the tenant the storage found it at.
 /// </summary>
 /// <remarks>
 /// The verification side finds a record by the user code the user typed and then has to decide on it, so it needs
@@ -18,4 +19,12 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// storage key is derived from the device code one way, so it leads to the record and not to the code.
 /// </remarks>
 /// <param name="Key">The key the record is stored under, as the storage composed it.</param>
-public readonly record struct DeviceAuthorizationReference(string Key);
+public readonly record struct DeviceAuthorizationReference(string Key)
+{
+    /// <summary>
+    /// The space of the tenant the storage issued this reference at. The storage reads and writes through the
+    /// reference only at that tenant, whatever its key factory makes of the key, so a reference built from the key
+    /// alone reaches nothing.
+    /// </summary>
+    internal string? Space { get; init; }
+}

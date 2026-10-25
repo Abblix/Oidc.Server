@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -51,9 +50,8 @@ public class LostUpdateTests
     private const string UserCode = "WDJB-MJHT";
     private const string DeviceCode = "device_code_abc123";
     private const string ClientIdentifier = "203.0.113.7";
-    // The keys the factory hands out are in the space of the tenant they are built for
-    private static readonly string RequestKey = TenantKey.Of(SingleIssuer.Tenant, "device:request:device_code_abc123");
-    private static readonly string UserCodeKey = TenantKey.Of(SingleIssuer.Tenant, "device:user-code:WDJB-MJHT");
+    private const string RequestKey = "device:request:device_code_abc123";
+    private const string UserCodeKey = "device:user-code:WDJB-MJHT";
 
     private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 

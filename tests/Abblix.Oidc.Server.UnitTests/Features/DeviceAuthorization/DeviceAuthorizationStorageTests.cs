@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -39,9 +40,8 @@ public class DeviceAuthorizationStorageTests
 {
     private const string DeviceCode = "device_code_abc123";
     private const string UserCode = "12345678";
-    // The keys the factory hands out are in the space of the tenant they are built for
-    private static readonly string RequestKey = TenantKey.Of(SingleIssuer.Tenant, "device:request:device_code_abc123");
-    private static readonly string UserCodeKey = TenantKey.Of(SingleIssuer.Tenant, "device:user-code:12345678");
+    private const string RequestKey = "device:request:device_code_abc123";
+    private const string UserCodeKey = "device:user-code:12345678";
 
     private readonly DateTimeOffset _now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly Mock<IDistributedCache> _cache = new(MockBehavior.Loose);
@@ -107,7 +107,8 @@ public class DeviceAuthorizationStorageTests
                 (_, _, opts, _) => captured = opts)
             .Returns(Task.CompletedTask);
 
-        await _storage.UpdateAsync(SingleIssuer.Tenant, new DeviceAuthorizationReference(RequestKey), request, TimeSpan.FromMinutes(3));
+        var reference = new DeviceAuthorizationReference(RequestKey) { Space = TenantKey.SpaceOf(SingleIssuer.Tenant) };
+        await _storage.UpdateAsync(SingleIssuer.Tenant, reference, request, TimeSpan.FromMinutes(3));
 
         Assert.NotNull(captured);
         Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
@@ -395,14 +396,9 @@ public class DeviceAuthorizationStorageTests
     [Fact]
     public async Task AReferenceOfOneTenant_ReadsAndWritesNothingAtAnother()
     {
-        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
-        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
-        var storage = new DeviceAuthorizationStorage(
-            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
-            TestFingerprints.Instance,
-            new DistributedCacheStorage(RealCache(), new ProtobufSerializer()),
-            new EntityStorageKeyFactory(),
-            new FakeTimeProvider(_now));
+        var acme = Tenant("acme");
+        var globex = Tenant("globex");
+        var storage = RealStorage(new EntityStorageKeyFactory());
         await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
         var (reference, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
 
@@ -415,6 +411,78 @@ public class DeviceAuthorizationStorageTests
             TimeSpan.FromMinutes(5));
         Assert.Equal(request.Status, (await storage.TryGetAsync(acme, reference))!.Status);
     }
+
+    /// <summary>
+    /// A tenant whose id begins with another's, or the same tenant created again, is another tenant: a reference
+    /// found at one of them reads and writes nothing at the other.
+    /// </summary>
+    [Theory]
+    [InlineData("acme", "", "acme2", "")]
+    [InlineData("acme", "", "acme-eu", "")]
+    [InlineData("acme", "", "acme", "2")]
+    [InlineData("acme2", "", "acme", "")]
+    public async Task AReferenceOfOneTenant_ReadsAndWritesNothingAtATenantNamedAlike(
+        string readerId, string readerGeneration, string ownerId, string ownerGeneration)
+    {
+        var reader = Tenant(readerId, readerGeneration);
+        var owner = Tenant(ownerId, ownerGeneration);
+        var storage = RealStorage(new EntityStorageKeyFactory());
+        await storage.StoreAsync(owner, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        var (reference, request) = (await storage.TryGetByUserCodeAsync(owner, UserCode))!.Value;
+
+        Assert.Null(await storage.TryGetAsync(reader, reference));
+
+        await storage.UpdateAsync(
+            reader,
+            reference,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(DeviceAuthorizationStatus.Pending, (await storage.TryGetAsync(owner, reference))!.Status);
+    }
+
+    /// <summary>
+    /// A host's key factory may put its own namespace on the keys, and the device flow works under it: the record is
+    /// found by the device code and by the user code, and a decision on it is written.
+    /// </summary>
+    [Theory]
+    [InlineData("host:{0}:{1}")]
+    [InlineData("host:tenant:{0}:{1}")]
+    [InlineData("{0}:{1}")]
+    public async Task UnderAHostsOwnKeys_TheDeviceFlowFindsAndDecidesItsRecord(string keyShape)
+    {
+        var acme = Tenant("acme");
+        var keys = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+        keys.Setup(f => f.DeviceAuthorizationRequestKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey(keyShape, tenant, "device:request:" + code));
+        keys.Setup(f => f.DeviceAuthorizationUserCodeKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey(keyShape, tenant, "device:user-code:" + code));
+        var storage = RealStorage(keys.Object);
+        await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+
+        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(acme, DeviceCode));
+        var (reference, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
+
+        await storage.UpdateAsync(
+            acme,
+            reference,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(DeviceAuthorizationStatus.Denied, (await storage.TryGetByDeviceCodeAsync(acme, DeviceCode))!.Status);
+    }
+
+    private static string HostKey(string shape, TenantDefinition tenant, string key)
+        => string.Format(CultureInfo.InvariantCulture, shape, tenant.Id, key);
+
+    private static TenantDefinition Tenant(string id, string generation = "")
+        => new() { Id = id, Issuer = new Uri("https://auth.example.com/" + id), Generation = generation };
+
+    private DeviceAuthorizationStorage RealStorage(IEntityStorageKeyFactory keys)
+        => new(
+            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
+            TestFingerprints.Instance,
+            new DistributedCacheStorage(RealCache(), new ProtobufSerializer()),
+            keys,
+            new FakeTimeProvider(_now));
 
     private static IDistributedCache RealCache()
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));

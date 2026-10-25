@@ -79,7 +79,7 @@ public partial class DeviceAuthorizationStorage(
         if (key == null)
             return null;
 
-        var reference = new DeviceAuthorizationReference(key);
+        var reference = new DeviceAuthorizationReference(key) { Space = TenantKey.SpaceOf(tenant) };
         var request = await TryGetAsync(tenant, reference);
         if (request == null)
             return null;
@@ -103,14 +103,15 @@ public partial class DeviceAuthorizationStorage(
     }
 
     private DeviceAuthorizationReference ReferenceTo(TenantDefinition tenant, string deviceCode)
-        => new(keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode));
+        => new(keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode)) { Space = TenantKey.SpaceOf(tenant) };
 
     /// <summary>
-    /// Whether <paramref name="reference"/> names a record in the space of <paramref name="tenant"/>: the key it carries
-    /// was built for one tenant, and another tenant reads and writes none of that tenant's records through it.
+    /// Whether <paramref name="reference"/> was issued at <paramref name="tenant"/>: another tenant reads and writes
+    /// none of that tenant's records through it. The reference answers by the tenant it was issued at rather than
+    /// by how its key is spelled, because a host's key factory may put its own namespace on the keys.
     /// </summary>
     private static bool IsOf(TenantDefinition tenant, DeviceAuthorizationReference reference)
-        => reference.Key.StartsWith(TenantKey.Of(tenant, string.Empty), StringComparison.Ordinal);
+        => string.Equals(reference.Space, TenantKey.SpaceOf(tenant), StringComparison.Ordinal);
 
     /// <inheritdoc />
     public async Task RemoveAsync(TenantDefinition tenant, [Credential] string deviceCode)
