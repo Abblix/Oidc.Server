@@ -495,8 +495,8 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// A tenant the server cannot name is refused before anything is written, under a host's key factory that never
-    /// names it either: no request is left behind that no device code leads to.
+    /// A tenant <see cref="TenantKey.SpaceOf"/> refuses is refused before anything is written, even under a host's key
+    /// factory that builds a key for it: no request and no user code is left behind that no device code leads to.
     /// </summary>
     [Fact]
     public async Task UnderAHostsOwnKeys_ATenantTheServerCannotName_LeavesNothingStored()
@@ -515,6 +515,8 @@ public class DeviceAuthorizationStorageTests
 
         Assert.Null(await entities.GetAsync<DeviceAuthorizationRequest>(
             HostKey("host:{0}:{1}", unnamed, "device:request:" + DeviceCode), removeOnRetrieval: false));
+        Assert.Null(await entities.GetAsync<string>(
+            HostKey("host:{0}:{1}", unnamed, "device:user-code:" + UserCode), removeOnRetrieval: false));
     }
 
     private static string HostKey(string shape, TenantDefinition tenant, string key)
