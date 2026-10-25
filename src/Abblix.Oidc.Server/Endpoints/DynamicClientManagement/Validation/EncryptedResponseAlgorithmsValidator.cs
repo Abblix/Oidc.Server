@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -26,7 +27,7 @@ public class EncryptedResponseAlgorithmsValidator(IJsonWebTokenValidator jwtVali
     : SyncClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         return ValidateAlg(request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg)

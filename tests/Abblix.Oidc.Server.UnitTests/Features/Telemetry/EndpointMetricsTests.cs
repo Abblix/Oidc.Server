@@ -338,13 +338,13 @@ public sealed class EndpointMetricsTests : IDisposable
     {
         var inner = new Mock<IRegisterClientHandler>();
         inner
-            .SetupSequence(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
+            .SetupSequence(h => h.HandleAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
             .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token") { Metadata = new() })
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRedirectUri, "Refused"));
         var traced = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
-        await traced.HandleAsync(new ClientRegistrationRequest());
-        await traced.HandleAsync(new ClientRegistrationRequest());
+        await traced.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest());
+        await traced.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest());
 
         Assert.Equal(
             [TelemetryOutcomes.Success, TelemetryOutcomes.Refused],
@@ -357,12 +357,12 @@ public sealed class EndpointMetricsTests : IDisposable
         var spent = new TooManyRequestsError("Too many", RetryAfter: null, CallerRateLimiters.AuthenticationFailures);
         var inner = new Mock<IRegisterClientHandler>();
         inner
-            .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TooManyAuthenticationFailuresException(spent));
         var observed = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
         await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
-            () => observed.HandleAsync(new ClientRegistrationRequest()));
+            () => observed.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest()));
 
         Assert.Equal(TelemetryOutcomes.Refused, Assert.Single(_measured.Of(OidcMetrics.ClientsRegistered))[TelemetryTags.Outcome]);
         Assert.Equal(TelemetryOutcomes.Refused, Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Outcome]);
@@ -373,11 +373,11 @@ public sealed class EndpointMetricsTests : IDisposable
     {
         var inner = new Mock<IRegisterClientHandler>();
         inner
-            .Setup(h => h.HandleAsync(It.IsAny<ClientRegistrationRequest>()))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TimeoutException());
         var traced = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
-        await Assert.ThrowsAsync<TimeoutException>(() => traced.HandleAsync(new ClientRegistrationRequest()));
+        await Assert.ThrowsAsync<TimeoutException>(() => traced.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest()));
 
         Assert.Equal(
             TelemetryOutcomes.Failed,

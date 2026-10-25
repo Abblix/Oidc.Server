@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -23,7 +24,7 @@ public class GrantTypeValidator : SyncClientRegistrationContextValidator
     /// Returns an <c>invalid_client_metadata</c> error listing the grant types the client must
     /// register to support its declared response types, or <c>null</c> when the sets agree.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         var requiredGrantTypes = new HashSet<string>();

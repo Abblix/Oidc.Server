@@ -47,7 +47,7 @@ public class InitialAccessTokenValidatorTests
         _validator = new InitialAccessTokenValidator(
             _jwtValidator.Object,
             _revocationProvider.Object,
-            optionsMonitor.Object, tenantAccessor: SingleIssuer.Accessor);
+            optionsMonitor.Object);
     }
 
     private static ClientRegistrationValidationContext CreateContext(
@@ -77,7 +77,7 @@ public class InitialAccessTokenValidatorTests
         _options.RequireInitialAccessToken = false;
         var context = CreateContext();
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -87,7 +87,7 @@ public class InitialAccessTokenValidatorTests
     {
         var context = CreateContext(operation: DynamicClientOperation.Update);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -97,7 +97,7 @@ public class InitialAccessTokenValidatorTests
     {
         var context = CreateContext(authHeader: null);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -109,7 +109,7 @@ public class InitialAccessTokenValidatorTests
     {
         var context = CreateContext(new AuthenticationHeaderValue("Basic", "credentials"));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -125,7 +125,7 @@ public class InitialAccessTokenValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is expired"));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -148,7 +148,7 @@ public class InitialAccessTokenValidatorTests
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -166,7 +166,7 @@ public class InitialAccessTokenValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -187,7 +187,7 @@ public class InitialAccessTokenValidatorTests
             .Setup(r => r.IsRevokedAsync("registration-portal"))
             .ReturnsAsync(true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -208,7 +208,7 @@ public class InitialAccessTokenValidatorTests
             .Setup(r => r.IsRevokedAsync("registration-portal"))
             .ReturnsAsync(false);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -233,7 +233,7 @@ public class InitialAccessTokenValidatorTests
             .Setup(r => r.IsRevokedAsync("registration-portal"))
             .ReturnsAsync(false);
 
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(capturedOptions);
 

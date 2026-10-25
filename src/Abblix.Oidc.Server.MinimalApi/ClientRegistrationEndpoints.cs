@@ -11,6 +11,7 @@ using System.Net.Http.Headers;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
@@ -60,13 +61,14 @@ internal static class ClientRegistrationEndpoints
         ClientMetadataBody body,
         HttpContext context,
         IRegisterClientHandler handler,
-        IRegisterClientResponseFormatter formatter)
+        IRegisterClientResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } request })
             return body.Refusal!;
 
         var clientRegistrationRequest = request with { AuthorizationHeader = ParseAuthorizationHeader(context.Request) };
-        var response = await handler.HandleAsync(clientRegistrationRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
     }
 
@@ -74,10 +76,11 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> ReadClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         IReadClientHandler handler,
-        IReadClientResponseFormatter formatter)
+        IReadClientResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 
@@ -86,13 +89,14 @@ internal static class ClientRegistrationEndpoints
         ClientAuthorizationRequest authorizationRequest,
         ClientMetadataBody body,
         IUpdateClientHandler handler,
-        IUpdateClientResponseFormatter formatter)
+        IUpdateClientResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } registrationRequest })
             return body.Refusal!;
 
         var updateRequest = new UpdateClientRequest(authorizationRequest, registrationRequest);
-        var response = await handler.HandleAsync(updateRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
     }
 
@@ -100,10 +104,11 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> RemoveClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         IRemoveClientHandler handler,
-        IRemoveClientResponseFormatter formatter)
+        IRemoveClientResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 

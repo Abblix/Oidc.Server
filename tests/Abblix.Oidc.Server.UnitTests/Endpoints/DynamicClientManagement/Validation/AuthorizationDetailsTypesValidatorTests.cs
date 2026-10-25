@@ -59,7 +59,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator();
 
-        var result = await validator.ValidateAsync(Context(null));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(null));
 
         Assert.Null(result);
     }
@@ -69,7 +69,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context([]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([]));
 
         Assert.Null(result);
     }
@@ -79,7 +79,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation", "account_information");
 
-        var result = await validator.ValidateAsync(Context(["payment_initiation"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["payment_initiation"]));
 
         Assert.Null(result);
     }
@@ -89,7 +89,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context(["payment_initiation", "unknown_type"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["payment_initiation", "unknown_type"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -102,7 +102,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator();
 
-        var result = await validator.ValidateAsync(Context(["payment_initiation"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["payment_initiation"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -114,7 +114,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context(["unknown_a", "unknown_b"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["unknown_a", "unknown_b"]));
 
         Assert.NotNull(result);
         Assert.Contains("unknown_a", result.ErrorDescription);
@@ -126,7 +126,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context(["unknown_type", "unknown_type"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["unknown_type", "unknown_type"]));
 
         Assert.NotNull(result);
         var firstIndex = result.ErrorDescription.IndexOf("unknown_type", StringComparison.Ordinal);

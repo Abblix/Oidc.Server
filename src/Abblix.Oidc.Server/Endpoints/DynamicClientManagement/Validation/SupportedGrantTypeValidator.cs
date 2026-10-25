@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -37,7 +38,7 @@ public class SupportedGrantTypeValidator(
         .ToHashSet(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var unsupported = context.Request.GrantTypes
             .Where(grantType => !_supportedGrantTypes.Contains(grantType))

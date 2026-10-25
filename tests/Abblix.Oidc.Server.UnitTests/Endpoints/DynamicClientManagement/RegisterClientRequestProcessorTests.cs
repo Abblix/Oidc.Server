@@ -50,12 +50,13 @@ public class RegisterClientRequestProcessorTests
 
         _tokens
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
         return new RegisterClientRequestProcessor(
             _logger,
-            credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object, tenantAccessor: SingleIssuer.Accessor);
+            credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object);
     }
 
     private static ValidClientRegistrationRequest Request() => new(
@@ -74,12 +75,12 @@ public class RegisterClientRequestProcessorTests
                 r.ClientInfo.ClientId == "client-1" && r.RegistrationAccessTokenId == "jti-1")))
             .ReturnsAsync(true);
 
-        var result = await Processor().ProcessAsync(Request());
+        var result = await Processor().ProcessAsync(SingleIssuer.Tenant, Request());
 
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Equal("client-1", response.ClientId);
         _tokens.Verify(
-            s => s.IssueTokenAsync("client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "jti-1"),
+            s => s.IssueTokenAsync(TestTenant.Matched, "client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "jti-1"),
             Times.Once);
     }
 
@@ -88,7 +89,7 @@ public class RegisterClientRequestProcessorTests
     {
         _clients.Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>())).ReturnsAsync(false);
 
-        var result = await Processor().ProcessAsync(Request());
+        var result = await Processor().ProcessAsync(SingleIssuer.Tenant, Request());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -106,10 +107,11 @@ public class RegisterClientRequestProcessorTests
         var processor = Processor();
         _tokens
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("no signing key"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(Request()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(SingleIssuer.Tenant, Request()));
 
         _clients.VerifyNoOtherCalls();
     }
@@ -128,8 +130,8 @@ public class RegisterClientRequestProcessorTests
                 SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>()));
         var processor = Processor(store);
 
-        Assert.True((await processor.ProcessAsync(Request())).TryGetSuccess(out _));
-        Assert.True((await processor.ProcessAsync(Request())).TryGetFailure(out var error));
+        Assert.True((await processor.ProcessAsync(SingleIssuer.Tenant, Request())).TryGetSuccess(out _));
+        Assert.True((await processor.ProcessAsync(SingleIssuer.Tenant, Request())).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
         Assert.NotNull(await store.TryFindRegisteredClientAsync(SingleIssuer.Tenant, "client-1"));
     }

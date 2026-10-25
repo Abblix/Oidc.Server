@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -20,6 +21,7 @@ public interface IRemoveClientRequestProcessor
     /// <summary>
     /// Removes the addressed client from the data store and records the removal timestamp.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">A request whose authentication and target client have been validated.</param>
-    Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request);
+    Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRequest request);
 }

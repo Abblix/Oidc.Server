@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -32,12 +33,13 @@ public class SigningAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : 
     /// per-parameter supported sets. Each set is read only when its parameter is present, so a
     /// parameter left unset never touches the corresponding provider property.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
     /// A <see cref="OidcError"/> if any signing algorithm is not supported;
     /// otherwise, null if all validations are successful.
     /// </returns>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

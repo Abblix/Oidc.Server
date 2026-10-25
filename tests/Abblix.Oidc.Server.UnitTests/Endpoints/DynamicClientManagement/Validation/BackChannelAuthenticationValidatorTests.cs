@@ -62,7 +62,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext();
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -79,7 +79,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Poll);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -98,7 +98,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("https://example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -116,7 +116,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Ping);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -137,7 +137,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("https://example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -160,7 +160,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("http://client.example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -178,7 +178,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Push);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -199,7 +199,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("https://example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -216,7 +216,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: "custom-mode");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -240,7 +240,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: SigningAlgorithms.RS256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -263,7 +263,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: SigningAlgorithms.ES512);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -283,7 +283,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Poll);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -306,7 +306,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: "rs256"); // Different case
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -326,7 +326,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -349,7 +349,7 @@ public class BackChannelAuthenticationValidatorTests
     {
         var context = CreateContext(mode, new Uri("/cb", UriKind.Relative));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // The same code the relative case gets from StoredUriValidator ahead of this one in the
         // pipeline. Every refusal this validator writes carries it, which is what makes the member
@@ -404,7 +404,7 @@ public class BackChannelAuthenticationValidatorTests
             endpoint is null ? null : new Uri(endpoint, UriKind.Absolute),
             signingAlg);
 
-        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(context));
+        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Contains(fragment, result.ErrorDescription, StringComparison.Ordinal);
     }
@@ -425,7 +425,7 @@ public class BackChannelAuthenticationValidatorTests
             BackchannelTokenDeliveryModes.Ping,
             new Uri("http://client.example/cb", UriKind.Absolute));
 
-        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(context));
+        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
@@ -450,7 +450,7 @@ public class BackChannelAuthenticationValidatorTests
     {
         var context = CreateContext(notificationEndpoint: new Uri("https://client.example/cb"));
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     /// <summary>
@@ -484,7 +484,7 @@ public class BackChannelAuthenticationValidatorTests
     {
         var context = CreateContext(signingAlg: "NOPE");
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     /// <summary>
@@ -504,7 +504,7 @@ public class BackChannelAuthenticationValidatorTests
             TokenEndpointAuthMethod = authenticationMethod,
         };
 
-        var result = await _validator.ValidateAsync(new ClientRegistrationValidationContext(request));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request));
 
         if (refused)
             Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
@@ -520,6 +520,6 @@ public class BackChannelAuthenticationValidatorTests
     {
         var request = CreateContext().Request with { TokenEndpointAuthMethod = ClientAuthenticationMethods.None };
 
-        Assert.Null(await _validator.ValidateAsync(new ClientRegistrationValidationContext(request)));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request)));
     }
 }

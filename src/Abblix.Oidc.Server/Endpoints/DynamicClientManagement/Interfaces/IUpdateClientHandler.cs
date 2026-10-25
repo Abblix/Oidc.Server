@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -21,6 +22,7 @@ public interface IUpdateClientHandler
     /// <summary>
     /// Asynchronously handles a request to update a client's configuration details.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The update request containing the client authentication and updated metadata.</param>
     /// <returns>A task that returns the updated client's configuration details or an error response.</returns>
     /// <remarks>
@@ -29,5 +31,5 @@ public interface IUpdateClientHandler
     /// validates the updated metadata, and updates the client configuration.
     /// The response includes all client metadata with potentially updated registration_access_token.
     /// </remarks>
-    Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(UpdateClientRequest request);
+    Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(TenantDefinition tenant, UpdateClientRequest request);
 }

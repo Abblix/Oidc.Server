@@ -17,11 +17,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Each requested scope must be recognized by the server.
 /// </summary>
 /// <param name="scopeManager">Provides access to known scope definitions.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAccessor) : SyncClientRegistrationContextValidator
+public class ScopeValidator(IScopeManager scopeManager) : SyncClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var scope = context.Request.Scope;
         if (scope is null)
@@ -33,7 +32,7 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
             return ErrorFactory.InvalidClientMetadata("The scope names no value");
 
         return (from value in scope
-            where !scopeManager.TryGet(tenantAccessor.CurrentTenant(), value, out _)
+            where !scopeManager.TryGet(tenant, value, out _)
             select ErrorFactory.InvalidClientMetadata($"Unknown scope: {value}")).FirstOrDefault();
     }
 }

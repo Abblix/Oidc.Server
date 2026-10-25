@@ -27,15 +27,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="jwtValidator">Validates JWT signature and expiration.</param>
 /// <param name="revocationProvider">Checks whether the token has been revoked.</param>
 /// <param name="options">OIDC configuration options.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class InitialAccessTokenValidator(
     IAuthServiceJwtValidator jwtValidator,
     IInitialAccessTokenRevocationProvider revocationProvider,
-    IOptionsMonitor<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
+    IOptionsMonitor<OidcOptions> options) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         if (context.Operation != DynamicClientOperation.Register || !options.CurrentValue.RequireInitialAccessToken)
             return null;
@@ -58,7 +56,7 @@ public class InitialAccessTokenValidator(
         // used to be off because the token carried no 'aud' at all - a token with no stated recipient, and
         // the one exception to the rule every other token here follows.
         var result = await jwtValidator.ValidateAsync(
-            tenantAccessor.CurrentTenant(),
+            tenant,
             header.Parameter, TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken));
 
         if (result.TryGetFailure(out var error))

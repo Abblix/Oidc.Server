@@ -50,7 +50,7 @@ public class RedirectUrisValidatorTests
     {
         var context = CreateContext(null!, [GrantTypes.AuthorizationCode]);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
@@ -85,7 +85,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -105,7 +105,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -125,7 +125,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -147,7 +147,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -168,7 +168,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -190,7 +190,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -217,7 +217,7 @@ public class RedirectUrisValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode],
             applicationType: ApplicationTypes.Native);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(accepted, result == null);
         if (!accepted)
@@ -264,7 +264,7 @@ public class RedirectUrisValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode],
             applicationType: ApplicationTypes.Web);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(accepted, result == null);
         if (!accepted)
@@ -285,7 +285,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -307,7 +307,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -328,7 +328,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -348,7 +348,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -368,7 +368,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -391,7 +391,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -413,7 +413,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -438,7 +438,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -463,7 +463,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -484,7 +484,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -504,7 +504,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -524,7 +524,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -544,7 +544,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -564,7 +564,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -584,7 +584,7 @@ public class RedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

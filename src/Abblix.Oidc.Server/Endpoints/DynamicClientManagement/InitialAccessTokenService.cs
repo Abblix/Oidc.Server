@@ -22,15 +22,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class InitialAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
-    ITenantAccessor tenantAccessor,
     ITenantCatalog catalog,
     IOptions<OidcOptions> options) : IInitialAccessTokenService
 {
     /// <inheritdoc />
-    public Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
+    public Task<string> IssueTokenAsync(TenantDefinition tenant, string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
     {
         var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
-        var tenant = tenantAccessor.CurrentTenant();
         var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 
         var token = new JsonWebToken
@@ -58,7 +56,7 @@ public class InitialAccessTokenService(
         };
 
         return serviceJwtFormatter.FormatAsync(
-            tenantAccessor.CurrentTenant(),
+            tenant,
             token, ServiceJwtEncryption.ForInitialAccessToken(options.Value));
     }
 }

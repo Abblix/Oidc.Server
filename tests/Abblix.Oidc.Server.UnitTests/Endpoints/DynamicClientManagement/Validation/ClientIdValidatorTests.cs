@@ -33,7 +33,7 @@ public class ClientIdValidatorTests
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _logger = new Mock<ILogger<ClientIdValidator>>();
-        _validator = new ClientIdValidator(_logger.Object, _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ClientIdValidator(_logger.Object, _clientInfoProvider.Object);
     }
 
     private ClientRegistrationValidationContext CreateContext(string? clientId = null)
@@ -58,7 +58,7 @@ public class ClientIdValidatorTests
         var context = CreateContext(clientId: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -76,7 +76,7 @@ public class ClientIdValidatorTests
         var context = CreateContext(clientId: string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -98,7 +98,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -120,7 +120,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -144,7 +144,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync(existingClient);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -168,7 +168,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, "test-client"), Times.Once);
@@ -189,7 +189,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -211,7 +211,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -233,7 +233,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -255,7 +255,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -276,7 +276,7 @@ public class ClientIdValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

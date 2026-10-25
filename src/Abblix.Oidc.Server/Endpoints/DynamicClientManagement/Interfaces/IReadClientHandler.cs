@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -23,7 +24,8 @@ public interface IReadClientHandler
     /// the addressed client. Returns either the client's metadata or an OIDC error suitable
     /// for the response body.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientRequest">The incoming request including the registration access token
     /// and target <c>client_id</c>.</param>
-    Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest);
+    Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(TenantDefinition tenant, ClientRequest clientRequest);
 }

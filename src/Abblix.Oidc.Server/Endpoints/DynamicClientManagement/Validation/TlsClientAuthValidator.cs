@@ -10,6 +10,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -24,11 +25,12 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
     /// Validates the client registration context for tls_client_auth method.
     /// Ensures at least one identification field is provided and all fields are properly formatted.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The client registration validation context containing the request to validate.</param>
     /// <returns>
     /// An <see cref="OidcError"/> if validation fails, or null if the request is valid or not using tls_client_auth.
     /// </returns>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

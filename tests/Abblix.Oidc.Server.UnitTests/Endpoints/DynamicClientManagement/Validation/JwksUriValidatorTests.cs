@@ -43,12 +43,12 @@ public class JwksUriValidatorTests
 
     [Fact]
     public async Task ValidateAsync_WithNoJwksUri_ReturnsNull()
-        => Assert.Null(await CreateValidator(SecureDefaults).ValidateAsync(Context(null)));
+        => Assert.Null(await CreateValidator(SecureDefaults).ValidateAsync(SingleIssuer.Tenant, Context(null)));
 
     [Fact]
     public async Task ValidateAsync_WithAnAbsoluteUri_ReturnsNull()
         => Assert.Null(await CreateValidator(SecureDefaults)
-            .ValidateAsync(Context(new Uri("https://client.example.com/.well-known/jwks.json"))));
+            .ValidateAsync(SingleIssuer.Tenant, Context(new Uri("https://client.example.com/.well-known/jwks.json"))));
 
     /// <summary>
     /// Everything the fetch policy refuses is refused here, including the two shapes that read as
@@ -72,7 +72,7 @@ public class JwksUriValidatorTests
         string uri,
         UriKind kind)
     {
-        var result = await CreateValidator(SecureDefaults).ValidateAsync(Context(new Uri(uri, kind)));
+        var result = await CreateValidator(SecureDefaults).ValidateAsync(SingleIssuer.Tenant, Context(new Uri(uri, kind)));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -104,14 +104,14 @@ public class JwksUriValidatorTests
         };
 
         var result = await CreateValidator(options)
-            .ValidateAsync(Context(new Uri("http://keys.internal:8080/jwks")));
+            .ValidateAsync(SingleIssuer.Tenant, Context(new Uri("http://keys.internal:8080/jwks")));
 
         Assert.Null(result);
 
         // The control: the same address is refused under the defaults, so what this row measures is the
         // named destination and not a policy that permits everything.
         Assert.NotNull(await CreateValidator(SecureDefaults)
-            .ValidateAsync(Context(new Uri("http://keys.internal:8080/jwks"))));
+            .ValidateAsync(SingleIssuer.Tenant, Context(new Uri("http://keys.internal:8080/jwks"))));
     }
 
     /// <summary>

@@ -24,24 +24,22 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
 /// <param name="catalog">The catalog the tenant the client is removed from was resolved from, which its license
 /// count is kept by.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class RemoveClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
-    ITenantCatalog catalog,
-    ITenantAccessor tenantAccessor) : IRemoveClientRequestProcessor
+    ITenantCatalog catalog) : IRemoveClientRequestProcessor
 {
     /// <summary>
     /// Deletes the addressed client and returns the recorded removal timestamp.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">A request whose authentication and target client have been validated.</param>
-    public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
+    public async Task<Result<RemoveClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRequest request)
     {
         var clientId = request.Client.ClientInfo.ClientId;
 
         // Only the registration this request was authenticated against: one rotated meanwhile is left
         // to whoever holds the rotated token.
-        var tenant = tenantAccessor.CurrentTenant();
         if (!await clientInfoManager.TryRemoveClientAsync(tenant, request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 

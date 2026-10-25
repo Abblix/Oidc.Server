@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -22,8 +23,9 @@ public class ClientRegistrationContextValidatorComposite(IClientRegistrationCont
     /// <summary>
     /// Runs each step until one returns an error or all succeed.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The shared validation context.</param>
     /// <returns>The first error produced, or <c>null</c> when every step passes.</returns>
-    public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
-        => validationSteps.FirstOrDefaultAsync(v => v.ValidateAsync(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+        => validationSteps.FirstOrDefaultAsync(v => v.ValidateAsync(tenant, context));
 }

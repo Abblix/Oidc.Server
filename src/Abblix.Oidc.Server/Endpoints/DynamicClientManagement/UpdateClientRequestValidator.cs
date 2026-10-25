@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,10 +37,10 @@ public class UpdateClientRequestValidator(
     public const string RegistrationKey = nameof(UpdateClientRequestValidator);
 
     /// <inheritdoc />
-    public async Task<Result<ValidUpdateClientRequest, OidcError>> ValidateAsync(UpdateClientRequest request)
+    public async Task<Result<ValidUpdateClientRequest, OidcError>> ValidateAsync(TenantDefinition tenant, UpdateClientRequest request)
     {
         // First validate client authentication (registration_access_token)
-        var clientValidation = await clientRequestValidator.ValidateAsync(request.ClientRequest);
+        var clientValidation = await clientRequestValidator.ValidateAsync(tenant, request.ClientRequest);
         var validClientRequest = clientValidation;
 
         if (validClientRequest.TryGetFailure(out var clientError))
@@ -56,7 +57,7 @@ public class UpdateClientRequestValidator(
         }
 
         // Validate the registration request metadata using update-specific validator
-        var registrationValidation = await registrationRequestValidator.ValidateAsync(request.RegistrationRequest);
+        var registrationValidation = await registrationRequestValidator.ValidateAsync(tenant, request.RegistrationRequest);
 
         // The pairwise subjects every end user of the client already holds are computed under its sector, so an
         // update deriving another sector would hand each of them a new identity; it is refused instead

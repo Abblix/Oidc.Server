@@ -120,7 +120,7 @@ public class RegisterClientHandlerIntegrationTests
         var provider = BuildProvider();
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
-        var result = await handler.HandleAsync(CreateRequest());
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), CreateRequest());
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
@@ -143,7 +143,7 @@ public class RegisterClientHandlerIntegrationTests
             responseTypes: [[ResponseTypes.Token]],
             grantTypes: [GrantTypes.Implicit]);
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -166,7 +166,7 @@ public class RegisterClientHandlerIntegrationTests
             responseTypes: [[ResponseTypes.Token]],
             grantTypes: [GrantTypes.Implicit]);
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
@@ -188,7 +188,7 @@ public class RegisterClientHandlerIntegrationTests
         var request = CreateRequest(
             grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Password]);
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -209,7 +209,7 @@ public class RegisterClientHandlerIntegrationTests
         var request = CreateRequest(
             grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Password]);
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
@@ -230,7 +230,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var request = CreateDpopBoundRequest();
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out var success),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
@@ -252,7 +252,7 @@ public class RegisterClientHandlerIntegrationTests
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
         var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
 
-        var result = await handler.HandleAsync(CreateRequest());
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), CreateRequest());
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.False(success.Metadata.DpopBoundAccessTokens);
@@ -277,7 +277,7 @@ public class RegisterClientHandlerIntegrationTests
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
         var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
 
-        var result = await handler.HandleAsync(CreateRequest());
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), CreateRequest());
 
         Assert.True(result.TryGetSuccess(out var success));
 
@@ -302,7 +302,7 @@ public class RegisterClientHandlerIntegrationTests
         var request = CreateRequest();
         request = request with { PkceRequired = false };
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out var success));
 
@@ -326,7 +326,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var request = CreateDpopBoundRequest();
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.NotNull(success.Metadata.RedirectUris);
@@ -346,11 +346,11 @@ public class RegisterClientHandlerIntegrationTests
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var withAlg = CreateRequest() with { IntrospectionSignedResponseAlg = SigningAlgorithms.RS256 };
-        Assert.True((await handler.HandleAsync(withAlg)).TryGetSuccess(out var registered));
+        Assert.True((await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), withAlg)).TryGetSuccess(out var registered));
         Assert.Equal(SigningAlgorithms.RS256, registered.Metadata.IntrospectionSignedResponseAlg);
 
         var withoutAlg = CreateRequest();
-        Assert.True((await handler.HandleAsync(withoutAlg)).TryGetSuccess(out var registeredDefault));
+        Assert.True((await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), withoutAlg)).TryGetSuccess(out var registeredDefault));
         Assert.Null(registeredDefault.Metadata.IntrospectionSignedResponseAlg);
     }
 
@@ -373,7 +373,7 @@ public class RegisterClientHandlerIntegrationTests
             TlsClientCertificateBoundAccessTokens = true,
         };
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.True(success.Metadata.RequirePushedAuthorizationRequests);
@@ -403,6 +403,7 @@ public class RegisterClientHandlerIntegrationTests
         var timeProvider = provider.GetRequiredService<TimeProvider>();
 
         var token = await initialAccessTokenService.IssueTokenAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(),
             subject: "registration-portal",
             issuedAt: timeProvider.GetUtcNow(),
             expiresIn: TimeSpan.FromHours(1));
@@ -412,7 +413,7 @@ public class RegisterClientHandlerIntegrationTests
             AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token),
         };
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
@@ -433,7 +434,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var request = CreateRequest() with { IdTokenSignedResponseAlg = algorithm };
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -453,7 +454,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var request = CreateRequest() with { Scope = [Scopes.OpenId, Scopes.Profile] };
 
-        var result = await handler.HandleAsync(request);
+        var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.Equal([GrantTypes.AuthorizationCode], success.Metadata.GrantTypes!);

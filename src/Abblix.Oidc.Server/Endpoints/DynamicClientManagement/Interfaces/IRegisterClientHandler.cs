@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -23,11 +24,12 @@ public interface IRegisterClientHandler
     /// generates credentials, and issues the registration access token used for later
     /// management operations (RFC 7592).
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientRegistrationRequest">The client metadata payload as defined in
     /// RFC 7591 section 2 and OIDC Dynamic Client Registration 1.0.</param>
     /// <returns>
     /// A successful response per RFC 7591 section 3.2.1 (containing <c>client_id</c>,
     /// <c>client_secret</c>, <c>registration_access_token</c>, etc.) or an error per section 3.2.2.
     /// </returns>
-    Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(TenantDefinition tenant, Model.ClientRegistrationRequest clientRegistrationRequest);
 }

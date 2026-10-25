@@ -63,7 +63,7 @@ public class UriMemberCoverageTests
             request,
             property.PropertyType == typeof(Uri[]) ? new[] { Relative } : Relative);
 
-        var result = await new StoredUriValidator().ValidateAsync(new ClientRegistrationValidationContext(request));
+        var result = await new StoredUriValidator().ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request));
 
         Assert.NotNull(result);
 
@@ -118,7 +118,7 @@ public class UriMemberCoverageTests
                 property.PropertyType == typeof(Uri[]) ? new[] { absolute } : absolute);
         }
 
-        var result = await new StoredUriValidator().ValidateAsync(new ClientRegistrationValidationContext(request));
+        var result = await new StoredUriValidator().ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request));
 
         Assert.Null(result);
     }

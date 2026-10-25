@@ -26,14 +26,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// the host already allowed keeps <c>allowed</c> there, while one it did not cannot raise itself to it.
 /// </remarks>
 /// <param name="clientInfoProvider">Store consulted for the offline access of the client being updated.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider, ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
+public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error when the client asks for offline access without
     /// <c>prompt=consent</c> it does not already have, or names no offline access at all; <c>null</c> otherwise.
     /// </summary>
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         switch (context.Request.OfflineAccess)
         {
@@ -41,7 +40,7 @@ public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider, ITen
                 return null;
 
             case OfflineAccess.Allowed:
-                if (await AlreadyAllowedAsync(context))
+                if (await AlreadyAllowedAsync(tenant, context))
                     return null;
 
                 return ErrorFactory.InvalidClientMetadata(
@@ -57,7 +56,7 @@ public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider, ITen
     /// Whether the request updates a client the host has already allowed offline access without
     /// <c>prompt=consent</c>.
     /// </summary>
-    private async Task<bool> AlreadyAllowedAsync(ClientRegistrationValidationContext context)
+    private async Task<bool> AlreadyAllowedAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         switch (context.Operation)
         {
@@ -67,7 +66,7 @@ public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider, ITen
             case DynamicClientOperation.Update:
                 var clientId = context.Request.ClientId;
                 return clientId.HasValue() &&
-                       await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId) is { OfflineAccess: OfflineAccess.Allowed };
+                       await clientInfoProvider.TryFindClientAsync(tenant, clientId) is { OfflineAccess: OfflineAccess.Allowed };
 
             default:
                 throw new InvalidOperationException($"Unsupported dynamic client operation: {context.Operation}");

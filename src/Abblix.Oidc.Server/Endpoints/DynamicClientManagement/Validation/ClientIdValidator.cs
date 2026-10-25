@@ -24,20 +24,18 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <param name="logger">Logger used for warnings about register/update conflicts.</param>
 /// <param name="clientInfoProvider">Store consulted to check for existing client records.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class ClientIdValidator(
     ILogger<ClientIdValidator> logger,
-    IClientInfoProvider clientInfoProvider,
-    ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
+    IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var clientId = context.Request.ClientId;
         if (!clientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         switch (context.Operation)
         {
             // For UPDATE: client MUST exist

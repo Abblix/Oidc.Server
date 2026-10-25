@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -28,7 +29,7 @@ public class BackChannelLogoutUriValidator(ISecureUriValidator uriValidator)
     /// Returns an <c>invalid_client_metadata</c> error if <c>backchannel_logout_uri</c> is relative or
     /// violates the SSRF policy; <c>null</c> when absent or compliant.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var uri = context.Request.BackChannelLogoutUri;
         if (uri == null)

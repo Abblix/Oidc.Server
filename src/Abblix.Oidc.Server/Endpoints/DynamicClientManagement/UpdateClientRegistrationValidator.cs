@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -25,14 +26,14 @@ public class UpdateClientRegistrationValidator(IClientRegistrationContextValidat
 	: IRegisterClientRequestValidator
 {
 	/// <inheritdoc />
-	public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request)
+	public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(TenantDefinition tenant, ClientRegistrationRequest request)
 	{
 		var context = new ClientRegistrationValidationContext(request)
 		{
 			Operation = DynamicClientOperation.Update
 		};
 
-		var error = await validator.ValidateAsync(context);
+		var error = await validator.ValidateAsync(tenant, context);
 		if (error != null)
 			return error;
 

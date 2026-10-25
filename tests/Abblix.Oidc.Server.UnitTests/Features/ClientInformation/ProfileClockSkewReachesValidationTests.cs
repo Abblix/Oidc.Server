@@ -114,10 +114,9 @@ public class ProfileClockSkewReachesValidationTests
             NullLogger<SoftwareStatementValidator>.Instance,
             tokenValidator.Object,
             options.Object,
-            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = profile }),
             new Mock<ISecureHttpFetcher>().Object);
 
-        await validator.ValidateAsync(new ClientRegistrationValidationContext(
+        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRegistrationValidationContext(
             new ClientRegistrationRequest { SoftwareStatement = "header.payload.signature" }));
 
         Assert.Equal(

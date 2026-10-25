@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using System.Reflection;
@@ -538,7 +539,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     {
         public IDictionary<string, JsonElement>? Seen { get; private set; }
 
-        public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+        public Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
         {
             Seen = context.Request.AdditionalMembers;
             return Task.FromResult<OidcError?>(null);

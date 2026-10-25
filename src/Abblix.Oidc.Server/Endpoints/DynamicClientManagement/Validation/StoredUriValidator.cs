@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -46,7 +47,7 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
     /// Returns an <c>invalid_client_metadata</c> error naming the first member that carries a relative
     /// URI; <c>null</c> when every member is absent or absolute.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

@@ -36,7 +36,7 @@ public class SubjectTypeValidatorTests
     {
         _secureHttpFetcher = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
         _logger = new Mock<ILogger<SubjectTypeValidator>>();
-        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(PairwiseKeyed), tenantAccessor: SingleIssuer.Accessor);
+        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(PairwiseKeyed));
     }
 
     /// <summary>
@@ -52,14 +52,14 @@ public class SubjectTypeValidatorTests
     [Fact]
     public async Task APairwiseRegistration_WithoutAKey_IsRefused()
     {
-        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor);
+        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()));
         var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
         {
             SubjectType = SubjectTypes.Pairwise,
             RedirectUris = [new Uri("https://client.example.com/callback")],
         });
 
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -83,7 +83,7 @@ public class SubjectTypeValidatorTests
     {
         var context = CreateContext(nullRatherThanEmpty ? null! : [], SubjectTypes.Pairwise);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -123,7 +123,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Public);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -146,7 +146,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -170,7 +170,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -191,7 +191,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -224,7 +224,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -245,7 +245,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: new Uri("http://example.com/sector.json"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -279,7 +279,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -313,7 +313,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -342,7 +342,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -370,7 +370,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -390,7 +390,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal("app.example.com", context.SectorIdentifier);
@@ -417,7 +417,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal("sector.example.com", context.SectorIdentifier);
@@ -443,7 +443,7 @@ public class SubjectTypeValidatorTests
             redirectUris: [new Uri("/cb", UriKind.Relative)],
             subjectType: SubjectTypes.Pairwise);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
         Assert.Null(context.SectorIdentifier);
@@ -464,7 +464,7 @@ public class SubjectTypeValidatorTests
             redirectUris: [new Uri("https://app.example.com/cb")],
             subjectType: SubjectTypes.Pairwise);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal("app.example.com", context.SectorIdentifier);
     }
 
@@ -510,7 +510,7 @@ public class SubjectTypeValidatorTests
             jwksUri: isPush ? null : modeUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         if (expectError)
@@ -555,7 +555,7 @@ public class SubjectTypeValidatorTests
             jwksUri: new Uri("https://client.example.com/jwks"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -588,7 +588,7 @@ public class SubjectTypeValidatorTests
             notificationEndpoint: notificationEndpoint);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -621,7 +621,7 @@ public class SubjectTypeValidatorTests
             jwksUri: new Uri("https://keys.example.com/jwks"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -658,7 +658,7 @@ public class SubjectTypeValidatorTests
             notificationEndpoint: new Uri("https://notify.example.com/callback"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -686,7 +686,7 @@ public class SubjectTypeValidatorTests
             notificationEndpoint: new Uri("https://notify.example.com/callback"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -723,7 +723,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         var error = Assert.IsType<OidcError>(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -753,7 +753,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal("sector.example.com", context.SectorIdentifier);
     }
 
@@ -784,7 +784,7 @@ public class SubjectTypeValidatorTests
             jwksUri: isPush ? null : overHttp);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -819,7 +819,7 @@ public class SubjectTypeValidatorTests
             jwksUri: isPush ? null : relative);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

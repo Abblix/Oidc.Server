@@ -36,7 +36,7 @@ public class RegistrationAccessTokenValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
-        return new RegistrationAccessTokenValidator(jwtValidator.Object, tenantAccessor: SingleIssuer.Accessor);
+        return new RegistrationAccessTokenValidator(jwtValidator.Object);
     }
 
     private static JsonWebToken CreateToken(string? jti, string? subject = null, string? audience = null) => new()
@@ -60,7 +60,7 @@ public class RegistrationAccessTokenValidatorTests
     {
         var validator = CreateValidator(CreateToken("jti-current"));
 
-        var result = await validator.ValidateAsync(Bearer, ClientId);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
 
         Assert.True(result.TryGetSuccess(out var tokenId));
         Assert.Equal("jti-current", tokenId);
@@ -74,7 +74,7 @@ public class RegistrationAccessTokenValidatorTests
     {
         var validator = CreateValidator(CreateToken(jti: null));
 
-        var result = await validator.ValidateAsync(Bearer, ClientId);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
@@ -91,7 +91,7 @@ public class RegistrationAccessTokenValidatorTests
     {
         var validator = CreateValidator(CreateToken("jti-current"));
 
-        var result = await validator.ValidateAsync(Bearer, "client-2");
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Bearer, "client-2");
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -111,7 +111,7 @@ public class RegistrationAccessTokenValidatorTests
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object, tenantAccessor: SingleIssuer.Accessor).ValidateAsync(Bearer, ClientId);
+        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object).ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);

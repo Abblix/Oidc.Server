@@ -58,7 +58,7 @@ public class SigningAlgorithmsValidatorTests
     {
         var context = CreateContext();
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -76,7 +76,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.RS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -94,7 +94,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -115,7 +115,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -132,7 +132,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -151,7 +151,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -169,7 +169,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.PS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -189,7 +189,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -209,7 +209,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.HS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -229,7 +229,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.RS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -247,7 +247,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -267,7 +267,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -296,7 +296,7 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES256,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.PS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -317,7 +317,7 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES256,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Contains("request_object_signing_alg", result.ErrorDescription);
@@ -336,7 +336,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: "rs256");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -364,7 +364,7 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES384,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.RS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -382,7 +382,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: "custom-alg-2024");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -401,7 +401,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.RS256);
 
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         _jwtAlgorithms.Verify(p => p.SigningAlgorithmsSupported, Times.Once);
     }

@@ -34,22 +34,20 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
 /// <param name="subjectTypeConverter">Tells which subject types the issuer can issue, as its discovery document
 /// does.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class SubjectTypeValidator(
     ILogger<SubjectTypeValidator> logger,
     ISecureHttpFetcher secureHttpFetcher,
-    ISubjectTypeConverter subjectTypeConverter,
-    ITenantAccessor tenantAccessor): IClientRegistrationContextValidator
+    ISubjectTypeConverter subjectTypeConverter): IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         if (request.SubjectType != SubjectTypes.Pairwise)
             return null;
 
         // A client registered for pseudonyms the issuer has no key to seal would fail every token request
-        if (!subjectTypeConverter.SubjectTypesSupported(tenantAccessor.CurrentTenant()).Contains(SubjectTypes.Pairwise))
+        if (!subjectTypeConverter.SubjectTypesSupported(tenant).Contains(SubjectTypes.Pairwise))
         {
             return ErrorFactory.InvalidClientMetadata(
                 $"{Parameters.SubjectType} {SubjectTypes.Pairwise} is not supported by this issuer");

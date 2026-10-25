@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -17,9 +19,10 @@ public interface IInitialAccessTokenService
     /// <summary>
     /// Issues an initial access token for authorizing client registration.
     /// </summary>
+    /// <param name="tenant">The tenant the token is issued at.</param>
     /// <param name="subject">A unique identifier for the token, used as the JWT subject for revocation tracking.</param>
     /// <param name="issuedAt">The timestamp when the token is issued.</param>
     /// <param name="expiresIn">The optional duration after which the token expires.</param>
     /// <returns>A task that results in the encoded initial access token.</returns>
-    Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn);
+    Task<string> IssueTokenAsync(TenantDefinition tenant, string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn);
 }
