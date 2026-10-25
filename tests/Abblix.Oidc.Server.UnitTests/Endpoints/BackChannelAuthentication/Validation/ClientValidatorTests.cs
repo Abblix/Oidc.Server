@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Abblix.Oidc;
@@ -32,7 +33,7 @@ public class ClientValidatorTests
     public ClientValidatorTests()
     {
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _validator = new ClientValidator(_clientAuthenticator.Object);
+        _validator = new ClientValidator(_clientAuthenticator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext()
@@ -66,7 +67,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -93,7 +94,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -114,7 +115,7 @@ public class ClientValidatorTests
         var context = CreateContext();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -141,7 +142,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -168,7 +169,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -196,7 +197,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -224,8 +225,8 @@ public class ClientValidatorTests
 
         ClientRequest? capturedRequest = null;
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Callback<ClientRequest>(r => capturedRequest = r)
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Callback<TenantDefinition, ClientRequest>((_, r) => capturedRequest = r)
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -255,7 +256,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -280,7 +281,7 @@ public class ClientValidatorTests
         };
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -306,7 +307,7 @@ public class ClientValidatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
         };
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(context.ClientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
         var result = await _validator.ValidateAsync(context);

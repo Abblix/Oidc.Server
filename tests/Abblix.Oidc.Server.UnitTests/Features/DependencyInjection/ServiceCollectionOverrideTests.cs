@@ -196,16 +196,57 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
-        services.AddSingleton(SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }));
+        var fapi2 = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 };
+        services.AddSingleton(SingleIssuer.AccessorOf(fapi2));
         services.AddSingleton(Mock.Of<ITenantCatalog>());
         services.AddSingleton(new Mock<IReplayCache>().Object);
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
 
         var authenticated = await authenticator.TryAuthenticateClientAsync(
+            fapi2.ToTenant(),
             new ClientRequest { ClientId = TestConstants.DefaultClientId });
 
         Assert.Null(authenticated);
+    }
+
+    /// <summary>
+    /// The composed authenticator, decorators included, hands the tenant it is given to the authenticator that looks
+    /// the client up: a client registered only at another tenant is refused, and found at its own.
+    /// </summary>
+    [Fact]
+    public async Task AddClientAuthentication_AClientRegisteredOnlyAtAnotherTenant_IsRefused()
+    {
+        var services = new ServiceCollection();
+        services.AddClientAuthentication();
+
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
+        var publicClient = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+        var clients = new Mock<IClientInfoProvider>();
+        clients
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? publicClient : null);
+
+        services.AddLogging();
+        services.AddSingleton(clients.Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
+        services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
+        services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
+        services.AddSingleton(new Mock<IClientJwtValidator>().Object);
+        services.AddSingleton(SingleIssuer.Accessor);
+        services.AddSingleton(Mock.Of<ITenantCatalog>());
+        services.AddSingleton(new Mock<IReplayCache>().Object);
+
+        var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
+        var request = new ClientRequest { ClientId = TestConstants.DefaultClientId };
+
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(acme, request));
+        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(globex, request));
     }
 
     [Fact]

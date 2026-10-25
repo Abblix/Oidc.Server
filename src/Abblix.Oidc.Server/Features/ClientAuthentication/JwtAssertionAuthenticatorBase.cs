@@ -27,20 +27,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
-/// <param name="tenantAccessor">Names the tenant whose issuer a profile-governed assertion must name and whose
-/// default security profile applies.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
-    ITenantAccessor tenantAccessor,
     TimeProvider timeProvider) : IClientAuthenticator
 {
-    /// <summary>
-    /// The tenant the request is served at, exposed so a derived authenticator looks the client up there.
-    /// </summary>
-    protected TenantDefinition CurrentTenant => tenantAccessor.CurrentTenant();
-
     /// <summary>
     /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
     /// reads the same instant rather than capturing a second copy of the same dependency.
@@ -55,14 +47,15 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// refusal, so the links run in the order listed and none of them spends anything. Held once for every
     /// authentication rather than built per request, which is why each link takes its subject as arguments.
     /// </remarks>
-    private static readonly Func<JwtAssertionAuthenticatorBase, JsonWebToken, ClientInfo, bool>[] AssertionLinks =
-    [
-        static (self, _, client) => self.AuthMethodIsSupported(client),
-        static (self, token, client) => self.SigningAlgorithmMatchesRegistration(token, client),
-        static (self, token, _) => self.IssuerMatchesSubject(token),
-        static (self, token, client) => self.TypeIsClientAuthentication(token, client),
-        static (self, token, client) => self.AudienceSatisfiesTheProfile(token, client),
-    ];
+    private static readonly Func<JwtAssertionAuthenticatorBase, TenantDefinition, JsonWebToken, ClientInfo, bool>[]
+        AssertionLinks =
+        [
+            static (self, _, _, client) => self.AuthMethodIsSupported(client),
+            static (self, _, token, client) => self.SigningAlgorithmMatchesRegistration(token, client),
+            static (self, _, token, _) => self.IssuerMatchesSubject(token),
+            static (self, _, token, client) => self.TypeIsClientAuthentication(token, client),
+            static (self, tenant, token, client) => self.AudienceSatisfiesTheProfile(tenant, token, client),
+        ];
 
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
@@ -70,12 +63,13 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     public abstract IEnumerable<string> ClientAuthenticationMethodsSupported { get; }
 
     /// <summary>
-    /// The control bundle this deployment's default profile mandates, for a derived authenticator
-    /// building its own validation parameters. Read from the same options this class validates
+    /// The control bundle the tenant's default profile mandates, for a derived authenticator
+    /// building its own validation parameters. Read from the same tenant this class validates
     /// against, so the two cannot disagree.
     /// </summary>
-    protected SecurityProfileRequirements DefaultProfileRequirements
-        => SecurityProfileRequirements.Resolve(tenantAccessor.CurrentTenant().DefaultSecurityProfile);
+    /// <param name="tenant">The tenant the request is served at.</param>
+    protected static SecurityProfileRequirements DefaultProfileRequirementsOf(TenantDefinition tenant)
+        => SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
 
     /// <summary>
     /// Answers whether the assertion's timestamps sit inside the window the profile governing THIS
@@ -91,12 +85,14 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// a refusal after it would burn the assertion's own identifier on a request this check was
     /// going to reject.
     /// </remarks>
+    /// <param name="tenant">The tenant whose default profile the client's own profile tightens.</param>
     /// <param name="timestamps">The assertion's timestamps, already read.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>
-    private bool TimestampsSatisfyTheClientsOwnProfile(AssertionTimestamps timestamps, ClientInfo clientInfo)
+    private bool TimestampsSatisfyTheClientsOwnProfile(
+        TenantDefinition tenant, AssertionTimestamps timestamps, ClientInfo clientInfo)
     {
         var refusal = SecurityProfileRequirements
-            .For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
+            .For(clientInfo, tenant.DefaultSecurityProfile)
             .ClockSkewOrDefault()
             .WhyRefused(
                 timeProvider.GetUtcNow(),
@@ -123,15 +119,15 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// underlying specification permits is left untouched, which is why this answers true there
     /// rather than checking anything.
     /// </remarks>
-    private bool AudienceSatisfiesTheProfile(JsonWebToken token, ClientInfo clientInfo)
+    private bool AudienceSatisfiesTheProfile(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
     {
-        if (!SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
+        if (!SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
                 .RequireIssuerAudienceInClientAssertion)
         {
             return true;
         }
 
-        var issuerIdentifier = tenantAccessor.CurrentTenant().Issuer.OriginalString;
+        var issuerIdentifier = tenant.Issuer.OriginalString;
         var audiences = token.Payload.Audiences.ToArray();
         if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
         {
@@ -145,16 +141,17 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the JWT to authenticate.</param>
     /// <returns>The authenticated <see cref="ClientInfo"/>, or null if authentication fails.</returns>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         if (!TryGetJwtBearerAssertion(request, out var assertion))
         {
             return null;
         }
 
-        var validationResult = await ValidateJwtAsync(assertion);
+        var validationResult = await ValidateJwtAsync(tenant, assertion);
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
@@ -165,7 +162,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         var token = validJwt.Token;
         var clientInfo = validJwt.Client;
 
-        if (!AssertionLinks.All(link => link(this, token, clientInfo)))
+        if (!AssertionLinks.All(link => link(this, tenant, token, clientInfo)))
         {
             return null;
         }
@@ -181,7 +178,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         var timestamps = new AssertionTimestamps(notBefore, expiresAt, issuedAt);
 
-        if (!TimestampsSatisfyTheClientsOwnProfile(timestamps, clientInfo))
+        if (!TimestampsSatisfyTheClientsOwnProfile(tenant, timestamps, clientInfo))
         {
             return null;
         }
@@ -368,9 +365,11 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// Validates the JWT assertion and returns the validation result along with client information.
     /// This method must be implemented by derived classes to provide their specific validation logic.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected abstract Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt);
+    protected abstract Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
+        TenantDefinition tenant, string jwt);
 }

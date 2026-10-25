@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -21,7 +22,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// to the validation context. If the authentication fails, it returns an error indicating that the client is not authorized.
 /// </remarks>
 /// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator): ITokenContextValidator
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class ClientValidator(IClientAuthenticator clientAuthenticator, ITenantAccessor tenantAccessor)
+    : ITokenContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client in the token request context. This method checks if the client
@@ -37,7 +40,8 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator): ITokenCo
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
     {
         var clientRequest = context.ClientRequest;
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+            tenantAccessor.CurrentTenant(), clientRequest);
         if (clientInfo == null)
         {
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");

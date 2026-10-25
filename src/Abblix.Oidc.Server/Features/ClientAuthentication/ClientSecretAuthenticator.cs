@@ -27,27 +27,31 @@ public abstract partial class ClientSecretAuthenticator(
 	ILogger<ClientSecretAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService,
-	ITenantAccessor tenantAccessor)
+	IHashService hashService)
 {
 	/// <summary>
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
 	/// against stored values, considering the authentication method and secret expiration.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
 	/// <param name="clientId">Client ID for identification.</param>
 	/// <param name="secret">Client secret for verification.</param>
 	/// <param name="authenticationMethod">Authentication method used, ensuring compatibility with client configuration.</param>
 	/// <returns>
 	/// Authenticated client information if successful; otherwise, null.
 	/// </returns>
-	protected async Task<ClientInfo?> TryAuthenticateAsync(string? clientId, [Credential] string? secret, string authenticationMethod)
+	protected async Task<ClientInfo?> TryAuthenticateAsync(
+		TenantDefinition tenant,
+		string? clientId,
+		[Credential] string? secret,
+		string authenticationMethod)
 	{
 		if (!clientId.NotNullOrWhiteSpace() || !secret.NotNullOrWhiteSpace())
 		{
 			return null;
 		}
 
-		var client = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+		var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
 		if (client == null)
 		{
 			LogClientNotFound(clientId);

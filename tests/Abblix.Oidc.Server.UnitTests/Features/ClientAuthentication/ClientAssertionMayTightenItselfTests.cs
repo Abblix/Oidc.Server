@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
@@ -24,7 +25,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -94,6 +94,37 @@ public class ClientAssertionMayTightenItselfTests
         var result = await Authenticate(
             clientProfile: null,
             issuedAt: Now + BeyondEveryProfileButNone);
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// The floor is the tenant's own: under a tenant naming FAPI 2.0 a client naming nothing is held to the seconds
+    /// the profile grants, though the validator here is a stub that applies no window at all.
+    /// </summary>
+    [Fact]
+    public async Task UnderATenantNamingFapi2_AClientNamingNothingIsHeldToIt()
+    {
+        var result = await Authenticate(
+            clientProfile: null,
+            issuedAt: Now + BeyondEveryProfileButNone,
+            tenantProfile: ClientSecurityProfile.Fapi2);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// And an assertion inside that window authenticates under the same tenant, without which
+    /// <see cref="UnderATenantNamingFapi2_AClientNamingNothingIsHeldToIt"/> would be satisfied by a tenant refusing
+    /// the assertion for another reason.
+    /// </summary>
+    [Fact]
+    public async Task UnderATenantNamingFapi2_AClientNamingNothingKeepsItsWindow()
+    {
+        var result = await Authenticate(
+            clientProfile: null,
+            issuedAt: Now.AddSeconds(5),
+            tenantProfile: ClientSecurityProfile.Fapi2);
 
         Assert.NotNull(result);
     }
@@ -204,7 +235,8 @@ public class ClientAssertionMayTightenItselfTests
         ClientSecurityProfile? clientProfile,
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? notBefore = null)
+        DateTimeOffset? notBefore = null,
+        ClientSecurityProfile tenantProfile = ClientSecurityProfile.None)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -244,10 +276,10 @@ public class ClientAssertionMayTightenItselfTests
             clientInfoProvider.Object,
             requestInfoProvider.Object,
             new FakeTimeProvider(Now),
-            replayCache.Object,
-            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = ClientSecurityProfile.None }));
+            replayCache.Object);
 
-        return await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var tenant = new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = tenantProfile }.ToTenant();
+        return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,

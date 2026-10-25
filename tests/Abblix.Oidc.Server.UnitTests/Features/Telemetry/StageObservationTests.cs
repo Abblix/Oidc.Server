@@ -101,7 +101,7 @@ public sealed class StageObservationTests : IDisposable
     {
         var observed = new ObservedClientAuthenticator(Mock.Of<IClientAuthenticator>());
 
-        var (_, stages) = await UnderAnEndpointSpan(() => observed.TryAuthenticateClientAsync(new ClientRequest()));
+        var (_, stages) = await UnderAnEndpointSpan(() => observed.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest()));
 
         var stage = Assert.Single(stages);
         Assert.Equal(TelemetryStages.ClientAuthentication, stage.GetTagItem(TelemetryTags.Stage));

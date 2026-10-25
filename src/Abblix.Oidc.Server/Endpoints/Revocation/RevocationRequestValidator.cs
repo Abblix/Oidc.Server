@@ -92,7 +92,7 @@ public partial class RevocationRequestValidator(
 		// used than revoked. The protection the spec actually mandates is the token-ownership
 		// check below. Do not re-add a public-client rejection here: it slipped in once and
 		// left every SPA and native client unable to revoke its own refresh token on logout.
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenantAccessor.CurrentTenant(), clientRequest);
 		if (clientInfo == null)
 		{
 			return new OidcError(

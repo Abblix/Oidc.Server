@@ -26,15 +26,13 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
     IReplayCache replayCache,
     IServiceProvider serviceProvider,
-    ITenantAccessor tenantAccessor,
     TimeProvider timeProvider)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, tenantAccessor, timeProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, timeProvider)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -50,11 +48,13 @@ public class PrivateKeyJwtAuthenticator(
     /// <summary>
     /// Validates the JWT assertion using the client's public keys from JWKS.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt)
+    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
+        TenantDefinition tenant, string jwt)
     {
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
@@ -67,6 +67,6 @@ public class PrivateKeyJwtAuthenticator(
         // RFC 7523bis types an assertion only by a SHOULD on the sender and admits more specific values, so the base
         // class judges the type after validation.
         return await tokenValidator.ValidateAsync(
-            CurrentTenant, jwt, TokenTypePolicy.CheckedByCaller, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+            tenant, jwt, TokenTypePolicy.CheckedByCaller, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
     }
 }

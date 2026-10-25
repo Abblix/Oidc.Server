@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,7 +70,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.NotNull(result);
@@ -112,7 +113,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -152,7 +153,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.NotNull(result);
@@ -174,7 +175,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -195,7 +196,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -217,7 +218,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -244,7 +245,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -274,7 +275,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -304,7 +305,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -334,7 +335,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -366,7 +367,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -400,7 +401,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.NotNull(result);
@@ -443,7 +444,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -475,7 +476,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -511,7 +512,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -532,7 +533,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
         Assert.Null(result);
@@ -567,7 +568,7 @@ public class PrivateKeyJwtAuthenticatorTests
     [InlineData("https://another-issuer.example.com")]
     public async Task Fapi2AssertionAudienceIsNotTheIssuer_ShouldReturnNull(string audience)
     {
-        var (authenticator, mocks) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, mocks) = CreateAuthenticator();
         var clientInfo = CreateClientInfo(ClientId);
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "audience-not-the-issuer",
@@ -578,7 +579,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -595,7 +596,7 @@ public class PrivateKeyJwtAuthenticatorTests
     [Fact]
     public async Task Fapi2AssertionAudienceIsTheIssuer_ShouldAuthenticate()
     {
-        var (authenticator, mocks) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, mocks) = CreateAuthenticator();
         var clientInfo = CreateClientInfo(ClientId);
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "audience-is-the-issuer",
@@ -606,7 +607,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -623,7 +624,7 @@ public class PrivateKeyJwtAuthenticatorTests
     [Fact]
     public async Task Fapi2AssertionAudienceCarriesTheIssuerAmongOthers_ShouldReturnNull()
     {
-        var (authenticator, mocks) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, mocks) = CreateAuthenticator();
         var clientInfo = CreateClientInfo(ClientId);
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "audience-among-others",
@@ -634,7 +635,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -664,7 +665,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -674,11 +675,16 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// The tenant a request is served at, holding its clients to <paramref name="profile"/> by default.
+    /// </summary>
+    private static TenantDefinition TenantAt(ClientSecurityProfile profile)
+        => new TestIssuer { Issuer = new Uri("https://issuer.example.com"), DefaultSecurityProfile = profile }.ToTenant();
+
+    /// <summary>
     /// Creates a new instance of PrivateKeyJwtAuthenticator with mocked dependencies for testing.
     /// </summary>
     /// <returns>A tuple containing the authenticator instance and the mock objects.</returns>
-    private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator(
-        ClientSecurityProfile profile = ClientSecurityProfile.None)
+    private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
         var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
@@ -698,11 +704,6 @@ public class PrivateKeyJwtAuthenticatorTests
             logger.Object,
             replayCache.Object,
             serviceProvider,
-            SingleIssuer.AccessorOf(new TestIssuer
-            {
-                Issuer = new Uri("https://issuer.example.com"),
-                DefaultSecurityProfile = profile,
-            }),
             TimeProvider.System);
 
         var mocks = new Mocks

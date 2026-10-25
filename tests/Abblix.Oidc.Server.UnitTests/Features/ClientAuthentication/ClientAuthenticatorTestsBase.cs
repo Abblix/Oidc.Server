@@ -104,11 +104,31 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ClientId, result.ClientId);
+    }
+
+    /// <summary>
+    /// The client is looked up at the tenant the request is served at alone: one registered only at another tenant
+    /// is refused, and found at its own.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteredOnlyAtAnotherTenant_IsRefused()
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
+            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? CreateClientInfo(ClientSecret) : null);
+        var authenticator = CreateAuthenticator(clientInfoProvider);
+        var request = PrepareValidRequest(ClientId, ClientSecret);
+
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(acme, request));
+        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(globex, request));
     }
 
     /// <summary>
@@ -123,7 +143,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareMissingPrimaryCredentialRequest();
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -141,7 +161,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareWrongFormatRequest();
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -167,7 +187,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, wrongSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -190,7 +210,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -216,7 +236,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -245,7 +265,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -284,7 +304,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -311,7 +331,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(specialClientId, specialSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -356,7 +376,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -375,7 +395,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareEmptyClientIdRequest();
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -399,7 +419,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareEmptyClientSecretRequest();
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -417,7 +437,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var request = PrepareWhitespaceClientIdRequest();
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);

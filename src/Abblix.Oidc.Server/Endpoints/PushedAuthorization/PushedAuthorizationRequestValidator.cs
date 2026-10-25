@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
@@ -26,7 +27,8 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 public class PushedAuthorizationRequestValidator(
     IAuthorizationRequestValidator authorizationRequestValidator,
     IClientAuthenticator clientAuthenticator,
-    IProofValidator proofValidator) : IPushedAuthorizationRequestValidator
+    IProofValidator proofValidator,
+    ITenantAccessor tenantAccessor) : IPushedAuthorizationRequestValidator
 {
     /// <summary>
     /// Validates a pushed authorization request according to OAuth 2.0 and OpenID Connect standards.
@@ -45,7 +47,8 @@ public class PushedAuthorizationRequestValidator(
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+            tenantAccessor.CurrentTenant(), clientRequest);
         if (clientInfo == null)
         {
             return ErrorFactory.InvalidClient("The client is not authorized");

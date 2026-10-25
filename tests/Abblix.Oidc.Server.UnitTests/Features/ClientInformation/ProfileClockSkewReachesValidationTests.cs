@@ -62,10 +62,9 @@ public class ProfileClockSkewReachesValidationTests
             clientInfoProvider.Object,
             new Mock<IRequestInfoProvider>().Object,
             TimeProvider.System,
-            new Mock<IReplayCache>().Object,
-            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = profile }));
+            new Mock<IReplayCache>().Object);
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        await authenticator.TryAuthenticateClientAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = "header.payload.signature",

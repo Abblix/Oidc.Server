@@ -43,7 +43,7 @@ public class TlsClientAuthenticatorTests
         _authenticator = new TlsClientAuthenticator(
             _loggerMock.Object,
             _clientInfoProviderMock.Object,
-            _clientKeysProviderMock.Object, tenantAccessor: SingleIssuer.Accessor);
+            _clientKeysProviderMock.Object);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class TlsClientAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -98,7 +98,7 @@ public class TlsClientAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -123,7 +123,7 @@ public class TlsClientAuthenticatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -158,7 +158,7 @@ public class TlsClientAuthenticatorTests
             .ReturnsAsync(client);
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -195,7 +195,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { certJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -233,7 +233,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { certJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -272,7 +272,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -310,7 +310,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -344,7 +344,7 @@ public class TlsClientAuthenticatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -383,7 +383,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { otherJwk1, certJwk, otherJwk2 }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -427,7 +427,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -465,7 +465,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);

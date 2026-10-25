@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -44,7 +45,7 @@ internal sealed partial class ThrottledClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
 
     /// <inheritdoc />
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var source = budget.Source;
         if (source is null)
@@ -56,7 +57,7 @@ internal sealed partial class ThrottledClientAuthenticator(
             throw new TooManyAuthenticationFailuresException(refusal);
         }
 
-        var clientInfo = await inner.TryAuthenticateClientAsync(request);
+        var clientInfo = await inner.TryAuthenticateClientAsync(tenant, request);
         if (clientInfo == null)
             budget.RecordFailure(source);
 

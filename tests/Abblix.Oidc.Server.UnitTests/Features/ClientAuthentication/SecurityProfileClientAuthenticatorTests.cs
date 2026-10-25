@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,17 +33,22 @@ public class SecurityProfileClientAuthenticatorTests
 {
     private const string ClientId = "stored-client";
 
-    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
-        CreateAuthenticator(ClientSecurityProfile defaultProfile)
-        => CreateAuthenticator(defaultProfile, NullLogger<SecurityProfileClientAuthenticator>.Instance);
+    /// <summary>
+    /// The tenant a request is served at, holding its clients to <paramref name="defaultProfile"/> by default.
+    /// </summary>
+    private static TenantDefinition TenantAt(ClientSecurityProfile defaultProfile)
+        => new TestIssuer { DefaultSecurityProfile = defaultProfile }.ToTenant();
 
     private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
-        CreateAuthenticator(ClientSecurityProfile defaultProfile, ILogger<SecurityProfileClientAuthenticator> logger)
+        CreateAuthenticator()
+        => CreateAuthenticator(NullLogger<SecurityProfileClientAuthenticator>.Instance);
+
+    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
+        CreateAuthenticator(ILogger<SecurityProfileClientAuthenticator> logger)
     {
         var inner = new Mock<IClientAuthenticator>();
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
-            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultProfile }),
             logger);
 
         return (authenticator, inner);
@@ -58,14 +64,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         // Selected by EVENT, not by level: this class emits a second warning of its own, and a
         // fixture that also tripped it would satisfy both assertions off the wrong line.
@@ -90,14 +96,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -118,13 +124,13 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -144,14 +150,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -175,13 +181,13 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -204,14 +210,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             SecurityProfile = ClientSecurityProfile.Fapi2,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         Assert.DoesNotContain(
             logger.Entries,
@@ -220,7 +226,7 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     private static void Authenticates(Mock<IClientAuthenticator> inner, ClientInfo clientInfo)
-        => inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+        => inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(clientInfo);
 
     /// <summary>
@@ -234,10 +240,10 @@ public class SecurityProfileClientAuthenticatorTests
     [InlineData(ClientAuthenticationMethods.None)]
     public async Task StoredClientCannotSatisfyProfile_ShouldReturnNull(string method)
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId) { TokenEndpointAuthMethod = method });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         Assert.Null(result);
     }
@@ -251,7 +257,7 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task StoredClientAllowsAForbiddenResponseType_ShouldReturnNull()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
@@ -262,7 +268,7 @@ public class SecurityProfileClientAuthenticatorTests
             AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         Assert.Null(result);
     }
@@ -275,14 +281,14 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task StoredClientCarriesAProfileThisServerDoesNotDefine_ShouldReturnNull()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         Assert.Null(result);
     }
@@ -296,7 +302,7 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task StoredClientWithAnUndefinedProfileButCompliant_ShouldAuthenticate()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (authenticator, inner) = CreateAuthenticator();
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
@@ -304,7 +310,7 @@ public class SecurityProfileClientAuthenticatorTests
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         Assert.Same(clientInfo, result);
     }
@@ -318,14 +324,14 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task StoredClientSatisfiesProfile_ShouldAuthenticate()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, inner) = CreateAuthenticator();
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         Assert.Same(clientInfo, result);
     }
@@ -337,14 +343,14 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task NoProfile_ShouldAuthenticateWhateverTheRegistration()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (authenticator, inner) = CreateAuthenticator();
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         Assert.Same(clientInfo, result);
     }
@@ -361,23 +367,23 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task TheClientProfileAddsToTheDefaultRatherThanReplacingIt()
     {
-        var (underFloor, underFloorInner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (underFloor, underFloorInner) = CreateAuthenticator();
         Authenticates(underFloorInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.Null(await underFloor.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.Null(await underFloor.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest()));
 
-        var (tightened, tightenedInner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (tightened, tightenedInner) = CreateAuthenticator();
         Authenticates(tightenedInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.Fapi2,
         });
 
-        Assert.Null(await tightened.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.Null(await tightened.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest()));
     }
 
     /// <summary>
@@ -388,14 +394,14 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task NoProfileEitherSide_LeavesASharedSecretClientAlone()
     {
-        var (unprofiled, unprofiledInner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (unprofiled, unprofiledInner) = CreateAuthenticator();
         Authenticates(unprofiledInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.NotNull(await unprofiled.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.NotNull(await unprofiled.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest()));
     }
 
     /// <summary>
@@ -405,11 +411,11 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task InnerRefuses_ShouldReturnNull()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
-        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+        var (authenticator, inner) = CreateAuthenticator();
+        inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync((ClientInfo?)null);
 
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest()));
     }
 
     /// <summary>
