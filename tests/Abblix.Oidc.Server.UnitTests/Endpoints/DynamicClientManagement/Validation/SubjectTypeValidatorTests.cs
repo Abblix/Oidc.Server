@@ -46,23 +46,30 @@ public class SubjectTypeValidatorTests
         new(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
 
     /// <summary>
-    /// An issuer with no pairwise key refuses a pairwise registration, rather than register a client every one of
-    /// whose token requests would fail.
+    /// The pairwise key is the tenant's own: a tenant holding none refuses a pairwise registration, rather than
+    /// register a client every one of whose token requests would fail, and a tenant holding one accepts it.
     /// </summary>
-    [Fact]
-    public async Task APairwiseRegistration_WithoutAKey_IsRefused()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task APairwiseRegistration_IsAcceptedOnlyAtATenantHoldingAKey(bool tenantHoldsAKey)
     {
-        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()));
+        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, SingleIssuer.SubjectTypes());
+        var tenant = new TestIssuer
+        {
+            PairwiseSubject = tenantHoldsAKey
+                ? new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) }
+                : null,
+        }.ToTenant();
         var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
         {
             SubjectType = SubjectTypes.Pairwise,
             RedirectUris = [new Uri("https://client.example.com/callback")],
         });
 
-        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var error = await validator.ValidateAsync(tenant, context);
 
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+        Assert.Equal(tenantHoldsAKey ? null : ErrorCodes.InvalidClientMetadata, error?.Error);
     }
 
     /// <summary>
