@@ -15,6 +15,7 @@ using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -293,6 +294,84 @@ public class StreamManagementServiceTests
                 (int)refused is >= 200 and <= 299,
                 $"A discarded write answered {(int)refused}, which the receiver reads as success.");
         }
+    }
+
+    /// <summary>
+    /// An update or a replacement that loses its write to another writer applies the receiver's members to the stream
+    /// as the other writer left it, so what that writer changed in the transmitter's half, such as the issuer of a
+    /// tenant that moved, is kept rather than written back from the first read.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AChangeThatLostItsWrite_KeepsWhatTheOtherWriterChanged(bool replace)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        const string movedIssuer = "https://moved.example.com";
+        var options = DefaultOptions();
+        var inner = new InMemoryStreamStore();
+        var otherWriterDone = false;
+        var store = new Mock<IStreamStore>(MockBehavior.Strict);
+        store
+            .Setup(s => s.TryCreateAsync(It.IsAny<StreamState>(), It.IsAny<CancellationToken>()))
+            .Returns((StreamState stream, CancellationToken token) => inner.TryCreateAsync(stream, token));
+        store
+            .Setup(s => s.FindAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string receiverId, string streamId, CancellationToken token) =>
+                inner.FindAsync(receiverId, streamId, token));
+        store
+            .Setup(s => s.ListAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string receiverId, CancellationToken token) => inner.ListAsync(receiverId, token));
+        store
+            .Setup(s => s.UpdateAsync(It.IsAny<StreamState>(), It.IsAny<CancellationToken>()))
+            .Returns(async (StreamState stream, CancellationToken token) =>
+            {
+                if (otherWriterDone)
+                    return await inner.UpdateAsync(stream, token);
+
+                // Another writer gets in between the receiver's read and its write
+                otherWriterDone = true;
+                var current = (await inner.FindAsync(stream.ReceiverId, stream.StreamId, token))!;
+                Assert.True(await inner.UpdateAsync(
+                    current with { Configuration = current.Configuration with { Issuer = movedIssuer } },
+                    token));
+                return await inner.UpdateAsync(stream, token);
+            });
+        var service = ServiceOver(store.Object, options);
+        var created = await service.CreateStreamAsync(
+            Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
+
+        var request = new UpdateStreamRequest
+        {
+            StreamId = created.Body!.StreamId,
+            Delivery = new PollDeliveryMethod(),
+            EventsRequested = [TypeB],
+        };
+        var changed = replace
+            ? await service.ReplaceStreamAsync(Receiver, request, ct)
+            : await service.UpdateStreamAsync(Receiver, request, ct);
+
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        var stored = (await inner.FindAsync(Receiver, request.StreamId, ct))!.Configuration;
+        Assert.Equal(movedIssuer, stored.Issuer);
+        Assert.Equal([TypeB], stored.EventsRequested);
+        Assert.Equal([TypeB], stored.EventsDelivered);
+        Assert.Equal(movedIssuer, changed.Body!.Issuer);
+    }
+
+    private static StreamManagementService ServiceOver(IStreamStore store, SharedSignalsTransmitterOptions options)
+    {
+        var outbox = new InMemoryEventOutbox();
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
+            clock: clock);
+        return new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
     }
 
     [Fact]
