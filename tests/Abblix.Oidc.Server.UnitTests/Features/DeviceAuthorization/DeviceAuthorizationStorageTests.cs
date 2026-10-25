@@ -421,6 +421,7 @@ public class DeviceAuthorizationStorageTests
     [InlineData("acme", "", "acme-eu", "")]
     [InlineData("acme", "", "acme", "2")]
     [InlineData("acme2", "", "acme", "")]
+    [InlineData("Acme", "", "acme", "")]
     public async Task AReferenceOfOneTenant_ReadsAndWritesNothingAtATenantNamedAlike(
         string readerId, string readerGeneration, string ownerId, string ownerGeneration)
     {
@@ -470,17 +471,63 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(DeviceAuthorizationStatus.Denied, (await storage.TryGetByDeviceCodeAsync(acme, DeviceCode))!.Status);
     }
 
+    /// <summary>
+    /// A reference the storage did not issue reaches nothing, even one carrying the very key a record is stored
+    /// under and handed to the tenant that record belongs to.
+    /// </summary>
+    [Fact]
+    public async Task AReferenceBuiltFromAKeyAlone_ReadsAndWritesNothing()
+    {
+        var acme = Tenant("acme");
+        var storage = RealStorage(new EntityStorageKeyFactory());
+        await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        var (found, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
+        var built = new DeviceAuthorizationReference(found.Key);
+
+        Assert.Null(await storage.TryGetAsync(acme, built));
+
+        await storage.UpdateAsync(
+            acme,
+            built,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(DeviceAuthorizationStatus.Pending, (await storage.TryGetAsync(acme, found))!.Status);
+    }
+
+    /// <summary>
+    /// A tenant the server cannot name is refused before anything is written, under a host's key factory that never
+    /// names it either: no request is left behind that no device code leads to.
+    /// </summary>
+    [Fact]
+    public async Task UnderAHostsOwnKeys_ATenantTheServerCannotName_LeavesNothingStored()
+    {
+        var unnamed = Tenant("a:b");
+        var keys = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+        keys.Setup(f => f.DeviceAuthorizationRequestKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey("host:{0}:{1}", tenant, "device:request:" + code));
+        keys.Setup(f => f.DeviceAuthorizationUserCodeKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey("host:{0}:{1}", tenant, "device:user-code:" + code));
+        var entities = new DistributedCacheStorage(RealCache(), new ProtobufSerializer());
+        var storage = RealStorage(keys.Object, entities);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => storage.StoreAsync(unnamed, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10)));
+
+        Assert.Null(await entities.GetAsync<DeviceAuthorizationRequest>(
+            HostKey("host:{0}:{1}", unnamed, "device:request:" + DeviceCode), removeOnRetrieval: false));
+    }
+
     private static string HostKey(string shape, TenantDefinition tenant, string key)
         => string.Format(CultureInfo.InvariantCulture, shape, tenant.Id, key);
 
     private static TenantDefinition Tenant(string id, string generation = "")
         => new() { Id = id, Issuer = new Uri("https://auth.example.com/" + id), Generation = generation };
 
-    private DeviceAuthorizationStorage RealStorage(IEntityStorageKeyFactory keys)
+    private DeviceAuthorizationStorage RealStorage(IEntityStorageKeyFactory keys, IEntityStorage? entities = null)
         => new(
             new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
             TestFingerprints.Instance,
-            new DistributedCacheStorage(RealCache(), new ProtobufSerializer()),
+            entities ?? new DistributedCacheStorage(RealCache(), new ProtobufSerializer()),
             keys,
             new FakeTimeProvider(_now));
 

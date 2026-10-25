@@ -44,17 +44,17 @@ public partial class DeviceAuthorizationStorage(
 
         var options = new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn };
 
+        // Built before anything is written, so a tenant the reference cannot name is refused with nothing stored
+        var reference = ReferenceTo(tenant, deviceCode);
+
         // Store the request by device code (primary key for client polling)
-        await storage.SetAsync(
-            keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode),
-            request,
-            options);
+        await storage.SetAsync(reference.Key, request, options);
 
         // The user code leads to the record by its storage key, never by the device code: the device code
         // redeems the tokens once the user approves, and a value is read by more than the key list is.
         await storage.SetAsync(
             keyFactory.DeviceAuthorizationUserCodeKey(tenant, request.UserCode),
-            ReferenceTo(tenant, deviceCode).Key,
+            reference.Key,
             options);
     }
 
