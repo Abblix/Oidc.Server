@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
@@ -22,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 /// Declares <c>implicit</c> in <see cref="GrantTypesSupported"/> so opting in surfaces the
 /// implicit grant in discovery and registration-time gating without extra DI wiring.
 /// </summary>
-public class TokenResponseBuilder(IAccessTokenService accessTokenService)
+public class TokenResponseBuilder(IAccessTokenService accessTokenService, ITenantAccessor tenantAccessor)
     : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
@@ -43,6 +44,7 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
         result.TokenType = TokenTypes.Bearer;
 
         result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
+            tenantAccessor.CurrentTenant(),
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
             request.ClientInfo,

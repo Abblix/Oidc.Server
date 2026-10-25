@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 
 
 namespace Abblix.DocSamples.Samples;
@@ -20,15 +20,19 @@ namespace Abblix.DocSamples.Samples;
 /// </remarks>
 internal static class TenantScopeSample
 {
-    internal static async Task RevokeAsync(
-        ITenantCatalog catalog, ITokenRevoker tokenRevoker, string subject, CancellationToken cancellationToken)
+    internal static async Task EndSessionAsync(
+        ITenantCatalog catalog,
+        IAuthSessionTerminator sessionTerminator,
+        string sessionId,
+        string subject,
+        CancellationToken cancellationToken)
     {
         // <sample>
         var tenant = await catalog.FindByIdAsync("acme", cancellationToken)
             ?? throw new InvalidOperationException("No tenant is registered under the id acme.");
 
         using (TenantScope.Enter(tenant))
-            await tokenRevoker.RevokeSubjectAsync(subject, cancellationToken: cancellationToken);
+            await sessionTerminator.TerminateAsync(sessionId, subject);
         // </sample>
     }
 }

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Microsoft.Extensions.Options;
 
@@ -19,10 +20,12 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// <param name="tokenRevoker">Revokes the tokens of the ended session, when the deployment asks for it.</param>
 /// <param name="sessionLogoutNotifier">Notifies the clients of the ended session.</param>
 /// <param name="options">Supplies whether ending a session revokes its tokens.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthSessionTerminator(
     ITokenRevoker tokenRevoker,
     ISessionLogoutNotifier sessionLogoutNotifier,
-    IOptions<OidcOptions> options) : IAuthSessionTerminator
+    IOptions<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : IAuthSessionTerminator
 {
     /// <inheritdoc />
     public async Task<LogoutContext> TerminateAsync(string sessionId, string subject)
@@ -30,7 +33,7 @@ public class AuthSessionTerminator(
         // Recorded before any client is told, so a client acting on the notification cannot refresh its way
         // back in against a cutoff that has not been written yet.
         if (options.Value.RevokeSessionTokensOnLogout)
-            await tokenRevoker.RevokeSessionAsync(sessionId);
+            await tokenRevoker.RevokeSessionAsync(tenantAccessor.CurrentTenant(), sessionId);
 
         return await sessionLogoutNotifier.NotifyClientsAsync(sessionId, subject);
     }

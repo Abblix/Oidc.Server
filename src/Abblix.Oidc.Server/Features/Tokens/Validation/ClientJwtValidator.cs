@@ -10,12 +10,11 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Configuration;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -39,9 +38,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: two resolve the client and its keys, one the server's own keys, and the tenant carries the server's address and the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
@@ -49,17 +45,14 @@ public partial class ClientJwtValidator(
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
-    TimeProvider timeProvider,
-    ITenantAccessor tenantAccessor) : IClientJwtValidator
+    TimeProvider timeProvider) : IClientJwtValidator
 {
-    private SecurityProfileRequirements Profile
-        => SecurityProfileRequirements.Resolve(tenantAccessor.CurrentTenant().DefaultSecurityProfile);
-
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
     /// and cryptographic signatures. This method is used in scenarios such as private JWT client authentication
     /// and request object validation.
     /// </summary>
+    /// <param name="tenant">The tenant the token is for.</param>
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="tokenTypes">The token types the caller accepts.</param>
     /// <param name="options">Options to customize the validation process.</param>
@@ -68,31 +61,37 @@ public partial class ClientJwtValidator(
     /// or a JwtValidationError on failure.
     /// </returns>
     public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
+        TenantDefinition tenant,
         string jwt,
         TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var tenant = tenantAccessor.CurrentTenant();
         var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
 
-        var result = await tokenValidator.ValidateAsync(
-            jwt,
-            new ValidationParameters
-            {
-                Options = options,
-                TokenTypes = tokenTypes,
-                ValidateAudience = ValidateAudience,
-                ValidateIssuer = context.ValidateIssuer,
-                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
-                // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
-                // the server's own private keys; the inner JWS is then verified with the client's key
-                // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
-                // only runs for an actual JWE token).
-                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
-                // The tolerance belongs to the profile this deployment is held to, ceiling
-                // included.
-                ClockSkew = Profile.ClockSkewOrDefault(),
-            });
+        // The token status decorator under this validator reads what is recorded about the token at the tenant of the
+        // accessor, so the scope makes that the tenant the token is validated for
+        Result<JsonWebToken, JwtValidationError> result;
+        using (TenantScope.Enter(tenant))
+        {
+            result = await tokenValidator.ValidateAsync(
+                jwt,
+                new ValidationParameters
+                {
+                    Options = options,
+                    TokenTypes = tokenTypes,
+                    ValidateAudience = audiences => ValidateAudience(tenant, audiences),
+                    ValidateIssuer = context.ValidateIssuer,
+                    ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
+                    // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
+                    // the server's own private keys; the inner JWS is then verified with the client's key
+                    // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
+                    // only runs for an actual JWE token).
+                    ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
+                    // The tolerance belongs to the profile this deployment is held to, ceiling
+                    // included.
+                    ClockSkew = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).ClockSkewOrDefault(),
+                });
+        }
 
         if (result.TryGetFailure(out var error))
         {
@@ -150,7 +149,7 @@ public partial class ClientJwtValidator(
             }
 
             var refusal = SecurityProfileRequirements
-                .For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
+                .For(context.ClientInfo, tenant.DefaultSecurityProfile)
                 .ClockSkewOrDefault()
                 .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
 
@@ -170,12 +169,13 @@ public partial class ClientJwtValidator(
     /// or the authorization server's issuer identifier.
     /// Per RFC 7523 Section 3 and OpenID Connect Core 1.0 Section 9, both values are acceptable.
     /// </summary>
+    /// <param name="tenant">The tenant whose issuer identifier is an audience the assertion may name.</param>
     /// <param name="audiences">The collection of audiences to validate against valid audience values.</param>
     /// <returns>A task that returns whether the audience is valid.</returns>
-    private Task<bool> ValidateAudience(IEnumerable<string> audiences)
+    private Task<bool> ValidateAudience(TenantDefinition tenant, IEnumerable<string> audiences)
     {
         var requestUri = requestInfoProvider.RequestUri.OriginalString;
-        var issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString;
+        var issuer = tenant.Issuer.OriginalString;
 
         var materializedAudiences = audiences.Materialize();
         var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);

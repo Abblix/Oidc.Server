@@ -52,34 +52,4 @@ public static class TestTenant
             Issuer = TestConstants.IssuerUri,
             SigningKeys = signingKeys,
         });
-
-    /// <summary>
-    /// The server's revoker, each call made within the test host's tenant.
-    /// </summary>
-    public static ITokenRevoker RevokerOf(IServiceProvider services)
-        => new TenantRevoker(services.GetRequiredService<ITokenRevoker>(), services);
-
-    private sealed class TenantRevoker(ITokenRevoker inner, IServiceProvider services) : ITokenRevoker
-    {
-        public async Task RevokeSubjectAsync(
-            string subject, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        {
-            using var tenant = Enter(services);
-            await inner.RevokeSubjectAsync(subject, before, cancellationToken);
-        }
-
-        public async Task RevokeSessionAsync(
-            string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        {
-            using var tenant = Enter(services);
-            await inner.RevokeSessionAsync(sessionId, before, cancellationToken);
-        }
-
-        public async Task RevokeSubjectAtClientAsync(
-            string subject, string clientId, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        {
-            using var tenant = Enter(services);
-            await inner.RevokeSubjectAtClientAsync(subject, clientId, before, cancellationToken);
-        }
-    }
 }

@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 
@@ -26,6 +27,7 @@ public interface IAccessTokenService
 	/// Asynchronously creates a new access token based on the given authentication session, authorization context
 	/// and client information.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="authSession">The authentication session containing user and session details.</param>
 	/// <param name="authContext">The authorization context containing details about the granted permissions and scopes.</param>
 	/// <param name="clientInfo">Information about the client for whom the token is being created.</param>
@@ -39,6 +41,7 @@ public interface IAccessTokenService
 	/// its expiry: the token endpoint reports the lifetime between them as <c>expires_in</c>, and fails the request
 	/// when either is missing.</returns>
 	Task<EncodedJsonWebToken> CreateAccessTokenAsync(
+		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
@@ -48,6 +51,7 @@ public interface IAccessTokenService
 	/// <summary>
 	/// Asynchronously authenticates a user based on a provided access token.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="accessToken">The access token to authenticate.</param>
 	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
 	/// the real subject.</param>
@@ -56,6 +60,7 @@ public interface IAccessTokenService
 	/// <see cref="OidcError"/> when a pairwise subject cannot be opened for this client, so the caller rejects the
 	/// token at the protocol level. This mirrors the result shape of the refresh and token-exchange recovery paths.</returns>
 	Task<Result<AuthorizedGrant, OidcError>> AuthenticateByAccessTokenAsync(
+		TenantDefinition tenant,
 		JsonWebToken accessToken,
 		ClientInfo clientInfo);
 }

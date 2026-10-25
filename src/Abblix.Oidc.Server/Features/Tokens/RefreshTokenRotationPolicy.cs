@@ -16,19 +16,20 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <summary>
 /// Decides whether a client's refresh tokens rotate, that is, whether renewing one spends it.
 /// </summary>
-/// <param name="tenantAccessor">Names the tenant whose default security profile applies.</param>
-public sealed class RefreshTokenRotationPolicy(ITenantAccessor tenantAccessor)
+public static class RefreshTokenRotationPolicy
 {
 	/// <summary>
 	/// Whether renewing a refresh token of <paramref name="clientInfo"/> spends the token it renews.
 	/// </summary>
+	/// <param name="tenant">The tenant the client is registered at, whose security profile applies to it.</param>
+	/// <param name="clientInfo">The client renewing its refresh token.</param>
 	/// <remarks>
 	/// The profile and the default policy drop rotation only for a confidential client whose tokens are
 	/// sender-constrained, the two controls that replace it; an explicit Reuse is the host's own decision and
 	/// drops it for whatever client the host sets it on.
 	/// </remarks>
-	public bool Rotates(ClientInfo clientInfo)
-		=> !ReusesRefreshTokens(clientInfo) && !ProfileForbidsRotation(clientInfo);
+	public static bool Rotates(TenantDefinition tenant, ClientInfo clientInfo)
+		=> !ReusesRefreshTokens(clientInfo) && !ProfileForbidsRotation(tenant, clientInfo);
 
 	/// <summary>
 	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens under its
@@ -53,8 +54,8 @@ public sealed class RefreshTokenRotationPolicy(ITenantAccessor tenantAccessor)
 	/// receive tokens outside the token endpoint: the profile checks the binding only there, so such a client's
 	/// tokens are not sender-constrained and the reason for dropping rotation does not hold.
 	/// </remarks>
-	private bool ProfileForbidsRotation(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile).ForbidRefreshTokenRotation &&
+	private static bool ProfileForbidsRotation(TenantDefinition tenant, ClientInfo clientInfo)
+		=> SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).ForbidRefreshTokenRotation &&
 		   !ReceivesTokensOutsideTheTokenEndpoint(clientInfo);
 
 	/// <summary>

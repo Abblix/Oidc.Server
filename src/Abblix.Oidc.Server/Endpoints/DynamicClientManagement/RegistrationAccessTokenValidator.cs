@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using System.Net.Http.Headers;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -26,7 +27,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Section 1.2 describes.
 /// </summary>
 /// <param name="jwtValidator">JWT validator used for signature and lifetime checks.</param>
-public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator, ITenantAccessor tenantAccessor)
     : IRegistrationAccessTokenValidator
 {
     /// <inheritdoc />
@@ -41,6 +43,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         // The audience is required and checked: it names this server, which is what reads the token. Which
         // registration the token is about is a separate question, and the subject answers it - see below.
         var result = await jwtValidator.ValidateAsync(
+            tenantAccessor.CurrentTenant(),
             header.Parameter, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         if (result.TryGetFailure(out var error))

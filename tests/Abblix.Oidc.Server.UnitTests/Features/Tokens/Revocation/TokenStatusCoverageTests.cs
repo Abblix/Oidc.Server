@@ -135,8 +135,8 @@ public class TokenStatusCoverageTests
                 cutoffs.Object,
                 Options.Create(new OidcOptions()),
                 clients.Object,
-                new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor),
-            new GrantRevocation(registry.Object, clients.Object, tenantAccessor: SingleIssuer.Accessor),
+                new FixedSubjectTypeConverter(new SubjectTypeConverter())),
+            new GrantRevocation(registry.Object, clients.Object),
             inner.Object, tenantAccessor: SingleIssuer.Accessor);
 
         var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });

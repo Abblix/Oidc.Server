@@ -8,6 +8,7 @@
 
 using System.Threading.RateLimiting;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -48,6 +49,7 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// </param>
 /// <param name="unnamedSource">Says, once, that a public client's request arrived from no address and so
 /// went uncharged.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
@@ -55,7 +57,8 @@ public partial class RevocationRequestValidator(
 	[FromKeyedServices(CallerRateLimiters.Revocation)]
 	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
 	IRequestInfoProvider requestInfoProvider,
-	UnnamedSourceNotice unnamedSource)
+	UnnamedSourceNotice unnamedSource,
+	ITenantAccessor tenantAccessor)
 	: IRevocationRequestValidator
 {
 	/// <summary>
@@ -174,7 +177,7 @@ public partial class RevocationRequestValidator(
 		// the check below. A token minted for a resource indicator names that resource in its audience, and
 		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
 		var result = await jwtValidator.ValidateAsync(
-			revocationRequest.Token,
+			tenantAccessor.CurrentTenant(), revocationRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 

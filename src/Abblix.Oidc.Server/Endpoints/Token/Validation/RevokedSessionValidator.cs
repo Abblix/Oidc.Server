@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -38,9 +39,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// client identifier, and under the assertion grants it belongs to a federated issuer.
 /// </para>
 /// </remarks>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself
 /// at its client.</param>
-public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : ITokenContextValidator
+public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker, ITenantAccessor tenantAccessor)
+    : ITokenContextValidator
 {
     /// <summary>
     /// The grant types whose session was authenticated before this request and can therefore have been
@@ -66,7 +69,7 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : I
         if (context.Request.GrantType is not { } grantType || !RedeemsAnEarlierSession.Contains(grantType))
             return null;
 
-        if (!await cutoffChecker.IsGrantRefusedAsync(context.AuthorizedGrant, grantType))
+        if (!await cutoffChecker.IsGrantRefusedAsync(tenantAccessor.CurrentTenant(), context.AuthorizedGrant, grantType))
             return null;
 
         // RFC 6749 Section 5.2 names this case in the definition of the code: the grant is "invalid,

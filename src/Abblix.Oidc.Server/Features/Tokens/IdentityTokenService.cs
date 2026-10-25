@@ -11,8 +11,8 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
@@ -28,7 +28,6 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// OpenID Connect specifications. It integrates additional security by incorporating claims for token integrity
 /// verification.
 /// </summary>
-/// <param name="tenantAccessor">Names the tenant whose issuer the 'iss' claim of the identity token names.</param>
 /// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
 /// token.</param>
@@ -38,9 +37,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// based on the authentication session and client's requested scopes and claims.</param>
 /// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
 /// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
-internal class IdentityTokenService(
-	ITenantAccessor tenantAccessor,
-	ITenantCatalog catalog,
+internal class IdentityTokenService(ITenantCatalog catalog,
 	TimeProvider clock,
 	IClientJwtFormatter jwtFormatter,
 	IUserClaimsProvider userClaimsProvider,
@@ -52,6 +49,7 @@ internal class IdentityTokenService(
 	/// user-specific claims if required, and `c_hash` or `at_hash` to validate the authorization code and access token
 	/// integrity.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="authSession">Details of the authenticated user's session.</param>
 	/// <param name="authContext">Contextual information about the authorization, including scopes and nonce.</param>
 	/// <param name="clientInfo">Information about the requesting client.</param>
@@ -70,6 +68,7 @@ internal class IdentityTokenService(
 	/// security checks for token integrity.
 	/// </remarks>
 	public async Task<EncodedJsonWebToken?> CreateIdentityTokenAsync(
+		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
@@ -135,8 +134,8 @@ internal class IdentityTokenService(
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
 				Issuer = LicenseChecker.CheckLicense(
-					tenantAccessor.CurrentTenant().Issuer.OriginalString,
-					tenantAccessor.CurrentTenant(),
+					tenant.Issuer.OriginalString,
+					tenant,
 					catalog,
 					authContext.ClientId),
 
@@ -169,6 +168,7 @@ internal class IdentityTokenService(
 			pushBindings);
 
 		var jwt = await jwtFormatter.FormatAsync(
+			tenant,
 			identityToken,
 			clientInfo,
 			ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));

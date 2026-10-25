@@ -82,7 +82,7 @@ public class IntrospectionResponseFormatterTests
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
 
         _clientJwtFormatter.Verify(
-            f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
+            f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
             Times.Never);
     }
 
@@ -111,7 +111,7 @@ public class IntrospectionResponseFormatterTests
 
         Assert.IsType<JsonResult>(result);
         _clientJwtFormatter.Verify(
-            f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
+            f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
             Times.Never);
     }
 
@@ -120,8 +120,8 @@ public class IntrospectionResponseFormatterTests
     {
         JsonWebToken? capturedToken = null;
         _clientJwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => capturedToken = token)
+            .Setup(f => f.FormatAsync(It.Is<TenantDefinition>(tenant => tenant.Id == "main"), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => capturedToken = token)
             .ReturnsAsync(EncodedJwt);
 
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.RS256), MediaTypes.TokenIntrospectionJwt);

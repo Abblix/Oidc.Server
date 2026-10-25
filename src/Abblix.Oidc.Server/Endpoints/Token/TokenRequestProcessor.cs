@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -32,12 +33,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="identityTokenService">Issues ID tokens.</param>
 /// <param name="tokenContextEvaluator">Narrows scopes/resources and computes mTLS confirmation binding.</param>
 /// <param name="grantIdGenerator">Starts a refresh token family for a grant that has none yet.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class TokenRequestProcessor(
 	IAccessTokenService accessTokenService,
 	IRefreshTokenService refreshTokenService,
 	IIdentityTokenService identityTokenService,
 	ITokenAuthorizationContextEvaluator tokenContextEvaluator,
-	IGrantIdGenerator grantIdGenerator) : ITokenRequestProcessor
+	IGrantIdGenerator grantIdGenerator,
+	ITenantAccessor tenantAccessor) : ITokenRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid token request, determining the necessary tokens to generate based on
@@ -85,6 +88,7 @@ public class TokenRequestProcessor(
 		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
+			tenantAccessor.CurrentTenant(),
 			request.AuthorizedGrant.AuthSession,
 			authContext,
 			clientInfo,
@@ -263,7 +267,7 @@ public class TokenRequestProcessor(
 		if (response.RefreshToken is null || presentedRefreshToken is null)
 			return Task.FromResult(true);
 
-		return refreshTokenService.TrySpendAsync(presentedRefreshToken, clientInfo);
+		return refreshTokenService.TrySpendAsync(tenantAccessor.CurrentTenant(), presentedRefreshToken, clientInfo);
 	}
 
 	private async Task AddRefreshTokenAsync(
@@ -301,6 +305,7 @@ public class TokenRequestProcessor(
 		};
 
 		response.RefreshToken = await refreshTokenService.CreateRefreshTokenAsync(
+			tenantAccessor.CurrentTenant(),
 			request.AuthorizedGrant.AuthSession,
 			refreshContext,
 			clientInfo,
@@ -326,7 +331,7 @@ public class TokenRequestProcessor(
 			: null;
 
 		response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-			request.AuthorizedGrant.AuthSession,
+			tenantAccessor.CurrentTenant(), request.AuthorizedGrant.AuthSession,
 			authContext,
 			request.ClientInfo,
 			false,

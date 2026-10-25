@@ -101,7 +101,7 @@ public class TokenStatusValidatorDecorator(
 		if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
 			return null;
 
-		return await cutoffChecker.CheckAsync(token.Payload);
+		return await cutoffChecker.CheckAsync(tenantAccessor.CurrentTenant(), token.Payload);
 	}
 
 	/// <summary>
@@ -139,7 +139,7 @@ public class TokenStatusValidatorDecorator(
 			case JsonWebTokenStatus.Used:
 				// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
 				// so revoke the whole grant family; the active token dies with it on its next use.
-				await grantRevocation.RevokeAsync(token.Payload);
+				await grantRevocation.RevokeAsync(tenantAccessor.CurrentTenant(), token.Payload);
 
 				return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
 

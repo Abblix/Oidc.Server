@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -53,7 +54,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 public class TokenExchangeGrantHandler(
     IServiceProvider serviceProvider,
     ISessionIdGenerator sessionIdGenerator,
-    TimeProvider timeProvider) : IAuthorizationGrantHandler
+    TimeProvider timeProvider,
+    ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
 {
     /// <inheritdoc/>
     public IEnumerable<string> GrantTypesSupported
@@ -423,7 +425,7 @@ public class TokenExchangeGrantHandler(
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tokenValue, tokenType, cancellationToken);
+        return await resolver.ResolveAsync(tenantAccessor.CurrentTenant(), tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)

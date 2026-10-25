@@ -69,7 +69,7 @@ public class LogoutTokenServiceTests
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
             _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
+            Options.Create(new OidcOptions()));
     }
 
     /// <summary>
@@ -86,12 +86,12 @@ public class LogoutTokenServiceTests
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
             _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
+            Options.Create(new OidcOptions()));
         var clientInfo = CreateClientInfo();
         var logoutContext = CreateLogoutContext();
         SetupMocks(clientInfo, logoutContext, _ => { });
 
-        await service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         var record = Assert.Single(loggers.Entries);
         Assert.Equal("unique-jwt-id-1", record.Value("JwtId")?.ToString());
@@ -114,7 +114,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -142,7 +142,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -166,7 +166,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -191,7 +191,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -213,7 +213,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -235,7 +235,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -263,8 +263,8 @@ public class LogoutTokenServiceTests
         });
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(token1);
@@ -289,7 +289,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -311,7 +311,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -334,7 +334,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -356,7 +356,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -380,7 +380,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -402,7 +402,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -429,7 +429,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -450,7 +450,7 @@ public class LogoutTokenServiceTests
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+            await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
         });
     }
 
@@ -472,7 +472,7 @@ public class LogoutTokenServiceTests
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+            await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
         });
 
         Assert.Contains("requires session id", exception.Message);
@@ -497,7 +497,7 @@ public class LogoutTokenServiceTests
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+            await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
         });
 
         Assert.Contains("null or empty", exception.Message);
@@ -518,7 +518,7 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -545,12 +545,12 @@ public class LogoutTokenServiceTests
             .Returns(string.Empty);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => capturedToken = token)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => capturedToken = token)
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -573,14 +573,14 @@ public class LogoutTokenServiceTests
         SetupMocks(clientInfo, logoutContext, token => capturedToken = token);
 
         // Act
-        var result = await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        var result = await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(result);
         Assert.Same(capturedToken, result.Token);
         Assert.Equal(EncodedJwt, result.EncodedJwt);
 
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     /// <summary>
@@ -602,8 +602,8 @@ public class LogoutTokenServiceTests
             .Returns(SubjectId);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, client, _) =>
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, client, _) =>
             {
                 formattedToken = token;
                 formattedClient = client;
@@ -611,13 +611,13 @@ public class LogoutTokenServiceTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.NotNull(formattedToken);
         Assert.Same(clientInfo, formattedClient);
 
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     private static ClientInfo CreateClientInfo(
@@ -657,8 +657,8 @@ public class LogoutTokenServiceTests
             .Returns(logoutContext.SubjectId);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => captureToken(token))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => captureToken(token))
             .ReturnsAsync(EncodedJwt);
     }
 }

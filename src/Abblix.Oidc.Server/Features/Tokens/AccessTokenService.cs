@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
@@ -22,7 +23,6 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -46,9 +46,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// token can be encrypted to the resource it is minted for.</param>
 /// <param name="scopeClaims">Names the claims the user-information endpoint asks the host's provider for, which
 /// decides whether the session's email address travels in the token.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's clock, identifier, format and subject each come from their own service, the tenant names its issuer, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
+    Justification = "Every dependency is used: the token's clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
 internal class AccessTokenService(
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
@@ -57,14 +56,14 @@ internal class AccessTokenService(
 	IOptions<OidcOptions> options,
 	ITenantCatalog catalog,
 	IAudienceKeyResolver audienceKeys,
-	IScopeClaimsProvider scopeClaims,
-	ITenantAccessor tenantAccessor) : IAccessTokenService
+	IScopeClaimsProvider scopeClaims) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
 	/// of the user, along with client-specific settings. This token is crafted using standard JWT practices,
 	/// ensuring it aligns with OAuth 2.0 and OpenID Connect requirements.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="authSession">Details of the user's current authentication session, including subject and
 	/// authentication time.</param>
 	/// <param name="authContext">Context providing authorization details such as requested scopes and permissions.
@@ -82,6 +81,7 @@ internal class AccessTokenService(
 	/// leverages provided services to dynamically generate compliant tokens suited for various authorization needs.
 	/// </remarks>
 	public async Task<EncodedJsonWebToken> CreateAccessTokenAsync(
+		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
@@ -127,8 +127,8 @@ internal class AccessTokenService(
 					? latest
 					: issuedAt + clientInfo.AccessTokenExpiresIn,
 				Issuer = LicenseChecker.CheckLicense(
-					tenantAccessor.CurrentTenant().Issuer.OriginalString,
-					tenantAccessor.CurrentTenant(),
+					tenant.Issuer.OriginalString,
+					tenant,
 					catalog,
 					authContext.ClientId),
 				GrantId = grantId,
@@ -149,7 +149,7 @@ internal class AccessTokenService(
 
 		// The audience is settled once, before anything reads it, so the payload below and the encryption
 		// policy further down agree on who this token is for instead of each deriving its own answer.
-		var audienceContext = authContext.WithDefaultResource(tenantAccessor.CurrentTenant().DefaultResourceIndicator);
+		var audienceContext = authContext.WithDefaultResource(tenant.DefaultResourceIndicator);
 		audienceContext.ApplyTo(accessToken.Payload);
 
 		if (options.Value.FilterAuthorizationDetailsByLocation)
@@ -158,12 +158,12 @@ internal class AccessTokenService(
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
 		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
-		accessToken.Payload.Subject = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
+		accessToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
 
 		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
-			.WithAudienceKeyAsync(audienceContext, audienceKeys);
+			.WithAudienceKeyAsync(tenant, audienceContext, audienceKeys);
 
-		var encoded = await serviceJwtFormatter.FormatAsync(accessToken, encryption);
+		var encoded = await serviceJwtFormatter.FormatAsync(tenant, accessToken, encryption);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
 	}
@@ -182,6 +182,7 @@ internal class AccessTokenService(
 	/// This process authenticates the token bearer and retrieves their authorization details, enabling secure resource
 	/// access.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="accessToken">The access token to be authenticated and analyzed.</param>
 	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
 	/// the real subject.</param>
@@ -194,6 +195,7 @@ internal class AccessTokenService(
 	/// authorization and authentication details, supporting secure and informed access control decisions.
 	/// </remarks>
 	public Task<Result<AuthorizedGrant, OidcError>> AuthenticateByAccessTokenAsync(
+		TenantDefinition tenant,
 		JsonWebToken accessToken,
 		ClientInfo clientInfo)
 	{
@@ -204,7 +206,7 @@ internal class AccessTokenService(
 		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
 		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
 		// at the protocol level instead of faulting.
-		var result = subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo)
+		var result = subjectTypeConverter.ConvertBack(tenant, authSession.Subject, clientInfo)
 			.FailIfNull(() => new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
 			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
 

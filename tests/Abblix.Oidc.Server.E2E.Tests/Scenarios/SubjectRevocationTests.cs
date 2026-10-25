@@ -63,6 +63,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             .GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             subject, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterRevocation = await RefreshAsync(client, discovery, rotated);
@@ -86,7 +87,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var subject = SubjectOf(tokens);
 
         var anHourAgo = ClockOf(host).GetUtcNow().AddHours(-1);
-        await RevokerOf(host).RevokeSubjectAsync(subject, anHourAgo, TestContext.Current.CancellationToken);
+        await RevokerOf(host).RevokeSubjectAsync(TestTenant.Of(host.Services), subject, anHourAgo, TestContext.Current.CancellationToken);
 
         var response = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(
@@ -109,6 +110,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             $"somebody-else-{Guid.NewGuid():N}",
             cancellationToken: TestContext.Current.CancellationToken);
 
@@ -139,6 +141,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             .GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
             SubjectOf(tokens),
             TestConstants.ConfidentialClientId,
             cancellationToken: TestContext.Current.CancellationToken);
@@ -162,6 +165,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
             SubjectOf(tokens),
             $"another-client-{Guid.NewGuid():N}",
             cancellationToken: TestContext.Current.CancellationToken);
@@ -257,6 +261,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.False(string.IsNullOrEmpty(codeBefore));
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             subject, cancellationToken: TestContext.Current.CancellationToken);
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, SilentRenewal());
@@ -283,6 +288,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.False(string.IsNullOrEmpty(codeBefore));
 
         await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
             sessionId, cancellationToken: TestContext.Current.CancellationToken);
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, SilentRenewal());
@@ -310,7 +316,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var subject = SubjectOf(tokens);
 
         var anHourAgo = ClockOf(host).GetUtcNow().AddHours(-1);
-        await RevokerOf(host).RevokeSubjectAsync(subject, anHourAgo, TestContext.Current.CancellationToken);
+        await RevokerOf(host).RevokeSubjectAsync(TestTenant.Of(host.Services), subject, anHourAgo, TestContext.Current.CancellationToken);
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, SilentRenewal());
 
@@ -350,6 +356,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             $"the code should be redeemable before the revocation, got {(int)beforeRevocation.StatusCode}");
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             subject, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterRevocation = await RedeemAsync(client, discovery, secondCode, secondVerifier);
@@ -375,6 +382,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var (verifierBefore, codeBefore) = await TakeCodeAsync(client, discovery);
 
         await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
             SubjectOf(tokens),
             TestConstants.ConfidentialClientId,
             cancellationToken: TestContext.Current.CancellationToken);
@@ -408,6 +416,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             $"the ID token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
 
         await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
             SubjectOf(tokens),
             TestConstants.ConfidentialClientId,
             cancellationToken: TestContext.Current.CancellationToken);
@@ -526,7 +535,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         });
 
     private static ITokenRevoker RevokerOf(WebApplicationFactory<Program> host)
-        => TestTenant.RevokerOf(host.Services);
+        => host.Services.GetRequiredService<ITokenRevoker>();
 
     private static TimeProvider ClockOf(WebApplicationFactory<Program> host)
         => host.Services.GetRequiredService<TimeProvider>();

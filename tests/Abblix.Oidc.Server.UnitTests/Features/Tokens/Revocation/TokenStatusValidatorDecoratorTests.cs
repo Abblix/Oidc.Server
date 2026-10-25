@@ -64,7 +64,7 @@ public class TokenStatusValidatorDecoratorTests
         _decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
-            new GrantRevocation(_registry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor),
+            new GrantRevocation(_registry.Object, _clients.Object),
             _inner.Object, tenantAccessor: SingleIssuer.Accessor);
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
@@ -365,7 +365,7 @@ public class TokenStatusValidatorDecoratorTests
         _cutoffs.Object,
         Options.Create(new OidcOptions { RevocationCutoffSkew = skew }),
         _clients.Object,
-        SubjectConverter, tenantAccessor: SingleIssuer.Accessor);
+        SubjectConverter);
 
     private static JsonWebToken RefreshToken(string? grantId) => new()
     {
@@ -509,7 +509,7 @@ public class TokenStatusValidatorDecoratorTests
         var decorator = new TokenStatusValidatorDecorator(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
-            new GrantRevocation(_registry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor),
+            new GrantRevocation(_registry.Object, _clients.Object),
             _inner.Object, tenantAccessor: SingleIssuer.Accessor);
 
         SetupInnerReturns(new JsonWebToken

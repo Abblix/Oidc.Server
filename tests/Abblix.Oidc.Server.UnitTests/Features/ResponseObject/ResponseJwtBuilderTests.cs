@@ -62,13 +62,13 @@ public class ResponseJwtBuilderTests
         var clientJwtFormatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeys.Object,
-            _serviceKeys.Object, tenantAccessor: SingleIssuer.Accessor);
+            _serviceKeys.Object);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             clientJwtFormatter,
             _timeProvider,
-            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
+            Options.Create(new OidcOptions()));
     }
 
     /// <summary>
@@ -109,6 +109,7 @@ public class ResponseJwtBuilderTests
         var capture = CaptureIssue();
 
         var result = await _builder.BuildAsync(
+            SingleIssuer.Tenant,
             ClientId, [("code", "auth-code"), ("state", "client-state")]);
 
         Assert.Equal(EncodedJwt, result);
@@ -131,7 +132,7 @@ public class ResponseJwtBuilderTests
     {
         var capture = CaptureIssue();
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [("code", "auth-code")]);
 
         // Signed-only: no encryption key is resolved or passed.
         Assert.Null(capture.EncryptionKey);
@@ -149,7 +150,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         _client.AuthorizationEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [("code", "auth-code")]);
 
         Assert.Same(_clientEncryptionKey, capture.EncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
@@ -167,7 +168,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         // AuthorizationEncryptedResponseEncryption omitted → JARM section 3 default
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [("code", "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
@@ -201,11 +202,11 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
-                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, tenantAccessor: SingleIssuer.Accessor),
+                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object),
             _timeProvider,
-            options, tenantAccessor: SingleIssuer.Accessor);
+            options);
 
-        await builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await builder.BuildAsync(SingleIssuer.Tenant, ClientId, [("code", "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, capture.ContentAlgorithm);
     }
@@ -233,7 +234,7 @@ public class ResponseJwtBuilderTests
         // Registered key-management algorithm differs from the key's own declared algorithm.
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [("code", "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
     }
@@ -250,7 +251,7 @@ public class ResponseJwtBuilderTests
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [("code", "auth-code")]);
 
         Assert.Equal(SigningAlgorithms.RS384, capture.Token.Header.Algorithm);
     }

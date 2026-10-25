@@ -9,10 +9,10 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
@@ -26,18 +26,16 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JARM response JWT.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
 /// <param name="options">Supplies the JARM response-JWT lifetime (<c>exp</c> window).</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider timeProvider,
-    IOptions<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : IResponseJwtBuilder
+    IOptions<OidcOptions> options) : IResponseJwtBuilder
 {
     /// <inheritdoc />
-    public async Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
+    public async Task<string> BuildAsync(TenantDefinition tenant, string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
-        var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId.NotNull(nameof(clientId))))
+        var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenant, clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
 
         var now = timeProvider.GetUtcNow();
@@ -57,7 +55,7 @@ public class ResponseJwtBuilder(
             {
                 IssuedAt = now,
                 ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
-                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
+                Issuer = tenant.Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
             },
         };
@@ -71,6 +69,7 @@ public class ResponseJwtBuilder(
         // JARM section 2.2 / section 3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
         // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted.
         return await clientJwtFormatter.FormatAsync(
+            tenant,
             token,
             clientInfo,
             ClientJwtEncryption.ForJarm(clientInfo, options.Value));

@@ -8,6 +8,7 @@
 
 using System.Threading.RateLimiting;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -37,12 +38,14 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="rateLimiter">
 /// The budget of introspection requests one client gets, spent once the caller is known to be that client.
 /// </param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Introspection)]
-	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
+	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
+	ITenantAccessor tenantAccessor)
 	: IIntrospectionRequestValidator
 {
 	/// <summary>
@@ -101,7 +104,7 @@ public partial class IntrospectionRequestValidator(
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
-			introspectionRequest.Token,
+			tenantAccessor.CurrentTenant(), introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 

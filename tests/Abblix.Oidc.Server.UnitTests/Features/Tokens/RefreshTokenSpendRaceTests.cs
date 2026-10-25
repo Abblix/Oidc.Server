@@ -83,13 +83,14 @@ public class RefreshTokenSpendRaceTests
 
         var client = Client();
         Assert.NotNull(await service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant,
             new AuthSession("user_1", "session_1", Now.AddHours(-1), "local"),
             new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
             client,
             presented,
             GrantId));
 
-        return await service.TrySpendAsync(presented, client);
+        return await service.TrySpendAsync(SingleIssuer.Tenant, presented, client);
     }
 
     private static RefreshTokenService CreateService(ITokenRegistry registry, TimeProvider time)
@@ -98,7 +99,7 @@ public class RefreshTokenSpendRaceTests
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => Guid.NewGuid().ToString("N"));
         var formatter = new Mock<IAuthServiceJwtFormatter>();
         formatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("encoded");
         var options = Options.Create(new OidcOptions());
 
@@ -107,12 +108,10 @@ public class RefreshTokenSpendRaceTests
             ids.Object,
             formatter.Object,
             registry,
-            new GrantRevocation(registry, Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
-            new RefreshTokenRotationPolicy(SingleIssuer.Accessor),
+            new GrantRevocation(registry, Mock.Of<IClientInfoProvider>()),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options,
-            SingleIssuer.LicensedCatalog,
-            SingleIssuer.Accessor);
+            SingleIssuer.LicensedCatalog);
     }
 
     private static ClientInfo Client() => new(ClientId)

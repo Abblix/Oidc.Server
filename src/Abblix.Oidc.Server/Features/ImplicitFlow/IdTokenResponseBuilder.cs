@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
@@ -31,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 /// <c>token</c> → <c>id_token</c>) so this dependency holds without explicit sequencing on
 /// the builder side.
 /// </remarks>
-public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
+public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService, ITenantAccessor tenantAccessor)
     : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
@@ -53,6 +54,7 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         var standalone = !responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token);
 
         result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
+            tenantAccessor.CurrentTenant(),
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
             request.ClientInfo,

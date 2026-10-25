@@ -91,7 +91,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(expectedToken);
 
         // Act
@@ -132,7 +132,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         var response = await _processor.ProcessAsync(request);
@@ -178,6 +178,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 session,
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
@@ -227,7 +228,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(expectedToken);
 
         // Act
@@ -349,6 +350,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 session,
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
@@ -392,11 +394,12 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 session,
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
@@ -450,11 +453,12 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 session,
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
@@ -573,6 +577,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 session,
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
@@ -587,6 +592,7 @@ public partial class AuthorizationRequestProcessorTests
         // Assert
         _identityTokenService.Verify(
             s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 session,
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,

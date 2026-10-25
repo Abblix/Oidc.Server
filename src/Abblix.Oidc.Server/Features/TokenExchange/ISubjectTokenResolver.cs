@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.TokenExchange;
@@ -36,6 +37,7 @@ public interface ISubjectTokenResolver
     /// Parses or looks up the wire-level <paramref name="subjectToken"/> and returns the
     /// portable subject context on success, or an <see cref="OidcError"/> on failure.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="subjectToken">The exact <c>subject_token</c> string from the wire.</param>
     /// <param name="tokenType">The token type URI the token was presented under (RFC 8693 section 3), which
     /// decides the token types the resolver accepts, since one resolver may serve several URIs.</param>
@@ -44,6 +46,7 @@ public interface ISubjectTokenResolver
     /// rejection reason on failure. The handler maps every failure to wire-level
     /// <c>invalid_request</c> per RFC 8693 section 2.2.2.</returns>
     Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
+        TenantDefinition tenant,
         string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken);

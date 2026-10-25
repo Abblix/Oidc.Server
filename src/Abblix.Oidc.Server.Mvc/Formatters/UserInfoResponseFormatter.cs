@@ -79,6 +79,7 @@ public class UserInfoResponseFormatter(
 
         // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
         var jwt = await clientJwtFormatter.FormatAsync(
+            tenantAccessor.CurrentTenant(),
             token,
             found.ClientInfo,
             ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));

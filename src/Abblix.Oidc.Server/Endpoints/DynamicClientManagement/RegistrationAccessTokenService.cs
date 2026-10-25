@@ -70,6 +70,7 @@ public class RegistrationAccessTokenService(
         };
 
         return serviceJwtFormatter.FormatAsync(
+            tenantAccessor.CurrentTenant(),
             token, ServiceJwtEncryption.ForRegistrationAccessToken(options.Value));
     }
 }

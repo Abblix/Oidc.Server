@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Moq;
 using Xunit;
@@ -33,7 +34,7 @@ public class BackChannelLogoutNotifierTests
     {
         _logoutTokenService = new Mock<ILogoutTokenService>(MockBehavior.Strict);
         _logoutTokenSender = new Mock<ILogoutTokenSender>(MockBehavior.Strict);
-        _notifier = new BackChannelLogoutNotifier(_logoutTokenService.Object, _logoutTokenSender.Object);
+        _notifier = new BackChannelLogoutNotifier(_logoutTokenService.Object, _logoutTokenSender.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ClientInfo CreateClientInfo(BackChannelLogoutOptions? backChannelLogout)
@@ -130,7 +131,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -142,7 +143,7 @@ public class BackChannelLogoutNotifierTests
 
         // Assert
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(clientInfo, logoutContext),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext),
             Times.Once);
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(clientInfo, logoutToken),
@@ -183,8 +184,8 @@ public class BackChannelLogoutNotifierTests
         ClientInfo? capturedClientInfo = null;
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((ci, _) => capturedClientInfo = ci)
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<TenantDefinition, ClientInfo, LogoutContext>((_, ci, _) => capturedClientInfo = ci)
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -213,8 +214,8 @@ public class BackChannelLogoutNotifierTests
         LogoutContext? capturedContext = null;
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((_, lc) => capturedContext = lc)
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<TenantDefinition, ClientInfo, LogoutContext>((_, _, lc) => capturedContext = lc)
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -242,7 +243,7 @@ public class BackChannelLogoutNotifierTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Callback(() => callOrder.Add("create"))
             .ReturnsAsync(logoutToken);
 
@@ -273,7 +274,7 @@ public class BackChannelLogoutNotifierTests
         EncodedJsonWebToken? capturedToken = null;
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -301,7 +302,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -314,6 +315,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.Is<ClientInfo>(c => c == clientInfo),
                 It.Is<LogoutContext>(lc => lc.SessionId == "different_session_456")),
             Times.Once);
@@ -332,7 +334,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -345,6 +347,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.Is<ClientInfo>(c => c == clientInfo),
                 It.Is<LogoutContext>(lc => lc.SubjectId == "different_user_789")),
             Times.Once);
@@ -363,7 +366,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -376,6 +379,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.Is<ClientInfo>(c => c == clientInfo),
                 It.Is<LogoutContext>(lc => lc.Issuer == "https://different.issuer.com")),
             Times.Once);
@@ -396,7 +400,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -431,7 +435,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -444,7 +448,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         Assert.False(clientInfo.BackChannelLogout!.RequiresSessionId);
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
             Times.Once);
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(It.IsAny<ClientInfo>(), It.IsAny<EncodedJsonWebToken>()),
@@ -464,7 +468,7 @@ public class BackChannelLogoutNotifierTests
         var exception = new InvalidOperationException("Token creation failed");
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ThrowsAsync(exception);
 
         // Act & Assert
@@ -489,7 +493,7 @@ public class BackChannelLogoutNotifierTests
         var exception = new InvalidOperationException("Token sending failed");
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -502,7 +506,7 @@ public class BackChannelLogoutNotifierTests
 
         Assert.Same(exception, thrownException);
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
             Times.Once);
     }
 
@@ -520,7 +524,7 @@ public class BackChannelLogoutNotifierTests
         var exception = new System.Net.Http.HttpRequestException("Network error");
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -545,7 +549,7 @@ public class BackChannelLogoutNotifierTests
         var exception = new TaskCanceledException("Operation canceled");
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ThrowsAsync(exception);
 
         // Act & Assert
@@ -568,10 +572,10 @@ public class BackChannelLogoutNotifierTests
         var logoutToken2 = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext1))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext1))
             .ReturnsAsync(logoutToken1);
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext2))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext2))
             .ReturnsAsync(logoutToken2);
 
         _logoutTokenSender
@@ -587,10 +591,10 @@ public class BackChannelLogoutNotifierTests
 
         // Assert
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(clientInfo, logoutContext1),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext1),
             Times.Once);
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(clientInfo, logoutContext2),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext2),
             Times.Once);
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(clientInfo, logoutToken1),
@@ -625,10 +629,10 @@ public class BackChannelLogoutNotifierTests
         var logoutToken2 = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo1, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo1, logoutContext))
             .ReturnsAsync(logoutToken1);
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo2, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo2, logoutContext))
             .ReturnsAsync(logoutToken2);
 
         _logoutTokenSender
@@ -644,7 +648,7 @@ public class BackChannelLogoutNotifierTests
 
         // Assert
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
             Times.Exactly(2));
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(It.IsAny<ClientInfo>(), It.IsAny<EncodedJsonWebToken>()),
@@ -664,7 +668,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -677,6 +681,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<ClientInfo>(),
                 It.Is<LogoutContext>(lc => lc.SessionId == string.Empty)),
             Times.Once);
@@ -695,7 +700,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -708,6 +713,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<ClientInfo>(),
                 It.Is<LogoutContext>(lc => lc.SubjectId == string.Empty)),
             Times.Once);
@@ -727,7 +733,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -739,7 +745,7 @@ public class BackChannelLogoutNotifierTests
 
         // Assert
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
             Times.Once);
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(It.IsAny<ClientInfo>(), It.IsAny<EncodedJsonWebToken>()),
@@ -761,7 +767,7 @@ public class BackChannelLogoutNotifierTests
         var tcs = new TaskCompletionSource<EncodedJsonWebToken>();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Returns(tcs.Task);
 
         _logoutTokenSender
@@ -793,7 +799,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -806,6 +812,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<ClientInfo>(),
                 It.Is<LogoutContext>(lc => lc.SessionId.Length == 1000)),
             Times.Once);
@@ -825,7 +832,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -838,6 +845,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         _logoutTokenService.Verify(
             s => s.CreateLogoutTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<ClientInfo>(),
                 It.Is<LogoutContext>(lc => lc.SessionId == sessionId)),
             Times.Once);
@@ -858,7 +866,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -890,7 +898,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -922,7 +930,7 @@ public class BackChannelLogoutNotifierTests
         var logoutToken = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
             .ReturnsAsync(logoutToken);
 
         _logoutTokenSender
@@ -964,10 +972,10 @@ public class BackChannelLogoutNotifierTests
         var logoutToken2 = CreateLogoutToken();
 
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo1, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo1, logoutContext))
             .ReturnsAsync(logoutToken1);
         _logoutTokenService
-            .Setup(s => s.CreateLogoutTokenAsync(clientInfo2, logoutContext))
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo2, logoutContext))
             .ReturnsAsync(logoutToken2);
 
         _logoutTokenSender
@@ -984,7 +992,7 @@ public class BackChannelLogoutNotifierTests
         // Assert
         Assert.NotEqual(clientInfo1.ClientId, clientInfo2.ClientId);
         _logoutTokenService.Verify(
-            s => s.CreateLogoutTokenAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
+            s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()),
             Times.Exactly(2));
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(It.IsAny<ClientInfo>(), It.IsAny<EncodedJsonWebToken>()),

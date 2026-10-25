@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -24,9 +25,10 @@ public interface IClientJwtFormatter
     /// algorithm and - per the supplied <paramref name="encryption"/> policy - optionally encrypting it to the
     /// client's registered public key.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="token">The JWT token to format.</param>
     /// <param name="clientInfo">The client information.</param>
     /// <param name="encryption">The encryption policy governing whether and how the JWT is encrypted.</param>
     /// <returns>The formatted JWT string.</returns>
-    Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption);
+    Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption);
 }

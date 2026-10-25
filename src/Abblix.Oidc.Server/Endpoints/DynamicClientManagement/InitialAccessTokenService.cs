@@ -58,6 +58,7 @@ public class InitialAccessTokenService(
         };
 
         return serviceJwtFormatter.FormatAsync(
+            tenantAccessor.CurrentTenant(),
             token, ServiceJwtEncryption.ForInitialAccessToken(options.Value));
     }
 }

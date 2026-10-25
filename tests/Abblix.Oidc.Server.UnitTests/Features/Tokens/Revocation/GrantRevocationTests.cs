@@ -103,8 +103,8 @@ public class GrantRevocationTests
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => "jti_" + ++_next);
         var formatter = new Mock<IAuthServiceJwtFormatter>();
         formatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .ReturnsAsync((JsonWebToken jwt, ServiceJwtEncryption _) =>
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync((TenantDefinition _, JsonWebToken jwt, ServiceJwtEncryption _) =>
             {
                 _issued[jwt.Payload.JwtId!] = jwt;
                 return jwt.Payload.JwtId!;
@@ -112,13 +112,12 @@ public class GrantRevocationTests
 
         var clients = new Mock<IClientInfoProvider>();
         clients.Setup(provider => provider.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
-        var grants = new GrantRevocation(_registry, clients.Object, tenantAccessor: SingleIssuer.Accessor);
+        var grants = new GrantRevocation(_registry, clients.Object);
 
         var options = Options.Create(new OidcOptions());
         _service = new RefreshTokenService(
-            _clock, ids.Object, formatter.Object, _registry, grants,
-            new RefreshTokenRotationPolicy(SingleIssuer.Accessor), new FixedSubjectTypeConverter(new SubjectTypeConverter()),
-            options, SingleIssuer.LicensedCatalog, SingleIssuer.Accessor);
+            _clock, ids.Object, formatter.Object, _registry, grants, new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            options, SingleIssuer.LicensedCatalog);
         _processor = new RevocationRequestProcessor(_registry, grants, _clock, tenantAccessor: SingleIssuer.Accessor);
 
         var inner = new Mock<IJsonWebTokenValidator>();
@@ -126,7 +125,7 @@ public class GrantRevocationTests
             .Setup(validator => validator.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
             .ReturnsAsync((string jwt, ValidationParameters _) => (Result<JsonWebToken, JwtValidationError>)_issued[jwt]);
         var cutoff = new Mock<IRevocationCutoffChecker>();
-        cutoff.Setup(checker => checker.CheckAsync(It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
+        cutoff.Setup(checker => checker.CheckAsync(TestTenant.Matched, It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
         _decorator = new TokenStatusValidatorDecorator(_registry, cutoff.Object, grants, inner.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
@@ -149,11 +148,11 @@ public class GrantRevocationTests
         var session = new AuthSession("user_1", "session_1", Start, "test");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null);
 
-        var encoded = await _service.CreateRefreshTokenAsync(session, context, _client, previous, GrantId);
+        var encoded = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, session, context, _client, previous, GrantId);
 
         // The token endpoint spends the presented token once the response is issued.
         if (previous != null)
-            Assert.True(await _service.TrySpendAsync(previous, _client));
+            Assert.True(await _service.TrySpendAsync(SingleIssuer.Tenant, previous, _client));
 
         return encoded!.Token;
     }

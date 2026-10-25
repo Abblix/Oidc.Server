@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
@@ -27,9 +28,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="jwtValidator">Validates the refresh-token JWT issued by this server.</param>
 /// <param name="refreshTokenService">Resolves the refresh-token JWT to an <see cref="AuthorizedGrant"/>
 /// and enforces single-use / rotation semantics.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class RefreshTokenGrantHandler(
 	IAuthServiceJwtValidator jwtValidator,
-	IRefreshTokenService refreshTokenService) : IAuthorizationGrantHandler
+	IRefreshTokenService refreshTokenService,
+	ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Indicates that this handler is responsible for processing the 'refresh_token' grant type.
@@ -64,6 +67,7 @@ public class RefreshTokenGrantHandler(
 
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(
+			tenantAccessor.CurrentTenant(),
 			request.RefreshToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
 		if (jwtValidationResult.TryGetFailure(out var error))
@@ -76,7 +80,7 @@ public class RefreshTokenGrantHandler(
 		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
 		// The authenticated client is the one the refresh token was issued to (verified below), so its sector opens
 		// a pairwise subject back to the real subject.
-		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token, clientInfo);
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenantAccessor.CurrentTenant(), token, clientInfo);
 		if (result.TryGetFailure(out var authError))
 		{
 			return authError;

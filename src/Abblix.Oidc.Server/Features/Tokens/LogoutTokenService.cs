@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -17,7 +18,6 @@ using Abblix.SecurityEvents;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -33,27 +33,26 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
 /// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
 /// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
     IClientJwtFormatter jwtFormatter,
     ITokenIdGenerator tokenIdGenerator,
-    IOptions<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : ILogoutTokenService
+    IOptions<OidcOptions> options) : ILogoutTokenService
 {
     /// <summary>
     /// Asynchronously creates a logout token based on the provided client information and logout event context.
     /// The token is then encoded to a serialized string format for easy distribution to clients.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">Information about the client that will receive the logout token.</param>
     /// <param name="logoutContext">Contextual information about the logout event, including the user's subject ID
     /// and session ID.</param>
     /// <returns>A task that returns a logout token.
     /// The task result is an <see cref="EncodedJsonWebToken"/>, which includes both the raw token object and its
     /// string representation.</returns>
-    public async Task<EncodedJsonWebToken> CreateLogoutTokenAsync(ClientInfo clientInfo, LogoutContext logoutContext)
+    public async Task<EncodedJsonWebToken> CreateLogoutTokenAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
     {
         var logoutOptions = clientInfo.BackChannelLogout.NotNull(nameof(clientInfo.BackChannelLogout));
         if (logoutOptions.RequiresSessionId && string.IsNullOrEmpty(logoutContext.SessionId))
@@ -61,7 +60,7 @@ public partial class LogoutTokenService(
             throw new InvalidOperationException($"The client {clientInfo.ClientId} requires session id");
         }
 
-        var subjectId = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), logoutContext.SubjectId, clientInfo);
+        var subjectId = subjectTypeConverter.Convert(tenant, logoutContext.SubjectId, clientInfo);
         if (string.IsNullOrEmpty(subjectId) && string.IsNullOrEmpty(logoutContext.SessionId))
         {
             throw new InvalidOperationException(
@@ -116,6 +115,7 @@ public partial class LogoutTokenService(
         LogTokenPrepared(logoutToken.Payload.JwtId, clientInfo.ClientId);
 
         var jwt = await jwtFormatter.FormatAsync(
+            tenant,
             logoutToken,
             clientInfo,
             ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));

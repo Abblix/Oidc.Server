@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -46,7 +47,7 @@ public class InitialAccessTokenValidatorTests
         _validator = new InitialAccessTokenValidator(
             _jwtValidator.Object,
             _revocationProvider.Object,
-            optionsMonitor.Object);
+            optionsMonitor.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static ClientRegistrationValidationContext CreateContext(
@@ -121,7 +122,7 @@ public class InitialAccessTokenValidatorTests
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "bad-jwt"));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is expired"));
 
         var result = await _validator.ValidateAsync(context);
@@ -142,7 +143,7 @@ public class InitialAccessTokenValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                "jwt-token",
+                TestTenant.Matched, "jwt-token",
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
@@ -162,7 +163,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken(subject: subject);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(context);
@@ -179,7 +180,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         _revocationProvider
@@ -200,7 +201,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         _revocationProvider
@@ -224,8 +225,8 @@ public class InitialAccessTokenValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, TokenTypePolicy, ValidationOptions>((_, _, opts) => capturedOptions = opts))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, string, TokenTypePolicy, ValidationOptions>((_, _, _, opts) => capturedOptions = opts))
             .ReturnsAsync(token);
 
         _revocationProvider

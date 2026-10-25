@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
@@ -26,6 +27,7 @@ public interface IIdentityTokenService
 	/// access token is provided. These claims are used for validating the hash of the authorization code and
 	/// access token respectively, enhancing the security of token exchange in OAuth 2.0 flows.
 	/// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authSession">The authentication session, which includes details such as the user's unique
     /// identifier and the session's authentication time.</param>
     /// <param name="authContext">The authorization context, providing contextual information about the authorization
@@ -52,6 +54,7 @@ public interface IIdentityTokenService
     /// reliably in identity assertions across different clients and services that support OpenID Connect.
     /// </remarks>
 	Task<EncodedJsonWebToken?> CreateIdentityTokenAsync(
+		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,

@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -52,11 +53,11 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdToken
         ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience;
 
     /// <inheritdoc />
-    public async Task<Result<JsonWebToken, string>> ParseAsync(string idTokenHint)
+    public async Task<Result<JsonWebToken, string>> ParseAsync(TenantDefinition tenant, string idTokenHint)
     {
         // Another token this server issued, an access or refresh token whose audience may well match, is refused
         // by its type, which the signature alone would not catch, as RFC 8725 Section 3.12 describes.
-        var result = await jwtValidator.ValidateAsync(idTokenHint, JwtTypes.IdTokens, HintOptions);
+        var result = await jwtValidator.ValidateAsync(tenant, idTokenHint, JwtTypes.IdTokens, HintOptions);
         if (result.TryGetFailure(out var validationError))
             return $"The id token hint contains an invalid token: {validationError}";
 

@@ -80,7 +80,7 @@ public class UserInfoRequestValidator(
 		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
 		// 'application/at+jwt' and reject tokens carrying any other value."
 		var result = await jwtValidator.ValidateAsync(
-			jwtAccessToken,
+			tenantAccessor.CurrentTenant(), jwtAccessToken,
 			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
 			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
@@ -121,7 +121,7 @@ public class UserInfoRequestValidator(
 
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
 		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
-		return (await accessTokenService.AuthenticateByAccessTokenAsync(token, clientInfo))
+		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenantAccessor.CurrentTenant(), token, clientInfo))
 			.MapSuccess(grant => new ValidUserInfoRequest(userInfoRequest, grant.AuthSession, grant.Context, clientInfo));
 	}
 

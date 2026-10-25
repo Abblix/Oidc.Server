@@ -59,8 +59,8 @@ public sealed class IssuerSpellingTests : IDisposable
         var formatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
         JsonWebToken? issued = null;
         formatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => issued = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => issued = jwt)
             .ReturnsAsync("token");
 
         var service = new AccessTokenService(
@@ -70,11 +70,11 @@ public sealed class IssuerSpellingTests : IDisposable
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
             SingleIssuer.HostCatalog,
-            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>(), tenantAccessor: SingleIssuer.Accessor),
-            ScopeClaims.Of(),
-            SingleIssuer.AccessorOf(options));
+            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
+            ScopeClaims.Of());
 
         await service.CreateAccessTokenAsync(
+            options.Value.ToTenant(),
             new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
             new AuthorizationContext("client", [Scopes.OpenId], null),
             new ClientInfo("client"),

@@ -28,23 +28,23 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </remarks>
 /// <param name="tokenRegistry">Records the grant as revoked.</param>
 /// <param name="clientInfoProvider">Finds the client whose refresh and access token lifetimes bound the grant.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoProvider clientInfoProvider, ITenantAccessor tenantAccessor)
+public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoProvider clientInfoProvider)
 {
     /// <summary>
     /// Revokes the grant <paramref name="refreshToken"/> was issued under; a token naming no grant revokes nothing.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="refreshToken">The payload of a refresh token of the grant.</param>
-    public async Task RevokeAsync(JsonWebTokenPayload refreshToken)
+    public async Task RevokeAsync(TenantDefinition tenant, JsonWebTokenPayload refreshToken)
     {
         if (refreshToken is not { GrantId: { } grantId, ExpiresAt: { } expiresAt })
             return;
 
-        var revokedUntil = await LastValidMomentAsync(refreshToken) is { } ceiling && ceiling > expiresAt
+        var revokedUntil = await LastValidMomentAsync(tenant, refreshToken) is { } ceiling && ceiling > expiresAt
             ? ceiling
             : expiresAt;
 
-        await tokenRegistry.SetStatusAsync(tenantAccessor.CurrentTenant(), grantId, JsonWebTokenStatus.Revoked, revokedUntil);
+        await tokenRegistry.SetStatusAsync(tenant, grantId, JsonWebTokenStatus.Revoked, revokedUntil);
     }
 
     /// <summary>
@@ -52,12 +52,12 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
     /// first issuance or its client cannot be found, in which case the presented token's own expiry is the best
     /// known bound.
     /// </summary>
-    private async Task<DateTimeOffset?> LastValidMomentAsync(JsonWebTokenPayload refreshToken)
+    private async Task<DateTimeOffset?> LastValidMomentAsync(TenantDefinition tenant, JsonWebTokenPayload refreshToken)
     {
         if (refreshToken is not { IssuedAt: { } issuedAt, ClientId: { } clientId })
             return null;
 
-        return await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId) is { } client
+        return await clientInfoProvider.TryFindClientAsync(tenant, clientId) is { } client
             ? issuedAt + client.RefreshToken.AbsoluteExpiresIn + client.AccessTokenExpiresIn
             : null;
     }

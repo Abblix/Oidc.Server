@@ -36,31 +36,27 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
 /// <param name="grantRevocation">Revokes the grant of a token another request has already spent.</param>
-/// <param name="rotationPolicy">Decides whether renewing a client's refresh token spends it.</param>
 /// <param name="subjectTypeConverter">Converts the real subject to the client-facing subject (pairwise pseudonym
 /// or real) on issuance, and opens it back when authorizing the token.</param>
 /// <param name="options">OIDC configuration options, source of the refresh token's signing and encryption settings.
 /// </param>
 /// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's clock, identifier, format, registry, grant revocation, rotation policy and subject each come from their own service, the tenant names its issuer, the server's options carry the service-token policy, and the catalog the licensing state the issuer claim is checked against.")]
+    Justification = "Every dependency is used: the token's clock, identifier, format, registry, grant revocation and subject each come from their own service, the server's options carry the service-token policy, and the catalog the licensing state the issuer claim is checked against.")]
 public class RefreshTokenService(
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
 	ITokenRegistry tokenRegistry,
 	GrantRevocation grantRevocation,
-	RefreshTokenRotationPolicy rotationPolicy,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
-	ITenantCatalog catalog,
-	ITenantAccessor tenantAccessor) : IRefreshTokenService
+	ITenantCatalog catalog) : IRefreshTokenService
 {
 	/// <inheritdoc />
-	public async Task<bool> TrySpendAsync(JsonWebToken refreshToken, ClientInfo clientInfo)
+	public async Task<bool> TrySpendAsync(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
-		if (!rotationPolicy.Rotates(clientInfo) ||
+		if (!RefreshTokenRotationPolicy.Rotates(tenant, clientInfo) ||
 		    refreshToken.Payload is not { JwtId: { } jwtId, ExpiresAt: { } expiresAt } payload)
 		{
 			return true;
@@ -69,10 +65,10 @@ public class RefreshTokenService(
 		// Spending marks the token Used ("superseded"), not Revoked ("killed"). A later presentation of a
 		// superseded token is the replay signal that TokenStatusValidatorDecorator turns into a whole-family
 		// revocation (RFC 9700 section 4.14.2); a presentation losing the race to spend it is the same signal.
-		if (await tokenRegistry.TrySetStatusAsync(tenantAccessor.CurrentTenant(), jwtId, JsonWebTokenStatus.Used, expiresAt))
+		if (await tokenRegistry.TrySetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Used, expiresAt))
 			return true;
 
-		await grantRevocation.RevokeAsync(payload);
+		await grantRevocation.RevokeAsync(tenant, payload);
 		return false;
 	}
 
@@ -81,6 +77,7 @@ public class RefreshTokenService(
 	/// optionally renewing an existing refresh token. This facilitates prolonged access without re-authentication,
 	/// adhering to specified client policies for token expiration and renewal.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="authSession">The session details of the authenticated user, providing context for token issuance.
 	/// </param>
 	/// <param name="authContext">Contextual information from the authorization process, including scopes and
@@ -94,6 +91,7 @@ public class RefreshTokenService(
 	/// the refresh token, or null if the existing token cannot be renewed due to policy constraints or expiration.
 	/// </returns>
 	public async Task<EncodedJsonWebToken?> CreateRefreshTokenAsync(
+		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
@@ -144,8 +142,8 @@ public class RefreshTokenService(
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckLicense(
-					tenantAccessor.CurrentTenant().Issuer.OriginalString,
-					tenantAccessor.CurrentTenant(),
+					tenant.Issuer.OriginalString,
+					tenant,
 					catalog,
 					authContext.ClientId),
 				GrantId = grantId,
@@ -160,9 +158,10 @@ public class RefreshTokenService(
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
 		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.
-		newToken.Payload.Subject = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
+		newToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
 
 		var encoded = await jwtFormatter.FormatAsync(
+			tenant,
 			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
 	}
@@ -195,12 +194,14 @@ public class RefreshTokenService(
 	/// authorization context. This method facilitates continued access by validating the refresh token's integrity
 	/// and expiry, granting a new access token for continued use.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="refreshToken">The refresh token to be validated and authorized.</param>
 	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
 	/// the real subject.</param>
 	/// <returns>A task that, upon successful validation, results in an <see cref="AuthorizedGrant"/>
 	/// encapsulating the reconstituted authentication session and authorization context.</returns>
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeByRefreshTokenAsync(
+		TenantDefinition tenant,
 		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
 		var authSession = refreshToken.Payload.ToAuthSession();
@@ -209,7 +210,7 @@ public class RefreshTokenService(
 		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
 		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
 		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.ConvertBack(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
+		var subject = subjectTypeConverter.ConvertBack(tenant, authSession.Subject, clientInfo);
 		if (subject is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the

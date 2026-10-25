@@ -66,29 +66,28 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="clientInfoProvider">Resolves the client a token names, so a pairwise pseudonym can be opened
 /// back into the subject a host would revoke.</param>
 /// <param name="subjectTypeConverter">Opens that pseudonym.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RevocationCutoffChecker(
     ILogger<RevocationCutoffChecker> logger,
     IRevocationCutoffRegistry cutoffRegistry,
     IOptions<OidcOptions> options,
     IClientInfoProvider clientInfoProvider,
-    ISubjectTypeConverter subjectTypeConverter,
-    ITenantAccessor tenantAccessor) : IRevocationCutoffChecker
+    ISubjectTypeConverter subjectTypeConverter) : IRevocationCutoffChecker
 {
     /// <inheritdoc />
-    public async Task<JwtValidationError?> CheckAsync(JsonWebTokenPayload payload)
+    public async Task<JwtValidationError?> CheckAsync(TenantDefinition tenant, JsonWebTokenPayload payload)
     {
-        if (payload.IssuedAt is not { } issuedAt || !IsOurOwnToken(payload))
+        if (payload.IssuedAt is not { } issuedAt || !IsOurOwnToken(tenant, payload))
             return null;
 
         if (await IsBeforeCutoffAsync(
+                tenant,
                 RevocationScope.Session, payload.SessionId, issuedAt, Skew))
         {
             LogTokenRefusedByCutoff(RevocationScope.Session, issuedAt);
             return RevokedByCutoff;
         }
 
-        var (resolved, subject) = await TryResolveSubjectAsync(payload);
+        var (resolved, subject) = await TryResolveSubjectAsync(tenant, payload);
         if (!resolved)
         {
             // The subject could not be recovered, so whether a cutoff covers this token is unknown - and a
@@ -101,7 +100,7 @@ public partial class RevocationCutoffChecker(
                 + "cannot be ruled out");
         }
 
-        if (await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt, Skew))
+        if (await IsBeforeCutoffAsync(tenant, RevocationScope.Subject, subject, issuedAt, Skew))
         {
             LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
             return RevokedByCutoff;
@@ -111,6 +110,7 @@ public partial class RevocationCutoffChecker(
             return null;
 
         if (!await IsBeforeCutoffAsync(
+                tenant,
                 RevocationScope.ClientSubject, RevocationPrincipal.ClientSubject(clientId, subject), issuedAt, Skew))
             return null;
 
@@ -119,7 +119,7 @@ public partial class RevocationCutoffChecker(
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsSessionRefusedAsync(AuthSession session)
+    public async Task<bool> IsSessionRefusedAsync(TenantDefinition tenant, AuthSession session)
     {
         // The subject here is the one a host would revoke, with no pseudonym to open: pairwise conversion
         // happens later, in the token services, against the client the token is being minted for. So this
@@ -130,6 +130,7 @@ public partial class RevocationCutoffChecker(
         // either way, but the scope is what the log line names, so a principal caught by both would
         // otherwise be reported differently depending on which door it came through.
         if (await IsBeforeCutoffAsync(
+                tenant,
                 RevocationScope.Session, session.SessionId, session.AuthenticationTime, TimeSpan.Zero))
         {
             LogSessionRefusedByCutoff(session.SessionId, session.AuthenticationTime, RevocationScope.Session);
@@ -137,6 +138,7 @@ public partial class RevocationCutoffChecker(
         }
 
         if (!await IsBeforeCutoffAsync(
+                tenant,
                 RevocationScope.Subject, session.Subject, session.AuthenticationTime, TimeSpan.Zero))
             return false;
 
@@ -145,14 +147,14 @@ public partial class RevocationCutoffChecker(
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsGrantRefusedAtItsClientAsync(AuthorizedGrant grant)
+    public async Task<bool> IsGrantRefusedAtItsClientAsync(TenantDefinition tenant, AuthorizedGrant grant)
     {
         // The token side's tolerance, unlike the session side: a grant approved on a node whose clock runs ahead
         // of the one that wrote the cutoff would otherwise pass and found a refresh family outliving it, while the
         // tokens a grant approved inside the window mints are refused by the token side all the same
         var authorizedAt = grant.AuthorizedAt ?? grant.AuthSession.AuthenticationTime;
         var principal = RevocationPrincipal.ClientSubject(grant.Context.ClientId, grant.AuthSession.Subject);
-        if (!await IsBeforeCutoffAsync(RevocationScope.ClientSubject, principal, authorizedAt, Skew))
+        if (!await IsBeforeCutoffAsync(tenant, RevocationScope.ClientSubject, principal, authorizedAt, Skew))
             return false;
 
         LogGrantRefusedByCutoff(grant.Context.ClientId, authorizedAt, RevocationScope.ClientSubject);
@@ -172,8 +174,8 @@ public partial class RevocationCutoffChecker(
     /// A token with no <c>iss</c> is not ours either: everything this server mints carries one, so its
     /// absence says the token came from somewhere that does not follow our conventions.
     /// </remarks>
-    private bool IsOurOwnToken(JsonWebTokenPayload payload)
-        => payload.Issuer is { Length: > 0 } issuer && issuer == tenantAccessor.CurrentTenant().Issuer.OriginalString;
+    private static bool IsOurOwnToken(TenantDefinition tenant, JsonWebTokenPayload payload)
+        => payload.Issuer is { Length: > 0 } issuer && issuer == tenant.Issuer.OriginalString;
 
     /// <summary>
     /// The subject a host would name when revoking, recovered from what the token carries.
@@ -190,7 +192,7 @@ public partial class RevocationCutoffChecker(
     /// deployment that chose the stricter privacy setting.
     /// </para>
     /// </remarks>
-    private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(JsonWebTokenPayload payload)
+    private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(TenantDefinition tenant, JsonWebTokenPayload payload)
     {
         if (payload.Subject is not { Length: > 0 } subject || payload.NamedClientId() is not { Length: > 0 } clientId)
             return (true, payload.Subject);
@@ -198,7 +200,6 @@ public partial class RevocationCutoffChecker(
         // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
         // on an ID token but may be a resource or this server's own address on another token, so one that names no
         // existing client leaves the subject as it is.
-        var tenant = tenantAccessor.CurrentTenant();
         var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (clientInfo is null)
             return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
@@ -238,12 +239,13 @@ public partial class RevocationCutoffChecker(
     /// </para>
     /// </remarks>
     private async Task<bool> IsBeforeCutoffAsync(
+        TenantDefinition tenant,
         RevocationScope scope, string? principal, DateTimeOffset instant, TimeSpan tolerance)
     {
         if (principal is not { Length: > 0 })
             return false;
 
-        return await cutoffRegistry.GetCutoffAsync(tenantAccessor.CurrentTenant(), scope, principal) is { } cutoff
+        return await cutoffRegistry.GetCutoffAsync(tenant, scope, principal) is { } cutoff
                && instant < cutoff + tolerance;
     }
 }

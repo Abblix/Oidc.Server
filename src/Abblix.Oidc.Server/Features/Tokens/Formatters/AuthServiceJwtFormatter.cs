@@ -10,8 +10,8 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -25,26 +25,24 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthServiceJwtFormatter(
 	IJsonWebTokenCreator jwtCreator,
-	IAuthServiceKeysProvider serviceKeysProvider,
-	ITenantAccessor tenantAccessor) : IAuthServiceJwtFormatter
+	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtFormatter
 {
 	/// <inheritdoc />
 	/// <remarks>
 	/// A refresh token is named for the tenant and creation it is signed at, in the payload of
 	/// <paramref name="token"/> itself, since the server accepts a refresh token only at the one it names.
 	/// </remarks>
-	public async Task<string> FormatAsync(JsonWebToken token, ServiceJwtEncryption encryption)
+	public async Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ServiceJwtEncryption encryption)
 	{
 		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken))
-			RefreshTokenTenant.Name(token.Payload, TenantKey.PartitionOf(tenantAccessor.CurrentTenant()));
+			RefreshTokenTenant.Name(token.Payload, TenantKey.PartitionOf(tenant));
 
 		// The signing algorithm and any pinned signing-key id live in the token header, placed there by the
 		// issuing service from its ServiceTokens.<Type>.Signing settings. The signer restamps the header kid
 		// from the chosen key, so passing the header kid here only selects which signing key is used.
-		var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenantAccessor.CurrentTenant(), true)
+		var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
 			.FirstByAlgorithmAsync(token.Header.Algorithm, token.Header.KeyId);
 
 		// Opt-out: this token type is configured signed only, so the server's encryption keys are not even
@@ -60,7 +58,7 @@ public class AuthServiceJwtFormatter(
 		// available encryption key. A pinned key id or a required algorithm that matches nothing fails loudly
 		// inside the selector.
 		var encryptingCredentials = encryption.Key
-			?? await serviceKeysProvider.GetEncryptionKeys(tenantAccessor.CurrentTenant())
+			?? await serviceKeysProvider.GetEncryptionKeys(tenant)
 				.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
 
 		if (encryptingCredentials is null)

@@ -69,12 +69,10 @@ public class RefreshTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
-            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
-            new RefreshTokenRotationPolicy(SingleIssuer.Accessor),
+            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            SingleIssuer.LicensedCatalog,
-            SingleIssuer.Accessor);
+            SingleIssuer.LicensedCatalog);
     }
 
     /// <summary>
@@ -93,12 +91,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -130,12 +128,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -162,12 +160,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -197,12 +195,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -228,12 +226,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -267,7 +265,7 @@ public class RefreshTokenServiceTests
             }
         };
 
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
             r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
@@ -307,7 +305,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(true);
 
         // Act
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         // Assert
         _tokenRegistry.Verify(
@@ -330,12 +328,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, refreshToken: null, grantId: GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, refreshToken: null, grantId: GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -368,7 +366,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         // Assert
         _tokenRegistry.Verify(
@@ -408,12 +406,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -442,12 +440,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -489,12 +487,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -541,12 +539,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -588,11 +586,11 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.Null(result);
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()), Times.Never);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()), Times.Never);
     }
 
     /// <summary>
@@ -610,12 +608,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -648,7 +646,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -684,7 +682,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -717,7 +715,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -766,7 +764,7 @@ public class RefreshTokenServiceTests
             .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
@@ -808,7 +806,7 @@ public class RefreshTokenServiceTests
             },
         };
 
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
@@ -843,7 +841,7 @@ public class RefreshTokenServiceTests
             .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
@@ -894,7 +892,7 @@ public class RefreshTokenServiceTests
             .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
@@ -932,7 +930,7 @@ public class RefreshTokenServiceTests
             .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        await _service.TrySpendAsync(oldToken, clientInfo);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
@@ -964,7 +962,7 @@ public class RefreshTokenServiceTests
             },
         };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.TrySpendAsync(oldToken, clientInfo));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo));
     }
 
     /// <summary>
@@ -997,7 +995,7 @@ public class RefreshTokenServiceTests
             .Setup(r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
-        Assert.False(await _service.TrySpendAsync(oldToken, clientInfo));
+        Assert.False(await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo));
 
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
@@ -1025,4 +1023,33 @@ public class RefreshTokenServiceTests
             ReusePolicy = RefreshTokenReusePolicy.Reuse,
         }
     };
+
+    /// <summary>
+    /// For a client naming no profile of its own, the default profile of the tenant the token is spent at decides
+    /// whether the token is rotated: a tenant holding clients to nothing marks it used, a tenant holding them to
+    /// FAPI 2.0, whose tokens are bound to a key the client proves, lets it be reused.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    public async Task TheTenantsDefaultProfile_DecidesWhetherATokenIsRotated(ClientSecurityProfile tenantDefault, bool rotated)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        var oldToken = new JsonWebToken
+        {
+            Payload = { JwtId = OldTokenId, IssuedAt = _currentTime.AddHours(-1), ExpiresAt = _currentTime.AddHours(7) },
+        };
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(new TestIssuer { DefaultSecurityProfile = tenantDefault }.ToTenant(), oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            rotated ? Times.Once() : Times.Never());
+    }
 }

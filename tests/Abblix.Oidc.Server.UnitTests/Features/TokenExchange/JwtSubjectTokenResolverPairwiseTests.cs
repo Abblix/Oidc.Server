@@ -59,7 +59,7 @@ public class JwtSubjectTokenResolverPairwiseTests
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(_pairwiseClient);
 
-        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter), _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter), _clientInfoProvider.Object);
     }
 
     [Fact]
@@ -83,10 +83,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             },
         };
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(RealSubject, ctx.Subject);

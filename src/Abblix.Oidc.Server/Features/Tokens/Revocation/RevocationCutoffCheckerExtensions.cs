@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -27,12 +28,13 @@ internal static class RevocationCutoffCheckerExtensions
     /// session, refusing a family founded after the end user consented again in that same session.
     /// </remarks>
     /// <param name="cutoffChecker">Reads the cutoffs.</param>
+    /// <param name="tenant">The tenant the grant was authorized at.</param>
     /// <param name="grant">The grant being redeemed.</param>
     /// <param name="grantType">The grant type it is redeemed under.</param>
     public static async Task<bool> IsGrantRefusedAsync(
-        this IRevocationCutoffChecker cutoffChecker, AuthorizedGrant grant, string grantType)
+        this IRevocationCutoffChecker cutoffChecker, TenantDefinition tenant, AuthorizedGrant grant, string grantType)
     {
-        if (await cutoffChecker.IsSessionRefusedAsync(grant.AuthSession))
+        if (await cutoffChecker.IsSessionRefusedAsync(tenant, grant.AuthSession))
             return true;
 
         switch (grantType)
@@ -41,7 +43,7 @@ internal static class RevocationCutoffCheckerExtensions
                 return false;
 
             case GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba:
-                return await cutoffChecker.IsGrantRefusedAtItsClientAsync(grant);
+                return await cutoffChecker.IsGrantRefusedAtItsClientAsync(tenant, grant);
 
             default:
                 throw new InvalidOperationException($"No revocation check is defined for the grant type {grantType}");

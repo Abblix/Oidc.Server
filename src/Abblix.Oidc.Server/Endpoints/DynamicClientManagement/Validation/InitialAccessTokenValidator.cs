@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Options;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
@@ -26,10 +27,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="jwtValidator">Validates JWT signature and expiration.</param>
 /// <param name="revocationProvider">Checks whether the token has been revoked.</param>
 /// <param name="options">OIDC configuration options.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class InitialAccessTokenValidator(
     IAuthServiceJwtValidator jwtValidator,
     IInitialAccessTokenRevocationProvider revocationProvider,
-    IOptionsMonitor<OidcOptions> options) : IClientRegistrationContextValidator
+    IOptionsMonitor<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -55,6 +58,7 @@ public class InitialAccessTokenValidator(
         // used to be off because the token carried no 'aud' at all - a token with no stated recipient, and
         // the one exception to the rule every other token here follows.
         var result = await jwtValidator.ValidateAsync(
+            tenantAccessor.CurrentTenant(),
             header.Parameter, TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken));
 
         if (result.TryGetFailure(out var error))

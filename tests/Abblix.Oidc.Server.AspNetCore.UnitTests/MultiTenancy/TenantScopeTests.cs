@@ -21,8 +21,8 @@ using Xunit;
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
 /// <summary>
-/// Work of one tenant run outside any request - an administration job revoking a subject's tokens - through
-/// <see cref="TenantScope"/>.
+/// Work of one tenant run outside any request, such as a message consumer ending a session through
+/// <see cref="TenantScope"/>, or a revocation handed the tenant it is for.
 /// </summary>
 public sealed class TenantScopeTests : IDisposable
 {
@@ -45,25 +45,19 @@ public sealed class TenantScopeTests : IDisposable
     private IRevocationCutoffRegistry Cutoffs => _provider.GetRequiredService<IRevocationCutoffRegistry>();
 
     /// <summary>
-    /// A revocation made within a tenant's scope, with no request at all, lands in that tenant's space: the tenant
-    /// finds it, another tenant does not.
+    /// A revocation made for a tenant, with no request at all, lands in that tenant's space: the tenant finds it,
+    /// another tenant does not.
     /// </summary>
     [Fact]
-    public async Task AWorkOfOneTenantOutsideAnyRequest_KeepsToThatTenant()
+    public async Task ARevocationOfOneTenantOutsideAnyRequest_KeepsToThatTenant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        using (TenantScope.Enter(Acme))
-            await Revoker.RevokeSubjectAsync(Subject, cancellationToken: cancellationToken);
+        await Revoker.RevokeSubjectAsync(Acme, Subject, cancellationToken: cancellationToken);
 
         Assert.NotNull(await Cutoffs.GetCutoffAsync(Acme, RevocationScope.Subject, Subject, cancellationToken));
         Assert.Null(await Cutoffs.GetCutoffAsync(Globex, RevocationScope.Subject, Subject, cancellationToken));
     }
-
-    [Fact]
-    public async Task OutsideAnyRequestAndAnyScope_TheWorkIsRefused()
-        => await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Revoker.RevokeSubjectAsync(Subject, cancellationToken: TestContext.Current.CancellationToken));
 
     /// <summary>
     /// A scope ends where it is disposed, giving back the tenant that was current before it - including an outer

@@ -33,10 +33,10 @@ public class RegistrationAccessTokenValidatorTests
     {
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
-        return new RegistrationAccessTokenValidator(jwtValidator.Object);
+        return new RegistrationAccessTokenValidator(jwtValidator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static JsonWebToken CreateToken(string? jti, string? subject = null, string? audience = null) => new()
@@ -106,12 +106,12 @@ public class RegistrationAccessTokenValidatorTests
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
             .Setup(v => v.ValidateAsync(
-                It.IsAny<string>(),
+                TestTenant.Matched, It.IsAny<string>(),
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object).ValidateAsync(Bearer, ClientId);
+        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object, tenantAccessor: SingleIssuer.Accessor).ValidateAsync(Bearer, ClientId);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);

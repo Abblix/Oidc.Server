@@ -12,8 +12,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// Runs work of one tenant outside a request resolved to it - completing a back-channel authentication from a
-/// push provider's callback, revoking a subject's tokens from an administration job, ending a session from a
-/// message consumer.
+/// push provider's callback, ending a session from a message consumer.
 /// </summary>
 /// <remarks>
 /// The tenant accessor answers with the tenant of the innermost scope entered here and, outside any, with the tenant
@@ -24,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 ///     ?? throw new InvalidOperationException("No tenant is registered under the id acme.");
 ///
 /// using (TenantScope.Enter(tenant))
-///     await tokenRevoker.RevokeSubjectAsync(subject, cancellationToken: cancellationToken);
+///     await sessionTerminator.TerminateAsync(sessionId, subject);
 /// </code>
 /// </remarks>
 public sealed class TenantScope : IDisposable

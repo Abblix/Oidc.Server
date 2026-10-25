@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -54,7 +55,7 @@ public class TokenRequestProcessorTests
             _refreshTokenService.Object,
             _identityTokenService.Object,
             _contextEvaluator.Object,
-            _grantIdGenerator.Object);
+            _grantIdGenerator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static TokenRequest CreateTokenRequest() => new()
@@ -122,7 +123,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -135,7 +136,7 @@ public class TokenRequestProcessorTests
         Assert.Same(accessToken, tokenIssued.AccessToken);
         _accessTokenService.Verify(
             s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()),
             Times.Once);
@@ -161,14 +162,14 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
@@ -184,7 +185,7 @@ public class TokenRequestProcessorTests
         Assert.Same(idToken, tokenIssued.IdToken);
         _identityTokenService.Verify(
             s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
@@ -213,14 +214,14 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
                 null, NewGrantId))
@@ -234,7 +235,7 @@ public class TokenRequestProcessorTests
         Assert.Same(refreshToken, tokenIssued.RefreshToken);
         _refreshTokenService.Verify(
             s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
                 null, NewGrantId),
@@ -278,14 +279,14 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
                 null, NewGrantId))
@@ -294,14 +295,14 @@ public class TokenRequestProcessorTests
         PushDeliveryBindings? captured = null;
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
                 null,
                 accessToken.EncodedJwt,
                 It.IsAny<PushDeliveryBindings?>()))
-            .Callback((AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
+            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
                 PushDeliveryBindings? bindings) => captured = bindings)
             .ReturnsAsync(idToken);
 
@@ -347,14 +348,14 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
                 null, NewGrantId))
@@ -363,14 +364,14 @@ public class TokenRequestProcessorTests
         var captured = new PushDeliveryBindings("not-set", null);
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
                 null,
                 accessToken.EncodedJwt,
                 It.IsAny<PushDeliveryBindings?>()))
-            .Callback((AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
+            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
                 PushDeliveryBindings? bindings) => captured = bindings!)
             .ReturnsAsync(idToken);
 
@@ -403,14 +404,14 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
                 null, NewGrantId))
@@ -418,7 +419,7 @@ public class TokenRequestProcessorTests
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
@@ -455,7 +456,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -492,10 +493,10 @@ public class TokenRequestProcessorTests
         AuthorizationContext? issuedUnder = null;
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
-            .Callback((AuthSession _, AuthorizationContext context, ClientInfo _, string? _, DateTimeOffset? _) =>
+            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext context, ClientInfo _, string? _, DateTimeOffset? _) =>
                 issuedUnder = context)
             .ReturnsAsync(CreateAccessToken());
 
@@ -527,7 +528,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -565,6 +566,7 @@ public class TokenRequestProcessorTests
             .Returns(authContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 authSession, authContext, request.ClientInfo, ExistingGrantId, subjectExpiresAt))
             .ReturnsAsync(accessToken);
 
@@ -598,14 +600,15 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, NewGrantId, null))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, NewGrantId, null))
             .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
-            .Setup(s => s.TrySpendAsync(legacyRefreshToken, request.ClientInfo))
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, legacyRefreshToken, request.ClientInfo))
             .ReturnsAsync(true);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession, authContext, request.ClientInfo, legacyRefreshToken, NewGrantId))
             .ReturnsAsync(newRefreshToken);
 
@@ -641,10 +644,11 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(narrowedContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(authSession, narrowedContext, request.ClientInfo, ExistingGrantId, null))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, narrowedContext, request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(accessToken);
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
                 authSession, narrowedContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
             .ReturnsAsync(CreateIdToken());
 
@@ -675,7 +679,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -708,7 +712,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -737,7 +741,7 @@ public class TokenRequestProcessorTests
             .Returns(authContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken(TimeSpan.FromSeconds(lifetimeSeconds)));
@@ -770,7 +774,7 @@ public class TokenRequestProcessorTests
             .Returns(authContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -796,7 +800,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -828,6 +832,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 request.AuthorizedGrant.AuthSession,
                 authContext,
                 request.ClientInfo, null, null))
@@ -839,6 +844,7 @@ public class TokenRequestProcessorTests
         // Assert
         _accessTokenService.Verify(
             s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 request.AuthorizedGrant.AuthSession,
                 authContext,
                 request.ClientInfo, null, null),
@@ -879,17 +885,19 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext,
                 request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
-            .Setup(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo))
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
             .ReturnsAsync(true);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext,
                 request.ClientInfo,
@@ -904,6 +912,7 @@ public class TokenRequestProcessorTests
         Assert.Same(newRefreshToken, tokenIssued.RefreshToken);
         _refreshTokenService.Verify(
             s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext,
                 request.ClientInfo,
@@ -933,14 +942,15 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
             .ReturnsAsync(CreateRefreshToken());
         _refreshTokenService
-            .Setup(s => s.TrySpendAsync(existingRefreshToken, request.ClientInfo))
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
             .ReturnsAsync(false);
 
         var result = await _processor.ProcessAsync(request);
@@ -972,21 +982,22 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(accessToken);
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
             .ReturnsAsync(CreateRefreshToken());
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
             .ThrowsAsync(new HttpRequestException("The client key set could not be fetched."));
 
         await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(request));
 
         _refreshTokenService.Verify(
-            s => s.TrySpendAsync(It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
+            s => s.TrySpendAsync(TestTenant.Matched, It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
     }
 
     /// <summary>
@@ -1011,10 +1022,11 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
             .ReturnsAsync((EncodedJsonWebToken?)null);
 
@@ -1023,7 +1035,7 @@ public class TokenRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var issued));
         Assert.Null(issued.RefreshToken);
         _refreshTokenService.Verify(
-            s => s.TrySpendAsync(It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
+            s => s.TrySpendAsync(TestTenant.Matched, It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
     }
 
     /// <summary>
@@ -1046,14 +1058,14 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
@@ -1067,7 +1079,7 @@ public class TokenRequestProcessorTests
         // Assert
         _identityTokenService.Verify(
             s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo,
                 false,
@@ -1102,7 +1114,7 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), authContext, request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -1153,18 +1165,18 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(evaluatedContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), evaluatedContext, clientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, It.IsAny<AuthSession>(), evaluatedContext, clientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         AuthorizationContext? capturedRefreshContext = null;
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 clientInfo,
                 It.IsAny<Jwt.JsonWebToken?>(), It.IsAny<string>()))
-            .Callback<AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?, string>(
-                (_, ctx, _, _, _) => capturedRefreshContext = ctx)
+            .Callback<TenantDefinition, AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?, string>(
+                (_, _, ctx, _, _, _) => capturedRefreshContext = ctx)
             .ReturnsAsync(refreshToken);
 
         // Act
@@ -1202,7 +1214,7 @@ public class TokenRequestProcessorTests
             .Returns(authContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
@@ -1239,7 +1251,7 @@ public class TokenRequestProcessorTests
             .Returns(emptyScopeContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 emptyScopeContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken());
@@ -1283,7 +1295,7 @@ public class TokenRequestProcessorTests
             .Returns(evaluated);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 evaluated,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken());
@@ -1333,7 +1345,7 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(svc => svc.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);

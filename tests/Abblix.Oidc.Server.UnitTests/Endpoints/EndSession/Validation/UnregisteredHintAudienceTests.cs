@@ -47,7 +47,7 @@ public class UnregisteredHintAudienceTests
 
         var hintParser = new Mock<IIdTokenHintParser>(MockBehavior.Strict);
         hintParser
-            .Setup(p => p.ParseAsync(IdTokenHint))
+            .Setup(p => p.ParseAsync(TestTenant.Matched, IdTokenHint))
             .ReturnsAsync((Result<JsonWebToken, string>)idToken);
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);

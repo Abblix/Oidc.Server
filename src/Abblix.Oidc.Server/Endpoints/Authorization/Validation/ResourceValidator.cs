@@ -20,9 +20,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// integration with the authorization context.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for retrieving and validating resource information.</param>
-/// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference, ITenantAccessor tenantAccessor)
+public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor tenantAccessor)
     : SyncAuthorizationContextValidatorBase
 {
     /// <summary>
@@ -43,7 +42,7 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
 
         if (requested is not { Length: > 0 })
         {
-            if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenantAccessor.CurrentTenant(), request.Scope, out var inferred, out var ambiguity))
                 return context.Error(ErrorCodes.InvalidScope, ambiguity);
 
             if (inferred is null)

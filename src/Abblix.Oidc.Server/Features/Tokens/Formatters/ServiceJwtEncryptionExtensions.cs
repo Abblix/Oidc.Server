@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -21,6 +22,7 @@ public static class ServiceJwtEncryptionExtensions
     /// <c>aud</c> can read it.
     /// </summary>
     /// <param name="encryption">The policy projected from the server's own settings.</param>
+    /// <param name="tenant">The tenant whose resources the audience is one of.</param>
     /// <param name="context">The authorization context naming the token's audience.</param>
     /// <param name="audienceKeys">Answers which key, if any, the named audience published.</param>
     /// <returns>The policy, pointed at the audience's key where one is published.</returns>
@@ -31,13 +33,14 @@ public static class ServiceJwtEncryptionExtensions
     /// </remarks>
     public static async Task<ServiceJwtEncryption> WithAudienceKeyAsync(
         this ServiceJwtEncryption encryption,
+        TenantDefinition tenant,
         AuthorizationContext context,
         IAudienceKeyResolver audienceKeys)
     {
         if (context.Resources is not { Length: > 0 } resources)
             return encryption;
 
-        return await audienceKeys.FindEncryptionKeyAsync(resources) is { } audienceKey
+        return await audienceKeys.FindEncryptionKeyAsync(tenant, resources) is { } audienceKey
             ? encryption with { Key = audienceKey }
             : encryption;
     }

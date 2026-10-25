@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
 using System.Threading.Tasks;
@@ -43,7 +44,7 @@ public class IdTokenHintParserTests
     {
         Result<JsonWebToken, JwtValidationError> success = token;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(success);
     }
 
@@ -53,7 +54,7 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidTokenType, "a registration access token");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(refusal);
     }
 
@@ -71,7 +72,7 @@ public class IdTokenHintParserTests
     {
         SetupToken(IdToken());
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetSuccess(out var idToken));
         Assert.Equal("user_42", idToken.Payload.Subject);
@@ -88,10 +89,10 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidToken, "bad signature");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(failure);
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out var reason));
         Assert.Contains("invalid token", reason, StringComparison.OrdinalIgnoreCase);
@@ -111,7 +112,7 @@ public class IdTokenHintParserTests
     {
         SetupRefusalOfTheType();
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -131,7 +132,7 @@ public class IdTokenHintParserTests
     {
         SetupToken(IdToken(withExpiry: false));
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out var reason));
         Assert.Contains("not an ID Token", reason, StringComparison.Ordinal);
@@ -155,7 +156,7 @@ public class IdTokenHintParserTests
     {
         SetupRefusalOfTheType();
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out var reason));
         Assert.DoesNotContain("expiration time", reason, StringComparison.Ordinal);
@@ -184,11 +185,11 @@ public class IdTokenHintParserTests
         Result<JsonWebToken, JwtValidationError> success = IdToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback((string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback((TenantDefinition _, string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
             .ReturnsAsync(success);
 
-        await _parser.ParseAsync(Hint);
+        await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.NotNull(asked);
         Assert.False(asked.Value.HasFlag(ValidationOptions.ValidateLifetime));

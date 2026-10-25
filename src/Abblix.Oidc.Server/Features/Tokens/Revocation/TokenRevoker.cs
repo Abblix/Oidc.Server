@@ -22,37 +22,40 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="logger">Records each cutoff written, which is the only trace a revocation leaves.</param>
 /// <param name="options">Supplies how long a cutoff is retained.</param>
 /// <param name="clock">Supplies the current moment when the caller names none.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class TokenRevoker(
     ILogger<TokenRevoker> logger,
     IRevocationCutoffRegistry cutoffRegistry,
     IOptions<OidcOptions> options,
-    TimeProvider clock,
-    ITenantAccessor tenantAccessor) : ITokenRevoker
+    TimeProvider clock) : ITokenRevoker
 {
     /// <inheritdoc />
     public Task RevokeSubjectAsync(
+        TenantDefinition tenant,
         string subject, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        => RevokeAsync(RevocationScope.Subject, subject, before, cancellationToken);
+        => RevokeAsync(tenant, RevocationScope.Subject, subject, before, cancellationToken);
 
     /// <inheritdoc />
     public Task RevokeSessionAsync(
+        TenantDefinition tenant,
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        => RevokeAsync(RevocationScope.Session, sessionId, before, cancellationToken);
+        => RevokeAsync(tenant, RevocationScope.Session, sessionId, before, cancellationToken);
 
     /// <inheritdoc />
     public Task RevokeSubjectAtClientAsync(
+        TenantDefinition tenant,
         string subject,
         string clientId,
         DateTimeOffset? before = null,
         CancellationToken cancellationToken = default)
         => RevokeAsync(
+            tenant,
             RevocationScope.ClientSubject,
             RevocationPrincipal.ClientSubject(clientId, subject),
             before,
             cancellationToken);
 
     private Task RevokeAsync(
+        TenantDefinition tenant,
         RevocationScope scope, string principal, DateTimeOffset? before, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
@@ -68,6 +71,6 @@ public partial class TokenRevoker(
 
         LogCutoffRecorded(scope, cutoff, expiresAt);
 
-        return cutoffRegistry.SetCutoffAsync(tenantAccessor.CurrentTenant(), scope, principal, cutoff, expiresAt, cancellationToken);
+        return cutoffRegistry.SetCutoffAsync(tenant, scope, principal, cutoff, expiresAt, cancellationToken);
     }
 }

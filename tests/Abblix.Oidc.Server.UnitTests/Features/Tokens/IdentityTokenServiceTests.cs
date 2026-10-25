@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -60,7 +61,6 @@ public class IdentityTokenServiceTests
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);
 
         _service = new IdentityTokenService(
-            SingleIssuer.Accessor,
             SingleIssuer.LicensedCatalog,
             timeProvider,
             _jwtFormatter.Object,
@@ -87,12 +87,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -132,8 +132,8 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         const string authenticationRequestId = "1c266114-a1be-4252-8ad1-04986c5b9ac1";
@@ -142,7 +142,7 @@ public class IdentityTokenServiceTests
 
         // Act
         await _service.CreateIdentityTokenAsync(
-            authSession, authContext, clientInfo, true, null, null,
+            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null,
             new PushDeliveryBindings(authenticationRequestId, refreshToken));
 
         // Assert
@@ -178,13 +178,13 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
         await _service.CreateIdentityTokenAsync(
-            authSession, authContext, clientInfo, true, null, null,
+            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null,
             new PushDeliveryBindings("some-request", RefreshToken: null));
 
         // Assert
@@ -219,12 +219,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -250,12 +250,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -293,12 +293,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -329,12 +329,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -366,12 +366,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -398,7 +398,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync((JsonObject?)null);
 
         // Act
-        var result = await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.Null(result);
@@ -430,11 +430,11 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, false, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, false, null, null);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -470,11 +470,11 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, false, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, false, null, null);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -506,12 +506,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -541,12 +541,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, AccessToken);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -575,12 +575,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, AccessToken);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -620,12 +620,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, AccessToken);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -655,12 +655,12 @@ public class IdentityTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -700,11 +700,11 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -736,11 +736,11 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
         Assert.NotNull(result);
@@ -765,14 +765,14 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
 
         // Assert
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     // Helper methods to create test objects
@@ -1148,10 +1148,11 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(CreateUserClaims());
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         return await _service.CreateIdentityTokenAsync(
+            SingleIssuer.Tenant,
             authSession, authContext, clientInfo, true, null, null);
     }
 

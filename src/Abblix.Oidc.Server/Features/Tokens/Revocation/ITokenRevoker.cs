@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 /// <summary>
@@ -33,9 +35,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// the tokens issued since that moment be used again.
 /// </para>
 /// <para>
-/// It acts for the tenant of the request it is called in. Called outside one, as from a job or a message handler, it
-/// acts for the tenant of the <see cref="Abblix.Oidc.Server.Features.MultiTenancy.TenantScope"/> the caller enters
-/// with the definition the tenant catalog returns, and refuses to act with no tenant at all.
+/// It records each cutoff under the tenant passed first; a caller outside a request passes the definition the tenant
+/// catalog returns.
 /// </para>
 /// </remarks>
 public interface ITokenRevoker
@@ -51,12 +52,14 @@ public interface ITokenRevoker
     /// <see cref="Common.Configuration.OidcOptions.RevocationCutoffSkew"/> has elapsed, since inside that
     /// window a freshly minted token cannot be told from one whose clock ran ahead.
     /// </remarks>
+    /// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="subject">The subject identifier the tokens carry.</param>
     /// <param name="before">The moment to cut off at; the current time when omitted. Tokens issued at or
     /// after it are unaffected, so the user signing in again works with nothing to undo.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSubjectAsync(
+        TenantDefinition tenant,
         string subject, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -67,11 +70,13 @@ public interface ITokenRevoker
     /// purposes of this server. It does not clear the cookie carrying it - that belongs to whoever holds the
     /// browser, and this call is made by somebody else.
     /// </remarks>
+    /// <param name="tenant">The tenant the revocation is for.</param>
     /// <param name="sessionId">The session identifier the tokens carry.</param>
     /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSessionAsync(
+        TenantDefinition tenant,
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -91,12 +96,14 @@ public interface ITokenRevoker
     /// that other client and is left alone; revoking the end user there takes a call naming that client.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the revocation is for.</param>
     /// <param name="subject">The subject identifier the host knows the end user by, not a pairwise pseudonym.</param>
     /// <param name="clientId">The client whose tokens stop.</param>
     /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSubjectAtClientAsync(
+        TenantDefinition tenant,
         string subject,
         string clientId,
         DateTimeOffset? before = null,

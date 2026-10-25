@@ -340,7 +340,7 @@ internal sealed class AuthSessionSelector(
 		var kept = new List<AuthSession>();
 		foreach (var session in sessions)
 		{
-			if (!await cutoffChecker.IsSessionRefusedAsync(session))
+			if (!await cutoffChecker.IsSessionRefusedAsync(tenantAccessor.CurrentTenant(), session))
 				kept.Add(session);
 		}
 

@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -20,9 +21,11 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// </summary>
 /// <param name="hintParser">Decides whether an <c>id_token_hint</c> is an ID token this server issued.</param>
 /// <param name="clientJwtValidator">Validator for JWTs issued by clients.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class UserIdentityValidator(
     IIdTokenHintParser hintParser,
-    IClientJwtValidator clientJwtValidator): IBackChannelAuthenticationContextValidator
+    IClientJwtValidator clientJwtValidator,
+    ITenantAccessor tenantAccessor): IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Validates the user's identity based on the provided identity hints, such as login hint, login hint token,
@@ -72,6 +75,7 @@ public class UserIdentityValidator(
             // judged below: a JWT declaring itself some other kind this server names is refused (RFC 8725 Section
             // 3.11)
             var loginHintTokenResult = await clientJwtValidator.ValidateAsync(
+                tenantAccessor.CurrentTenant(),
                 request.LoginHintToken, TokenTypePolicy.CheckedByCaller);
 
             if (loginHintTokenResult.TryGetSuccess(out var validJwt))
@@ -137,7 +141,7 @@ public class UserIdentityValidator(
         // part of it: the three endpoints accepting the parameter disagree about who must be in it. Here it
         // is the requesting client, because OpenID Connect Core 1.0 Section 2 says an ID token's aud "MUST
         // contain the OAuth 2.0 client_id of the Relying Party".
-        var result = await hintParser.ParseAsync(idTokenHint);
+        var result = await hintParser.ParseAsync(tenantAccessor.CurrentTenant(), idTokenHint);
         if (result.TryGetFailure(out var reason))
             return new OidcError(ErrorCodes.InvalidRequest, reason);
 

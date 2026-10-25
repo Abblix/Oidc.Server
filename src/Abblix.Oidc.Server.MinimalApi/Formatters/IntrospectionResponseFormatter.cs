@@ -77,6 +77,7 @@ public class IntrospectionResponseFormatter(
         };
 
         var jwt = await clientJwtFormatter.FormatAsync(
+            tenantAccessor.CurrentTenant(),
             token,
             clientInfo,
             ClientJwtEncryption.ForIntrospection(clientInfo, options.Value));

@@ -67,7 +67,7 @@ public class EndSessionRequestProcessorTests
                     _logoutNotifier.Object,
                     SingleIssuer.LicensedCatalog,
                     SingleIssuer.Accessor),
-                Options.Create(_options)),
+                Options.Create(_options), tenantAccessor: SingleIssuer.Accessor),
             _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
@@ -188,7 +188,7 @@ public class EndSessionRequestProcessorTests
 
 
         _tokenRevoker
-            .Setup(r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()))
+            .Setup(r => r.RevokeSessionAsync(TestTenant.Matched, "session_abc", null, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -197,7 +197,7 @@ public class EndSessionRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         _tokenRevoker.Verify(
-            r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()), Times.Once);
+            r => r.RevokeSessionAsync(TestTenant.Matched, "session_abc", null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -228,7 +228,7 @@ public class EndSessionRequestProcessorTests
         Assert.True(result.TryGetSuccess(out _));
         _tokenRevoker.Verify(
             r => r.RevokeSessionAsync(
-                It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()),
+                TestTenant.Matched, It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
