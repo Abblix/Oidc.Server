@@ -118,7 +118,7 @@ public class ConfigurationResponseFormatter(
 
 		if (options.Value.Discovery.SignedMetadata)
 		{
-			mvcResponse = mvcResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(mvcResponse) };
+			mvcResponse = mvcResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(tenantAccessor.CurrentTenant(), mvcResponse) };
 		}
 
 		return mvcResponse;

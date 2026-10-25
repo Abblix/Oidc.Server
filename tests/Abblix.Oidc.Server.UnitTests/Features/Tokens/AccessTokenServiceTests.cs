@@ -127,7 +127,8 @@ public class AccessTokenServiceTests
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of(new ScopeDefinition(contactScope, IanaClaimTypes.Email)));
+            ScopeClaims.Of());
+        var tenant = new TestIssuer { Scopes = [new ScopeDefinition(contactScope, IanaClaimTypes.Email)] }.ToTenant();
         var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
         var authContext = byHostScope
             ? new AuthorizationContext(ClientId, [Scopes.OpenId, contactScope], null)
@@ -142,7 +143,7 @@ public class AccessTokenServiceTests
             .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
-        await service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
+        await service.CreateAccessTokenAsync(tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedToken);
         Assert.Equal("user@example.com", capturedToken!.Payload.Email);

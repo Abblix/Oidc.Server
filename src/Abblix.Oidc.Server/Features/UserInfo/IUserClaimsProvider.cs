@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
@@ -26,6 +27,7 @@ public interface IUserClaimsProvider
     /// embedded in identity tokens or provided through user info endpoints, allowing for a personalized and secure user
     /// experience based on the authenticated session and application requirements.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authSession">The authentication session which includes details about the user's authentication
     /// state and may affect the resultant claims.</param>
     /// <param name="scope">A collection of scopes indicating which categories of claims are requested.
@@ -44,6 +46,7 @@ public interface IUserClaimsProvider
     /// carries it as null, a redirect leaves the parameter out - while still carrying whatever else that
     /// response holds and saying nothing about why.</returns>
     Task<JsonObject?> GetUserClaimsAsync(
+        TenantDefinition tenant,
         AuthSession authSession,
         ICollection<string> scope,
         ICollection<KeyValuePair<string, RequestedClaimDetails>>? requestedClaims,

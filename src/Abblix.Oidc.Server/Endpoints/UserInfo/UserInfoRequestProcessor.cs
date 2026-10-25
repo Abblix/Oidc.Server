@@ -41,6 +41,7 @@ public class UserInfoRequestProcessor(
 	public async Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUserInfoRequest request)
 	{
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
+			tenant,
 			request.AuthSession,
 			request.AuthContext.Scope,
 			request.AuthContext.RequestedClaims?.UserInfo,

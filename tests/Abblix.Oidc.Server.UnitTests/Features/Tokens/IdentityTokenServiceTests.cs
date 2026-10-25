@@ -82,7 +82,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -127,7 +127,7 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(CreateUserClaims());
 
         JsonWebToken? capturedToken = null;
@@ -173,7 +173,7 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(CreateUserClaims());
 
         JsonWebToken? capturedToken = null;
@@ -214,7 +214,7 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(CreateUserClaims());
 
         JsonWebToken? capturedToken = null;
@@ -245,7 +245,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -288,7 +288,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -324,7 +324,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -361,7 +361,7 @@ public class IdentityTokenServiceTests
         };
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -394,7 +394,7 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync((JsonObject?)null);
 
         // Act
@@ -423,6 +423,7 @@ public class IdentityTokenServiceTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(expectedScopes)),
                 null,
@@ -439,6 +440,7 @@ public class IdentityTokenServiceTests
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(expectedScopes)),
                 null,
@@ -463,6 +465,7 @@ public class IdentityTokenServiceTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(scopes)),  // All scopes preserved
                 null,
@@ -479,6 +482,7 @@ public class IdentityTokenServiceTests
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(scopes)),
                 null,
@@ -501,7 +505,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -536,7 +540,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -570,7 +574,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -615,7 +619,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -650,7 +654,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
@@ -690,6 +694,7 @@ public class IdentityTokenServiceTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext.Scope,
                 It.Is<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(
@@ -709,6 +714,7 @@ public class IdentityTokenServiceTests
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext.Scope,
                 It.Is<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(
@@ -732,7 +738,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
@@ -761,7 +767,7 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
@@ -1141,6 +1147,7 @@ public class IdentityTokenServiceTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext.Scope,
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(),

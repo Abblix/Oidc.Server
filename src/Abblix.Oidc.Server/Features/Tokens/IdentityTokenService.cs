@@ -108,6 +108,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 			: null;
 
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
+			tenant,
 			authSession,
 			scope,
 			authContext.RequestedClaims?.IdToken,

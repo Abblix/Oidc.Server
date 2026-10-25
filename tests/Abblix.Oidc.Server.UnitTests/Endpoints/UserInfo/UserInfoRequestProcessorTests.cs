@@ -92,6 +92,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 validRequest.AuthSession,
                 validRequest.AuthContext.Scope,
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -122,6 +123,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -150,6 +152,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 validRequest.AuthSession,
                 validRequest.AuthContext.Scope,
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -163,6 +166,7 @@ public class UserInfoRequestProcessorTests
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 validRequest.AuthSession,
                 validRequest.AuthContext.Scope,
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -183,6 +187,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -213,6 +218,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -243,6 +249,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -272,12 +279,13 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
                 It.IsAny<ClientInfo>()))
-            .Callback<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession, ICollection<string>, ICollection<KeyValuePair<string, RequestedClaimDetails>>?, ClientInfo>(
-                (_, scopes, _, _) => capturedScopes = scopes)
+            .Callback<TenantDefinition, Abblix.Oidc.Server.Features.UserAuthentication.AuthSession, ICollection<string>, ICollection<KeyValuePair<string, RequestedClaimDetails>>?, ClientInfo>(
+                (_, _, scopes, _, _) => capturedScopes = scopes)
             .ReturnsAsync(userClaims);
 
 
@@ -303,12 +311,13 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
                 It.IsAny<ClientInfo>()))
-            .Callback<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession, ICollection<string>, ICollection<KeyValuePair<string, RequestedClaimDetails>>?, ClientInfo>(
-                (session, _, _, _) => capturedSession = session)
+            .Callback<TenantDefinition, Abblix.Oidc.Server.Features.UserAuthentication.AuthSession, ICollection<string>, ICollection<KeyValuePair<string, RequestedClaimDetails>>?, ClientInfo>(
+                (_, session, _, _, _) => capturedSession = session)
             .ReturnsAsync(userClaims);
 
 
@@ -338,6 +347,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .SetupSequence(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -370,6 +380,7 @@ public class UserInfoRequestProcessorTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
@@ -383,6 +394,7 @@ public class UserInfoRequestProcessorTests
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
                 It.IsAny<ICollection<string>>(),
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),

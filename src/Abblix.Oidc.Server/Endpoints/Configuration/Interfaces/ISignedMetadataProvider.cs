@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
@@ -21,11 +23,12 @@ public interface ISignedMetadataProvider
     /// <summary>
     /// Signs <paramref name="metadata"/> and returns the compact JWS.
     /// </summary>
+    /// <param name="tenant">The tenant whose signing key signs the metadata.</param>
     /// <param name="metadata">
     /// The fully assembled metadata, including resolved endpoint URLs and any mTLS aliases, and without
     /// <c>signed_metadata</c> itself: RFC 8414 section 2.1 has the bundle assert the metadata, not restate its own
     /// signature.
     /// </param>
     /// <returns>The compact-serialized JWS.</returns>
-    Task<string> SignAsync(Model.ConfigurationResponse metadata);
+    Task<string> SignAsync(TenantDefinition tenant, Model.ConfigurationResponse metadata);
 }

@@ -303,6 +303,26 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A tenant's discovery document lists the scopes that tenant declares, and another tenant's document does not.
+    /// </summary>
+    [Fact]
+    public async Task ATenantsDiscoveryDocument_ListsTheScopesOfThatTenantAlone()
+    {
+        var atAcme = JsonNode.Parse(await Http.GetStringAsync(
+            Acme + ConfigurationPath, TestContext.Current.CancellationToken))!;
+        var atGlobex = JsonNode.Parse(await Http.GetStringAsync(
+            Globex + ConfigurationPath, TestContext.Current.CancellationToken))!;
+
+        Assert.Contains(AcmeScope, ScopesListedIn(atAcme));
+        Assert.DoesNotContain(AcmeScope, ScopesListedIn(atGlobex));
+    }
+
+    private static string[] ScopesListedIn(JsonNode configuration)
+        => configuration[ConfigurationResponse.Parameters.ScopesSupported]!.AsArray()
+            .Select(scope => scope!.GetValue<string>())
+            .ToArray();
+
+    /// <summary>
     /// A tenant's discovery document names its mutual-TLS aliases on its own mutual-TLS host under its issuer path,
     /// and a request there is served as that tenant's.
     /// </summary>

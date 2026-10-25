@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
@@ -23,6 +24,7 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 public sealed class StaticUserClaimsProvider : IUserClaimsProvider
 {
     public Task<JsonObject?> GetUserClaimsAsync(
+        TenantDefinition tenant,
         AuthSession authSession,
         ICollection<string> scope,
         ICollection<KeyValuePair<string, RequestedClaimDetails>>? requestedClaims,

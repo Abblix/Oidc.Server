@@ -24,10 +24,10 @@ namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 /// recomputed value. The default stub emits the raw subject, which cannot exercise that equality.
 /// </summary>
 public sealed class PairwiseStaticUserClaimsProvider(
-    ISubjectTypeConverter subjectTypeConverter,
-    ITenantAccessor tenantAccessor) : IUserClaimsProvider
+    ISubjectTypeConverter subjectTypeConverter) : IUserClaimsProvider
 {
     public Task<JsonObject?> GetUserClaimsAsync(
+        TenantDefinition tenant,
         AuthSession authSession,
         ICollection<string> scope,
         ICollection<KeyValuePair<string, RequestedClaimDetails>>? requestedClaims,
@@ -38,7 +38,7 @@ public sealed class PairwiseStaticUserClaimsProvider(
             // Mirror UserClaimsProvider: the client-facing subject is the pairwise pseudonym for a pairwise client
             // (a public client is untouched by the converter), so the id_token carries the same value the access
             // token does.
-            ["sub"] = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo),
+            ["sub"] = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo),
             ["name"] = "E2E Test User",
             ["email"] = "e2e@example.com",
         };

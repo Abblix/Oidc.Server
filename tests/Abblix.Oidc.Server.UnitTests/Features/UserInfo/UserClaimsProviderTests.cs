@@ -53,8 +53,8 @@ public class UserClaimsProviderTests
     {
         var scopeClaimsProvider = new Mock<IScopeClaimsProvider>(MockBehavior.Strict);
         scopeClaimsProvider
-            .Setup(p => p.GetRequestedClaims(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>?>()))
-            .Returns<IEnumerable<string>, IEnumerable<string>?>((_, requested) => requested ?? []);
+            .Setup(p => p.GetRequestedClaims(TestTenant.Matched, It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>?>()))
+            .Returns<TenantDefinition, IEnumerable<string>, IEnumerable<string>?>((_, _, requested) => requested ?? []);
 
         // A converter that answers something other than the session's subject, so the row asserting the subject
         // proves the converter was consulted rather than passing on a value production could have copied.
@@ -67,7 +67,7 @@ public class UserClaimsProviderTests
             NullLogger<UserClaimsProvider>.Instance,
             _userInfoProvider.Object,
             scopeClaimsProvider.Object,
-            subjectTypeConverter.Object, tenantAccessor: SingleIssuer.Accessor);
+            subjectTypeConverter.Object);
     }
 
     /// <summary>
@@ -178,6 +178,7 @@ public class UserClaimsProviderTests
             .ReturnsAsync(userInfo);
 
         return await _provider.GetUserClaimsAsync(
+            SingleIssuer.Tenant,
             authSession,
             [Scopes.OpenId],
             requested,

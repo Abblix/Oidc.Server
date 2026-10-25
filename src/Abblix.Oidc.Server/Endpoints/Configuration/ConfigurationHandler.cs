@@ -29,7 +29,6 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 	Justification = "Configuration handler legitimately requires multiple specialized metadata providers to assemble comprehensive OIDC discovery document")]
 public sealed class ConfigurationHandler(
 	IOptionsSnapshot<OidcOptions> options,
-	ITenantAccessor tenantAccessor,
 	ITenantCatalog catalog,
 	ILogoutNotifier logoutNotifier,
 	IClientAuthenticator clientAuthenticator,
@@ -50,19 +49,19 @@ public sealed class ConfigurationHandler(
 	/// Handles the configuration request by building discovery metadata.
 	/// </summary>
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
-	public Task<ConfigurationResponse> HandleAsync() => Task.FromResult(new ConfigurationResponse
+	public Task<ConfigurationResponse> HandleAsync(TenantDefinition tenant) => Task.FromResult(new ConfigurationResponse
 	{
-		Issuer = Licensed(tenantAccessor.CurrentTenant()),
+		Issuer = Licensed(tenant),
 
 		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
 		BackChannelLogoutSupported = logoutNotifier.BackChannelLogoutSupported,
 		BackChannelLogoutSessionSupported = logoutNotifier.BackChannelLogoutSessionSupported,
 
-		ScopesSupported = scopesAndClaims.ScopesSupported,
-		ClaimsSupported = scopesAndClaims.ClaimsSupported,
+		ScopesSupported = scopesAndClaims.ScopesSupported(tenant),
+		ClaimsSupported = scopesAndClaims.ClaimsSupported(tenant),
 		GrantTypesSupported = scopesAndClaims.GrantTypesSupported,
-		SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported,
+		SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
 
 		ClaimsParameterSupported = authorizationMetadata.ClaimsParameterSupported,
 		ResponseTypesSupported = authorizationMetadata.ResponseTypesSupported,
