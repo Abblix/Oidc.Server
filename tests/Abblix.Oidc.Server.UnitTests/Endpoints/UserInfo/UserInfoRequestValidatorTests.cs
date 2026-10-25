@@ -48,7 +48,7 @@ public class UserInfoRequestValidatorTests
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _dpopValidator = new Mock<IDPoPUserInfoValidator>(MockBehavior.Strict);
         _dpopValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(), It.IsAny<string>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(), It.IsAny<string>()))
             .ReturnsAsync((OidcError?)null);
         _mtlsValidator = new Mock<IMtlsUserInfoValidator>(MockBehavior.Strict);
         _mtlsValidator
@@ -60,7 +60,7 @@ public class UserInfoRequestValidatorTests
             _accessTokenService.Object,
             _clientInfoProvider.Object,
             _dpopValidator.Object,
-            _mtlsValidator.Object, tenantAccessor: SingleIssuer.Accessor);
+            _mtlsValidator.Object);
     }
 
     private static UserInfoRequest CreateUserInfoRequest(string? accessToken = null)
@@ -141,7 +141,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -182,7 +182,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -202,7 +202,7 @@ public class UserInfoRequestValidatorTests
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -223,7 +223,7 @@ public class UserInfoRequestValidatorTests
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -243,7 +243,7 @@ public class UserInfoRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -264,7 +264,7 @@ public class UserInfoRequestValidatorTests
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -294,7 +294,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -320,7 +320,7 @@ public class UserInfoRequestValidatorTests
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
 
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
@@ -356,7 +356,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -400,7 +400,7 @@ public class UserInfoRequestValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(userInfoRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.NotNull(capturedOptions);

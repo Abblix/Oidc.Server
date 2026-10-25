@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Abblix.Oidc.Server.Mvc.Filters;
@@ -82,6 +83,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing userinfo requests.</param>
     /// <param name="formatter">The formatter used to generate a response with user claims.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="userInfoRequest">The userinfo request containing the access token.</param>
     /// <param name="clientRequest">Additional request information provided by the client.</param>
     /// <returns>A task that returns an action result containing
@@ -98,11 +100,12 @@ public sealed class AuthenticationController : ControllerBase
     public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] UserInfoRequest userInfoRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
-        var response = await handler.HandleAsync(coreUserInfoRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreUserInfoRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreUserInfoRequest, response);
     }
 

@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
@@ -29,6 +30,7 @@ public interface IDPoPUserInfoValidator
     /// RFC 9449 section 7.1 <c>WWW-Authenticate: DPoP</c> challenge or the section 8 nonce response
     /// header attachment.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientRequest">Carries the <c>Authorization</c> scheme + token plus
     /// the optional <c>DPoP</c> proof header.</param>
     /// <param name="accessToken">The parsed access-token JWT whose <c>cnf.jkt</c>
@@ -36,6 +38,7 @@ public interface IDPoPUserInfoValidator
     /// <param name="rawAccessToken">The original on-the-wire access-token string used
     /// to compute <c>ath = Base64Url(SHA-256(access_token))</c>.</param>
     Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
         ClientRequest clientRequest,
         JsonWebToken accessToken,
         string rawAccessToken);

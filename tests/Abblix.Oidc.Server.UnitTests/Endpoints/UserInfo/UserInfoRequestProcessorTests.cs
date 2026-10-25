@@ -38,7 +38,6 @@ public class UserInfoRequestProcessorTests
     {
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);
         _processor = new UserInfoRequestProcessor(
-            SingleIssuer.Accessor,
             SingleIssuer.LicensedCatalog,
             _userClaimsProvider.Object);
     }
@@ -101,7 +100,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -130,7 +129,7 @@ public class UserInfoRequestProcessorTests
             .ReturnsAsync((JsonObject?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -159,7 +158,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -192,7 +191,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -222,7 +221,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -252,7 +251,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -283,7 +282,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.NotNull(capturedScopes);
@@ -314,45 +313,12 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.NotNull(capturedSession);
         Assert.Equal("user_123", capturedSession.Subject);
         Assert.Equal("session_123", capturedSession.SessionId);
-    }
-
-    /// <summary>
-    /// Verifies processor refuses without asking which tenant the request is served at when claims are null:
-    /// an error carries no issuer, so the license is not consulted for it.
-    /// </summary>
-    [Fact]
-    public async Task ProcessAsync_WhenUserClaimsNull_ShouldNotAskTheTenant()
-    {
-        // Arrange
-        var validRequest = CreateValidUserInfoRequest();
-
-        _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(
-                It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.AuthSession>(),
-                It.IsAny<ICollection<string>>(),
-                It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
-                It.IsAny<ClientInfo>()))
-            .ReturnsAsync((JsonObject?)null);
-
-        var tenantAccessor = new Mock<ITenantAccessor>(MockBehavior.Strict);
-        var processor = new UserInfoRequestProcessor(
-            tenantAccessor.Object,
-            SingleIssuer.LicensedCatalog,
-            _userClaimsProvider.Object);
-
-        // Act
-        var result = await processor.ProcessAsync(validRequest);
-
-        // Assert
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-        tenantAccessor.VerifyNoOtherCalls();
     }
 
     /// <summary>
@@ -381,8 +347,8 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        var result1 = await _processor.ProcessAsync(validRequest1);
-        var result2 = await _processor.ProcessAsync(validRequest2);
+        var result1 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest1);
+        var result2 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest2);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var response1));
@@ -412,7 +378,7 @@ public class UserInfoRequestProcessorTests
 
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         _userClaimsProvider.Verify(

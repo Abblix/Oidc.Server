@@ -38,24 +38,24 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// proof-of-possession binding when the access token carries a <c>cnf.jkt</c> confirmation.</param>
 /// <param name="mtlsValidator">RFC 8705 section 3 mutual-TLS resource-server-side validator that enforces
 /// the certificate binding when the access token carries a <c>cnf.x5t#S256</c> confirmation.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class UserInfoRequestValidator(
 	IAuthServiceJwtValidator jwtValidator,
 	IAccessTokenService accessTokenService,
 	IClientInfoProvider clientInfoProvider,
 	IDPoPUserInfoValidator dpopValidator,
-	IMtlsUserInfoValidator mtlsValidator,
-	ITenantAccessor tenantAccessor) : IUserInfoRequestValidator
+	IMtlsUserInfoValidator mtlsValidator) : IUserInfoRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a user information request and determines its validity based on
 	/// the provided access token and request parameters.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="userInfoRequest">The user info request to validate.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, AuthError}"/>.</returns>
 	public async Task<Result<ValidUserInfoRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		UserInfoRequest userInfoRequest,
 		ClientRequest clientRequest)
 	{
@@ -80,7 +80,7 @@ public class UserInfoRequestValidator(
 		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
 		// 'application/at+jwt' and reject tokens carrying any other value."
 		var result = await jwtValidator.ValidateAsync(
-			tenantAccessor.CurrentTenant(), jwtAccessToken,
+			tenant, jwtAccessToken,
 			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
 			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
@@ -94,7 +94,7 @@ public class UserInfoRequestValidator(
 		// whose key thumbprint matches cnf.jkt and whose ath claim matches the access
 		// token. Runs before AuthenticateByAccessTokenAsync so a bad-DPoP token never
 		// surfaces auth-session probes downstream.
-		var dpopError = await dpopValidator.ValidateAsync(clientRequest, token, jwtAccessToken);
+		var dpopError = await dpopValidator.ValidateAsync(tenant, clientRequest, token, jwtAccessToken);
 		if (dpopError is not null)
 			return dpopError;
 
@@ -109,7 +109,7 @@ public class UserInfoRequestValidator(
 		// the real subject with the client's sector, so AuthenticateByAccessTokenAsync needs the ClientInfo.
 		var clientId = token.Payload.ClientId;
 		var clientInfo = clientId is not null
-			? await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId)
+			? await clientInfoProvider.TryFindClientAsync(tenant, clientId)
 			: null;
 
 		if (clientInfo == null)
@@ -121,7 +121,7 @@ public class UserInfoRequestValidator(
 
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
 		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
-		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenantAccessor.CurrentTenant(), token, clientInfo))
+		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenant, token, clientInfo))
 			.MapSuccess(grant => new ValidUserInfoRequest(userInfoRequest, grant.AuthSession, grant.Context, clientInfo));
 	}
 

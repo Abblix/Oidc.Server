@@ -47,7 +47,7 @@ public partial class DPoPTokenEndpointValidator(
     IProofValidator proofValidator,
     INonceService nonceService,
     IOptionsMonitor<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : DPoPNonceValidator(nonceService, tenantAccessor), ITokenContextValidator
+    ITenantAccessor tenantAccessor) : DPoPNonceValidator(nonceService), ITokenContextValidator
 {
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
@@ -73,7 +73,7 @@ public partial class DPoPTokenEndpointValidator(
         // authentication request is spent. The profile tightens, and the granular RequireDPoP toggle cannot
         // weaken it.
         if (SecurityProfileRequirements
-                .For(context.ClientInfo, CurrentTenant.DefaultSecurityProfile)
+                .For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
                 .RequireSenderConstrainedTokens &&
             !WillIssueCertificateBoundToken(context))
         {
@@ -108,7 +108,7 @@ public partial class DPoPTokenEndpointValidator(
 
         if (options.CurrentValue.DPoP.Nonce.RequireAtTokenEndpoint)
         {
-            var nonceError = await EnforceNonceAsync(proof);
+            var nonceError = await EnforceNonceAsync(tenantAccessor.CurrentTenant(), proof);
             if (nonceError is not null)
                 return nonceError;
         }

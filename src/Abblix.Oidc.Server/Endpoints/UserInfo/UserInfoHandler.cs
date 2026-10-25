@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -29,6 +30,7 @@ public class UserInfoHandler(
     /// Asynchronously processes a user info request by first validating it and then, if validation is successful,
     /// retrieving the requested user information.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="userInfoRequest">The user info request containing necessary parameters such as the access token.
     /// </param>
     /// <param name="clientRequest">Additional information about the client making the request, useful for contextual
@@ -43,11 +45,12 @@ public class UserInfoHandler(
     /// OIDC standards and the processor to fetch and return the relevant user information securely.
     /// </remarks>
     public async Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await validator.ValidateAsync(userInfoRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(tenant, userInfoRequest, clientRequest);
 
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
     }
 }

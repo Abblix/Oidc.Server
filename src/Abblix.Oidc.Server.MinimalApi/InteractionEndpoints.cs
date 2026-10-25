@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
@@ -62,11 +63,12 @@ internal static class InteractionEndpoints
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest,
         IUserInfoHandler handler,
-        IUserInfoResponseFormatter formatter)
+        IUserInfoResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreUserInfoRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreUserInfoRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreUserInfoRequest, response);
     }
 

@@ -108,7 +108,7 @@ public sealed class EndpointSpanRegistrationTests
         ActivitySource.AddActivityListener(listener);
 
         var stub = new Mock<IUserInfoHandler>();
-        stub.Setup(h => h.HandleAsync(It.IsAny<UserInfoRequest>(), It.IsAny<ClientRequest>()))
+        stub.Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<UserInfoRequest>(), It.IsAny<ClientRequest>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "Refused"));
         // Logging is the host's, as every host has it: the endpoint's decorator logs a refused request
         var services = new ServiceCollection().AddLogging();
@@ -122,7 +122,7 @@ public sealed class EndpointSpanRegistrationTests
         {
             Assert.NotNull(root);
             trace = root.TraceId;
-            await provider.GetRequiredService<IUserInfoHandler>().HandleAsync(new UserInfoRequest(), new ClientRequest());
+            await provider.GetRequiredService<IUserInfoHandler>().HandleAsync(SingleIssuer.Tenant, new UserInfoRequest(), new ClientRequest());
         }
 
         Assert.Single(stopped, span => span.Source.Name == OidcTelemetry.SourceName && span.TraceId == trace);
