@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
@@ -21,10 +23,11 @@ public interface ISessionLogoutNotifier
     /// <summary>
     /// Notifies the clients of an ended session.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="sessionId">The session that ended.</param>
     /// <param name="subject">The end user the session belonged to.</param>
     /// <returns>
     /// The logout context the notifiers filled in, whose front-channel URIs the caller renders to the user agent.
     /// </returns>
-    Task<LogoutContext> NotifyClientsAsync(string sessionId, string subject);
+    Task<LogoutContext> NotifyClientsAsync(TenantDefinition tenant, string sessionId, string subject);
 }

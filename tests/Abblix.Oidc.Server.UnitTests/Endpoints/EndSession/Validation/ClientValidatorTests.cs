@@ -33,7 +33,7 @@ public class ClientValidatorTests
     {
         _logger = new Mock<ILogger<ClientValidator>>();
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        _validator = new ClientValidator(_logger.Object, _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ClientValidator(_logger.Object, _clientInfoProvider.Object);
     }
 
     private static EndSessionValidationContext CreateContext(string? clientId = TestConstants.DefaultClientId)
@@ -61,7 +61,7 @@ public class ClientValidatorTests
         var context = CreateContext(clientId: null);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -83,7 +83,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -105,7 +105,7 @@ public class ClientValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);
@@ -129,7 +129,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Same(clientInfo, context.ClientInfo);
@@ -146,7 +146,7 @@ public class ClientValidatorTests
         var context = CreateContext("");
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -168,7 +168,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, "specific_client_789"), Times.Once);
@@ -185,7 +185,7 @@ public class ClientValidatorTests
         var context = CreateContext(clientId: null);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _clientInfoProvider.VerifyNoOtherCalls();
@@ -206,7 +206,7 @@ public class ClientValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(context.ClientInfo);
@@ -228,7 +228,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);

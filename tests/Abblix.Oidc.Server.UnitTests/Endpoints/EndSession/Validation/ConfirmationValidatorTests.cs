@@ -43,7 +43,7 @@ public class ConfirmationValidatorTests
         // These rows exercise public clients (the default subject type), so a converter with no pairwise settings
         // is the production path: it passes a subject through unchanged.
         _validator = new ConfirmationValidator(
-            _authSessionService.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
+            _authSessionService.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _confirmationStore.Object);
 
         SignedIn(null);
 
@@ -104,7 +104,7 @@ public class ConfirmationValidatorTests
     /// </summary>
     private async Task<bool> AsksTheEndUserAsync(EndSessionValidationContext context)
     {
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(error);
         return context.ConfirmationRequired;
@@ -253,7 +253,8 @@ public class ConfirmationValidatorTests
     /// <summary>
     /// A pairwise client never sees the subject the session holds, so the comparison is made in that client's own
     /// spelling of the end user: its pseudonym matches, and the real subject, which only this server knows, does
-    /// not. Comparing the two strings directly would have it the other way round.
+    /// not. Comparing the two strings directly would have it the other way round. The pseudonym is the one of the
+    /// tenant the request is served at: the converter answers it for that tenant alone.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -269,12 +270,15 @@ public class ConfirmationValidatorTests
             SectorIdentifier = "client.example.com",
         };
 
+        var pseudonym = converter.Convert(CurrentSubject, client);
+        var subjects = new Mock<ISubjectTypeConverter>();
+        subjects.Setup(s => s.Convert(TestTenant.Matched, CurrentSubject, client)).Returns(pseudonym);
+
         var validator = new ConfirmationValidator(
-            _authSessionService.Object, new FixedSubjectTypeConverter(converter), _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
+            _authSessionService.Object, subjects.Object, _confirmationStore.Object);
 
         SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        var pseudonym = converter.Convert(CurrentSubject, client);
         Assert.NotEqual(CurrentSubject, pseudonym);
 
         var context = CreateContext(
@@ -283,7 +287,7 @@ public class ConfirmationValidatorTests
             hintSessionId: CurrentSessionId);
         context.ClientInfo = client;
 
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(error);
         Assert.Equal(!hintCarriesThePseudonym, context.ConfirmationRequired);

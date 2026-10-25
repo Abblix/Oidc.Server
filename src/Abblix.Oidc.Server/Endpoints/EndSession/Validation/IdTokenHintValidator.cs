@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 public class IdTokenHintValidator(IIdTokenHintParser hintParser, ITenantAccessor tenantAccessor) : IEndSessionContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context)
     {
         var request = context.Request;
 

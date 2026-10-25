@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.EndSessionRequest;
@@ -25,7 +26,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 public partial class PostLogoutRedirectUrisValidator(ILogger<PostLogoutRedirectUrisValidator> logger) : IEndSessionContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context)
         => Task.FromResult(Validate(context));
 
     private OidcError? Validate(EndSessionValidationContext context)

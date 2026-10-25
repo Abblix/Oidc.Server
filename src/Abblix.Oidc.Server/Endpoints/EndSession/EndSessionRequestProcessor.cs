@@ -31,21 +31,20 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// <param name="authSessionTerminator">Ends the session for its tokens and its clients.</param>
 /// <param name="confirmationStore">Issues the value that carries the end user's answer back when they have to be
 /// asked.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
 	IAuthSessionTerminator authSessionTerminator,
-	ILogoutConfirmationStore confirmationStore,
-	ITenantAccessor tenantAccessor) : IEndSessionRequestProcessor
+	ILogoutConfirmationStore confirmationStore) : IEndSessionRequestProcessor
 {
 	/// <summary>
 	/// Processes the end-session request and returns the corresponding response.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The valid end-session request to be processed.</param>
 	/// <returns>A task representing the asynchronous operation, which upon completion will yield an
 	/// <see cref="EndSessionSuccess"/> or an <see cref="OidcError"/>.</returns>
-	public async Task<Result<IEndSessionResponse, OidcError>> ProcessAsync(ValidEndSessionRequest request)
+	public async Task<Result<IEndSessionResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidEndSessionRequest request)
 	{
 		var postLogoutRedirectUri = request.Model.PostLogoutRedirectUri;
 		if (postLogoutRedirectUri != null && request.Model.State != null)
@@ -72,7 +71,7 @@ public partial class EndSessionRequestProcessor(
 		// request that reaches this point is one this server would otherwise have acted upon.
 		if (request.ConfirmationRequired)
 		{
-			return new ConfirmationRequired(await confirmationStore.IssueAsync(tenantAccessor.CurrentTenant(), sessionId));
+			return new ConfirmationRequired(await confirmationStore.IssueAsync(tenant, sessionId));
 		}
 
 		var subjectId = authSession.Subject;

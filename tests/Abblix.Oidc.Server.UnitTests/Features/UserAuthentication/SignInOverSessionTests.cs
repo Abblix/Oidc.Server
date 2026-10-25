@@ -95,6 +95,7 @@ public class SignInOverSessionTests
         await RequestAsync(provider, reauthenticated, async services =>
         {
             var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
+                SingleIssuer.Tenant,
                 new ValidEndSessionRequest(new EndSessionRequest(), ClientInfo: null));
             Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
         });
@@ -164,6 +165,7 @@ public class SignInOverSessionTests
         await RequestAsync(provider, bob, async services =>
         {
             var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
+                SingleIssuer.Tenant,
                 new ValidEndSessionRequest(new EndSessionRequest(), ClientInfo: null));
             Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
         });
@@ -299,8 +301,8 @@ public class SignInOverSessionTests
 
         var notifier = new Mock<ILogoutNotifier>();
         notifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback((ClientInfo client, LogoutContext context) => notified.Enqueue((client.ClientId, context)))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback((TenantDefinition _, ClientInfo client, LogoutContext context) => notified.Enqueue((client.ClientId, context)))
             .Returns(Task.CompletedTask);
         services.Replace(ServiceDescriptor.Singleton(notifier.Object));
         configure?.Invoke(services);

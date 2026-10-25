@@ -79,10 +79,11 @@ internal static class InteractionEndpoints
     private static async Task<IResult> EndSessionAsync(
         EndSessionRequest endSessionRequest,
         IEndSessionHandler handler,
-        IEndSessionResponseFormatter formatter)
+        IEndSessionResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.EndSessionRequest coreEndSessionRequest = endSessionRequest;
-        var response = await handler.HandleAsync(coreEndSessionRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreEndSessionRequest);
         return await formatter.FormatResponseAsync(coreEndSessionRequest, response);
     }
 

@@ -35,9 +35,9 @@ public class AuthSessionTerminatorTests
             .Callback((TenantDefinition _, string sessionId, DateTimeOffset? _, CancellationToken _) => _calls.Add($"revoke {sessionId}"))
             .Returns(Task.CompletedTask);
         _notifier
-            .Setup(n => n.NotifyClientsAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .Callback((string sessionId, string subject) => _calls.Add($"notify {sessionId} {subject}"))
-            .ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
+            .Setup(n => n.NotifyClientsAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback((TenantDefinition _, string sessionId, string subject) => _calls.Add($"notify {sessionId} {subject}"))
+            .ReturnsAsync((TenantDefinition _, string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
     }
 
     private AuthSessionTerminator Terminator => new(_tokenRevoker.Object, _notifier.Object, Options.Create(_options), tenantAccessor: SingleIssuer.Accessor);

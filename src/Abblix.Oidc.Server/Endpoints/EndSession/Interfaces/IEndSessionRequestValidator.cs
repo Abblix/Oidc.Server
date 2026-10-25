@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
@@ -25,10 +26,11 @@ public interface IEndSessionRequestValidator
 	/// <summary>
 	/// Runs the configured validation pipeline over the raw end-session request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The wire-level request to validate.</param>
 	/// <returns>
 	/// A <see cref="ValidEndSessionRequest"/> on success, or an <see cref="OidcError"/>
 	/// identifying the first failed step.
 	/// </returns>
-	Task<Result<ValidEndSessionRequest, OidcError>> ValidateAsync(EndSessionRequest request);
+	Task<Result<ValidEndSessionRequest, OidcError>> ValidateAsync(TenantDefinition tenant, EndSessionRequest request);
 }

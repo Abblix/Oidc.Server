@@ -34,7 +34,7 @@ public class BackChannelLogoutNotifierTests
     {
         _logoutTokenService = new Mock<ILogoutTokenService>(MockBehavior.Strict);
         _logoutTokenSender = new Mock<ILogoutTokenSender>(MockBehavior.Strict);
-        _notifier = new BackChannelLogoutNotifier(_logoutTokenService.Object, _logoutTokenSender.Object, tenantAccessor: SingleIssuer.Accessor);
+        _notifier = new BackChannelLogoutNotifier(_logoutTokenService.Object, _logoutTokenSender.Object);
     }
 
     private static ClientInfo CreateClientInfo(BackChannelLogoutOptions? backChannelLogout)
@@ -139,7 +139,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -162,7 +162,7 @@ public class BackChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.VerifyNoOtherCalls();
@@ -193,7 +193,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Same(clientInfo, capturedClientInfo);
@@ -223,7 +223,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Same(logoutContext, capturedContext);
@@ -253,7 +253,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Equal(new[] { "create", "send" }, callOrder);
@@ -283,7 +283,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Same(logoutToken, capturedToken);
@@ -310,7 +310,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -342,7 +342,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -374,7 +374,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -408,7 +408,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Equal(logoutUri, clientInfo.BackChannelLogout!.Uri);
@@ -443,7 +443,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.False(clientInfo.BackChannelLogout!.RequiresSessionId);
@@ -473,7 +473,7 @@ public class BackChannelLogoutNotifierTests
 
         // Act & Assert
         var thrownException = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
 
         Assert.Same(exception, thrownException);
         _logoutTokenSender.VerifyNoOtherCalls();
@@ -502,7 +502,7 @@ public class BackChannelLogoutNotifierTests
 
         // Act & Assert
         var thrownException = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
 
         Assert.Same(exception, thrownException);
         _logoutTokenService.Verify(
@@ -533,7 +533,7 @@ public class BackChannelLogoutNotifierTests
 
         // Act & Assert
         await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
     }
 
     /// <summary>
@@ -554,7 +554,7 @@ public class BackChannelLogoutNotifierTests
 
         // Act & Assert
         await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
     }
 
     /// <summary>
@@ -586,8 +586,8 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext1);
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext2);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext1);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext2);
 
         // Assert
         _logoutTokenService.Verify(
@@ -643,8 +643,8 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo1, logoutContext);
-        await _notifier.NotifyClientAsync(clientInfo2, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo1, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo2, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -676,7 +676,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -708,7 +708,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -741,7 +741,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -775,7 +775,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var notifyTask = _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        var notifyTask = _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
         Assert.False(notifyTask.IsCompleted);
 
         tcs.SetResult(logoutToken);
@@ -807,7 +807,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -840,7 +840,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         _logoutTokenService.Verify(
@@ -874,7 +874,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Equal("https", clientInfo.BackChannelLogout!.Uri.Scheme);
@@ -906,7 +906,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Contains("param=value", clientInfo.BackChannelLogout!.Uri.Query);
@@ -938,7 +938,7 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Equal("#section", clientInfo.BackChannelLogout!.Uri.Fragment);
@@ -986,8 +986,8 @@ public class BackChannelLogoutNotifierTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo1, logoutContext);
-        await _notifier.NotifyClientAsync(clientInfo2, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo1, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo2, logoutContext);
 
         // Assert
         Assert.NotEqual(clientInfo1.ClientId, clientInfo2.ClientId);

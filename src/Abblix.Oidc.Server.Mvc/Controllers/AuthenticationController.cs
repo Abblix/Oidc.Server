@@ -115,6 +115,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing end session requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the end session request.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="request">The end session request details received from the client.</param>
     /// <returns>A task that returns an action result for
     /// the end session process.</returns>
@@ -133,10 +134,11 @@ public sealed class AuthenticationController : ControllerBase
     public async Task<ActionResult> EndSessionAsync(
         [FromServices] IEndSessionHandler handler,
         [FromServices] IEndSessionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] EndSessionRequest request)
     {
         Core.EndSessionRequest coreEndSessionRequest = request;
-        var response = await handler.HandleAsync(coreEndSessionRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreEndSessionRequest);
         return await formatter.FormatResponseAsync(coreEndSessionRequest, response);
     }
 

@@ -35,6 +35,6 @@ public class AuthSessionTerminator(
         if (options.Value.RevokeSessionTokensOnLogout)
             await tokenRevoker.RevokeSessionAsync(tenantAccessor.CurrentTenant(), sessionId);
 
-        return await sessionLogoutNotifier.NotifyClientsAsync(sessionId, subject);
+        return await sessionLogoutNotifier.NotifyClientsAsync(tenantAccessor.CurrentTenant(), sessionId, subject);
     }
 }

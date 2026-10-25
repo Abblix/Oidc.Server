@@ -22,31 +22,28 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// <param name="clientInfoProvider">Resolves each recorded client.</param>
 /// <param name="logoutNotifier">Delivers the notification to one client.</param>
 /// <param name="catalog">The catalog the tenant was resolved from, which the license counts its issuer by.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class SessionLogoutNotifier(
     ILogger<SessionLogoutNotifier> logger,
     ISessionClientRegistry sessionClients,
     IClientInfoProvider clientInfoProvider,
     ILogoutNotifier logoutNotifier,
-    ITenantCatalog catalog,
-    ITenantAccessor tenantAccessor) : ISessionLogoutNotifier
+    ITenantCatalog catalog) : ISessionLogoutNotifier
 {
     /// <inheritdoc />
-    public async Task<LogoutContext> NotifyClientsAsync(string sessionId, string subject)
+    public async Task<LogoutContext> NotifyClientsAsync(TenantDefinition tenant, string sessionId, string subject)
     {
-        var tenant = tenantAccessor.CurrentTenant();
         var context = new LogoutContext(
             sessionId, subject, LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog));
 
         // Every notification is awaited, so the back-channel POST is actually sent before the request ends.
         var tasks = new List<Task>();
-        foreach (var clientId in await sessionClients.GetClientsAsync(tenantAccessor.CurrentTenant(), sessionId))
+        foreach (var clientId in await sessionClients.GetClientsAsync(tenant, sessionId))
         {
-            var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+            var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
             if (clientInfo == null)
                 continue;
 
-            tasks.Add(NotifyClientSafelyAsync(clientInfo, context));
+            tasks.Add(NotifyClientSafelyAsync(tenant, clientInfo, context));
         }
         await Task.WhenAll(tasks);
 
@@ -58,11 +55,11 @@ public partial class SessionLogoutNotifier(
     /// logout are best-effort: a client whose endpoint is unreachable (down, TLS failure, blocked) is
     /// logged for operator attention but must not fail the end-user's logout.
     /// </summary>
-    private async Task NotifyClientSafelyAsync(ClientInfo clientInfo, LogoutContext context)
+    private async Task NotifyClientSafelyAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext context)
     {
         try
         {
-            await logoutNotifier.NotifyClientAsync(clientInfo, context);
+            await logoutNotifier.NotifyClientAsync(tenant, clientInfo, context);
         }
         catch (Exception exception)
         {
