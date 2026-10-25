@@ -27,7 +27,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 
 /// <summary>
-/// A token is validated for the tenant its caller hands over, and what is recorded about it, revoked or cut off, is
+/// A token is validated for the tenant its caller hands over, and what is recorded about it, its status, is
 /// read at that tenant too, whichever tenant the request happens to be served at.
 /// </summary>
 public class RevocationFollowsTheValidatedTenantTests

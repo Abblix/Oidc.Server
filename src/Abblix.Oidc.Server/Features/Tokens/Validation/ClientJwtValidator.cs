@@ -69,7 +69,7 @@ public partial class ClientJwtValidator(
         var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
 
         // The token status decorator under this validator reads what is recorded about the token at the tenant of the
-        // accessor, so the scope makes that the tenant the token is validated for, also for a caller outside its request
+        // accessor, so the scope makes that the tenant the token is validated for
         Result<JsonWebToken, JwtValidationError> result;
         using (TenantScope.Enter(tenant))
         {

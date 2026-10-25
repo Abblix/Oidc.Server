@@ -52,7 +52,7 @@ public interface ITokenRevoker
     /// <see cref="Common.Configuration.OidcOptions.RevocationCutoffSkew"/> has elapsed, since inside that
     /// window a freshly minted token cannot be told from one whose clock ran ahead.
     /// </remarks>
-    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="subject">The subject identifier the tokens carry.</param>
     /// <param name="before">The moment to cut off at; the current time when omitted. Tokens issued at or
     /// after it are unaffected, so the user signing in again works with nothing to undo.</param>

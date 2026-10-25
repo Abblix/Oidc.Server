@@ -85,7 +85,7 @@ public class AuthServiceJwtValidator(
 	/// <summary>
 	/// Validates the issuer of the JWT against the expected issuer.
 	/// </summary>
-	/// <param name="tenant">The tenant the request is served at.</param>
+	/// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
 	/// <param name="issuer">The issuer value to validate.</param>
 	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
 	private Task<bool> ValidateIssuerAsync(TenantDefinition tenant, string issuer)
@@ -102,7 +102,7 @@ public class AuthServiceJwtValidator(
 	/// <summary>
 	/// Validates the audience of the JWT by checking whether it names this service or any known client.
 	/// </summary>
-	/// <param name="tenant">The tenant the request is served at.</param>
+	/// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
 	/// <param name="audiences">A collection of audience values to validate.</param>
 	/// <returns>A task that yields true if any of the audience values are valid, otherwise false.</returns>
 	/// <remarks>
