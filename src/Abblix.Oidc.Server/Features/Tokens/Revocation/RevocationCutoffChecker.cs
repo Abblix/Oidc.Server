@@ -12,12 +12,12 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -243,7 +243,7 @@ public partial class RevocationCutoffChecker(
         if (principal is not { Length: > 0 })
             return false;
 
-        return await cutoffRegistry.GetCutoffAsync(scope, principal) is { } cutoff
+        return await cutoffRegistry.GetCutoffAsync(tenantAccessor.CurrentTenant(), scope, principal) is { } cutoff
                && instant < cutoff + tolerance;
     }
 }

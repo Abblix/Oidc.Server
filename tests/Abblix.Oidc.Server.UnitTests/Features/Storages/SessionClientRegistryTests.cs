@@ -62,18 +62,18 @@ public class SessionClientRegistryTests
     {
         var registry = Registry();
 
-        await registry.AddClientAsync(SessionId, "first", Ct);
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     [Fact]
     public async Task A_session_nobody_signed_in_to_lists_no_clients()
     {
-        await Registry().AddClientAsync("another-session", "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, "another-session", "first", Ct);
 
-        Assert.Empty(await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Empty(await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     [Fact]
@@ -81,8 +81,8 @@ public class SessionClientRegistryTests
     {
         var registry = Registry();
 
-        await registry.AddClientAsync(SessionId, "first", Ct);
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.Null(await StoredPositionAsync(2));
     }
@@ -92,10 +92,10 @@ public class SessionClientRegistryTests
     {
         var registry = Registry();
 
-        await registry.AddClientAsync(SessionId, "client", Ct);
-        await registry.AddClientAsync(SessionId, "CLIENT", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "client", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "CLIENT", Ct);
 
-        Assert.Equal(["client", "CLIENT"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["client", "CLIENT"], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -104,21 +104,21 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_losing_a_position_to_another_client_takes_the_next_one()
     {
-        await Registry().AddClientAsync(SessionId, "zero", Ct);
-        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "zero", Ct);
+        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct));
 
-        await Registry(racing).AddClientAsync(SessionId, "second", Ct);
+        await Registry(racing).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Equal(["zero", "first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["zero", "first", "second"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     [Fact]
     public async Task A_client_losing_a_position_to_itself_takes_no_other_one()
     {
-        await Registry().AddClientAsync(SessionId, "zero", Ct);
-        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "zero", Ct);
+        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct));
 
-        await Registry(racing).AddClientAsync(SessionId, "first", Ct);
+        await Registry(racing).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.Null(await StoredPositionAsync(3));
     }
@@ -129,11 +129,11 @@ public class SessionClientRegistryTests
     private async Task<StoredSessionClient?> StoredPositionAsync(int position)
     {
         var generation = await _storage.GetAsync<StoredGeneration>(
-            _keys.SessionClientsGenerationKey(SessionId), false, Ct);
+            _keys.SessionClientsGenerationKey(SingleIssuer.Tenant, SessionId), false, Ct);
 
         Assert.NotNull(generation);
         return await _storage.GetAsync<StoredSessionClient>(
-            _keys.SessionClientKey(SessionId, generation.Id, position), false, Ct);
+            _keys.SessionClientKey(SingleIssuer.Tenant, SessionId, generation.Id, position), false, Ct);
     }
 
     /// <summary>
@@ -145,27 +145,27 @@ public class SessionClientRegistryTests
     public async Task Clients_are_forgotten_two_retentions_after_the_last_authorization()
     {
         var registry = Registry();
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention / 2);
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
         _time.Advance(2 * Retention + TimeSpan.FromSeconds(1));
-        await registry.AddClientAsync(SessionId, "third", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "third", Ct);
 
-        Assert.Equal(["third"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["third"], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     [Fact]
     public async Task Clients_stay_listed_until_the_retention_counted_from_the_last_authorization_has_passed()
     {
         var registry = Registry();
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention / 2);
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
         _time.Advance(Retention - TimeSpan.FromSeconds(1));
 
-        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -176,15 +176,15 @@ public class SessionClientRegistryTests
     public async Task A_client_signing_in_again_keeps_the_list_past_two_retentions_from_the_first_one()
     {
         var registry = Registry();
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention * 1.5);
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention);
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
         _time.Advance(Retention / 2);
 
-        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -195,14 +195,14 @@ public class SessionClientRegistryTests
     public async Task A_client_signing_in_again_after_two_retentions_from_its_first_sign_in_takes_no_second_position()
     {
         var registry = Registry();
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention / 2);
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
         _time.Advance(Retention / 2 + TimeSpan.FromSeconds(1));
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention);
 
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.Null(await StoredPositionAsync(3));
     }
@@ -214,12 +214,12 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_signing_in_again_within_a_retention_of_the_last_renewal_writes_nothing()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
-        await Registry().AddClientAsync(SessionId, "second", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
         _time.Advance(Retention - TimeSpan.FromSeconds(1));
         var counting = EntityStorageMock.Over(_storage);
 
-        await Registry(counting.Object).AddClientAsync(SessionId, "first", Ct);
+        await Registry(counting.Object).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.Equal(0, Writes(counting));
     }
@@ -233,7 +233,7 @@ public class SessionClientRegistryTests
     {
         var counting = EntityStorageMock.Over(_storage);
 
-        await Registry(counting.Object).AddClientAsync(SessionId, "first", Ct);
+        await Registry(counting.Object).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.Equal(0, Extensions(counting));
     }
@@ -245,15 +245,15 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_slow_renewal_is_due_again_a_retention_before_the_end_it_set()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
-        await Registry().AddClientAsync(SessionId, "second", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
         _time.Advance(Retention + TimeSpan.FromSeconds(1));
         var renewedAt = _time.GetUtcNow();
-        await Registry(ClockMovesOnEachExtension(_storage, _time)).AddClientAsync(SessionId, "first", Ct);
+        await Registry(ClockMovesOnEachExtension(_storage, _time)).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         _time.SetUtcNow(renewedAt + Retention + TimeSpan.FromSeconds(1));
         var counting = EntityStorageMock.Over(_storage);
-        await Registry(counting.Object).AddClientAsync(SessionId, "first", Ct);
+        await Registry(counting.Object).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.NotEqual(0, Extensions(counting));
     }
@@ -265,17 +265,17 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_renewal_stopping_half_way_is_made_again_by_the_next_authorization()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
-        await Registry().AddClientAsync(SessionId, "second", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
         _time.Advance(Retention + TimeSpan.FromSeconds(1));
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Registry(FailsTheThirdExtension(_storage)).AddClientAsync(SessionId, "first", Ct));
+            () => Registry(FailsTheThirdExtension(_storage)).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct));
 
         _time.Advance(Retention / 2);
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(Retention - TimeSpan.FromSeconds(1));
 
-        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -285,19 +285,19 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_generation_ending_while_it_is_renewed_is_not_brought_back()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
         var ending = ClockMovesAtTheFirstExtension(_storage, () =>
         {
             _time.Advance(TimeSpan.FromMilliseconds(2));
             return Task.CompletedTask;
         });
-        await Registry(ending).AddClientAsync(SessionId, "second", Ct);
+        await Registry(ending).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
         _time.Advance(TimeSpan.FromDays(1));
-        await Registry().AddClientAsync(SessionId, "third", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "third", Ct);
 
-        Assert.Equal(["third"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["third"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -307,17 +307,17 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_generation_replaced_while_the_old_one_is_renewed_keeps_its_client()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
         var replacing = ClockMovesAtTheFirstExtension(_storage, async () =>
         {
             _time.Advance(TimeSpan.FromMilliseconds(2));
-            await Registry().AddClientAsync(SessionId, "elsewhere", Ct);
+            await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "elsewhere", Ct);
         });
 
-        await Registry(replacing).AddClientAsync(SessionId, "second", Ct);
+        await Registry(replacing).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Contains("elsewhere", await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Contains("elsewhere", await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -329,7 +329,7 @@ public class SessionClientRegistryTests
     {
         var heldByTheStore = new StorageOptions { AbsoluteExpiration = _time.GetUtcNow() + TimeSpan.FromMinutes(1) };
         await _storage.SetAsync(
-            _keys.SessionClientsGenerationKey(SessionId),
+            _keys.SessionClientsGenerationKey(SingleIssuer.Tenant, SessionId),
             new StoredGeneration
             {
                 Id = "skewed",
@@ -338,12 +338,12 @@ public class SessionClientRegistryTests
             heldByTheStore,
             Ct);
         await _storage.SetAsync(
-            _keys.SessionClientKey(SessionId, "skewed", 1), new StoredSessionClient { ClientId = "first" }, heldByTheStore, Ct);
+            _keys.SessionClientKey(SingleIssuer.Tenant, SessionId, "skewed", 1), new StoredSessionClient { ClientId = "first" }, heldByTheStore, Ct);
 
         var registry = Registry();
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     [Fact]
@@ -351,11 +351,11 @@ public class SessionClientRegistryTests
     {
         var registry = Registry();
         foreach (var position in Enumerable.Range(1, SessionClientRegistry.MaxClientsPerSession))
-            await registry.AddClientAsync(SessionId, $"client-{position}", Ct);
+            await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, $"client-{position}", Ct);
 
-        await registry.AddClientAsync(SessionId, "one-too-many", Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, "one-too-many", Ct);
 
-        var listed = await registry.GetClientsAsync(SessionId, Ct);
+        var listed = await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct);
         Assert.Equal(SessionClientRegistry.MaxClientsPerSession, listed.Count);
         Assert.DoesNotContain("one-too-many", listed);
         var warning = Assert.Single(_logs.Entries, entry => entry.Level == LogLevel.Warning);
@@ -369,7 +369,7 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_recorded_as_the_session_records_expire_is_listed()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
         var expiring = ClockMovesAtTheFirstClaim(_storage, () =>
@@ -377,9 +377,9 @@ public class SessionClientRegistryTests
             _time.Advance(TimeSpan.FromMilliseconds(2));
             return Task.CompletedTask;
         });
-        await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
+        await Registry(expiring).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Contains("second", await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Contains("second", await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -392,13 +392,13 @@ public class SessionClientRegistryTests
         // Another instance's clock, a minute ahead of the store's; the store's does not move until both
         // instances have written.
         var aheadByAMinute = new FakeTimeProvider(_time.GetUtcNow() + TimeSpan.FromMinutes(1));
-        await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "a", Ct);
-        await Registry().AddClientAsync(SessionId, "b", Ct);
-        await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "c", Ct);
+        await Registry(clock: aheadByAMinute).AddClientAsync(SingleIssuer.Tenant, SessionId, "a", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "b", Ct);
+        await Registry(clock: aheadByAMinute).AddClientAsync(SingleIssuer.Tenant, SessionId, "c", Ct);
 
         _time.Advance(2 * Retention + TimeSpan.FromSeconds(30));
 
-        Assert.Equal(["a", "b", "c"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["a", "b", "c"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -408,7 +408,7 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_recorded_as_the_records_expire_is_listed_by_a_store_refusing_past_expiries()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
         var expiring = ClockMovesAtTheFirstClaim(RefusesAnExpiryInThePast(_storage, _time), () =>
@@ -416,9 +416,9 @@ public class SessionClientRegistryTests
             _time.Advance(TimeSpan.FromMilliseconds(2));
             return Task.CompletedTask;
         });
-        await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
+        await Registry(expiring).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Contains("second", await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Contains("second", await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -427,17 +427,17 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_losing_to_a_record_that_then_expires_is_listed()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
 
         var racing = ClockMovesAtTheFirstClaim(_storage, async () =>
         {
-            await Registry().AddClientAsync(SessionId, "winner", Ct);
+            await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "winner", Ct);
             _time.Advance(TimeSpan.FromMilliseconds(2));
         });
-        await Registry(racing).AddClientAsync(SessionId, "loser", Ct);
+        await Registry(racing).AddClientAsync(SingleIssuer.Tenant, SessionId, "loser", Ct);
 
-        Assert.Contains("loser", await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Contains("loser", await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -447,15 +447,15 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_recorded_as_the_records_expire_is_listed_once_after_signing_in_again()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
         _time.Advance(2 * Retention - TimeSpan.FromMilliseconds(1));
         var expiring = ClockMovesAfterTheFirstRecordRead(_storage, () => _time.Advance(TimeSpan.FromMilliseconds(2)));
-        await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
+        await Registry(expiring).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
         _time.Advance(TimeSpan.FromMinutes(1));
-        await Registry().AddClientAsync(SessionId, "second", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Equal(["second"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["second"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -467,12 +467,12 @@ public class SessionClientRegistryTests
     {
         var failing = FailsTheFirstClientWrite(_storage);
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Registry(failing).AddClientAsync(SessionId, "first", Ct));
+            () => Registry(failing).AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct));
 
-        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
 
         Assert.NotNull(await StoredPositionAsync(2));
-        Assert.Equal(["first"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -482,11 +482,11 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task Reading_a_short_list_stops_after_its_last_client()
     {
-        await Registry().AddClientAsync(SessionId, "first", Ct);
-        await Registry().AddClientAsync(SessionId, "second", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct);
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
         var counting = EntityStorageMock.Over(_storage);
 
-        await Registry(counting.Object).GetClientsAsync(SessionId, Ct);
+        await Registry(counting.Object).GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct);
 
         // The generation, both positions, and the free position that ends the list.
         Assert.Equal(4, Reads(counting));
@@ -501,12 +501,12 @@ public class SessionClientRegistryTests
     {
         const string composed = "caf\u00e9-client";
         const string decomposed = "cafe\u0301-client";
-        await Registry().AddClientAsync(SessionId, "zero", Ct);
-        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, composed, Ct));
+        await Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "zero", Ct);
+        var racing = ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, composed, Ct));
 
-        await Registry(racing).AddClientAsync(SessionId, decomposed, Ct);
+        await Registry(racing).AddClientAsync(SingleIssuer.Tenant, SessionId, decomposed, Ct);
 
-        Assert.Equal(["zero", composed, decomposed], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["zero", composed, decomposed], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>
@@ -517,11 +517,11 @@ public class SessionClientRegistryTests
     public async Task Two_authorizations_starting_a_session_together_record_each_client_once()
     {
         var counting = EntityStorageMock.Over(_storage);
-        var racing = ClockMovesAtTheFirstClaim(counting.Object, () => Registry().AddClientAsync(SessionId, "first", Ct));
+        var racing = ClockMovesAtTheFirstClaim(counting.Object, () => Registry().AddClientAsync(SingleIssuer.Tenant, SessionId, "first", Ct));
 
-        await Registry(racing).AddClientAsync(SessionId, "second", Ct);
+        await Registry(racing).AddClientAsync(SingleIssuer.Tenant, SessionId, "second", Ct);
 
-        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
         Assert.Equal(1, Writes(counting));
     }
 
@@ -536,10 +536,10 @@ public class SessionClientRegistryTests
         const string decomposed = "café-client";
         var registry = Registry();
 
-        await registry.AddClientAsync(SessionId, composed, Ct);
-        await registry.AddClientAsync(SessionId, decomposed, Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, composed, Ct);
+        await registry.AddClientAsync(SingleIssuer.Tenant, SessionId, decomposed, Ct);
 
-        Assert.Equal([composed, decomposed], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal([composed, decomposed], await registry.GetClientsAsync(SingleIssuer.Tenant, SessionId, Ct));
     }
 
     /// <summary>

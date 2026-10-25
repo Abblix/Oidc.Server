@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -37,7 +38,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         var stored = CreateRequest(UserId, requested: null);
-        _storage.Setup(s => s.UpdateAsync(AuthReqId, stored, _expiresIn)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, _expiresIn)).Returns(Task.CompletedTask);
 
         var handler = new PollModeCompletionHandler(
             Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
@@ -46,7 +47,7 @@ public partial class AuthenticationCompletionHandlerTests
         await handler.DenyAuthenticationAsync(AuthReqId, _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, stored.Status);
-        _storage.Verify(s => s.UpdateAsync(AuthReqId, stored, _expiresIn), Times.Once);
+        _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, _expiresIn), Times.Once);
         notifier.Verify(n => n.NotifyStatusChangeAsync(AuthReqId, BackChannelAuthenticationStatus.Denied), Times.Once);
     }
 
@@ -61,7 +62,7 @@ public partial class AuthenticationCompletionHandlerTests
         stored.ClientNotificationEndpoint = _notificationEndpoint;
         var order = new List<string>();
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, stored, _expiresIn))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, _expiresIn))
             .Callback(() => order.Add("denied"))
             .Returns(Task.CompletedTask);
         _notificationService
@@ -98,12 +99,12 @@ public partial class AuthenticationCompletionHandlerTests
     {
         var stored = CreateRequest(UserId, requested: null);
         stored.ClientNotificationEndpoint = _notificationEndpoint;
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(stored);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(stored);
         NotificationsAreAccepted();
 
         await CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn);
 
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
         _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
     }
@@ -123,7 +124,7 @@ public partial class AuthenticationCompletionHandlerTests
             () => CreatePollModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn));
 
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -137,7 +138,7 @@ public partial class AuthenticationCompletionHandlerTests
     {
         var stored = CreateRequest(UserId, requested: null);
         stored.ClientNotificationEndpoint = _notificationEndpoint;
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn));

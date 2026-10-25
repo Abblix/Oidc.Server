@@ -76,7 +76,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["account_information"]);
 
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
@@ -96,7 +96,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["account_information", "payment_initiation"]);
 
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
@@ -116,7 +116,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["account_information", "medical_record"]);
 
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
@@ -137,7 +137,7 @@ public partial class AuthenticationCompletionHandlerTests
         request.RequestedAuthorizationDetails = null;
 
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
@@ -158,7 +158,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["payment_initiation"]);
 
         _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
@@ -193,7 +193,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["payment_initiation"],
             deliverable: true);
 
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
         var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
@@ -209,7 +209,7 @@ public partial class AuthenticationCompletionHandlerTests
         // nothing of "instructedAmount exceeds the ceiling".
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
         _notificationService.VerifyNoOtherCalls();
-        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -225,7 +225,7 @@ public partial class AuthenticationCompletionHandlerTests
             grantedTypes: ["payment_initiation"],
             deliverable: true);
 
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
         var policy = StubAuthorizationDetailsPolicy.Throwing("the entry lost its amount");
@@ -262,7 +262,7 @@ public partial class AuthenticationCompletionHandlerTests
         var granted = request.AuthorizedGrant.Context.AuthorizationDetails!;
         var before = granted.ToJsonString();
 
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
         var policy = StubAuthorizationDetailsPolicy.Capping("instructedAmount", "100");

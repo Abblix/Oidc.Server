@@ -12,7 +12,7 @@ using System.Globalization;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// The key a stored value is kept under within the current tenant's space.
+/// The key a stored value is kept under within the space of the tenant it is handed.
 /// </summary>
 public static class TenantKey
 {
@@ -21,16 +21,16 @@ public static class TenantKey
     private const string Naming = "a tenant's id and generation may hold only ASCII letters, digits, '-' and '_'.";
 
     /// <summary>
-    /// <paramref name="key"/> in the space of the tenant <paramref name="accessor"/> resolved.
+    /// <paramref name="key"/> in the space of <paramref name="tenant"/>.
     /// </summary>
     /// <remarks>
     /// The space holds no separator of the key, so tenant <c>a</c> with key <c>b:x</c> and tenant <c>a:b</c> with
     /// key <c>x</c> cannot be one entry: a tenant named <c>a:b</c> builds no key at all.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says, or the
-    /// one resolved is not named as <see cref="IsNamed"/> requires.</exception>
-    public static string Of(ITenantAccessor accessor, string key)
-        => string.Create(CultureInfo.InvariantCulture, $"tenant:{SpaceOf(CurrentTenant(accessor))}:{key}");
+    /// <exception cref="InvalidOperationException"><paramref name="tenant"/> is not named as <see cref="IsNamed"/>
+    /// requires.</exception>
+    public static string Of(TenantDefinition tenant, string key)
+        => string.Create(CultureInfo.InvariantCulture, $"tenant:{SpaceOf(tenant)}:{key}");
 
     /// <summary>
     /// What tells the space of <paramref name="tenant"/> from every other tenant's, this creation of its id
@@ -39,13 +39,6 @@ public static class TenantKey
     /// <exception cref="InvalidOperationException"><paramref name="tenant"/> is not named as <see cref="IsNamed"/>
     /// requires.</exception>
     internal static string SpaceOf(TenantDefinition tenant) => PartitionOf(tenant);
-
-    /// <summary>
-    /// The space of the tenant <paramref name="accessor"/> resolved, as <see cref="SpaceOf"/> tells it.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">No tenant is resolved, as <see cref="CurrentTenant"/> says, or the
-    /// one resolved is not named as <see cref="IsNamed"/> requires.</exception>
-    internal static string CurrentSpace(ITenantAccessor accessor) => SpaceOf(CurrentTenant(accessor));
 
     /// <summary>
     /// The partition of the key ring that keeps the keys the server mints for <paramref name="tenant"/>.

@@ -147,13 +147,13 @@ public class AuthorizationResponseFormatterTests
 
     private sealed class StoresEveryRequest : IAuthorizationRequestStorage
     {
-        public Task<CorePushedAuthorizationResponse> StoreAsync(AuthorizationRequest request, TimeSpan expiresIn)
+        public Task<CorePushedAuthorizationResponse> StoreAsync(TenantDefinition tenant, AuthorizationRequest request, TimeSpan expiresIn)
             => Task.FromResult(new CorePushedAuthorizationResponse(
                 request,
                 new Uri("urn:ietf:params:oauth:request_uri:stored"),
                 expiresIn));
 
-        public Task<AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false)
+        public Task<AuthorizationRequest?> TryGetAsync(TenantDefinition tenant, Uri requestUri, bool shouldRemove = false)
             => throw new NotSupportedException();
     }
 

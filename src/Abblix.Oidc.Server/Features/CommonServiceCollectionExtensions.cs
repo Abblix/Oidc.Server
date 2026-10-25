@@ -36,8 +36,8 @@ public static class CommonServiceCollectionExtensions
     /// <remarks>A call after the first changes nothing.</remarks>
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
-        // The storage is wrapped in the tenant's form here, so a second call would wrap it again and keep every
-        // entity under the tenant's key twice; the first call's mark ends every later one
+        // A second call would add the check that a consent provider is chosen again, and a server without one would
+        // be refused twice over; the first call's mark ends every later one
         if (services.Any(descriptor => descriptor.ImplementationInstance is CommonServicesMarker))
             return services;
 
@@ -51,15 +51,14 @@ public static class CommonServiceCollectionExtensions
         services.TryAddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
         services.TryAddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
         services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
-        // Every tenant's entities are kept in one store under keys of its own. The store is the one registered under
-        // the shared key, which a host substitutes in any order, or one the host registered for the server before
-        // this call, which the forwarding below then leaves in place; either way the tenant's form is outermost
+        // Every tenant's entities are kept in one store, each under keys its stores build from the tenant. The store
+        // is the one registered under the shared key, which a host substitutes in any order, or one the host
+        // registered for the server before this call, which the forwarding below then leaves in place
         services.TryAddKeyedSingleton<IEntityStorage, DistributedCacheStorage>(TenantServiceKeys.Shared);
         services.TryAddSingleton<IEntityStorage>(
             serviceProvider => serviceProvider.GetRequiredKeyedService<IEntityStorage>(TenantServiceKeys.Shared));
         services.AddTelemetryDecorator<IEntityStorage, MeasuredEntityStorage>();
         services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
-        services.Decorate<IEntityStorage, TenantEntityStorage>();
 
         // The next-poll instant of a polled request, kept apart from the request itself: a poll
         // writing the request back to note it overwrote whatever the approval had changed.

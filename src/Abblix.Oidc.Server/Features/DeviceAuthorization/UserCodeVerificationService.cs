@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -28,13 +29,15 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// through this abstraction rather than the HTTP context so it stays independent of the host, and so a test
 /// can drive the limiter without standing up a web host.</param>
 /// <param name="timeProvider">Provides the current time for deriving the request's remaining lifetime.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class UserCodeVerificationService(
     ILogger<UserCodeVerificationService> logger,
     IDeviceAuthorizationStorage storage,
     IUserCodeRateLimiter rateLimiter,
     IUserCodeNormalizer normalizer,
     IRequestInfoProvider requestInfoProvider,
-    TimeProvider timeProvider) : IUserCodeVerificationService
+    TimeProvider timeProvider,
+    ITenantAccessor tenantAccessor) : IUserCodeVerificationService
 {
     /// <inheritdoc />
     public async Task<UserCodeVerificationResult> VerifyAsync([Credential] string userCode)
@@ -47,7 +50,7 @@ public partial class UserCodeVerificationService(
         var clientIp = requestInfoProvider.SourceName();
 
         // Check rate limiting before attempting verification
-        if (await rateLimiter.CheckAsync(userCode, clientIp) is { } refusal)
+        if (await rateLimiter.CheckAsync(tenantAccessor.CurrentTenant(), userCode, clientIp) is { } refusal)
         {
             // A refusal that followed from attempts against THIS code stays indistinguishable from an
             // unknown code: only a value the server issued can have such attempts, so naming the refusal
@@ -59,7 +62,7 @@ public partial class UserCodeVerificationService(
                 : new TooManyUserCodeAttempts(refusal.RetryAfter);
         }
 
-        var result = await storage.TryGetByUserCodeAsync(userCode);
+        var result = await storage.TryGetByUserCodeAsync(tenantAccessor.CurrentTenant(), userCode);
         if (result == null)
         {
             // Charged to the source and to the server's budget for the window, and NOT to the value that
@@ -67,7 +70,7 @@ public partial class UserCodeVerificationService(
             // count per value bounds nothing - and a count standing against a value nobody was issued
             // would be spent before a real code could carry it, leaving the person reading that code off
             // their screen unable to use it.
-            await rateLimiter.RecordUnknownCodeAsync(clientIp);
+            await rateLimiter.RecordUnknownCodeAsync(tenantAccessor.CurrentTenant(), clientIp);
             return new InvalidUserCode();
         }
 
@@ -76,7 +79,7 @@ public partial class UserCodeVerificationService(
         {
             // This value IS a code, so the attempt belongs to it. That is what stops one code being
             // hammered, from one source or from a thousand.
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            await rateLimiter.RecordFailureAsync(tenantAccessor.CurrentTenant(), userCode, clientIp);
             return new UserCodeAlreadyUsed();
         }
 
@@ -88,12 +91,12 @@ public partial class UserCodeVerificationService(
         // promises for this - "not found or has expired".
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out _))
         {
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            await rateLimiter.RecordFailureAsync(tenantAccessor.CurrentTenant(), userCode, clientIp);
             return new InvalidUserCode();
         }
 
         // Valid user code found and pending - record success to reset counters
-        await rateLimiter.RecordSuccessAsync(userCode, clientIp);
+        await rateLimiter.RecordSuccessAsync(tenantAccessor.CurrentTenant(), userCode, clientIp);
         // A copy, because the stored entries are the baseline the granted ones are held to when the code is
         // redeemed: a host narrowing what it was handed in place, over a store keeping objects in memory, would
         // move the baseline along with the grant and the comparison would see nothing.
@@ -174,13 +177,13 @@ public partial class UserCodeVerificationService(
         // and answers whether it names a live authorization, which is the question a guesser is asking.
         // Without this it is the same oracle with no counting at all, and the one that grants.
         var clientIp = requestInfoProvider.SourceName();
-        if (await rateLimiter.CheckAsync(userCode, clientIp) is not null)
+        if (await rateLimiter.CheckAsync(tenantAccessor.CurrentTenant(), userCode, clientIp) is not null)
             return null;
 
-        var result = await storage.TryGetByUserCodeAsync(userCode);
+        var result = await storage.TryGetByUserCodeAsync(tenantAccessor.CurrentTenant(), userCode);
         if (result == null)
         {
-            await rateLimiter.RecordUnknownCodeAsync(clientIp);
+            await rateLimiter.RecordUnknownCodeAsync(tenantAccessor.CurrentTenant(), clientIp);
             return null;
         }
 
@@ -190,7 +193,7 @@ public partial class UserCodeVerificationService(
         {
             // Charged to the code, as verification charges it: the value names a real authorization and the
             // attempt is against it, whether it arrived here or at the verification step.
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            await rateLimiter.RecordFailureAsync(tenantAccessor.CurrentTenant(), userCode, clientIp);
             return null;
         }
 
@@ -199,7 +202,7 @@ public partial class UserCodeVerificationService(
         // writing a record with a non-positive cache TTL.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
         {
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            await rateLimiter.RecordFailureAsync(tenantAccessor.CurrentTenant(), userCode, clientIp);
             return null;
         }
 
@@ -239,14 +242,14 @@ public partial class UserCodeVerificationService(
         TimeSpan remaining,
         Action<DeviceAuthorizationRequest> decide)
     {
-        var current = await storage.TryGetAsync(reference);
+        var current = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), reference);
         if (current is not { Status: DeviceAuthorizationStatus.Pending })
         {
             return false;
         }
 
         decide(current);
-        await storage.UpdateAsync(reference, current, remaining);
+        await storage.UpdateAsync(tenantAccessor.CurrentTenant(), reference, current, remaining);
         return true;
     }
 }

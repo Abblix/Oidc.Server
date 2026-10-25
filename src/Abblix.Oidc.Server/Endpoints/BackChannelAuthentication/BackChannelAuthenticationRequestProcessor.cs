@@ -17,12 +17,12 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
@@ -192,7 +192,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			ClientNotificationToken = request.Model.ClientNotificationToken,
 		};
 
-		var authenticationRequestId = await storage.StoreAsync(backChannelRequest, request.ExpiresIn);
+		var authenticationRequestId = await storage.StoreAsync(tenantAccessor.CurrentTenant(), backChannelRequest, request.ExpiresIn);
 
 		return new BackChannelAuthenticationSuccess
 		{

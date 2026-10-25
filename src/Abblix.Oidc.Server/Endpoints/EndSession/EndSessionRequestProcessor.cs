@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -30,11 +31,13 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// <param name="authSessionTerminator">Ends the session for its tokens and its clients.</param>
 /// <param name="confirmationStore">Issues the value that carries the end user's answer back when they have to be
 /// asked.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
 	IAuthSessionTerminator authSessionTerminator,
-	ILogoutConfirmationStore confirmationStore) : IEndSessionRequestProcessor
+	ILogoutConfirmationStore confirmationStore,
+	ITenantAccessor tenantAccessor) : IEndSessionRequestProcessor
 {
 	/// <summary>
 	/// Processes the end-session request and returns the corresponding response.
@@ -69,7 +72,7 @@ public partial class EndSessionRequestProcessor(
 		// request that reaches this point is one this server would otherwise have acted upon.
 		if (request.ConfirmationRequired)
 		{
-			return new ConfirmationRequired(await confirmationStore.IssueAsync(sessionId));
+			return new ConfirmationRequired(await confirmationStore.IssueAsync(tenantAccessor.CurrentTenant(), sessionId));
 		}
 
 		var subjectId = authSession.Subject;

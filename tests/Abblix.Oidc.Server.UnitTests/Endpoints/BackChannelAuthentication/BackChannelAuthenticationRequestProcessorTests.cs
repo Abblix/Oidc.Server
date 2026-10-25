@@ -64,7 +64,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         _storage
-            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("auth-req-id");
 
         _processor = new BackChannelAuthenticationRequestProcessor(
@@ -143,8 +143,8 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         StoredRequest? stored = null;
         _storage
-            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
-            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
             .ReturnsAsync("auth-req-id");
 
         var result = await _processor.ProcessAsync(Request(null, authorizationDetails: requested));
@@ -190,8 +190,8 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         StoredRequest? stored = null;
         _storage
-            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
-            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
             .ReturnsAsync("auth-req-id");
 
         var result = await _processor.ProcessAsync(Request(null, claimsJson));
@@ -220,8 +220,8 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         StoredRequest? stored = null;
         _storage
-            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
-            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
             .ReturnsAsync("auth-req-id");
 
         var requested = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
@@ -259,7 +259,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
         _storage.Verify(
-            s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()),
+            s => s.StoreAsync(It.IsAny<TenantDefinition>(), It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 

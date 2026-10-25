@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 
 /// <summary>
@@ -28,6 +30,7 @@ public interface IUserCodeRateLimiter
     /// Implements a growing pause per code, a cap per source address and a budget for the whole server, to
     /// prevent brute force attacks.
     /// </summary>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="userCode">The user code being verified.</param>
     /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
     /// see one.</param>
@@ -36,15 +39,16 @@ public interface IUserCodeRateLimiter
     /// and whether it follows from attempts against this very code - which decides whether a caller may be told
     /// anything at all.
     /// </returns>
-    Task<UserCodeRateLimited?> CheckAsync(string userCode, string? clientIdentifier);
+    Task<UserCodeRateLimited?> CheckAsync(TenantDefinition tenant, string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
     /// </summary>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="userCode">The user code that failed verification.</param>
     /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
     /// see one.</param>
-    Task RecordFailureAsync(string userCode, string? clientIdentifier);
+    Task RecordFailureAsync(TenantDefinition tenant, string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed attempt at a user code that does not exist.
@@ -56,16 +60,18 @@ public interface IUserCodeRateLimiter
     /// their screen unable to use it. What this attempt belongs to is the source that made it and the
     /// server's own budget for the window.
     /// </remarks>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="clientIdentifier">The address the attempt came from, or null when the server cannot
     /// see one.</param>
     /// <returns>A task that completes when the attempt has been recorded.</returns>
-    Task RecordUnknownCodeAsync(string? clientIdentifier);
+    Task RecordUnknownCodeAsync(TenantDefinition tenant, string? clientIdentifier);
 
     /// <summary>
     /// Records a successful verification to reset rate limiting counters.
     /// </summary>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="userCode">The user code that was successfully verified.</param>
     /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
     /// see one.</param>
-    Task RecordSuccessAsync(string userCode, string? clientIdentifier);
+    Task RecordSuccessAsync(TenantDefinition tenant, string userCode, string? clientIdentifier);
 }

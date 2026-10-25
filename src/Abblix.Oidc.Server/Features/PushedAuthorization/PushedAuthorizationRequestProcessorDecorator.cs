@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Options;
 
@@ -30,12 +31,14 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// <param name="consumedRequestUris">Records the flows that ended, so the other pages of one are refused.</param>
 /// <param name="options">How long a page of a flow can be presented.</param>
 /// <param name="timeProvider">Dates the end of a flow.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class PushedAuthorizationRequestProcessorDecorator(
     IAuthorizationRequestProcessor inner,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IConsumedRequestUriRegistry consumedRequestUris,
     IOptions<OidcOptions> options,
-    TimeProvider timeProvider) : IAuthorizationRequestProcessor
+    TimeProvider timeProvider,
+    ITenantAccessor tenantAccessor) : IAuthorizationRequestProcessor
 {
     /// <summary>
     /// Delegates to the wrapped processor and consumes the <c>request_uri</c> values the request is done with: on a
@@ -58,7 +61,7 @@ public class PushedAuthorizationRequestProcessorDecorator(
             request.RequestUri is { } requestUri &&
             requestUri.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            await authorizationRequestStorage.TryGetAsync(requestUri, shouldRemove: true);
+            await authorizationRequestStorage.TryGetAsync(tenantAccessor.CurrentTenant(), requestUri, shouldRemove: true);
         }
 
         // The URN the request was first fetched under - usually the one the client pushed - outlives the pages the
@@ -68,9 +71,10 @@ public class PushedAuthorizationRequestProcessorDecorator(
         if (response is SuccessfullyAuthenticated && request.Model.OriginRequestUri is { } originRequestUri)
         {
             if (originRequestUri != request.RequestUri)
-                await authorizationRequestStorage.TryGetAsync(originRequestUri, shouldRemove: true);
+                await authorizationRequestStorage.TryGetAsync(tenantAccessor.CurrentTenant(), originRequestUri, shouldRemove: true);
 
             await consumedRequestUris.MarkConsumedAsync(
+                tenantAccessor.CurrentTenant(),
                 originRequestUri,
                 timeProvider.GetUtcNow() + options.Value.AuthenticationRequestExpiresIn);
         }

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -26,7 +27,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// </summary>
 public class AuthorizationCodeBuilder(
     IAuthorizationCodeService authorizationCodeService,
-    IAuthorizationValueReuseDetector reuseDetector)
+    IAuthorizationValueReuseDetector reuseDetector,
+    ITenantAccessor tenantAccessor)
     : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
@@ -45,6 +47,7 @@ public class AuthorizationCodeBuilder(
         SuccessfullyAuthenticated result)
     {
         result.Code = await authorizationCodeService.GenerateAuthorizationCodeAsync(
+            tenantAccessor.CurrentTenant(),
             authorizedGrant,
             request.ClientInfo.AuthorizationCodeExpiresIn);
 
@@ -53,8 +56,8 @@ public class AuthorizationCodeBuilder(
         // means the same request re-processed across a login or consent redirect is not flagged.
         var context = authorizedGrant.Context;
         if (context.CodeChallenge is { } codeChallenge)
-            await reuseDetector.RecordAsync(context.ClientId, AuthorizationRequest.Parameters.CodeChallenge, codeChallenge);
+            await reuseDetector.RecordAsync(tenantAccessor.CurrentTenant(), context.ClientId, AuthorizationRequest.Parameters.CodeChallenge, codeChallenge);
         if (context.Nonce is { } nonce)
-            await reuseDetector.RecordAsync(context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce);
+            await reuseDetector.RecordAsync(tenantAccessor.CurrentTenant(), context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce);
     }
 }

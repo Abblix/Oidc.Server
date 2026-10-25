@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 using Google.Protobuf.WellKnownTypes;
@@ -23,12 +24,13 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
 {
     /// <inheritdoc />
     public async Task<DateTimeOffset?> GetCutoffAsync(
+        TenantDefinition tenant,
         RevocationScope scope,
         string principal,
         CancellationToken cancellationToken = default)
     {
         var record = await storage.GetAsync<Proto.RevocationCutoff>(
-            keyFactory.RevocationCutoffKey(scope, principal),
+            keyFactory.RevocationCutoffKey(tenant, scope, principal),
             false,
             cancellationToken);
 
@@ -54,13 +56,14 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
     /// even when its cutoff is not later.
     /// </remarks>
     public async Task SetCutoffAsync(
+        TenantDefinition tenant,
         RevocationScope scope,
         string principal,
         DateTimeOffset cutoff,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
-        var key = keyFactory.RevocationCutoffKey(scope, principal);
+        var key = keyFactory.RevocationCutoffKey(tenant, scope, principal);
 
         for (var attempt = 0; attempt < RecordingAttempts; attempt++)
         {

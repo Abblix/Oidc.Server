@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -22,7 +23,6 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInteraction;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -187,7 +187,7 @@ public class AuthorizationRequestProcessor(
 	{
 		// Recorded before anything is issued, so a store that refuses the record fails the authorization
 		// rather than following a code or a token already handed out.
-		await sessionClients.AddClientAsync(authSession.SessionId, request.ClientInfo.ClientId);
+		await sessionClients.AddClientAsync(tenantAccessor.CurrentTenant(), authSession.SessionId, request.ClientInfo.ClientId);
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
 		// scope set (identical to what the issued token carries) so the response encoder advertises the
@@ -196,7 +196,7 @@ public class AuthorizationRequestProcessor(
 			request.Model,
 			request.ResponseMode,
 			authSession.SessionId,
-			[..await sessionClients.GetClientsAsync(authSession.SessionId)])
+			[..await sessionClients.GetClientsAsync(tenantAccessor.CurrentTenant(), authSession.SessionId)])
 		{
 			GrantedScopes = authContext.Scope,
 			SessionPersistence = authSession.Persistence,

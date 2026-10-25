@@ -162,7 +162,7 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
         {
             using var reading = _app!.Services.CreateScope();
             var stored = await reading.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>()
-                .TryGetAsync(authenticationRequestId);
+                .TryGetAsync(readIn, authenticationRequestId);
             Assert.NotNull(stored);
 
             var session = new AuthSession(

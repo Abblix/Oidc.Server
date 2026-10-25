@@ -40,5 +40,5 @@ public sealed class TenantReplayCache(IReplayCache inner, ITenantAccessor tenant
         => inner.ReleaseAsync(Scope(identifier), cancellationToken);
 
     private string Scope(string identifier)
-        => tenantAccessor.Current is null ? identifier : TenantKey.Of(tenantAccessor, identifier);
+        => tenantAccessor.Current is null ? identifier : TenantKey.Of(tenantAccessor.CurrentTenant(), identifier);
 }

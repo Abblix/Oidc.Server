@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -59,13 +60,13 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(s => s.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) =>
+            .Setup(s => s.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) =>
                 code == CanonicalUserCode ? (Reference, request) : null);
 
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
-            .Setup(r => r.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(r => r.CheckAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((UserCodeRateLimited?)null);
 
         var normalizer = new UserCodeNormalizer(Options.Create(new OidcOptions
@@ -87,7 +88,7 @@ public class UserCodeVerificationServiceTests
             rateLimiter.Object,
             normalizer,
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero)));
+            new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero)), tenantAccessor: SingleIssuer.Accessor);
     }
 
     [Theory]
@@ -251,18 +252,19 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, fromUserCode) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, fromUserCode) : null);
 
         storage
-            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
-            .ReturnsAsync((DeviceAuthorizationReference reference) => reference == Reference ? fromDeviceCode : null);
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((TenantDefinition _, DeviceAuthorizationReference reference) => reference == Reference ? fromDeviceCode : null);
 
         DeviceAuthorizationRequest? written = null;
         storage
             .Setup(store => store.UpdateAsync(
+                TestTenant.Matched,
                 It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
-            .Callback<DeviceAuthorizationReference, DeviceAuthorizationRequest, TimeSpan>((_, r, _) => written = r)
+            .Callback<TenantDefinition, DeviceAuthorizationReference, DeviceAuthorizationRequest, TimeSpan>((_, _, r, _) => written = r)
             .Returns(Task.CompletedTask);
 
         var service = new UserCodeVerificationService(
@@ -271,7 +273,7 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
 
         Assert.True(await service.ApproveAsync(CanonicalUserCode, GrantWith(null)));
 
@@ -318,12 +320,12 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, expired) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, expired) : null);
 
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
-            .Setup(limiter => limiter.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(limiter => limiter.CheckAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((UserCodeRateLimited?)null);
 
         var service = new UserCodeVerificationService(
@@ -332,7 +334,7 @@ public class UserCodeVerificationServiceTests
             rateLimiter.Object,
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
 
         var result = await service.VerifyAsync(CanonicalUserCode);
 
@@ -340,9 +342,9 @@ public class UserCodeVerificationServiceTests
 
         // Both halves, because a refusal that still reset the counter would satisfy the line above.
         rateLimiter.Verify(
-            limiter => limiter.RecordFailureAsync(CanonicalUserCode, It.IsAny<string>()), Times.Once);
+            limiter => limiter.RecordFailureAsync(TestTenant.Matched, CanonicalUserCode, It.IsAny<string>()), Times.Once);
         rateLimiter.Verify(
-            limiter => limiter.RecordSuccessAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            limiter => limiter.RecordSuccessAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -371,11 +373,11 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, expired) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, expired) : null);
         storage
-            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
-            .ReturnsAsync((DeviceAuthorizationReference reference) => reference == Reference ? expired : null);
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((TenantDefinition _, DeviceAuthorizationReference reference) => reference == Reference ? expired : null);
 
         var service = new UserCodeVerificationService(
             new CapturingLogger<UserCodeVerificationService>(),
@@ -383,7 +385,7 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
 
         var decided = approving
             ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
@@ -396,6 +398,7 @@ public class UserCodeVerificationServiceTests
         Assert.Equal(DeviceAuthorizationStatus.Pending, expired.Status);
         storage.Verify(
             store => store.UpdateAsync(
+                It.IsAny<TenantDefinition>(),
                 It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
@@ -412,15 +415,15 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, request) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, request) : null);
 
         // The decision is applied to the record as it stands at the write, so a fixture that answers the
         // user-code lookup and not this one is describing a record consumed in between - which is its own
         // row rather than the arrangement these tests want.
         storage
-            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
-            .ReturnsAsync((DeviceAuthorizationReference reference) => reference == Reference ? request : null);
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((TenantDefinition _, DeviceAuthorizationReference reference) => reference == Reference ? request : null);
 
         logs = new CapturingLogger<UserCodeVerificationService>();
         return new UserCodeVerificationService(
@@ -429,7 +432,7 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -486,11 +489,11 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (Reference, request) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, request) : null);
 
         storage
-            .Setup(store => store.TryGetAsync(It.IsAny<DeviceAuthorizationReference>()))
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
             .ReturnsAsync(current);
 
         var service = new UserCodeVerificationService(
@@ -499,7 +502,7 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
 
         var decided = approving
             ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
@@ -507,7 +510,7 @@ public class UserCodeVerificationServiceTests
 
         Assert.False(decided);
         storage.Verify(
-            store => store.UpdateAsync(It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            store => store.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 

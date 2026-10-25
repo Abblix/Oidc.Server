@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
@@ -29,16 +31,17 @@ public interface INonceService
     /// header. The returned value is opaque to callers - clients must echo it
     /// verbatim.
     /// </summary>
-    Task<string> IssueAsync(CancellationToken cancellationToken = default);
+    Task<string> IssueAsync(TenantDefinition tenant, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Verifies that <paramref name="nonce"/> was issued by this deployment
     /// and is still within the acceptance window.
     /// </summary>
+    /// <param name="tenant">The tenant the nonce belongs to.</param>
     /// <param name="nonce">The nonce string echoed by the client in its DPoP
     /// proof <c>nonce</c> claim.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><c>null</c> when the nonce is acceptable, otherwise a
     /// <see cref="NonceValidationFailure"/> describing why it is not.</returns>
-    Task<NonceValidationFailure?> ValidateAsync(string nonce, CancellationToken cancellationToken = default);
+    Task<NonceValidationFailure?> ValidateAsync(TenantDefinition tenant, string nonce, CancellationToken cancellationToken = default);
 }

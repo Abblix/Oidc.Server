@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,11 +22,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="logger">Records each cutoff written, which is the only trace a revocation leaves.</param>
 /// <param name="options">Supplies how long a cutoff is retained.</param>
 /// <param name="clock">Supplies the current moment when the caller names none.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class TokenRevoker(
     ILogger<TokenRevoker> logger,
     IRevocationCutoffRegistry cutoffRegistry,
     IOptions<OidcOptions> options,
-    TimeProvider clock) : ITokenRevoker
+    TimeProvider clock,
+    ITenantAccessor tenantAccessor) : ITokenRevoker
 {
     /// <inheritdoc />
     public Task RevokeSubjectAsync(
@@ -65,6 +68,6 @@ public partial class TokenRevoker(
 
         LogCutoffRecorded(scope, cutoff, expiresAt);
 
-        return cutoffRegistry.SetCutoffAsync(scope, principal, cutoff, expiresAt, cancellationToken);
+        return cutoffRegistry.SetCutoffAsync(tenantAccessor.CurrentTenant(), scope, principal, cutoff, expiresAt, cancellationToken);
     }
 }

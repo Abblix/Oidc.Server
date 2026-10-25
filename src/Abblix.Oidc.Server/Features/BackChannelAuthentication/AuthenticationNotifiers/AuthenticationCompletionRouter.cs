@@ -10,10 +10,10 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -89,7 +89,7 @@ public partial class AuthenticationCompletionRouter(
         [Credential] string authenticationRequestId,
         string answered)
     {
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
         if (stored is null)
         {
             LogNothingStored(fingerprints.Of(authenticationRequestId), answered);

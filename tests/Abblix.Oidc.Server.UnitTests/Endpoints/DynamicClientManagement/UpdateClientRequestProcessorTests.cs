@@ -197,7 +197,7 @@ public class UpdateClientRequestProcessorTests
 
         // Assert
         manager.Verify(
-            m => m.TryUpdateClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
+            m => m.TryUpdateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
             Times.Never);
     }
 

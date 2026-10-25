@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
@@ -23,10 +24,12 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// <param name="tokenRegistry">The token registry to be used by this processor for managing token statuses.</param>
 /// <param name="grantRevocation">Revokes the grant a refresh token was issued under.</param>
 /// <param name="clock">Provides the current time for timestamping the revocation operation.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class RevocationRequestProcessor(
 	ITokenRegistry tokenRegistry,
 	GrantRevocation grantRevocation,
-	TimeProvider clock) : IRevocationRequestProcessor
+	TimeProvider clock,
+	ITenantAccessor tenantAccessor) : IRevocationRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid revocation request.
@@ -42,7 +45,7 @@ public class RevocationRequestProcessor(
 	{
 		var payload = request.Token?.Payload;
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
-			await tokenRegistry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+			await tokenRegistry.SetStatusAsync(tenantAccessor.CurrentTenant(), jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
 		// RFC 7009 section 2.1: "If the particular token is a refresh token and the authorization server supports the
 		// revocation of access tokens, then the authorization server SHOULD also invalidate all access tokens based on

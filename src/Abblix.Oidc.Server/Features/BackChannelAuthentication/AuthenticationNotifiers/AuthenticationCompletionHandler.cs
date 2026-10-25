@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
@@ -18,7 +19,6 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -286,7 +286,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
     private async Task<BackChannelAuthenticationRequest> ReadPendingAsync([Credential] string authenticationRequestId, string answered)
     {
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
             return stored;
 
@@ -456,7 +456,7 @@ public abstract partial class AuthenticationCompletionHandler(
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
-        await storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+        await storage.UpdateAsync(tenantAccessor.CurrentTenant(), authenticationRequestId, request, expiresIn);
 
         if (statusNotifier != null)
         {
@@ -479,5 +479,5 @@ public abstract partial class AuthenticationCompletionHandler(
     /// single caller with nobody to lose to. A store fault after the removal raises rather than
     /// returning null.</returns>
     protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync([Credential] string authenticationRequestId)
-        => storage.TryRemoveAsync(authenticationRequestId);
+        => storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
 }

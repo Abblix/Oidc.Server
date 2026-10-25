@@ -8,9 +8,9 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
@@ -40,7 +40,7 @@ public partial class SessionLogoutNotifier(
 
         // Every notification is awaited, so the back-channel POST is actually sent before the request ends.
         var tasks = new List<Task>();
-        foreach (var clientId in await sessionClients.GetClientsAsync(sessionId))
+        foreach (var clientId in await sessionClients.GetClientsAsync(tenantAccessor.CurrentTenant(), sessionId))
         {
             var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
             if (clientInfo == null)

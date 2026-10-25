@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -32,7 +33,8 @@ public partial class DPoPUserInfoValidator(
     ILogger<DPoPUserInfoValidator> logger,
     IProofValidator proofValidator,
     INonceService nonceService,
-    IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), IDPoPUserInfoValidator
+    IOptionsMonitor<OidcOptions> options,
+    ITenantAccessor tenantAccessor) : DPoPNonceValidator(nonceService, tenantAccessor), IDPoPUserInfoValidator
 {
     /// <inheritdoc/>
     /// <remarks>

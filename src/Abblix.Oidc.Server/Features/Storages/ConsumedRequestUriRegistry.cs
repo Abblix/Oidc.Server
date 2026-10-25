@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -22,14 +23,14 @@ public class ConsumedRequestUriRegistry(
     TimeProvider timeProvider) : IConsumedRequestUriRegistry
 {
     /// <inheritdoc />
-    public Task MarkConsumedAsync(Uri requestUri, DateTimeOffset expiresAt)
+    public Task MarkConsumedAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt)
         => storage.SetAsync(
-            keyFactory.ConsumedRequestUriKey(requestUri),
+            keyFactory.ConsumedRequestUriKey(tenant, requestUri),
             new Proto.ConsumedRequestUri { ConsumedAt = Timestamp.FromDateTimeOffset(timeProvider.GetUtcNow()) },
             new StorageOptions { AbsoluteExpiration = expiresAt });
 
     /// <inheritdoc />
-    public async Task<bool> IsConsumedAsync(Uri requestUri)
-        => await storage.GetAsync<Proto.ConsumedRequestUri>(keyFactory.ConsumedRequestUriKey(requestUri), false)
+    public async Task<bool> IsConsumedAsync(TenantDefinition tenant, Uri requestUri)
+        => await storage.GetAsync<Proto.ConsumedRequestUri>(keyFactory.ConsumedRequestUriKey(tenant, requestUri), false)
             is not null;
 }

@@ -10,7 +10,6 @@ using System.Threading.RateLimiting;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.RateLimiting;
-using Abblix.Oidc.Server.Features.Storages;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
 /// Refuses to start a server that could serve no tenant, or whose tenants would share a service the server keeps
-/// apart for each: its storage, replay cache or budgets, or the signer of its security events.
+/// apart for each: its replay cache or budgets, or the signer of its security events.
 /// </summary>
 /// <remarks>
 /// A started service rather than a check of the settings: it builds the services it judges, and a host's service
@@ -53,7 +52,6 @@ internal sealed class TenantServicesStartupCheck(
 
         failures.AddRange(new[]
             {
-                Replaced<IEntityStorage, TenantEntityStorage>(null),
                 Replaced<IReplayCache, TenantReplayCache>(null),
                 Replaced<PartitionedRateLimiter<string>, TenantPartitionedRateLimiter<string>>(
                     CallerRateLimiters.AuthenticationFailures),

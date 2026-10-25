@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -63,7 +64,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             RequestedSubjects = [UserId],
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -71,7 +72,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
 
         // The grant is not spent either: a refused poll must leave the request where it was.
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -101,8 +102,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             RequestedSubjects = [UserId],
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -152,8 +153,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             RequestedSubjects = [UserId],
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(asConsumed);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -184,8 +185,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var authRequest = RequestRequiringStrongLevel(authenticatedLevel);
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -198,7 +199,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         {
             Assert.True(result.TryGetFailure(out var error));
             Assert.Equal(ErrorCodes.AccessDenied, error.Error);
-            _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+            _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
         }
     }
 
@@ -232,8 +233,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated,
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(asConsumed);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -268,13 +269,13 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             RequiredAuthContextClassRefs = [StrongLevel],
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
-        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -310,8 +311,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated,
         };
 
-        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
-        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(asConsumed);
 
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
@@ -373,6 +374,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             timeProvider,
             options,
             CreateMockServiceProvider(storage.Object),
+            SingleIssuer.Accessor,
             statusNotifier.Object);
 
         var clientInfo = new ClientInfo(ClientId)
@@ -401,12 +403,13 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             RequestedSubjects = [UserId],
         };
 
-        storage.SetupSequence(s => s.TryGetAsync(AuthReqId))
+        storage.SetupSequence(s => s.TryGetAsync(TestTenant.Matched, AuthReqId))
             .ReturnsAsync(pending)
             .ReturnsAsync(authenticatedAsSomebodyElse);
 
         storage
             .Setup(s => s.UpdateAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()))
             .Returns(Task.CompletedTask);
 
@@ -421,6 +424,6 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
 
         // Refused before the request is consumed, so a client that polls again is told the same thing.
-        storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 }

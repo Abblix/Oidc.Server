@@ -95,7 +95,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(granted);
         _authorizationCodeService
-            .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
+            .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
         var result = await _processor.ProcessAsync(request);
@@ -123,7 +123,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(granted);
         _authorizationCodeService
-            .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
+            .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
         var result = await _processor.ProcessAsync(request);
@@ -171,7 +171,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
         _authorizationCodeService
-            .Setup(s => s.GenerateAuthorizationCodeAsync(It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
+            .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
         return (await _processor.ProcessAsync(request) as AuthorizationError)?.Error;
@@ -354,6 +354,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
 
@@ -382,6 +383,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
 

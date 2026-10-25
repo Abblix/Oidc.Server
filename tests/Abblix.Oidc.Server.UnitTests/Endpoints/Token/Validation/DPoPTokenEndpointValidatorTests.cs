@@ -392,12 +392,12 @@ public class DPoPTokenEndpointValidatorTests
 
     private void SetupNonceIssue() =>
         _nonceService
-            .Setup(n => n.IssueAsync(It.IsAny<CancellationToken>()))
+            .Setup(n => n.IssueAsync(TestTenant.Matched, It.IsAny<CancellationToken>()))
             .ReturnsAsync(FreshNonce);
 
     private void SetupNonceValidate(string nonce, NonceValidationFailure? failure) =>
         _nonceService
-            .Setup(n => n.ValidateAsync(nonce, It.IsAny<CancellationToken>()))
+            .Setup(n => n.ValidateAsync(TestTenant.Matched, nonce, It.IsAny<CancellationToken>()))
             .ReturnsAsync(failure);
 
     private static void AssertProofRejected(OidcError? error, TokenValidationContext context)

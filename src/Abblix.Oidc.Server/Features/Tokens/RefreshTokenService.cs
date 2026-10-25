@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -22,7 +23,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -69,7 +69,7 @@ public class RefreshTokenService(
 		// Spending marks the token Used ("superseded"), not Revoked ("killed"). A later presentation of a
 		// superseded token is the replay signal that TokenStatusValidatorDecorator turns into a whole-family
 		// revocation (RFC 9700 section 4.14.2); a presentation losing the race to spend it is the same signal.
-		if (await tokenRegistry.TrySetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt))
+		if (await tokenRegistry.TrySetStatusAsync(tenantAccessor.CurrentTenant(), jwtId, JsonWebTokenStatus.Used, expiresAt))
 			return true;
 
 		await grantRevocation.RevokeAsync(payload);

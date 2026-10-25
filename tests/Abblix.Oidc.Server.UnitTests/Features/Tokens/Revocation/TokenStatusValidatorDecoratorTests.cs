@@ -65,12 +65,12 @@ public class TokenStatusValidatorDecoratorTests
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
             new GrantRevocation(_registry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor),
-            _inner.Object);
+            _inner.Object, tenantAccessor: SingleIssuer.Accessor);
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
         _cutoffs
             .Setup(c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                TestTenant.Matched, It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
 
         // A public client is what every test but the pairwise one carries, and for it the subject in the
@@ -89,17 +89,17 @@ public class TokenStatusValidatorDecoratorTests
     public async Task ValidateAsync_ReusedRefreshToken_RevokesFamilyAndReportsAlreadyUsed()
     {
         SetupInnerReturns(RefreshToken(GrantId));
-        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
         _registry
-            .Setup(r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, Expiry))
+            .Setup(r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, Expiry))
             .Returns(Task.CompletedTask);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
-        _registry.Verify(r => r.SetStatusAsync(GrantId, JsonWebTokenStatus.Revoked, Expiry), Times.Once);
+        _registry.Verify(r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, Expiry), Times.Once);
     }
 
     /// <summary>
@@ -112,13 +112,13 @@ public class TokenStatusValidatorDecoratorTests
     public async Task ValidateAsync_ActiveTokenOfRevokedFamily_IsRejected()
     {
         SetupInnerReturns(RefreshToken(GrantId));
-        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
-        _registry.Verify(r => r.GetStatusAsync(ActiveJwtId), Times.Never);
+        _registry.Verify(r => r.GetStatusAsync(It.IsAny<TenantDefinition>(), ActiveJwtId), Times.Never);
     }
 
     /// <summary>
@@ -130,8 +130,8 @@ public class TokenStatusValidatorDecoratorTests
     {
         var token = RefreshToken(GrantId);
         SetupInnerReturns(token);
-        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
@@ -148,14 +148,14 @@ public class TokenStatusValidatorDecoratorTests
     public async Task ValidateAsync_UsedTokenWithoutFamily_RejectsWithoutTouchingAnyFamily()
     {
         SetupInnerReturns(RefreshToken(grantId: null));
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
 
         var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
         _registry.Verify(
-            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            r => r.SetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -186,14 +186,14 @@ public class TokenStatusValidatorDecoratorTests
     {
         SetupInnerReturns(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-1));
-        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
         Assert.True(result.TryGetSuccess(out _));
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()), Times.Once);
+            c => c.GetCutoffAsync(TestTenant.Matched, RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -257,7 +257,7 @@ public class TokenStatusValidatorDecoratorTests
             }
         });
         SetupCutoff(RevocationScope.Subject, Subject, Expiry);
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
@@ -267,7 +267,7 @@ public class TokenStatusValidatorDecoratorTests
         // consulted at all. Without this the test passes over a decorator that ignores cutoffs entirely.
         _cutoffs.Verify(
             c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                It.IsAny<TenantDefinition>(), It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -322,8 +322,8 @@ public class TokenStatusValidatorDecoratorTests
     {
         SetupInnerReturns(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
-        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         var result = await _decorator.ValidateAsync(
             "opaque.id.jwt",
@@ -338,13 +338,13 @@ public class TokenStatusValidatorDecoratorTests
         // The store is not consulted at all, so this cannot pass by the cutoff happening to be absent.
         _cutoffs.Verify(
             c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                It.IsAny<TenantDefinition>(), It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)
         => _cutoffs
-            .Setup(c => c.GetCutoffAsync(scope, principal, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCutoffAsync(TestTenant.Matched, scope, principal, It.IsAny<CancellationToken>()))
             .ReturnsAsync(cutoff);
 
     private void SetupInnerReturns(JsonWebToken token)
@@ -407,7 +407,7 @@ public class TokenStatusValidatorDecoratorTests
             }
         });
         SetupCutoff(RevocationScope.Subject, Subject, Expiry);
-        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         var result = await _decorator.ValidateAsync("opaque.assertion.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 
@@ -417,7 +417,7 @@ public class TokenStatusValidatorDecoratorTests
         // so the question is not one to ask rather than one to answer negatively.
         _cutoffs.Verify(
             c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                It.IsAny<TenantDefinition>(), It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -510,7 +510,7 @@ public class TokenStatusValidatorDecoratorTests
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
             new GrantRevocation(_registry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor),
-            _inner.Object);
+            _inner.Object, tenantAccessor: SingleIssuer.Accessor);
 
         SetupInnerReturns(new JsonWebToken
         {

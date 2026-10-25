@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Moq;
 using Xunit;
 
@@ -36,7 +37,7 @@ public partial class AuthorizationRequestProcessorTests
 
         // Assert
         _sessionClients.Verify(
-            r => r.AddClientAsync(session.SessionId, request.ClientInfo.ClientId, It.IsAny<CancellationToken>()),
+            r => r.AddClientAsync(TestTenant.Matched, session.SessionId, request.ClientInfo.ClientId, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -54,11 +55,12 @@ public partial class AuthorizationRequestProcessorTests
 
         var order = new List<string>();
         _sessionClients
-            .Setup(r => r.AddClientAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.AddClientAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Callback(() => order.Add("recorded"))
             .Returns(Task.CompletedTask);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .Callback(() => order.Add("issued"))
@@ -82,7 +84,7 @@ public partial class AuthorizationRequestProcessorTests
         var session = CreateAuthSession();
         SetupSuccessfulAuthCodeFlow(request, session, CreateConsents());
         _sessionClients
-            .Setup(r => r.GetClientsAsync(session.SessionId, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetClientsAsync(TestTenant.Matched, session.SessionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(["recorded-earlier", request.ClientInfo.ClientId]);
 
         // Act
@@ -118,7 +120,7 @@ public partial class AuthorizationRequestProcessorTests
         // Assert
         Assert.IsType<ConsentRequired>(result);
         _sessionClients.Verify(
-            r => r.AddClientAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            r => r.AddClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 }

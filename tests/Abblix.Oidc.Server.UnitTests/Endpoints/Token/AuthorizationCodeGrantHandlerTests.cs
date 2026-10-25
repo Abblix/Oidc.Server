@@ -35,7 +35,7 @@ public class AuthorizationCodeGrantHandlerTests
 		_authCodeService = new Mock<IAuthorizationCodeService>(MockBehavior.Strict);
 
 		_handler = new AuthorizationCodeGrantHandler(
-			_authCodeService.Object);
+			_authCodeService.Object, tenantAccessor: SingleIssuer.Accessor);
 	}
 
 	/// <summary>
@@ -63,7 +63,7 @@ public class AuthorizationCodeGrantHandlerTests
 			"2026-06-11T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
 		var tokenRequest = new TokenRequest { Code = "abc" };
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
 					new AuthSession("123", "session1", authenticationTime, "ip"),
@@ -126,7 +126,7 @@ public class AuthorizationCodeGrantHandlerTests
 		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = "unexpected-verifier" };
 
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
 					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
@@ -149,7 +149,7 @@ public class AuthorizationCodeGrantHandlerTests
 		var tokenRequest = new TokenRequest { Code = "abc" };
 
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
 					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
@@ -168,7 +168,7 @@ public class AuthorizationCodeGrantHandlerTests
 		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = codeVerifier };
 
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
 					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),

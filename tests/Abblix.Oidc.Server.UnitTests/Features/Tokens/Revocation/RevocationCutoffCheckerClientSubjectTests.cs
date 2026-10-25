@@ -46,7 +46,7 @@ public class RevocationCutoffCheckerClientSubjectTests
     {
         _cutoffs
             .Setup(c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                TestTenant.Matched, It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
         _clients
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
@@ -74,7 +74,7 @@ public class RevocationCutoffCheckerClientSubjectTests
     private void SetupCutoff(string clientId, DateTimeOffset cutoff)
         => _cutoffs
             .Setup(c => c.GetCutoffAsync(
-                RevocationScope.ClientSubject,
+                TestTenant.Matched, RevocationScope.ClientSubject,
                 RevocationPrincipal.ClientSubject(clientId, Subject),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(cutoff);
@@ -175,7 +175,7 @@ public class RevocationCutoffCheckerClientSubjectTests
         Assert.Null(await Checker().CheckAsync(Token(clientId: null)));
 
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.ClientSubject, It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(It.IsAny<TenantDefinition>(), RevocationScope.ClientSubject, It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 }

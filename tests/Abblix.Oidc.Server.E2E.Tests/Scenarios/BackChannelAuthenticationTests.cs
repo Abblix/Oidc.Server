@@ -249,10 +249,9 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         // which is the level where a removal that stops happening actually costs something. It does not
         // pin the branch: hoisting the removal above the if, so it runs whether or not delivery
         // succeeded, leaves every test in this file green and only the unit test red.
-        using var tenant = TestTenant.Enter(host.Services);
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
-        Assert.Null(await storage.TryGetAsync(authRequestId));
+        Assert.Null(await storage.TryGetAsync(TestTenant.Of(host.Services), authRequestId));
     }
 
     [Fact]
@@ -322,10 +321,9 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
         // And the request does not sit there afterwards. A push client never polls, so a refused request
         // left in storage is an orphan nobody reads until it expires.
-        using var tenant = TestTenant.Enter(host.Services);
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
-        Assert.Null(await storage.TryGetAsync(authRequestId));
+        Assert.Null(await storage.TryGetAsync(TestTenant.Of(host.Services), authRequestId));
     }
 
     [Fact]
@@ -560,11 +558,10 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
     private static async Task AssertTheRequestCarriesWhatWasAskedFor(
         WebApplicationFactory<Program> host, string authenticationRequestId)
     {
-        using var tenant = TestTenant.Enter(host.Services);
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
 
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authenticationRequestId);
         Assert.NotNull(stored);
         Assert.NotEmpty(stored.RequestedAuthorizationDetails ?? []);
     }
@@ -587,7 +584,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
 
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authenticationRequestId);
         Assert.NotNull(stored);
 
         var session = new AuthSession(

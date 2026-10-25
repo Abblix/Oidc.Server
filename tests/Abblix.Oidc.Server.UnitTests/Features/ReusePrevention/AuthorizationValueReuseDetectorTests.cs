@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Caching.Distributed;
@@ -45,14 +46,31 @@ public class AuthorizationValueReuseDetectorTests
         var detector = CreateDetector(TimeSpan.FromMinutes(5));
 
         // A value not yet recorded is fresh; after recording, the same value is flagged as reused.
-        Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
-        await detector.RecordAsync("c1", CodeChallenge, "value-1");
-        Assert.True(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1"));
+        await detector.RecordAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1");
+        Assert.True(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1"));
 
         // A different value, a different kind, and a different client are all independent.
-        Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-2"));
-        Assert.False(await detector.IsReusedAsync("c1", Nonce, "value-1"));
-        Assert.False(await detector.IsReusedAsync("c2", CodeChallenge, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-2"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", Nonce, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c2", CodeChallenge, "value-1"));
+    }
+
+    /// <summary>
+    /// Each tenant records the values its clients present in a space of its own: a value one tenant's client used is
+    /// fresh at another tenant's client of the same id, and still reused at its own.
+    /// </summary>
+    [Fact]
+    public async Task AValueRecordedAtOneTenant_IsFreshAtAnother_AndReusedAtItsOwn()
+    {
+        var detector = CreateDetector(TimeSpan.FromMinutes(5));
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
+
+        await detector.RecordAsync(acme, "c1", CodeChallenge, "value-1");
+
+        Assert.False(await detector.IsReusedAsync(globex, "c1", CodeChallenge, "value-1"));
+        Assert.True(await detector.IsReusedAsync(acme, "c1", CodeChallenge, "value-1"));
     }
 
     [Fact]
@@ -60,10 +78,10 @@ public class AuthorizationValueReuseDetectorTests
     {
         var detector = CreateDetector(interval: null);
 
-        await detector.RecordAsync("c1", CodeChallenge, "value-1");
+        await detector.RecordAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1");
 
         // Nothing is recorded and nothing is flagged while detection is off.
-        Assert.False(await detector.IsReusedAsync("c1", CodeChallenge, "value-1"));
+        Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-1"));
     }
 
 }

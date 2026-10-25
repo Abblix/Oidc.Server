@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -29,11 +30,13 @@ public interface IRevocationCutoffRegistry
     /// <summary>
     /// The cutoff recorded for a principal, or <c>null</c> when none is.
     /// </summary>
+    /// <param name="tenant">The tenant the principal belongs to.</param>
     /// <param name="scope">Whether the principal is an end user or a single session.</param>
     /// <param name="principal">The subject identifier or the session identifier.</param>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <returns>The moment before which tokens for this principal are revoked.</returns>
     Task<DateTimeOffset?> GetCutoffAsync(
+        TenantDefinition tenant,
         RevocationScope scope,
         string principal,
         CancellationToken cancellationToken = default);
@@ -47,6 +50,7 @@ public interface IRevocationCutoffRegistry
     /// kept until the later of the two expiries, so a revocation repeated later keeps it longer either way.
     /// Implementations must decide this between concurrent callers, so of two racing writes the later cutoff stays.
     /// </remarks>
+    /// <param name="tenant">The tenant the principal belongs to.</param>
     /// <param name="scope">Whether the principal is an end user or a single session.</param>
     /// <param name="principal">The subject identifier or the session identifier.</param>
     /// <param name="cutoff">The moment before which tokens for this principal are revoked.</param>
@@ -55,6 +59,7 @@ public interface IRevocationCutoffRegistry
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the cutoff has been written.</returns>
     Task SetCutoffAsync(
+        TenantDefinition tenant,
         RevocationScope scope,
         string principal,
         DateTimeOffset cutoff,

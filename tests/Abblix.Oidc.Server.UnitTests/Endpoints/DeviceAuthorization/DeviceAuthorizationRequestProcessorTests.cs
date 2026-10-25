@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -105,8 +106,8 @@ public class DeviceAuthorizationRequestProcessorTests
     {
         var storage = new Mock<IDeviceAuthorizationStorage>();
         storage
-            .Setup(s => s.StoreAsync(It.IsAny<string>(), It.IsAny<StoredRequest>(), CodeLifetime))
-            .Callback<string, StoredRequest, TimeSpan>((deviceCode, _, _) => _storedUnder = deviceCode)
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<StoredRequest>(), CodeLifetime))
+            .Callback<TenantDefinition, string, StoredRequest, TimeSpan>((_, deviceCode, _, _) => _storedUnder = deviceCode)
             .Returns(Task.CompletedTask);
 
         var deviceCodes = new Mock<IDeviceCodeGenerator>();

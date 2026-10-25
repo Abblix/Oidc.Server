@@ -81,13 +81,13 @@ public class LostUpdateTests
         var storage = new LetsAnotherCallerIn(RealStorage(cache), RequestKey);
         var devices = DeviceStorageOver(storage.Storage);
 
-        await devices.StoreAsync(DeviceCode, NewRequest(), TimeSpan.FromMinutes(5));
+        await devices.StoreAsync(SingleIssuer.Tenant, DeviceCode, NewRequest(), TimeSpan.FromMinutes(5));
 
         // What a user approving on their phone does, timed to land inside the read the handler makes.
         storage.OnNextReadOf(async () =>
         {
             var approving = DeviceStorageOver(RealStorage(cache));
-            var (reference, request) = (await approving.TryGetByUserCodeAsync(UserCode))!.Value;
+            var (reference, request) = (await approving.TryGetByUserCodeAsync(SingleIssuer.Tenant, UserCode))!.Value;
             request.Status = DeviceAuthorizationStatus.Authorized;
 
             // The status and the grant together, which is what approval writes: a record saying approved
@@ -96,7 +96,7 @@ public class LostUpdateTests
                 new AuthSession("a-user", "a-session", _now, "device"),
                 new AuthorizationContext("a-client", ["openid"], null));
 
-            await approving.UpdateAsync(reference, request, TimeSpan.FromMinutes(5));
+            await approving.UpdateAsync(SingleIssuer.Tenant, reference, request, TimeSpan.FromMinutes(5));
         });
 
         // The real poll, through the handler the token endpoint calls.
@@ -109,7 +109,7 @@ public class LostUpdateTests
         Assert.Equal("a-client", grant.Context.ClientId);
 
         // And the code is spent, so a second poll cannot be answered with the same grant.
-        Assert.Null(await DeviceStorageOver(RealStorage(cache)).TryGetByDeviceCodeAsync(DeviceCode));
+        Assert.Null(await DeviceStorageOver(RealStorage(cache)).TryGetByDeviceCodeAsync(SingleIssuer.Tenant, DeviceCode));
     }
 
     /// <summary>
@@ -136,17 +136,17 @@ public class LostUpdateTests
     {
         var cache = RealCache();
         var firstAttemptKey = new EntityStorageKeyFactory()
-            .UserCodeRateLimitAttemptKey(UserCode, UserCodeRateLimiter.BeforeAnyVerification, attempt: 1);
+            .UserCodeRateLimitAttemptKey(SingleIssuer.Tenant, UserCode, UserCodeRateLimiter.BeforeAnyVerification, attempt: 1);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
 
         storage.OnNextClaimOf(() => LimiterOver(RealStorage(cache))
-            .RecordFailureAsync(UserCode, ClientIdentifier));
+            .RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
 
-        await LimiterOver(storage.Storage).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(storage.Storage).RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // With the pause starting at the second failure, being told to wait is the whole claim: one
         // failure on record would let the next attempt straight through.
-        var result = await LimiterOver(RealStorage(cache)).CheckAsync(UserCode, ClientIdentifier);
+        var result = await LimiterOver(RealStorage(cache)).CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var retryAfter = Assert.IsType<UserCodeRateLimited>(result);
         Assert.Equal(TimeSpan.FromSeconds(1), retryAfter.RetryAfter);
@@ -174,25 +174,25 @@ public class LostUpdateTests
     {
         var cache = RealCache();
         var firstAttemptKey = new EntityStorageKeyFactory()
-            .UserCodeRateLimitAttemptKey(UserCode, UserCodeRateLimiter.BeforeAnyVerification, attempt: 1);
+            .UserCodeRateLimitAttemptKey(SingleIssuer.Tenant, UserCode, UserCodeRateLimiter.BeforeAnyVerification, attempt: 1);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
 
         // Two failures are already on record, so the clearing has a range to walk.
-        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
-        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         storage.OnNextRemovalOf(() => LimiterOver(RealStorage(cache))
-            .RecordFailureAsync(UserCode, ClientIdentifier));
+            .RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
 
-        await LimiterOver(storage.Storage).RecordSuccessAsync(UserCode, ClientIdentifier);
+        await LimiterOver(storage.Storage).RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // Two failures since the code was verified, and the pause starts at the third: the next attempt
         // must be let through. A rung stranded above the cleared run makes these two count as three.
         var after = LimiterOver(RealStorage(cache), failuresBeforeBackoff: 3);
-        await after.RecordFailureAsync(UserCode, ClientIdentifier);
-        await after.RecordFailureAsync(UserCode, ClientIdentifier);
+        await after.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
+        await after.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        Assert.Null(await after.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await after.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     /// <summary>
@@ -224,35 +224,35 @@ public class LostUpdateTests
         // names. The two are not the same case: only here is there a record for a failing caller's own read
         // to go stale against, and a caller that put what it read back would then be restoring a life the
         // verification below has already replaced.
-        await LimiterOver(RealStorage(cache)).RecordSuccessAsync(UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         var named = await RealStorage(cache).GetAsync<StoredLife>(
-            keys.UserCodeRateLimitGenerationKey(UserCode), removeOnRetrieval: false);
+            keys.UserCodeRateLimitGenerationKey(SingleIssuer.Tenant, UserCode), removeOnRetrieval: false);
         var life = Assert.IsType<StoredLife>(named).Id;
 
         // Rung 2 rather than rung 1: the reader halves the range, so with two rungs taken it reads 16, 8,
         // 4 and 2, and never touches the first.
         var watched = armOnRung == 0
-            ? keys.UserCodeRateLimitGenerationKey(UserCode)
-            : keys.UserCodeRateLimitAttemptKey(UserCode, life, attempt: armOnRung);
+            ? keys.UserCodeRateLimitGenerationKey(SingleIssuer.Tenant, UserCode)
+            : keys.UserCodeRateLimitAttemptKey(SingleIssuer.Tenant, UserCode, life, attempt: armOnRung);
 
         Assert.NotEmpty(ordering);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), watched);
 
-        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
-        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         storage.OnNextReadOf(() => LimiterOver(RealStorage(cache))
-            .RecordSuccessAsync(UserCode, ClientIdentifier));
+            .RecordSuccessAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
 
-        await LimiterOver(storage.Storage).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(storage.Storage).RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
         // Two failures since the code was verified, at most, and the pause starts at the third.
         var after = LimiterOver(RealStorage(cache), failuresBeforeBackoff: 3);
-        await after.RecordFailureAsync(UserCode, ClientIdentifier);
-        await after.RecordFailureAsync(UserCode, ClientIdentifier);
+        await after.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
+        await after.RecordFailureAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier);
 
-        Assert.Null(await after.CheckAsync(UserCode, ClientIdentifier));
+        Assert.Null(await after.CheckAsync(SingleIssuer.Tenant, UserCode, ClientIdentifier));
     }
 
     private DeviceAuthorizationStorage DeviceStorageOver(IEntityStorage storage)
@@ -275,7 +275,7 @@ public class LostUpdateTests
             new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             new FakeTimeProvider(_now),
-            Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
+            Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }), tenantAccessor: SingleIssuer.Accessor);
 
     private UserCodeRateLimiter LimiterOver(IEntityStorage storage, int failuresBeforeBackoff = 2)
         => new(
@@ -303,8 +303,8 @@ public class LostUpdateTests
     private static IEntityStorageKeyFactory DeviceKeys()
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(TestTenant.Matched, DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(TestTenant.Matched, UserCode)).Returns(UserCodeKey);
         return keyFactory.Object;
     }
 

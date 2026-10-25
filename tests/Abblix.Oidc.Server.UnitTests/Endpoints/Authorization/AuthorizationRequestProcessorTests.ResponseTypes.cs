@@ -53,6 +53,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync(expectedCode);
@@ -220,6 +221,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync(expectedCode);
@@ -294,9 +296,10 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
-            .Callback<AuthorizedGrant, TimeSpan>((grant, _) => capturedGrant = grant)
+            .Callback<TenantDefinition, AuthorizedGrant, TimeSpan>((_, grant, _) => capturedGrant = grant)
             .ReturnsAsync("code");
 
         // Act
@@ -339,6 +342,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync(expectedCode);
@@ -440,6 +444,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync(expectedCode);
@@ -491,6 +496,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.Is<AuthorizedGrant>(g => g.AuthSession == session),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");
@@ -501,6 +507,7 @@ public partial class AuthorizationRequestProcessorTests
         // Assert
         _authorizationCodeService.Verify(
             s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.Is<AuthorizedGrant>(g => g.AuthSession == session),
                 request.ClientInfo.AuthorizationCodeExpiresIn),
             Times.Once);
@@ -529,6 +536,7 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
                 It.IsAny<AuthorizedGrant>(),
                 request.ClientInfo.AuthorizationCodeExpiresIn))
             .ReturnsAsync("code");

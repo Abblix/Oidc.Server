@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -22,24 +23,26 @@ public class TokenRegistry(IEntityStorage storage, IEntityStorageKeyFactory keyF
 	/// <summary>
 	/// Retrieves the current status of a JWT by its identifier.
 	/// </summary>
+	/// <param name="tenant">The tenant the token belongs to.</param>
 	/// <param name="jwtId">The identifier of the JWT whose status is being queried.</param>
 	/// <returns>A task that resolves to the status of the JWT if found; otherwise, a default status indicating
 	/// the token does not exist in the registry.</returns>
-	public Task<JsonWebTokenStatus> GetStatusAsync(string jwtId)
-		=> storage.GetAsync<JsonWebTokenStatus>(keyFactory.JsonWebTokenStatusKey(jwtId), false);
+	public Task<JsonWebTokenStatus> GetStatusAsync(TenantDefinition tenant, string jwtId)
+		=> storage.GetAsync<JsonWebTokenStatus>(keyFactory.JsonWebTokenStatusKey(tenant, jwtId), false);
 
 	/// <summary>
 	/// Sets or updates the status of a JWT by its identifier, with an expiration on the status entry.
 	/// </summary>
+	/// <param name="tenant">The tenant the token belongs to.</param>
 	/// <param name="jwtId">The identifier of the JWT whose status is being set.</param>
 	/// <param name="status">The status to assign to the JWT.</param>
 	/// <param name="expiresAt">The time at which the status record should expire.</param>
 	/// <returns>A task representing the asynchronous operation of setting the token's status.</returns>
-	public Task SetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
-		=> storage.SetAsync(keyFactory.JsonWebTokenStatusKey(jwtId), status, new () { AbsoluteExpiration = expiresAt });
+	public Task SetStatusAsync(TenantDefinition tenant, string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
+		=> storage.SetAsync(keyFactory.JsonWebTokenStatusKey(tenant, jwtId), status, new () { AbsoluteExpiration = expiresAt });
 
 	/// <inheritdoc />
-	public Task<bool> TrySetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
+	public Task<bool> TrySetStatusAsync(TenantDefinition tenant, string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
 		=> storage.TrySetIfAbsentAsync(
-			keyFactory.JsonWebTokenStatusKey(jwtId), status, new () { AbsoluteExpiration = expiresAt });
+			keyFactory.JsonWebTokenStatusKey(tenant, jwtId), status, new () { AbsoluteExpiration = expiresAt });
 }

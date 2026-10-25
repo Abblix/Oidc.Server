@@ -74,7 +74,7 @@ public class BackChannelRequestStorageTests
     {
         var (sut, request) = CreateSut();
 
-        Assert.Equal(RequestId, await sut.StoreAsync(request, TimeSpan.FromMinutes(5)));
+        Assert.Equal(RequestId, await sut.StoreAsync(SingleIssuer.Tenant, request, TimeSpan.FromMinutes(5)));
     }
 
     /// <summary>
@@ -86,10 +86,10 @@ public class BackChannelRequestStorageTests
     public async Task TryGetAsync_DoesNotConsumeTheRequest()
     {
         var (sut, request) = CreateSut();
-        var id = await sut.StoreAsync(request, TimeSpan.FromMinutes(5));
+        var id = await sut.StoreAsync(SingleIssuer.Tenant, request, TimeSpan.FromMinutes(5));
 
-        var first = await sut.TryGetAsync(id);
-        var second = await sut.TryGetAsync(id);
+        var first = await sut.TryGetAsync(SingleIssuer.Tenant, id);
+        var second = await sut.TryGetAsync(SingleIssuer.Tenant, id);
 
         Assert.NotNull(first);
         Assert.NotNull(second);
@@ -105,10 +105,10 @@ public class BackChannelRequestStorageTests
     public async Task TryGetAsync_ThenTryRemoveAsync_StillRedeems()
     {
         var (sut, request) = CreateSut();
-        var id = await sut.StoreAsync(request, TimeSpan.FromMinutes(5));
+        var id = await sut.StoreAsync(SingleIssuer.Tenant, request, TimeSpan.FromMinutes(5));
 
-        _ = await sut.TryGetAsync(id);
-        var redeemed = await sut.TryRemoveAsync(id);
+        _ = await sut.TryGetAsync(SingleIssuer.Tenant, id);
+        var redeemed = await sut.TryRemoveAsync(SingleIssuer.Tenant, id);
 
         Assert.NotNull(redeemed);
     }
@@ -122,10 +122,10 @@ public class BackChannelRequestStorageTests
     public async Task TryRemoveAsync_ConsumesTheRequest()
     {
         var (sut, request) = CreateSut();
-        var id = await sut.StoreAsync(request, TimeSpan.FromMinutes(5));
+        var id = await sut.StoreAsync(SingleIssuer.Tenant, request, TimeSpan.FromMinutes(5));
 
-        var redeemed = await sut.TryRemoveAsync(id);
-        var afterRemoval = await sut.TryGetAsync(id);
+        var redeemed = await sut.TryRemoveAsync(SingleIssuer.Tenant, id);
+        var afterRemoval = await sut.TryGetAsync(SingleIssuer.Tenant, id);
 
         Assert.NotNull(redeemed);
         Assert.Null(afterRemoval);

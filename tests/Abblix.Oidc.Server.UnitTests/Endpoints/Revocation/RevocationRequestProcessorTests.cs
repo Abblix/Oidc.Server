@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
@@ -38,7 +39,7 @@ public class RevocationRequestProcessorTests
         _clock = new FakeTimeProvider();
         _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _processor = new RevocationRequestProcessor(
-            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor), _clock);
+            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object, tenantAccessor: SingleIssuer.Accessor), _clock, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()
@@ -76,6 +77,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value))
@@ -89,6 +91,7 @@ public class RevocationRequestProcessorTests
         Assert.Equal(token.Payload.JwtId, revoked.TokenId);
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value),
@@ -134,6 +137,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
@@ -161,6 +165,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value))
@@ -172,6 +177,7 @@ public class RevocationRequestProcessorTests
         // Assert
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()),
@@ -192,6 +198,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
@@ -223,6 +230,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
@@ -253,10 +261,11 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
-            .Callback<string, JsonWebTokenStatus, DateTimeOffset>((_, _, exp) => capturedExpiresAt = exp)
+            .Callback<TenantDefinition, string, JsonWebTokenStatus, DateTimeOffset>((_, _, _, exp) => capturedExpiresAt = exp)
             .Returns(Task.CompletedTask);
 
         // Act
@@ -273,6 +282,7 @@ public class RevocationRequestProcessorTests
         Assert.Equal(expectedSeconds, actualSeconds);
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()),
@@ -358,6 +368,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
@@ -369,6 +380,7 @@ public class RevocationRequestProcessorTests
         // Assert
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 It.IsAny<JsonWebTokenStatus>(),
                 It.IsAny<DateTimeOffset>()),
@@ -393,6 +405,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 "token_1",
                 JsonWebTokenStatus.Revoked,
                 token1.Payload.ExpiresAt!.Value))
@@ -400,6 +413,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 "token_2",
                 JsonWebTokenStatus.Revoked,
                 token2.Payload.ExpiresAt!.Value))
@@ -415,10 +429,10 @@ public class RevocationRequestProcessorTests
         Assert.Equal("token_1", revoked1.TokenId);
         Assert.Equal("token_2", revoked2.TokenId);
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync("token_1", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
+            r => r.SetStatusAsync(TestTenant.Matched, "token_1", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync("token_2", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
+            r => r.SetStatusAsync(TestTenant.Matched, "token_2", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
     }
 }

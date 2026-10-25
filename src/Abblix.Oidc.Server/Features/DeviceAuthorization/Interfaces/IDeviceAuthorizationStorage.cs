@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 
 /// <summary>
@@ -17,26 +19,29 @@ public interface IDeviceAuthorizationStorage
     /// <summary>
     /// Stores a device authorization request with the specified device code.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="deviceCode">The unique device code identifier.</param>
     /// <param name="request">The device authorization request to store.</param>
     /// <param name="expiresIn">The duration after which the stored request will expire.</param>
     /// <returns>A task that completes when the request is stored.</returns>
-    Task StoreAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn);
+    Task StoreAsync(TenantDefinition tenant, string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn);
 
     /// <summary>
     /// Tries to retrieve a device authorization request by its device code.
     /// This is used by the client when polling the token endpoint.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>
     /// A task that returns the device authorization request if found; otherwise, null.
     /// </returns>
-    Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync(string deviceCode);
+    Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync(TenantDefinition tenant, string deviceCode);
 
     /// <summary>
     /// Tries to retrieve a device authorization request by its user code.
     /// This is used during user verification to look up the pending request.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="userCode">The user-friendly verification code.</param>
     /// <returns>
     /// A task that returns a reference to the record and the request if found; otherwise, null. The reference,
@@ -44,29 +49,35 @@ public interface IDeviceAuthorizationStorage
     /// nowhere a reader of the stored values would find it.
     /// </returns>
     Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync(
+        TenantDefinition tenant,
         string userCode);
 
     /// <summary>
     /// Tries to retrieve the device authorization request a reference names.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="reference">The reference <see cref="TryGetByUserCodeAsync"/> returned.</param>
-    /// <returns>A task that returns the request if it is still stored; otherwise, null.</returns>
-    Task<DeviceAuthorizationRequest?> TryGetAsync(DeviceAuthorizationReference reference);
+    /// <returns>A task that returns the request if it is still stored in the space of <paramref name="tenant"/>;
+    /// otherwise, null, for a reference another tenant was handed included.</returns>
+    Task<DeviceAuthorizationRequest?> TryGetAsync(TenantDefinition tenant, DeviceAuthorizationReference reference);
 
     /// <summary>
     /// Updates an existing device authorization request in storage, refreshing its cache entry with the
     /// caller-supplied remaining lifetime.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to; a reference another tenant was handed is written
+    /// nowhere.</param>
     /// <param name="reference">The reference <see cref="TryGetByUserCodeAsync"/> returned.</param>
     /// <param name="request">The updated device authorization request.</param>
     /// <param name="expiresIn">The remaining lifetime to apply as the cache TTL. The caller derives it from
     /// the request's fixed expiry (RFC 8628 section 3.2) so that repeated polling cannot extend the code.</param>
     /// <returns>A task that completes when the request is updated.</returns>
-    Task UpdateAsync(DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn);
+    Task UpdateAsync(TenantDefinition tenant, DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn);
 
     /// <summary>
     /// Removes a device authorization request from storage using its device code.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>
     /// A task that completes when the request is removed. Tidying the secondary user-code index is
@@ -74,13 +85,14 @@ public interface IDeviceAuthorizationStorage
     /// deciding otherwise must not become a fault where a grant error belongs. Removing the request
     /// itself is not guarded - that IS what was asked, so a refusal there raises.
     /// </returns>
-    Task RemoveAsync(string deviceCode);
+    Task RemoveAsync(TenantDefinition tenant, string deviceCode);
 
     /// <summary>
     /// Claims a device authorization request by its device code, deciding presence and removing it in one
     /// protocol, so that a caller told it removed the request is the only caller that can be told so. It
     /// narrows that window rather than closing it; the returns block below says what a false covers.
     /// </summary>
+    /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
     /// <returns>
@@ -97,5 +109,5 @@ public interface IDeviceAuthorizationStorage
     /// this method never checks against the record it removed.
     /// </para>
     /// </returns>
-    Task<bool> TryRemoveAsync(string deviceCode, string userCode);
+    Task<bool> TryRemoveAsync(TenantDefinition tenant, string deviceCode, string userCode);
 }

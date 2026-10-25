@@ -99,12 +99,12 @@ public class TokenStatusCoverageTests
         const string jwtId = "jti_1";
 
         var registry = new Mock<ITokenRegistry>(MockBehavior.Strict);
-        registry.Setup(r => r.GetStatusAsync(jwtId)).ReturnsAsync(status);
+        registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, jwtId)).ReturnsAsync(status);
 
         var cutoffs = new Mock<IRevocationCutoffRegistry>(MockBehavior.Strict);
         cutoffs
             .Setup(c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                TestTenant.Matched, It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
 
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
@@ -137,7 +137,7 @@ public class TokenStatusCoverageTests
                 clients.Object,
                 new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor),
             new GrantRevocation(registry.Object, clients.Object, tenantAccessor: SingleIssuer.Accessor),
-            inner.Object);
+            inner.Object, tenantAccessor: SingleIssuer.Accessor);
 
         var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
 

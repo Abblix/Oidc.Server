@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
@@ -30,7 +31,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -49,33 +49,43 @@ public class GrantRevocationTests
     private static readonly DateTimeOffset Start = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
-    /// A registry that forgets an entry once its expiry passes.
+    /// A registry that forgets an entry once its expiry passes, keeping each tenant's entries apart.
     /// </summary>
     private sealed class ExpiringRegistry(TimeProvider clock) : ITokenRegistry
     {
         private readonly Dictionary<string, (JsonWebTokenStatus Status, DateTimeOffset ExpiresAt)> _entries = new();
 
-        public Task<JsonWebTokenStatus> GetStatusAsync(string jwtId)
-            => Task.FromResult(_entries.TryGetValue(jwtId, out var entry) && clock.GetUtcNow() < entry.ExpiresAt
-                ? entry.Status
-                : JsonWebTokenStatus.Unknown);
+        public Task<JsonWebTokenStatus> GetStatusAsync(TenantDefinition tenant, string jwtId)
+            => Task.FromResult(
+                _entries.TryGetValue(TenantKey.Of(tenant, jwtId), out var entry) && clock.GetUtcNow() < entry.ExpiresAt
+                    ? entry.Status
+                    : JsonWebTokenStatus.Unknown);
 
-        public Task SetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
+        public Task SetStatusAsync(
+            TenantDefinition tenant,
+            string jwtId,
+            JsonWebTokenStatus status,
+            DateTimeOffset expiresAt)
         {
-            _entries[jwtId] = (status, expiresAt);
+            _entries[TenantKey.Of(tenant, jwtId)] = (status, expiresAt);
             return Task.CompletedTask;
         }
 
-        public async Task<bool> TrySetStatusAsync(string jwtId, JsonWebTokenStatus status, DateTimeOffset expiresAt)
+        public async Task<bool> TrySetStatusAsync(
+            TenantDefinition tenant,
+            string jwtId,
+            JsonWebTokenStatus status,
+            DateTimeOffset expiresAt)
         {
-            if (await GetStatusAsync(jwtId) != JsonWebTokenStatus.Unknown)
+            if (await GetStatusAsync(tenant, jwtId) != JsonWebTokenStatus.Unknown)
                 return false;
 
-            await SetStatusAsync(jwtId, status, expiresAt);
+            await SetStatusAsync(tenant, jwtId, status, expiresAt);
             return true;
         }
 
-        public DateTimeOffset ExpiryOf(string jwtId) => _entries[jwtId].ExpiresAt;
+        /// <summary>When the entry the test's tenant keeps under <paramref name="jwtId"/> expires.</summary>
+        public DateTimeOffset ExpiryOf(string jwtId) => _entries[TenantKey.Of(SingleIssuer.Tenant, jwtId)].ExpiresAt;
     }
 
     private readonly FakeTimeProvider _clock = new(Start);
@@ -109,7 +119,7 @@ public class GrantRevocationTests
             _clock, ids.Object, formatter.Object, _registry, grants,
             new RefreshTokenRotationPolicy(SingleIssuer.Accessor), new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options, SingleIssuer.LicensedCatalog, SingleIssuer.Accessor);
-        _processor = new RevocationRequestProcessor(_registry, grants, _clock);
+        _processor = new RevocationRequestProcessor(_registry, grants, _clock, tenantAccessor: SingleIssuer.Accessor);
 
         var inner = new Mock<IJsonWebTokenValidator>();
         inner
@@ -117,7 +127,7 @@ public class GrantRevocationTests
             .ReturnsAsync((string jwt, ValidationParameters _) => (Result<JsonWebToken, JwtValidationError>)_issued[jwt]);
         var cutoff = new Mock<IRevocationCutoffChecker>();
         cutoff.Setup(checker => checker.CheckAsync(It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
-        _decorator = new TokenStatusValidatorDecorator(_registry, cutoff.Object, grants, inner.Object);
+        _decorator = new TokenStatusValidatorDecorator(_registry, cutoff.Object, grants, inner.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private ClientInfo _client = ClientWith(RefreshTokenReusePolicy.Rotate);

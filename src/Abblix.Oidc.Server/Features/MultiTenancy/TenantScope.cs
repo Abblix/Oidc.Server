@@ -16,9 +16,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// message consumer.
 /// </summary>
 /// <remarks>
-/// Everything that keeps data per tenant asks the tenant accessor, which answers with the tenant of the innermost
-/// scope entered here and, outside any, with the tenant the request was resolved to; entered within a request, a
-/// scope takes precedence over it. The scope flows across awaits and ends when disposed:
+/// The tenant accessor answers with the tenant of the innermost scope entered here and, outside any, with the tenant
+/// the request was resolved to; entered within a request, a scope takes precedence over it. A service reading the
+/// tenant from the accessor therefore serves the tenant entered here. The scope flows across awaits and ends when disposed:
 /// <code>
 /// var tenant = await catalog.FindByIdAsync("acme", cancellationToken)
 ///     ?? throw new InvalidOperationException("No tenant is registered under the id acme.");

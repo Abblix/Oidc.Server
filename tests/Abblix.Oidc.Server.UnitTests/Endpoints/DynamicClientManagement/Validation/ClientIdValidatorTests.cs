@@ -62,7 +62,7 @@ public class ClientIdValidatorTests
 
         // Assert
         Assert.Null(result);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()), Times.Never);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ public class ClientIdValidatorTests
 
         // Assert
         Assert.Null(result);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()), Times.Never);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>

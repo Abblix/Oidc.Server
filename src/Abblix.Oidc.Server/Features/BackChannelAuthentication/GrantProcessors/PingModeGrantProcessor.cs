@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
@@ -22,7 +23,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// storage on retrieval, identically to poll mode, whose token response the same section defines.
 /// </summary>
 /// <param name="storage">Storage for backchannel authentication requests.</param>
-public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class PingModeGrantProcessor(IBackChannelRequestStorage storage,
+    ITenantAccessor tenantAccessor)
     : IBackChannelGrantProcessor
 {
     /// <summary>
@@ -46,7 +49,7 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
+        var removedRequest = await storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
 
         if (removedRequest == null)
         {

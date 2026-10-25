@@ -87,14 +87,14 @@ public class UserCodeVerificationServiceRateLimitTests
         var reference = new DeviceAuthorizationReference("device-record");
         var deviceStorage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         deviceStorage
-            .Setup(s => s.TryGetByUserCodeAsync(TheCode))
+            .Setup(s => s.TryGetByUserCodeAsync(TestTenant.Matched, TheCode))
             .ReturnsAsync(request == null ? null : (reference, request));
 
         // Approval re-reads the record by its reference before it writes, so without this the approval path refuses for
         // a reason having nothing to do with the limits - and a row about the limits could not tell the two
         // apart. Measured: with this absent, removing the limiter from approval changed no test at all.
         deviceStorage
-            .Setup(s => s.TryGetAsync(reference))
+            .Setup(s => s.TryGetAsync(TestTenant.Matched, reference))
             .ReturnsAsync(request);
 
         var requestInfo = new Mock<IRequestInfoProvider>(MockBehavior.Loose);
@@ -116,7 +116,7 @@ public class UserCodeVerificationServiceRateLimitTests
                 options),
             new UserCodeNormalizer(options),
             requestInfo.Object,
-            new FakeTimeProvider(_now));
+            new FakeTimeProvider(_now), tenantAccessor: SingleIssuer.Accessor);
     }
 
     private DeviceAuthorizationRequest PendingCode() =>
@@ -370,7 +370,7 @@ public class UserCodeVerificationServiceRateLimitTests
             Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
 
         for (var i = 0; i < 5; i++)
-            await limiter.RecordFailureAsync(TheCode, Address);
+            await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
 
         Assert.IsType<InvalidUserCode>(await ServiceOver(PendingCode()).VerifyAsync("1234-5678"));
     }
@@ -431,15 +431,15 @@ public class UserCodeVerificationServiceRateLimitTests
             new FakeTimeProvider(_now),
             Options.Create(new OidcOptions { DeviceAuthorization = deviceOptions }));
 
-        await limiter.RecordFailureAsync(TheCode, Address);
-        await limiter.RecordFailureAsync(TheCode, Address);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
 
         Assert.IsType<ValidUserCode>(
             await ServiceOver(PendingCode(), configure: PauseAtThree).VerifyAsync(TheCode));
 
-        await limiter.RecordFailureAsync(TheCode, Address);
+        await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
 
-        Assert.Null(await limiter.CheckAsync(TheCode, Address));
+        Assert.Null(await limiter.CheckAsync(SingleIssuer.Tenant, TheCode, Address));
     }
 
     /// <summary>
@@ -580,7 +580,7 @@ public class UserCodeVerificationServiceRateLimitTests
             new FakeTimeProvider(_now),
             Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
 
-        var refusal = Assert.IsType<UserCodeRateLimited>(await limiter.CheckAsync(TheCode, Address));
+        var refusal = Assert.IsType<UserCodeRateLimited>(await limiter.CheckAsync(SingleIssuer.Tenant, TheCode, Address));
         Assert.True(refusal.AboutThisCode);
     }
 

@@ -11,8 +11,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -73,7 +73,7 @@ public class DeviceAuthorizationRequestProcessor(
             AuthorizationDetails = request.AuthorizationDetails,
         };
 
-        await storage.StoreAsync(deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
+        await storage.StoreAsync(tenantAccessor.CurrentTenant(), deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
 
         return new DeviceAuthorizationResponse
         {

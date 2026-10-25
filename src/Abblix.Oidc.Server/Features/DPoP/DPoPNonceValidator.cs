@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Nonces;
 
 namespace Abblix.Oidc.Server.Features.DPoP;
@@ -18,8 +19,15 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// <see cref="LogNonceChallengeIssued"/> to attribute the «challenge issued» event to
 /// their own endpoint <c>EventId</c>.
 /// </summary>
-public abstract class DPoPNonceValidator(INonceService nonceService)
+public abstract class DPoPNonceValidator(
+    INonceService nonceService,
+    ITenantAccessor tenantAccessor)
 {
+    /// <summary>
+    /// The tenant the request is served at, whose nonces the proof is judged against.
+    /// </summary>
+    protected TenantDefinition CurrentTenant => tenantAccessor.CurrentTenant();
+
     /// <summary>
     /// Enforces the nonce policy on <paramref name="proof"/>. Returns <c>null</c> when
     /// the proof carries an acceptable nonce; otherwise mints a fresh nonce, fires
@@ -33,7 +41,7 @@ public abstract class DPoPNonceValidator(INonceService nonceService)
         if (nonceClaim is null)
             return await UseDPoPNonce();
 
-        var failure = await nonceService.ValidateAsync(nonceClaim);
+        var failure = await nonceService.ValidateAsync(CurrentTenant, nonceClaim);
         if (failure is not null)
             return await UseDPoPNonce();
 
@@ -42,7 +50,7 @@ public abstract class DPoPNonceValidator(INonceService nonceService)
 
     private async Task<UseDPoPNonceError> UseDPoPNonce()
     {
-        var nonce = await nonceService.IssueAsync();
+        var nonce = await nonceService.IssueAsync(CurrentTenant);
         LogNonceChallengeIssued();
         return new UseDPoPNonceError(nonce);
     }

@@ -156,7 +156,7 @@ public partial class BackChannelAuthenticationTests
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
 
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authenticationRequestId);
         Assert.NotNull(stored);
 
         var session = stored.AuthorizedGrant.AuthSession with { AuthenticationTime = sessionBegan };

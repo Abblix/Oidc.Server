@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
 
@@ -26,11 +27,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="cutoffChecker">Decides whether a revocation cutoff reaches this token.</param>
 /// <param name="grantRevocation">Revokes the grant of a replayed refresh token.</param>
 /// <param name="innerValidator">The inner validator for initial token validation.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class TokenStatusValidatorDecorator(
 	ITokenRegistry tokenRegistry,
 	IRevocationCutoffChecker cutoffChecker,
 	GrantRevocation grantRevocation,
-	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
+	IJsonWebTokenValidator innerValidator,
+	ITenantAccessor tenantAccessor) : IJsonWebTokenValidator
 {
 	/// <summary>
 	/// Forwards the set of JWS signing algorithms accepted by the inner validator (RFC 7518 section 3.1
@@ -114,7 +117,7 @@ public class TokenStatusValidatorDecorator(
 		if (token.Payload is not { JwtId: not null, GrantId: { } grantId })
 			return null;
 
-		var status = await tokenRegistry.GetStatusAsync(grantId);
+		var status = await tokenRegistry.GetStatusAsync(tenantAccessor.CurrentTenant(), grantId);
 		return status switch
 		{
 			JsonWebTokenStatus.Revoked => new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked"),
@@ -131,7 +134,7 @@ public class TokenStatusValidatorDecorator(
 		if (token.Payload.JwtId is not { } jwtId)
 			return null;
 
-		switch (await tokenRegistry.GetStatusAsync(jwtId))
+		switch (await tokenRegistry.GetStatusAsync(tenantAccessor.CurrentTenant(), jwtId))
 		{
 			case JsonWebTokenStatus.Used:
 				// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,

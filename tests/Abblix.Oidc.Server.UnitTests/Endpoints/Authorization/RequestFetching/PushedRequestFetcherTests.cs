@@ -71,9 +71,9 @@ public class PushedRequestFetcherTests
         var pageUri = new Uri(RequestUrn.Prefix + "page");
         var originUri = new Uri(RequestUrn.Prefix + "pushed");
         _storage
-            .Setup(s => s.TryGetAsync(pageUri, false))
+            .Setup(s => s.TryGetAsync(TestTenant.Matched, pageUri, false))
             .ReturnsAsync(CreateRequest() with { OriginRequestUri = originUri });
-        _consumedRequestUris.Setup(r => r.IsConsumedAsync(originUri)).ReturnsAsync(true);
+        _consumedRequestUris.Setup(r => r.IsConsumedAsync(TestTenant.Matched, originUri)).ReturnsAsync(true);
 
         var result = await CreateFetcher().FetchAsync(CreateRequest() with { RequestUri = pageUri });
 
@@ -121,7 +121,7 @@ public class PushedRequestFetcherTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()), Times.Never);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>

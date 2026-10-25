@@ -186,7 +186,7 @@ public class AuthServiceJwtFormatterTests
 
         Assert.Equal(EncodedJwt, result);
         Assert.Null(capturedEncryptionKey);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()), Times.Never);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
     }
 
     /// <summary>
@@ -215,7 +215,7 @@ public class AuthServiceJwtFormatterTests
         await _formatter.FormatAsync(token, disabledButConfigured);
 
         Assert.Null(capturedEncryptionKey);
-        _keysProvider.Verify(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()), Times.Never);
+        _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
     }
 
     // Encryption

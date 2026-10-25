@@ -8,11 +8,11 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -215,6 +215,7 @@ public class AuthorizationResponseFormatter(
     private async Task<ActionResult> RedirectAsync(Uri uri, CoreModel.AuthorizationRequest request)
     {
         var response = await authorizationRequestStorage.StoreAsync(
+            tenantAccessor.CurrentTenant(),
             request,
             options.Value.AuthenticationRequestExpiresIn);
 

@@ -6,9 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -49,8 +51,8 @@ public class DeviceAuthorizationStorageTests
     public DeviceAuthorizationStorageTests()
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(TestTenant.Matched, DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(TestTenant.Matched, UserCode)).Returns(UserCodeKey);
 
         _serializer.Setup(s => s.Serialize(It.IsAny<DeviceAuthorizationRequest>())).Returns([1, 2, 3]);
         _serializer.Setup(s => s.Serialize(It.IsAny<string>())).Returns([4, 5, 6]);
@@ -83,7 +85,7 @@ public class DeviceAuthorizationStorageTests
     {
         var request = new DeviceAuthorizationRequest("client", ["openid"], null, UserCode);
 
-        await _storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(15));
+        await _storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, request, TimeSpan.FromMinutes(15));
 
         Assert.Equal(_now + TimeSpan.FromMinutes(15), request.ExpiresAt);
     }
@@ -105,7 +107,8 @@ public class DeviceAuthorizationStorageTests
                 (_, _, opts, _) => captured = opts)
             .Returns(Task.CompletedTask);
 
-        await _storage.UpdateAsync(new DeviceAuthorizationReference(RequestKey), request, TimeSpan.FromMinutes(3));
+        var reference = new DeviceAuthorizationReference(RequestKey) { Space = TenantKey.SpaceOf(SingleIssuer.Tenant) };
+        await _storage.UpdateAsync(SingleIssuer.Tenant, reference, request, TimeSpan.FromMinutes(3));
 
         Assert.NotNull(captured);
         Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
@@ -142,7 +145,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.True(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
         // And the code really is gone, which is what makes the answer true rather than merely reassuring.
         Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
@@ -203,7 +206,7 @@ public class DeviceAuthorizationStorageTests
         await cache.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
         await cache.SetAsync(UserCodeKey, [4, 5, 6], new(), TestContext.Current.CancellationToken);
 
-        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.True(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
         Assert.Null(await cache.GetAsync(RequestKey, TestContext.Current.CancellationToken));
         Assert.Null(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
@@ -221,7 +224,7 @@ public class DeviceAuthorizationStorageTests
 
         await cache.SetAsync(UserCodeKey, [4, 5, 6], new(), TestContext.Current.CancellationToken);
 
-        Assert.False(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.False(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
         Assert.NotNull(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
     }
@@ -254,7 +257,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        await storage.RemoveAsync(DeviceCode);
+        await storage.RemoveAsync(SingleIssuer.Tenant, DeviceCode);
 
         Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
         Assert.Equal(1, failing.Attempts);
@@ -285,7 +288,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        await storage.RemoveAsync(DeviceCode);
+        await storage.RemoveAsync(SingleIssuer.Tenant, DeviceCode);
 
         var entry = Assert.Single(log.Entries);
         Assert.Equal(LogLevel.Warning, entry.Level);
@@ -312,7 +315,7 @@ public class DeviceAuthorizationStorageTests
 
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(DeviceCode));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(SingleIssuer.Tenant, DeviceCode));
     }
 
     /// <summary>
@@ -336,22 +339,22 @@ public class DeviceAuthorizationStorageTests
         var storage = StorageOver(entities);
         var request = NewRequest(_now.AddMinutes(10));
 
-        await storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(10));
+        await storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, request, TimeSpan.FromMinutes(10));
 
-        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(SingleIssuer.Tenant, DeviceCode));
 
-        var found = await storage.TryGetByUserCodeAsync(UserCode);
+        var found = await storage.TryGetByUserCodeAsync(SingleIssuer.Tenant, UserCode);
         Assert.NotNull(found);
         Assert.Equal(RequestKey, found.Value.Reference.Key);
         Assert.Equal(UserCode, found.Value.Request.UserCode);
 
         // Twice, because the lookup must not consume what it finds: the verification service makes this
         // call to show the confirmation page and again to act on the answer, with the same user code.
-        Assert.NotNull(await storage.TryGetByUserCodeAsync(UserCode));
+        Assert.NotNull(await storage.TryGetByUserCodeAsync(SingleIssuer.Tenant, UserCode));
 
-        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+        Assert.True(await storage.TryRemoveAsync(SingleIssuer.Tenant, DeviceCode, UserCode));
 
-        Assert.Null(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+        Assert.Null(await storage.TryGetByDeviceCodeAsync(SingleIssuer.Tenant, DeviceCode));
 
         // The index entry itself, read straight from the store. Asking by user code again would answer
         // null as soon as the RECORD went, whatever became of the index - the lookup follows one to the
@@ -379,12 +382,156 @@ public class DeviceAuthorizationStorageTests
             new EntityStorageKeyFactory(),
             new FakeTimeProvider(_now));
 
-        await storage.StoreAsync(DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        await storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
 
         var deviceCode = System.Text.Encoding.UTF8.GetBytes(DeviceCode);
         Assert.NotEmpty(cache.Written);
         Assert.All(cache.Written, value => Assert.Equal(-1, value.AsSpan().IndexOf(deviceCode)));
     }
+
+    /// <summary>
+    /// A reference found at one tenant names that tenant's record alone: another tenant handed it reads nothing and
+    /// writes nothing through it.
+    /// </summary>
+    [Fact]
+    public async Task AReferenceOfOneTenant_ReadsAndWritesNothingAtAnother()
+    {
+        var acme = Tenant("acme");
+        var globex = Tenant("globex");
+        var storage = RealStorage(new EntityStorageKeyFactory());
+        await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        var (reference, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
+
+        Assert.Null(await storage.TryGetAsync(globex, reference));
+
+        await storage.UpdateAsync(
+            globex,
+            reference,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(request.Status, (await storage.TryGetAsync(acme, reference))!.Status);
+    }
+
+    /// <summary>
+    /// A tenant whose id begins with another's, or the same tenant created again, is another tenant: a reference
+    /// found at one of them reads and writes nothing at the other.
+    /// </summary>
+    [Theory]
+    [InlineData("acme", "", "acme2", "")]
+    [InlineData("acme", "", "acme-eu", "")]
+    [InlineData("acme", "", "acme", "2")]
+    [InlineData("acme2", "", "acme", "")]
+    [InlineData("Acme", "", "acme", "")]
+    public async Task AReferenceOfOneTenant_ReadsAndWritesNothingAtATenantNamedAlike(
+        string readerId, string readerGeneration, string ownerId, string ownerGeneration)
+    {
+        var reader = Tenant(readerId, readerGeneration);
+        var owner = Tenant(ownerId, ownerGeneration);
+        var storage = RealStorage(new EntityStorageKeyFactory());
+        await storage.StoreAsync(owner, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        var (reference, request) = (await storage.TryGetByUserCodeAsync(owner, UserCode))!.Value;
+
+        Assert.Null(await storage.TryGetAsync(reader, reference));
+
+        await storage.UpdateAsync(
+            reader,
+            reference,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(DeviceAuthorizationStatus.Pending, (await storage.TryGetAsync(owner, reference))!.Status);
+    }
+
+    /// <summary>
+    /// A host's key factory may put its own namespace on the keys, and the device flow works under it: the record is
+    /// found by the device code and by the user code, and a decision on it is written.
+    /// </summary>
+    [Theory]
+    [InlineData("host:{0}:{1}")]
+    [InlineData("host:tenant:{0}:{1}")]
+    [InlineData("{0}:{1}")]
+    public async Task UnderAHostsOwnKeys_TheDeviceFlowFindsAndDecidesItsRecord(string keyShape)
+    {
+        var acme = Tenant("acme");
+        var keys = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+        keys.Setup(f => f.DeviceAuthorizationRequestKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey(keyShape, tenant, "device:request:" + code));
+        keys.Setup(f => f.DeviceAuthorizationUserCodeKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey(keyShape, tenant, "device:user-code:" + code));
+        var storage = RealStorage(keys.Object);
+        await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+
+        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(acme, DeviceCode));
+        var (reference, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
+
+        await storage.UpdateAsync(
+            acme,
+            reference,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(DeviceAuthorizationStatus.Denied, (await storage.TryGetByDeviceCodeAsync(acme, DeviceCode))!.Status);
+    }
+
+    /// <summary>
+    /// A reference the storage did not issue reaches nothing, even one carrying the very key a record is stored
+    /// under and handed to the tenant that record belongs to.
+    /// </summary>
+    [Fact]
+    public async Task AReferenceBuiltFromAKeyAlone_ReadsAndWritesNothing()
+    {
+        var acme = Tenant("acme");
+        var storage = RealStorage(new EntityStorageKeyFactory());
+        await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        var (found, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
+        var built = new DeviceAuthorizationReference(found.Key);
+
+        Assert.Null(await storage.TryGetAsync(acme, built));
+
+        await storage.UpdateAsync(
+            acme,
+            built,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(DeviceAuthorizationStatus.Pending, (await storage.TryGetAsync(acme, found))!.Status);
+    }
+
+    /// <summary>
+    /// A tenant <see cref="TenantKey.SpaceOf"/> refuses is refused before anything is written, even under a host's key
+    /// factory that builds a key for it: no request and no user code is left behind that no device code leads to.
+    /// </summary>
+    [Fact]
+    public async Task UnderAHostsOwnKeys_ATenantTheServerCannotName_LeavesNothingStored()
+    {
+        var unnamed = Tenant("a:b");
+        var keys = new Mock<IEntityStorageKeyFactory>(MockBehavior.Strict);
+        keys.Setup(f => f.DeviceAuthorizationRequestKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey("host:{0}:{1}", tenant, "device:request:" + code));
+        keys.Setup(f => f.DeviceAuthorizationUserCodeKey(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((tenant, code) => HostKey("host:{0}:{1}", tenant, "device:user-code:" + code));
+        var entities = new DistributedCacheStorage(RealCache(), new ProtobufSerializer());
+        var storage = RealStorage(keys.Object, entities);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => storage.StoreAsync(unnamed, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10)));
+
+        Assert.Null(await entities.GetAsync<DeviceAuthorizationRequest>(
+            HostKey("host:{0}:{1}", unnamed, "device:request:" + DeviceCode), removeOnRetrieval: false));
+        Assert.Null(await entities.GetAsync<string>(
+            HostKey("host:{0}:{1}", unnamed, "device:user-code:" + UserCode), removeOnRetrieval: false));
+    }
+
+    private static string HostKey(string shape, TenantDefinition tenant, string key)
+        => string.Format(CultureInfo.InvariantCulture, shape, tenant.Id, key);
+
+    private static TenantDefinition Tenant(string id, string generation = "")
+        => new() { Id = id, Issuer = new Uri("https://auth.example.com/" + id), Generation = generation };
+
+    private DeviceAuthorizationStorage RealStorage(IEntityStorageKeyFactory keys, IEntityStorage? entities = null)
+        => new(
+            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
+            TestFingerprints.Instance,
+            entities ?? new DistributedCacheStorage(RealCache(), new ProtobufSerializer()),
+            keys,
+            new FakeTimeProvider(_now));
 
     private static IDistributedCache RealCache()
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
@@ -400,8 +547,8 @@ public class DeviceAuthorizationStorageTests
         IEntityStorage entities, RecordingLoggerFactory? log = null)
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(TestTenant.Matched, DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(TestTenant.Matched, UserCode)).Returns(UserCodeKey);
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
