@@ -18,14 +18,13 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// Validates the scopes requested in a device authorization request.
 /// </summary>
 /// <param name="scopeManager">The service for managing and validating scopes.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAccessor) : IDeviceAuthorizationContextValidator
+public class ScopeValidator(IScopeManager scopeManager) : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
-        => Task.FromResult(Validate(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
+        => Task.FromResult(Validate(tenant, context));
 
-    private OidcError? Validate(DeviceAuthorizationValidationContext context)
+    private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         var scopes = context.Request.Scope ?? [];
 
@@ -37,7 +36,7 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
                 "This client is not allowed to request for offline access");
         }
 
-        if (!scopeManager.Validate(tenantAccessor.CurrentTenant(), 
+        if (!scopeManager.Validate(tenant, 
                 scopes,
                 context.Resources,
                 context.ClientInfo.AllowedScopes,

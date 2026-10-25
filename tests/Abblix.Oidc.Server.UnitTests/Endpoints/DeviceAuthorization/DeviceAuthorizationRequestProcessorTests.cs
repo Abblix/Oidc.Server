@@ -133,10 +133,9 @@ public class DeviceAuthorizationRequestProcessorTests
             deviceCodes.Object,
             userCodes.Object,
             options.Object,
-            new FakeTimeProvider(Now),
-            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri(issuer) }));
+            new FakeTimeProvider(Now));
 
-        var result = await processor.ProcessAsync(new ValidDeviceAuthorizationRequest(
+        var result = await processor.ProcessAsync(new TestIssuer { Issuer = new Uri(issuer) }.ToTenant(), new ValidDeviceAuthorizationRequest(
             new DeviceAuthorizationValidationContext(
                 new WireRequest { Scope = [Scopes.OpenId] },
                 new ClientRequest { ClientId = ClientId })

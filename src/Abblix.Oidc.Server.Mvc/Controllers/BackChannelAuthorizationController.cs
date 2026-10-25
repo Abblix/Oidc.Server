@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -126,11 +127,12 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     public async Task<ActionResult> DeviceAuthorizationAsync(
         [FromServices] IDeviceAuthorizationHandler handler,
         [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] DeviceAuthorizationRequest deviceAuthorizationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
-        var response = await handler.HandleAsync(coreDeviceAuthorizationRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreDeviceAuthorizationRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreDeviceAuthorizationRequest, response);
     }
 }

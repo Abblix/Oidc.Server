@@ -95,7 +95,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new DeviceAuthorizationValidationContext(
                     new DeviceAuthorizationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
-                var error = await new DeviceResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
+                var error = await new DeviceResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
 

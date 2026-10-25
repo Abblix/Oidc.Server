@@ -17,22 +17,21 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// Validates the resources requested in a device authorization request.
 /// </summary>
 /// <param name="resourceManager">The service for managing and validating resources.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor tenantAccessor)
+public class ResourceValidator(IResourceManager resourceManager)
     : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
-        => Task.FromResult(Validate(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
+        => Task.FromResult(Validate(tenant, context));
 
-    private OidcError? Validate(DeviceAuthorizationValidationContext context)
+    private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         var request = context.Request;
         var requested = request.Resources;
 
         if (requested is not { Length: > 0 })
         {
-            if (!ResourceInference.TryInfer(tenantAccessor.CurrentTenant(), request.Scope ?? [], out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenant, request.Scope ?? [], out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
             if (inferred is null)
@@ -41,7 +40,7 @@ public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor
             requested = [inferred];
         }
 
-        if (!resourceManager.Validate(tenantAccessor.CurrentTenant(), 
+        if (!resourceManager.Validate(tenant, 
                 requested,
                 request.Scope ?? [],
                 out var resources,

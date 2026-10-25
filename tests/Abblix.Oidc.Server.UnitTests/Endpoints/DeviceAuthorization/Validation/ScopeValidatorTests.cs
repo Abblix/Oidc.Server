@@ -41,7 +41,7 @@ public class ScopeValidatorTests
                 definition = new ScopeDefinition(scope);
                 return true;
             }));
-        var validator = new ScopeValidator(scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
+        var validator = new ScopeValidator(scopeManager.Object);
         var context = new DeviceAuthorizationValidationContext(
             new DeviceAuthorizationRequest { Scope = [Scopes.OpenId, Scopes.OfflineAccess] },
             new ClientRequest { ClientId = "device-client" })
@@ -49,7 +49,7 @@ public class ScopeValidatorTests
             ClientInfo = new ClientInfo("device-client") { OfflineAccess = offlineAccess },
         };
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(error, result?.Error);
     }
