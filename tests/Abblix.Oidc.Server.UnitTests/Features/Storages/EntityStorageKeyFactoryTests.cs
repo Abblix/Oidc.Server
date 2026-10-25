@@ -28,9 +28,9 @@ public class EntityStorageKeyFactoryTests
     private static readonly IEntityStorageKeyFactory Factory = new EntityStorageKeyFactory();
 
     /// <summary>
-    /// Every key the factory builds is in the space of the tenant it is built for, so two tenants storing the same
-    /// entity never meet in the one storage they share. Each method of the factory is asked, a method added later
-    /// included.
+    /// Every key the factory builds is in the space of the tenant it is built for, once, so two tenants storing the
+    /// same entity never meet in the one storage they share, and what follows the space is the same for every tenant.
+    /// Each method of the factory is asked, a method added later included.
     /// </summary>
     [Fact]
     public void EveryKey_IsInTheSpaceOfTheTenantItIsBuiltFor()
@@ -48,6 +48,9 @@ public class EntityStorageKeyFactoryTests
 
             Assert.StartsWith(TenantKey.Of(acme, string.Empty), atAcme, StringComparison.Ordinal);
             Assert.StartsWith(TenantKey.Of(globex, string.Empty), atGlobex, StringComparison.Ordinal);
+            Assert.Equal(
+                atAcme[TenantKey.Of(acme, string.Empty).Length..],
+                atGlobex[TenantKey.Of(globex, string.Empty).Length..]);
         }
     }
 

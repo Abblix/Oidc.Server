@@ -64,7 +64,9 @@ public partial class DeviceAuthorizationStorage(
 
     /// <inheritdoc />
     public Task<DeviceAuthorizationRequest?> TryGetAsync(TenantDefinition tenant, DeviceAuthorizationReference reference)
-        => storage.GetAsync<DeviceAuthorizationRequest>(reference.Key, removeOnRetrieval: false);
+        => IsOf(tenant, reference)
+            ? storage.GetAsync<DeviceAuthorizationRequest>(reference.Key, removeOnRetrieval: false)
+            : Task.FromResult<DeviceAuthorizationRequest?>(null);
 
     /// <inheritdoc />
     public async Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request)?>
@@ -88,6 +90,9 @@ public partial class DeviceAuthorizationStorage(
     /// <inheritdoc />
     public Task UpdateAsync(TenantDefinition tenant, DeviceAuthorizationReference reference, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
+        if (!IsOf(tenant, reference))
+            return Task.CompletedTask;
+
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
         // record's fixed ExpiresAt (RFC 8628 section 3.2) and gates on expiry first, so polling cannot extend the
         // code and the TTL here is always positive - no second clock read that could race the expiry boundary
@@ -99,6 +104,13 @@ public partial class DeviceAuthorizationStorage(
 
     private DeviceAuthorizationReference ReferenceTo(TenantDefinition tenant, string deviceCode)
         => new(keyFactory.DeviceAuthorizationRequestKey(tenant, deviceCode));
+
+    /// <summary>
+    /// Whether <paramref name="reference"/> names a record in the space of <paramref name="tenant"/>: the key it carries
+    /// was built for one tenant, and another tenant reads and writes none of that tenant's records through it.
+    /// </summary>
+    private static bool IsOf(TenantDefinition tenant, DeviceAuthorizationReference reference)
+        => reference.Key.StartsWith(TenantKey.Of(tenant, string.Empty), StringComparison.Ordinal);
 
     /// <inheritdoc />
     public async Task RemoveAsync(TenantDefinition tenant, [Credential] string deviceCode)

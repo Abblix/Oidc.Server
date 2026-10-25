@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Caching.Distributed;
@@ -53,6 +54,23 @@ public class AuthorizationValueReuseDetectorTests
         Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", CodeChallenge, "value-2"));
         Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c1", Nonce, "value-1"));
         Assert.False(await detector.IsReusedAsync(SingleIssuer.Tenant, "c2", CodeChallenge, "value-1"));
+    }
+
+    /// <summary>
+    /// Each tenant records the values its clients present in a space of its own: a value one tenant's client used is
+    /// fresh at another tenant's client of the same id, and still reused at its own.
+    /// </summary>
+    [Fact]
+    public async Task AValueRecordedAtOneTenant_IsFreshAtAnother_AndReusedAtItsOwn()
+    {
+        var detector = CreateDetector(TimeSpan.FromMinutes(5));
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
+
+        await detector.RecordAsync(acme, "c1", CodeChallenge, "value-1");
+
+        Assert.False(await detector.IsReusedAsync(globex, "c1", CodeChallenge, "value-1"));
+        Assert.True(await detector.IsReusedAsync(acme, "c1", CodeChallenge, "value-1"));
     }
 
     [Fact]

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using System;
 using System.Collections.Generic;
@@ -38,8 +39,9 @@ public class DeviceAuthorizationStorageTests
 {
     private const string DeviceCode = "device_code_abc123";
     private const string UserCode = "12345678";
-    private const string RequestKey = "device:request:device_code_abc123";
-    private const string UserCodeKey = "device:user-code:12345678";
+    // The keys the factory hands out are in the space of the tenant they are built for
+    private static readonly string RequestKey = TenantKey.Of(SingleIssuer.Tenant, "device:request:device_code_abc123");
+    private static readonly string UserCodeKey = TenantKey.Of(SingleIssuer.Tenant, "device:user-code:12345678");
 
     private readonly DateTimeOffset _now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly Mock<IDistributedCache> _cache = new(MockBehavior.Loose);
@@ -384,6 +386,34 @@ public class DeviceAuthorizationStorageTests
         var deviceCode = System.Text.Encoding.UTF8.GetBytes(DeviceCode);
         Assert.NotEmpty(cache.Written);
         Assert.All(cache.Written, value => Assert.Equal(-1, value.AsSpan().IndexOf(deviceCode)));
+    }
+
+    /// <summary>
+    /// A reference found at one tenant names that tenant's record alone: another tenant handed it reads nothing and
+    /// writes nothing through it.
+    /// </summary>
+    [Fact]
+    public async Task AReferenceOfOneTenant_ReadsAndWritesNothingAtAnother()
+    {
+        var acme = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
+        var storage = new DeviceAuthorizationStorage(
+            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
+            TestFingerprints.Instance,
+            new DistributedCacheStorage(RealCache(), new ProtobufSerializer()),
+            new EntityStorageKeyFactory(),
+            new FakeTimeProvider(_now));
+        await storage.StoreAsync(acme, DeviceCode, NewRequest(_now.AddMinutes(10)), TimeSpan.FromMinutes(10));
+        var (reference, request) = (await storage.TryGetByUserCodeAsync(acme, UserCode))!.Value;
+
+        Assert.Null(await storage.TryGetAsync(globex, reference));
+
+        await storage.UpdateAsync(
+            globex,
+            reference,
+            request with { Status = DeviceAuthorizationStatus.Denied },
+            TimeSpan.FromMinutes(5));
+        Assert.Equal(request.Status, (await storage.TryGetAsync(acme, reference))!.Status);
     }
 
     private static IDistributedCache RealCache()

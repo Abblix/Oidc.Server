@@ -12,7 +12,7 @@ using System.Globalization;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// The key a stored value is kept under within the current tenant's space.
+/// The key a stored value is kept under within the space of the tenant it is handed.
 /// </summary>
 public static class TenantKey
 {

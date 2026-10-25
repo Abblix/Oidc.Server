@@ -12,10 +12,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// The keys a host registers its own store or budget under, for the server to keep each tenant's part of it apart.
 /// </summary>
 /// <remarks>
-/// The server resolves its storage, its replay cache and its rate limiters in the form that keeps each tenant apart,
-/// built over what is registered under these keys, so a host substitutes its own there, before or after registering
-/// the server. Replacing the service the server resolves instead would let every tenant share one store or budget,
-/// so startup refuses it.
+/// A host substitutes its own storage, replay cache or rate limiters under these keys, before or after registering the
+/// server. The server keeps each tenant's replay records and budgets apart over what is registered there, and
+/// replacing the replay cache or a limiter the server resolves instead is refused at startup. The stores key every
+/// entity by its tenant themselves, so a storage put in place of the one the server resolves still keeps the tenants
+/// apart, but it is not measured: register it under <see cref="Shared"/> to keep the storage's metrics.
 /// </remarks>
 public static class TenantServiceKeys
 {

@@ -57,14 +57,16 @@ public interface IDeviceAuthorizationStorage
     /// </summary>
     /// <param name="tenant">The tenant the request belongs to.</param>
     /// <param name="reference">The reference <see cref="TryGetByUserCodeAsync"/> returned.</param>
-    /// <returns>A task that returns the request if it is still stored; otherwise, null.</returns>
+    /// <returns>A task that returns the request if it is still stored in the space of <paramref name="tenant"/>;
+    /// otherwise, null, for a reference another tenant was handed included.</returns>
     Task<DeviceAuthorizationRequest?> TryGetAsync(TenantDefinition tenant, DeviceAuthorizationReference reference);
 
     /// <summary>
     /// Updates an existing device authorization request in storage, refreshing its cache entry with the
     /// caller-supplied remaining lifetime.
     /// </summary>
-    /// <param name="tenant">The tenant the request belongs to.</param>
+    /// <param name="tenant">The tenant the request belongs to; a reference another tenant was handed is written
+    /// nowhere.</param>
     /// <param name="reference">The reference <see cref="TryGetByUserCodeAsync"/> returned.</param>
     /// <param name="request">The updated device authorization request.</param>
     /// <param name="expiresIn">The remaining lifetime to apply as the cache TTL. The caller derives it from
