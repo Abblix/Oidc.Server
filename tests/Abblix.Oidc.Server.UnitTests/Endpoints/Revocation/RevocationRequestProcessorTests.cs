@@ -39,7 +39,7 @@ public class RevocationRequestProcessorTests
         _clock = new FakeTimeProvider();
         _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _processor = new RevocationRequestProcessor(
-            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object), _clock, tenantAccessor: SingleIssuer.Accessor);
+            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object), _clock);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()
@@ -84,7 +84,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -111,7 +111,7 @@ public class RevocationRequestProcessorTests
         var now = _clock.GetUtcNow();
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -144,7 +144,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -172,7 +172,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         _tokenRegistry.Verify(
@@ -205,7 +205,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -237,7 +237,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -269,7 +269,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.NotNull(capturedExpiresAt);
@@ -304,7 +304,7 @@ public class RevocationRequestProcessorTests
         var validRequest = CreateValidRevocationRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -327,7 +327,7 @@ public class RevocationRequestProcessorTests
         var validRequest = CreateValidRevocationRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -348,7 +348,7 @@ public class RevocationRequestProcessorTests
         var validRequest = CreateValidRevocationRequest(request);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -375,7 +375,7 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         _tokenRegistry.Verify(
@@ -420,8 +420,8 @@ public class RevocationRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result1 = await _processor.ProcessAsync(validRequest1);
-        var result2 = await _processor.ProcessAsync(validRequest2);
+        var result1 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest1);
+        var result2 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest2);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var revoked1));

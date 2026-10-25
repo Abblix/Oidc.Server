@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -31,6 +32,7 @@ public class RevocationHandler(
     /// Asynchronously handles a token revocation request by validating it and then processing it if the
     /// validation succeeds.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="revocationRequest">
     /// The revocation request details, mapped to the model expected by the system.</param>
     /// <param name="clientRequest">
@@ -46,10 +48,11 @@ public class RevocationHandler(
     /// preventing unauthorized or malicious attempts to revoke tokens.
     /// </remarks>
     public async Task<Result<TokenRevoked, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         RevocationRequest revocationRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await validator.ValidateAsync(revocationRequest, clientRequest);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, revocationRequest, clientRequest);
+        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
     }
 }

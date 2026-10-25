@@ -24,35 +24,34 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// <param name="tokenRegistry">The token registry to be used by this processor for managing token statuses.</param>
 /// <param name="grantRevocation">Revokes the grant a refresh token was issued under.</param>
 /// <param name="clock">Provides the current time for timestamping the revocation operation.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class RevocationRequestProcessor(
 	ITokenRegistry tokenRegistry,
 	GrantRevocation grantRevocation,
-	TimeProvider clock,
-	ITenantAccessor tenantAccessor) : IRevocationRequestProcessor
+	TimeProvider clock) : IRevocationRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid revocation request.
 	/// This method handles the revocation of a specified token by changing its status to 'Revoked' in the token registry.
 	/// The operation ensures that the token is no longer valid for any future requests.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The revocation request to be processed. Contains information about the token to be revoked.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield a <see cref="Result{TSuccess, TFailure}"/>
 	/// containing either <see cref="TokenRevoked"/> on success or <see cref="OidcError"/> on failure.
 	/// </returns>
-	public async Task<Result<TokenRevoked, OidcError>> ProcessAsync(ValidRevocationRequest request)
+	public async Task<Result<TokenRevoked, OidcError>> ProcessAsync(TenantDefinition tenant, ValidRevocationRequest request)
 	{
 		var payload = request.Token?.Payload;
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
-			await tokenRegistry.SetStatusAsync(tenantAccessor.CurrentTenant(), jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+			await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
 		// RFC 7009 section 2.1: "If the particular token is a refresh token and the authorization server supports the
 		// revocation of access tokens, then the authorization server SHOULD also invalidate all access tokens based on
 		// the same authorization grant". Revoking the grant does that, and refuses the other refresh tokens of a grant
 		// whose client reuses them. An access token's grant stays: the specification leaves that to the server.
 		if (request.Token is { Header.Type: JwtTypes.RefreshToken } refreshToken)
-			await grantRevocation.RevokeAsync(tenantAccessor.CurrentTenant(), refreshToken.Payload);
+			await grantRevocation.RevokeAsync(tenant, refreshToken.Payload);
 
 		return new TokenRevoked(
 			TokenId: payload?.JwtId,

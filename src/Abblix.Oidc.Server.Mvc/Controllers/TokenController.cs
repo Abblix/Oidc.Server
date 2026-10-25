@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
@@ -82,6 +83,7 @@ public class TokenController : ControllerBase
     /// </summary>
     /// <param name="handler">The service responsible for processing token revocation requests.</param>
     /// <param name="formatter">The service responsible for formatting the revocation response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="revocationRequest">Details of the revocation request, including the token to be revoked.</param>
     /// <param name="clientRequest">Additional contextual information about the client making the revocation request.
     /// </param>
@@ -98,11 +100,12 @@ public class TokenController : ControllerBase
     public async Task<ActionResult> RevocationAsync(
         [FromServices] IRevocationHandler handler,
         [FromServices] IRevocationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] RevocationRequest revocationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.RevocationRequest coreRevocationRequest = revocationRequest;
-        var response = await handler.HandleAsync(coreRevocationRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreRevocationRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreRevocationRequest, response);
     }
 
@@ -113,6 +116,7 @@ public class TokenController : ControllerBase
     /// <param name="handler">The service responsible for validating and processing token introspection requests.</param>
     /// <param name="formatter">The service responsible for formatting the introspection response with detailed token
     /// information.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="introspectionRequest">Details of the introspection request, including the token to be introspected.
     /// </param>
     /// <param name="clientRequest">Additional contextual information about the client making the introspection request.
@@ -130,11 +134,12 @@ public class TokenController : ControllerBase
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
         [FromServices] IIntrospectionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] IntrospectionRequest introspectionRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
-        var response = await handler.HandleAsync(coreIntrospectionRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreIntrospectionRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreIntrospectionRequest, response);
     }
 }

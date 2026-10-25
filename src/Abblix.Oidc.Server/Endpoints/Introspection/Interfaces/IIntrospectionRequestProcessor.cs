@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
@@ -21,7 +22,8 @@ public interface IIntrospectionRequestProcessor
 	/// <summary>
 	/// Produces the introspection response for a validated request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">A request that has cleared client authentication and token validation.</param>
 	/// <returns>An <see cref="IntrospectionSuccess"/>; processing-time errors map to <see cref="OidcError"/>.</returns>
-	Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request);
+	Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidIntrospectionRequest request);
 }

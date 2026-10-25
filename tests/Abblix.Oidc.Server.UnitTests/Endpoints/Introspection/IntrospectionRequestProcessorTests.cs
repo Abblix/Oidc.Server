@@ -39,7 +39,7 @@ public class IntrospectionRequestProcessorTests
 
         _processor = new IntrospectionRequestProcessor(
             _clientInfoProvider.Object,
-            _subjectTypeConverter.Object, tenantAccessor: SingleIssuer.Accessor);
+            _subjectTypeConverter.Object);
     }
 
     private static IntrospectionRequest CreateIntrospectionRequest() => new()
@@ -87,7 +87,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -107,7 +107,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -128,7 +128,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -147,7 +147,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -167,7 +167,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -186,7 +186,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -210,7 +210,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token, callerClientId: "resource_server");
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -253,7 +253,7 @@ public class IntrospectionRequestProcessorTests
             callerClientId: "payments_resource_server",
             callerResourceLocations: [new Uri("https://payments.example.com")]);
 
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         Assert.True(result.TryGetSuccess(out var success));
         var details = Assert.IsType<JsonArray>(success.Claims![IanaClaimTypes.AuthorizationDetails]);
@@ -281,7 +281,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(
             request, token, callerClientId: "payments_resource_server");
 
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.AuthorizationDetails));
@@ -320,7 +320,7 @@ public class IntrospectionRequestProcessorTests
             callerClientId: "payments_resource_server",
             callerResourceLocations: [new Uri("https://api.example.com/payments")]);
 
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.AuthorizationDetails));
@@ -350,7 +350,7 @@ public class IntrospectionRequestProcessorTests
             callerClientId: "payments_resource_server",
             callerResourceLocations: [new Uri("https://payments.example.com")]);
 
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         Assert.True(result.TryGetSuccess(out var success));
         var details = Assert.IsType<JsonArray>(success.Claims![IanaClaimTypes.AuthorizationDetails]);
@@ -379,7 +379,7 @@ public class IntrospectionRequestProcessorTests
             callerClientId: "accounts_resource_server",
             callerResourceLocations: [new Uri("https://api.example.com/accounts")]);
 
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         Assert.True(result.TryGetSuccess(out var success));
         Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.AuthorizationDetails));
@@ -396,7 +396,7 @@ public class IntrospectionRequestProcessorTests
 
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         Assert.True(result.TryGetSuccess(out var success));
         var details = Assert.IsType<JsonArray>(success.Claims![IanaClaimTypes.AuthorizationDetails]);
@@ -421,7 +421,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -457,8 +457,8 @@ public class IntrospectionRequestProcessorTests
         var validRequest2 = CreateValidIntrospectionRequest(request2, token2);
 
         // Act
-        var result1 = await _processor.ProcessAsync(validRequest1);
-        var result2 = await _processor.ProcessAsync(validRequest2);
+        var result1 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest1);
+        var result2 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest2);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var success1));
@@ -480,7 +480,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -502,7 +502,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -533,7 +533,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -561,7 +561,7 @@ public class IntrospectionRequestProcessorTests
         var validRequest = CreateValidIntrospectionRequest(request);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.False(result.TryGetFailure(out _));

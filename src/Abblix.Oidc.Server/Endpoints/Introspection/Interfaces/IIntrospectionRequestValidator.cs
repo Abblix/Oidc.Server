@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
@@ -26,6 +27,7 @@ public interface IIntrospectionRequestValidator
 	/// <summary>
 	/// Authenticates the caller and validates the introspected token.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="introspectionRequest">Wire-level request carrying the <c>token</c> to introspect.</param>
 	/// <param name="clientRequest">Carrier of the client's authentication credentials.</param>
 	/// <returns>
@@ -33,6 +35,7 @@ public interface IIntrospectionRequestValidator
 	/// an <see cref="OidcError"/> only when the caller itself cannot be authenticated.
 	/// </returns>
 	Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest);
 }

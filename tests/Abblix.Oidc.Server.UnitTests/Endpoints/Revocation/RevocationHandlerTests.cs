@@ -73,21 +73,21 @@ public class RevocationHandlerTests
         var tokenRevoked = CreateTokenRevoked();
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
-        var result = await _handler.HandleAsync(revocationRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
         Assert.Same(tokenRevoked, revoked);
-        _validator.Verify(v => v.ValidateAsync(revocationRequest, clientRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -105,16 +105,16 @@ public class RevocationHandlerTests
             "Client authentication failed");
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(revocationRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(revocationRequest, clientRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
 
@@ -134,21 +134,21 @@ public class RevocationHandlerTests
             "Failed to revoke token");
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<TokenRevoked, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(revocationRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(revocationRequest, clientRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -166,18 +166,18 @@ public class RevocationHandlerTests
         var tokenRevoked = CreateTokenRevoked();
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(It.Is<ValidRevocationRequest>(r => r == validRequest)))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.Is<ValidRevocationRequest>(r => r == validRequest)))
             .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
-        await _handler.HandleAsync(revocationRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ public class RevocationHandlerTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
@@ -204,7 +204,7 @@ public class RevocationHandlerTests
             });
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
@@ -212,7 +212,7 @@ public class RevocationHandlerTests
             });
 
         // Act
-        await _handler.HandleAsync(revocationRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -235,11 +235,11 @@ public class RevocationHandlerTests
             "Token is invalid");
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(revocationRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -261,15 +261,16 @@ public class RevocationHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Invalid request");
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(revocationRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         _validator.Verify(
             v => v.ValidateAsync(
+                TestTenant.Matched,
                 It.Is<RevocationRequest>(r => r == revocationRequest),
                 It.Is<ClientRequest>(r => r == clientRequest)),
             Times.Once);
@@ -289,11 +290,11 @@ public class RevocationHandlerTests
         var error = new OidcError(ErrorCodes.InvalidClient, "Client not authorized");
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(revocationRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         _processor.VerifyNoOtherCalls();
@@ -313,15 +314,15 @@ public class RevocationHandlerTests
         var tokenRevoked = CreateTokenRevoked();
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
-        var result = await _handler.HandleAsync(revocationRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -343,15 +344,15 @@ public class RevocationHandlerTests
         var tokenRevoked = CreateTokenRevoked();
 
         _validator
-            .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, revocationRequest, clientRequest))
             .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
-        var result = await _handler.HandleAsync(revocationRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));

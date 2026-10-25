@@ -49,7 +49,6 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// </param>
 /// <param name="unnamedSource">Says, once, that a public client's request arrived from no address and so
 /// went uncharged.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
@@ -57,8 +56,7 @@ public partial class RevocationRequestValidator(
 	[FromKeyedServices(CallerRateLimiters.Revocation)]
 	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
 	IRequestInfoProvider requestInfoProvider,
-	UnnamedSourceNotice unnamedSource,
-	ITenantAccessor tenantAccessor)
+	UnnamedSourceNotice unnamedSource)
 	: IRevocationRequestValidator
 {
 	/// <summary>
@@ -66,6 +64,7 @@ public partial class RevocationRequestValidator(
 	/// It checks the client's credentials and the validity of the token to be revoked. The validation ensures
 	/// that the token belongs to the authenticated client and is valid as per JWT standards.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="revocationRequest">
 	/// The revocation request to be validated. Contains the token to be revoked and client information.
 	/// </param>
@@ -81,6 +80,7 @@ public partial class RevocationRequestValidator(
 	/// it logs a warning with the specific cause.
 	/// </remarks>
 	public async Task<Result<ValidRevocationRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest)
 	{
@@ -92,7 +92,7 @@ public partial class RevocationRequestValidator(
 		// used than revoked. The protection the spec actually mandates is the token-ownership
 		// check below. Do not re-add a public-client rejection here: it slipped in once and
 		// left every SPA and native client unable to revoke its own refresh token on logout.
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenantAccessor.CurrentTenant(), clientRequest);
+		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
 		if (clientInfo == null)
 		{
 			return new OidcError(
@@ -104,7 +104,7 @@ public partial class RevocationRequestValidator(
 		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
 		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
 		if (BudgetFor(clientInfo) is not { } budgetKey)
-			return await ReadTokenAsync(revocationRequest, clientInfo);
+			return await ReadTokenAsync(tenant, revocationRequest, clientInfo);
 
 		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
 		// in flight bounds the token validation below rather than nothing at all.
@@ -129,7 +129,7 @@ public partial class RevocationRequestValidator(
 				CallerRateLimiters.Revocation);
 		}
 
-		return await ReadTokenAsync(revocationRequest, clientInfo);
+		return await ReadTokenAsync(tenant, revocationRequest, clientInfo);
 	}
 
 	/// <summary>
@@ -169,6 +169,7 @@ public partial class RevocationRequestValidator(
 	/// Reads the token the request names and decides whether it belongs to the client that asked.
 	/// </summary>
 	private async Task<Result<ValidRevocationRequest, OidcError>> ReadTokenAsync(
+		TenantDefinition tenant,
 		RevocationRequest revocationRequest,
 		ClientInfo clientInfo)
 	{
@@ -177,7 +178,7 @@ public partial class RevocationRequestValidator(
 		// the check below. A token minted for a resource indicator names that resource in its audience, and
 		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
 		var result = await jwtValidator.ValidateAsync(
-			tenantAccessor.CurrentTenant(), revocationRequest.Token,
+			tenant, revocationRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
