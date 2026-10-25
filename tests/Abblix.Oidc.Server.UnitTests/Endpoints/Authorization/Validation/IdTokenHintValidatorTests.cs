@@ -39,7 +39,7 @@ public class IdTokenHintValidatorTests
 
     public IdTokenHintValidatorTests()
     {
-        _validator = new IdTokenHintValidator(_hintParser.Object);
+        _validator = new IdTokenHintValidator(_hintParser.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static AuthorizationValidationContext Context(string? hint = Hint) => new(
@@ -63,7 +63,7 @@ public class IdTokenHintValidatorTests
             token.Payload.Audiences = [audience];
 
         Result<JsonWebToken, string> parsed = token;
-        _hintParser.Setup(p => p.ParseAsync(Hint)).ReturnsAsync(parsed);
+        _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, Hint)).ReturnsAsync(parsed);
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public class IdTokenHintValidatorTests
     {
         var context = Context();
         Result<JsonWebToken, string> refused = "The id token hint is not an ID Token";
-        _hintParser.Setup(p => p.ParseAsync(Hint)).ReturnsAsync(refused);
+        _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, Hint)).ReturnsAsync(refused);
 
         var error = await _validator.ValidateAsync(context);
 

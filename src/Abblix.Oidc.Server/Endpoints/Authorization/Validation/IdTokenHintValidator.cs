@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -35,7 +36,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </para>
 /// </remarks>
 /// <param name="hintParser">Decides whether the hint is an ID token this server issued.</param>
-public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IAuthorizationContextValidator
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class IdTokenHintValidator(IIdTokenHintParser hintParser, ITenantAccessor tenantAccessor) : IAuthorizationContextValidator
 {
     /// <inheritdoc />
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
@@ -43,7 +45,7 @@ public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IAuthorizatio
         if (!context.Request.IdTokenHint.HasValue())
             return null;
 
-        var result = await hintParser.ParseAsync(context.Request.IdTokenHint);
+        var result = await hintParser.ParseAsync(tenantAccessor.CurrentTenant(), context.Request.IdTokenHint);
         if (result.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 

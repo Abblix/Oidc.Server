@@ -35,9 +35,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// the tokens issued since that moment be used again.
 /// </para>
 /// <para>
-/// It acts for the tenant of the request it is called in. Called outside one, as from a job or a message handler, it
-/// acts for the tenant of the <see cref="Abblix.Oidc.Server.Features.MultiTenancy.TenantScope"/> the caller enters
-/// with the definition the tenant catalog returns, and refuses to act with no tenant at all.
+/// It records each cutoff under the tenant passed first; a caller outside a request passes the definition the tenant
+/// catalog returns.
 /// </para>
 /// </remarks>
 public interface ITokenRevoker

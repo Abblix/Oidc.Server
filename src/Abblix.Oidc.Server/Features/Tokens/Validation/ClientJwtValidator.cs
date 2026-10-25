@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Configuration;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -39,8 +38,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
-[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: two resolve the client and its keys, one the server's own keys, and the tenant carries the server's address and the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
@@ -71,24 +68,30 @@ public partial class ClientJwtValidator(
     {
         var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
 
-        var result = await tokenValidator.ValidateAsync(
-            jwt,
-            new ValidationParameters
-            {
-                Options = options,
-                TokenTypes = tokenTypes,
-                ValidateAudience = audiences => ValidateAudience(tenant, audiences),
-                ValidateIssuer = context.ValidateIssuer,
-                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
-                // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
-                // the server's own private keys; the inner JWS is then verified with the client's key
-                // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
-                // only runs for an actual JWE token).
-                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
-                // The tolerance belongs to the profile this deployment is held to, ceiling
-                // included.
-                ClockSkew = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).ClockSkewOrDefault(),
-            });
+        // The token status decorator under this validator reads what is recorded about the token at the tenant of the
+        // accessor, so the scope makes that the tenant the token is validated for, also for a caller outside its request
+        Result<JsonWebToken, JwtValidationError> result;
+        using (TenantScope.Enter(tenant))
+        {
+            result = await tokenValidator.ValidateAsync(
+                jwt,
+                new ValidationParameters
+                {
+                    Options = options,
+                    TokenTypes = tokenTypes,
+                    ValidateAudience = audiences => ValidateAudience(tenant, audiences),
+                    ValidateIssuer = context.ValidateIssuer,
+                    ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
+                    // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
+                    // the server's own private keys; the inner JWS is then verified with the client's key
+                    // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
+                    // only runs for an actual JWE token).
+                    ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
+                    // The tolerance belongs to the profile this deployment is held to, ceiling
+                    // included.
+                    ClockSkew = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).ClockSkewOrDefault(),
+                });
+        }
 
         if (result.TryGetFailure(out var error))
         {

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -26,7 +27,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// the family. A host that removes it or moves it ahead of this step passes an unregistered audience through
 /// validation, and a step it inserts right after this one reads a client nobody has checked yet.
 /// </remarks>
-public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IEndSessionContextValidator
+public class IdTokenHintValidator(IIdTokenHintParser hintParser, ITenantAccessor tenantAccessor) : IEndSessionContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
@@ -39,7 +40,7 @@ public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IEndSessionCo
             // because they disagree about it. An ID token is the one type that names a client there:
             // OpenID Connect Core 1.0 Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id
             // of the Relying Party".
-            var result = await hintParser.ParseAsync(request.IdTokenHint);
+            var result = await hintParser.ParseAsync(tenantAccessor.CurrentTenant(), request.IdTokenHint);
             if (result.TryGetFailure(out var reason))
                 return new OidcError(ErrorCodes.InvalidRequest, reason);
 

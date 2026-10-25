@@ -42,7 +42,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// </param>
 /// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: the token's clock, identifier, format, registry, grant revocation, rotation policy and subject each come from their own service, the tenant names its issuer, the server's options carry the service-token policy, and the catalog the licensing state the issuer claim is checked against.")]
+    Justification = "Every dependency is used: the token's clock, identifier, format, registry, grant revocation and subject each come from their own service, the server's options carry the service-token policy, and the catalog the licensing state the issuer claim is checked against.")]
 public class RefreshTokenService(
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,

@@ -45,23 +45,29 @@ public class AuthServiceJwtValidator(
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
-		var result = await validator.ValidateAsync(
-			jwt,
-			new ValidationParameters
-			{
-				Options = options,
-				TokenTypes = tokenTypes,
-				ValidateIssuer = issuer => ValidateIssuerAsync(tenant, issuer),
-				ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
-				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
-				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
+		// The token status decorator under this validator reads what is recorded about the token at the tenant of the
+		// accessor, so the scope makes that the tenant the token is validated for, also for a caller outside its request
+		Result<JsonWebToken, JwtValidationError> result;
+		using (TenantScope.Enter(tenant))
+		{
+			result = await validator.ValidateAsync(
+				jwt,
+				new ValidationParameters
+				{
+					Options = options,
+					TokenTypes = tokenTypes,
+					ValidateIssuer = issuer => ValidateIssuerAsync(tenant, issuer),
+					ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
+					ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
+					ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
-				// No profile tolerance here, and the absence is a decision. These are tokens this
-				// server issued and reads back, so the freshness a profile bounds is not the
-				// question: a tolerance tight enough for a third party would turn one node running
-				// ahead of another into a refusal of this server's own refresh token, which is an
-				// operational hazard rather than the requirement.
-			});
+					// No profile tolerance here, and the absence is a decision. These are tokens this
+					// server issued and reads back, so the freshness a profile bounds is not the
+					// question: a tolerance tight enough for a third party would turn one node running
+					// ahead of another into a refusal of this server's own refresh token, which is an
+					// operational hazard rather than the requirement.
+				});
+		}
 
 		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
 		// was issued at, so one of another creation of this tenant, or of a version before 3.0, which names none,

@@ -36,7 +36,7 @@ public class IdTokenHintValidatorTests
         // The real parser over the same mocked validator, not a stub of it: what a hint has to survive
         // before this validator sees it is shared code, and these cases were written to drive it.
         _validator = new IdTokenHintValidator(
-            new IdTokenHintParser(_jwtValidator.Object, tenantAccessor: SingleIssuer.Accessor));
+            new IdTokenHintParser(_jwtValidator.Object), tenantAccessor: SingleIssuer.Accessor);
     }
 
     private static EndSessionValidationContext CreateContext(

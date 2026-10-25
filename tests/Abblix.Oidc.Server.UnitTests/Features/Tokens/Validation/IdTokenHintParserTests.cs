@@ -37,7 +37,7 @@ public class IdTokenHintParserTests
 
     public IdTokenHintParserTests()
     {
-        _parser = new IdTokenHintParser(_jwtValidator.Object, tenantAccessor: SingleIssuer.Accessor);
+        _parser = new IdTokenHintParser(_jwtValidator.Object);
     }
 
     private void SetupToken(JsonWebToken token)
@@ -72,7 +72,7 @@ public class IdTokenHintParserTests
     {
         SetupToken(IdToken());
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetSuccess(out var idToken));
         Assert.Equal("user_42", idToken.Payload.Subject);
@@ -92,7 +92,7 @@ public class IdTokenHintParserTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(failure);
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out var reason));
         Assert.Contains("invalid token", reason, StringComparison.OrdinalIgnoreCase);
@@ -112,7 +112,7 @@ public class IdTokenHintParserTests
     {
         SetupRefusalOfTheType();
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -132,7 +132,7 @@ public class IdTokenHintParserTests
     {
         SetupToken(IdToken(withExpiry: false));
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out var reason));
         Assert.Contains("not an ID Token", reason, StringComparison.Ordinal);
@@ -156,7 +156,7 @@ public class IdTokenHintParserTests
     {
         SetupRefusalOfTheType();
 
-        var result = await _parser.ParseAsync(Hint);
+        var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.True(result.TryGetFailure(out var reason));
         Assert.DoesNotContain("expiration time", reason, StringComparison.Ordinal);
@@ -189,7 +189,7 @@ public class IdTokenHintParserTests
             .Callback((TenantDefinition _, string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
             .ReturnsAsync(success);
 
-        await _parser.ParseAsync(Hint);
+        await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
 
         Assert.NotNull(asked);
         Assert.False(asked.Value.HasFlag(ValidationOptions.ValidateLifetime));

@@ -21,8 +21,8 @@ using Xunit;
 namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 
 /// <summary>
-/// Work of one tenant run outside any request - an administration job revoking a subject's tokens - through
-/// <see cref="TenantScope"/>.
+/// Work of one tenant run outside any request, such as a message consumer ending a session through
+/// <see cref="TenantScope"/>, or a revocation handed the tenant it is for.
 /// </summary>
 public sealed class TenantScopeTests : IDisposable
 {
@@ -58,14 +58,6 @@ public sealed class TenantScopeTests : IDisposable
         Assert.NotNull(await Cutoffs.GetCutoffAsync(Acme, RevocationScope.Subject, Subject, cancellationToken));
         Assert.Null(await Cutoffs.GetCutoffAsync(Globex, RevocationScope.Subject, Subject, cancellationToken));
     }
-
-    /// <summary>
-    /// Outside any request and any scope there is no tenant to serve, and asking for one is refused.
-    /// </summary>
-    [Fact]
-    public void OutsideAnyRequestAndAnyScope_TheTenantIsRefused()
-        => Assert.Throws<InvalidOperationException>(
-            () => _provider.GetRequiredService<ITenantAccessor>().CurrentTenant());
 
     /// <summary>
     /// A scope ends where it is disposed, giving back the tenant that was current before it - including an outer

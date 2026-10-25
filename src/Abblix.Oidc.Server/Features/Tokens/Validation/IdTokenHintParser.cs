@@ -29,8 +29,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// </para>
 /// </remarks>
 /// <param name="jwtValidator">Validates the hint's signature and issuer.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator, ITenantAccessor tenantAccessor) : IIdTokenHintParser
+public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdTokenHintParser
 {
     /// <summary>
     /// What a hint has to satisfy beyond an ordinary own-issued token.
@@ -54,11 +53,11 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator, ITenantAcc
         ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience;
 
     /// <inheritdoc />
-    public async Task<Result<JsonWebToken, string>> ParseAsync(string idTokenHint)
+    public async Task<Result<JsonWebToken, string>> ParseAsync(TenantDefinition tenant, string idTokenHint)
     {
         // Another token this server issued, an access or refresh token whose audience may well match, is refused
         // by its type, which the signature alone would not catch, as RFC 8725 Section 3.12 describes.
-        var result = await jwtValidator.ValidateAsync(tenantAccessor.CurrentTenant(), idTokenHint, JwtTypes.IdTokens, HintOptions);
+        var result = await jwtValidator.ValidateAsync(tenant, idTokenHint, JwtTypes.IdTokens, HintOptions);
         if (result.TryGetFailure(out var validationError))
             return $"The id token hint contains an invalid token: {validationError}";
 

@@ -1023,4 +1023,33 @@ public class RefreshTokenServiceTests
             ReusePolicy = RefreshTokenReusePolicy.Reuse,
         }
     };
+
+    /// <summary>
+    /// For a client naming no profile of its own, the default profile of the tenant the token is spent at decides
+    /// whether the token is rotated: a tenant holding clients to nothing marks it used, a tenant holding them to
+    /// FAPI 2.0, whose tokens are bound to a key the client proves, lets it be reused.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    public async Task TheTenantsDefaultProfile_DecidesWhetherATokenIsRotated(ClientSecurityProfile tenantDefault, bool rotated)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        var oldToken = new JsonWebToken
+        {
+            Payload = { JwtId = OldTokenId, IssuedAt = _currentTime.AddHours(-1), ExpiresAt = _currentTime.AddHours(7) },
+        };
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(new TestIssuer { DefaultSecurityProfile = tenantDefault }.ToTenant(), oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            rotated ? Times.Once() : Times.Never());
+    }
 }

@@ -42,7 +42,7 @@ public class UserIdentityValidatorTests
         _idTokenValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         _clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
         _validator = new UserIdentityValidator(
-            new IdTokenHintParser(_idTokenValidator.Object, tenantAccessor: SingleIssuer.Accessor), _clientJwtValidator.Object, tenantAccessor: SingleIssuer.Accessor);
+            new IdTokenHintParser(_idTokenValidator.Object), _clientJwtValidator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(
