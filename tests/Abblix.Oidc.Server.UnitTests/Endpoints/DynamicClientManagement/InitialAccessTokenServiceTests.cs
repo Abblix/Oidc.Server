@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -47,8 +48,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
@@ -68,8 +69,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
@@ -85,8 +86,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
@@ -100,8 +101,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         var expiresIn = TimeSpan.FromDays(30);
@@ -119,8 +120,8 @@ public class InitialAccessTokenServiceTests
     {
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, expiresIn: null);
@@ -133,7 +134,7 @@ public class InitialAccessTokenServiceTests
     public async Task IssueTokenAsync_ShouldReturnFormattedJwt()
     {
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("eyJhbGciOiJSUzI1NiJ9.test.signature");
 
         var result = await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));

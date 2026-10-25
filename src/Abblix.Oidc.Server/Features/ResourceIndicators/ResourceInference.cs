@@ -21,19 +21,20 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 /// "scope" parameter refer to different default resource indicator values, the authorization server SHOULD reject
 /// the request with "invalid_scope"". A scope refers to the registered resources whose definitions declare it.
 /// </remarks>
-/// <param name="tenantAccessor">Names the tenant serving the request, which holds its resources.</param>
-public sealed class ResourceInference(ITenantAccessor tenantAccessor)
+public static class ResourceInference
 {
     /// <summary>
     /// The resource the requested scopes refer to.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="scopes">The scopes the request asks for.</param>
     /// <param name="resource">The one resource the scopes refer to; null when inference is off for the issuer or
     /// no requested scope refers to a resource.</param>
     /// <param name="errorDescription">Why the request is refused, when the scopes refer to more than one resource.
     /// </param>
     /// <returns>False when the scopes refer to more than one resource, so no single one can be inferred.</returns>
-    public bool TryInfer(
+    public static bool TryInfer(
+        TenantDefinition tenant,
         IEnumerable<string> scopes,
         out Uri? resource,
         [MaybeNullWhen(true)] out string errorDescription)
@@ -41,7 +42,6 @@ public sealed class ResourceInference(ITenantAccessor tenantAccessor)
         resource = null;
         errorDescription = null;
 
-        var tenant = tenantAccessor.CurrentTenant();
         if (!tenant.InferResourceFromScope || tenant.Resources is not { Length: > 0 } definitions)
             return true;
 

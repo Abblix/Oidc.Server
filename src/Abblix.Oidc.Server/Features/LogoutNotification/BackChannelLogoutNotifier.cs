@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
@@ -19,9 +20,11 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// the details of the logout event.</param>
 /// <param name="logoutTokenSender">The service responsible for sending the logout tokens to the client
 /// applications via back-channel communication.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class BackChannelLogoutNotifier(
     ILogoutTokenService logoutTokenService,
-    ILogoutTokenSender logoutTokenSender) : ILogoutNotifier
+    ILogoutTokenSender logoutTokenSender,
+    ITenantAccessor tenantAccessor) : ILogoutNotifier
 {
     /// <summary>
     /// Asynchronously notifies a client of a logout event by creating a logout token and sending it to the client's
@@ -41,7 +44,7 @@ public class BackChannelLogoutNotifier(
             return;
 
         // Create the logout token specific to the logout event and client
-        var logoutToken = await logoutTokenService.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        var logoutToken = await logoutTokenService.CreateLogoutTokenAsync(tenantAccessor.CurrentTenant(), clientInfo, logoutContext);
 
         // Send the logout token to the client's back-channel logout endpoint
         await logoutTokenSender.SendBackChannelLogoutAsync(clientInfo, logoutToken);

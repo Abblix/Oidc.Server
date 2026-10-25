@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -25,6 +26,7 @@ public interface IClientJwtValidator
     /// <summary>
     /// Asynchronously validates a JWT and retrieves associated client information if the validation is successful.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="tokenTypes">The token types the caller accepts.</param>
     /// <param name="options">Optional validation options that define the specific checks and constraints
@@ -34,5 +36,6 @@ public interface IClientJwtValidator
     /// or a JwtValidationError on failure.
     /// </returns>
     public Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
+        TenantDefinition tenant,
         string jwt, TokenTypePolicy tokenTypes, ValidationOptions options = ValidationOptions.Default);
 }

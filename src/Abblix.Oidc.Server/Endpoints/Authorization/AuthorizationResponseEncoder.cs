@@ -88,7 +88,7 @@ public class AuthorizationResponseEncoder(
 		if (!response.ResponseMode.IsJwtMode())
 			return;
 
-		response.ResponseJwt = await responseJwtBuilder.BuildAsync(response.Model.ClientId, parameters);
+		response.ResponseJwt = await responseJwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), response.Model.ClientId, parameters);
 		response.ResponseMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
 	}
 

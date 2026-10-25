@@ -57,6 +57,11 @@ public abstract partial class AuthenticationCompletionHandler(
     protected Fingerprint FingerprintOf([Credential] string? authenticationRequestId) => fingerprints.Of(authenticationRequestId);
 
     /// <summary>
+    /// The tenant the request is completed at.
+    /// </summary>
+    protected TenantDefinition CurrentTenant => tenantAccessor.CurrentTenant();
+
+    /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
     /// to the mode-specific delivery implementation.
     /// </summary>

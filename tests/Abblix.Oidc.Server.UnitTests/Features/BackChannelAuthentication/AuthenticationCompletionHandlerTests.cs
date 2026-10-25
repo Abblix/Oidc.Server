@@ -119,8 +119,8 @@ public partial class AuthenticationCompletionHandlerTests
     private static IRevocationCutoffChecker Cutoffs(bool sessionRefused, bool grantRefused)
     {
         var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
-        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(sessionRefused);
-        cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(It.IsAny<AuthorizedGrant>())).ReturnsAsync(grantRefused);
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(sessionRefused);
+        cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>())).ReturnsAsync(grantRefused);
         return cutoffs.Object;
     }
 

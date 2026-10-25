@@ -18,9 +18,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// recognized and appropriately scoped according to OAuth 2.0 and OpenID Connect standards.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
-/// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference, ITenantAccessor tenantAccessor)
+public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor tenantAccessor)
     : SyncTokenContextValidatorBase
 {
     /// <summary>
@@ -53,7 +52,7 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
             request.Audiences is not { Length: > 0 } &&
             !AuthorizedEarlier.Contains(request.GrantType))
         {
-            if (!inference.TryInfer(request.Scope, out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenantAccessor.CurrentTenant(), request.Scope, out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
             // A grant the request itself authorizes builds its audience from the request, so the inferred

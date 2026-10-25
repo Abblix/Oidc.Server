@@ -229,7 +229,7 @@ public partial class PushModeCompletionHandler(
         bool revoked;
         try
         {
-            revoked = await cutoffChecker.IsGrantRefusedAsync(request.AuthorizedGrant, GrantTypes.Ciba);
+            revoked = await cutoffChecker.IsGrantRefusedAsync(CurrentTenant, request.AuthorizedGrant, GrantTypes.Ciba);
         }
         catch (Exception exception)
         {

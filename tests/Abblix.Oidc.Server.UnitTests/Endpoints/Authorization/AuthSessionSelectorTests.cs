@@ -47,7 +47,7 @@ public class AuthSessionSelectorTests
         var service = new Mock<IAuthSessionService>();
         service.Setup(s => s.GetAvailableAuthSessions()).Returns(() => sessions.ToAsyncEnumerable());
         var cutoff = new Mock<IRevocationCutoffChecker>();
-        cutoff.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(false);
+        cutoff.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(false);
 
         var request = new ValidAuthorizationRequest(new AuthorizationValidationContext(new AuthorizationRequest
         {

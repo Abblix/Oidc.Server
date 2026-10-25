@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -86,9 +87,9 @@ public partial class AuthenticationCompletionHandlerTests
 
         AuthorizedGrant? asked = null;
         var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
-        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(false);
-        cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(It.IsAny<AuthorizedGrant>()))
-            .Callback((AuthorizedGrant grant) => asked = grant)
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(false);
+        cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>()))
+            .Callback((TenantDefinition _, AuthorizedGrant grant) => asked = grant)
             .ReturnsAsync(true);
 
         await CreatePushModeHandler(cutoffs: cutoffs.Object).CompleteAuthenticationAsync(
@@ -114,7 +115,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         var fault = new InvalidOperationException("the cutoff store is unavailable");
         var cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
-        cutoffs.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ThrowsAsync(fault);
+        cutoffs.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ThrowsAsync(fault);
 
         var logger = new Mock<ILogger<PushModeCompletionHandler>>();
         // [LoggerMessage] gates each call on IsEnabled, which a loose mock answers false

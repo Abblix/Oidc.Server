@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -28,10 +29,11 @@ public interface IAuthServiceJwtFormatter
     /// <paramref name="encryption"/> policy - optionally encrypts it as a JWE to the server's own encryption key.
     /// The signing algorithm and pinned signing key id come from the token header, set by the issuing service.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
     /// <param name="encryption">The encryption policy: whether to encrypt, which key-management algorithm and
     /// encryption key to use, and the content-encryption algorithm.</param>
     /// <returns>A task representing the asynchronous operation, which results in the JWT formatted as a string.
     /// </returns>
-    Task<string> FormatAsync(JsonWebToken token, ServiceJwtEncryption encryption);
+    Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ServiceJwtEncryption encryption);
 }

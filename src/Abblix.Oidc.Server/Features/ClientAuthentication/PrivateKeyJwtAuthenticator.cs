@@ -67,6 +67,6 @@ public class PrivateKeyJwtAuthenticator(
         // RFC 7523bis types an assertion only by a SHOULD on the sender and admits more specific values, so the base
         // class judges the type after validation.
         return await tokenValidator.ValidateAsync(
-            jwt, TokenTypePolicy.CheckedByCaller, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+            CurrentTenant, jwt, TokenTypePolicy.CheckedByCaller, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
     }
 }

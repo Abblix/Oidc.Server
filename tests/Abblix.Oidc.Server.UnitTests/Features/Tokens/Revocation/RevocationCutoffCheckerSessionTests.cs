@@ -70,7 +70,7 @@ public class RevocationCutoffCheckerSessionTests
                 ? new OidcOptions { RevocationCutoffSkew = configured }
                 : new OidcOptions()),
             _clients.Object,
-            new FixedSubjectTypeConverter(new SubjectTypeConverter()), tenantAccessor: SingleIssuer.Accessor);
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()));
     }
 
     private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)
@@ -84,7 +84,7 @@ public class RevocationCutoffCheckerSessionTests
     [Fact]
     public async Task WithNoCutoffRecorded_TheSessionIsUsable()
     {
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -98,7 +98,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.True(refused);
     }
@@ -112,7 +112,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.True(refused);
     }
@@ -127,7 +127,7 @@ public class RevocationCutoffCheckerSessionTests
         SetupCutoff(
             RevocationScope.ClientSubject, PrincipalOf(RevocationScope.ClientSubject), AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -144,7 +144,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(scope, PrincipalOf(scope), AuthenticatedAt.AddHours(-1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -172,7 +172,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddSeconds(-secondsAfter));
 
-        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(Session());
+        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -197,7 +197,7 @@ public class RevocationCutoffCheckerSessionTests
         var cutoff = AuthenticatedAt.AddTicks(ticksTheCutoffFollowsBy);
         SetupCutoff(RevocationScope.Subject, Subject, cutoff);
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.Equal(expected, refused);
     }
@@ -214,7 +214,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddSeconds(-1));
 
-        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(Session());
+        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -234,7 +234,7 @@ public class RevocationCutoffCheckerSessionTests
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.True(refused);
 
@@ -261,7 +261,7 @@ public class RevocationCutoffCheckerSessionTests
 
         var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
 
-        Assert.True(await Checker().IsSessionRefusedAsync(session));
+        Assert.True(await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, session));
     }
 
     /// <summary>
@@ -286,7 +286,7 @@ public class RevocationCutoffCheckerSessionTests
 
         var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
 
-        Assert.False(await Checker().IsSessionRefusedAsync(session));
+        Assert.False(await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, session));
     }
 
     /// <summary>
@@ -299,7 +299,7 @@ public class RevocationCutoffCheckerSessionTests
         const string somebodyElse = "somebody-else";
         SetupCutoff(RevocationScope.Subject, somebodyElse, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
 
@@ -323,7 +323,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
 
-        await Checker().IsSessionRefusedAsync(Session());
+        await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         _clients.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }

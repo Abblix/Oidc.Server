@@ -74,7 +74,7 @@ public partial class AuthorizationRequestProcessorTests
 
         // No cutoff recorded is the ordinary case; the tests about revocation build their own.
         _cutoffChecker
-            .Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>()))
+            .Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()))
             .ReturnsAsync(false);
 
         // A real ConsentConstraintEnforcer (not a mock) so the anti-escalation backstop is
@@ -103,8 +103,8 @@ public partial class AuthorizationRequestProcessorTests
             _timeProvider,
             [
                 new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(), tenantAccessor: SingleIssuer.Accessor),
-                new TokenResponseBuilder(_accessTokenService.Object),
-                new IdTokenResponseBuilder(_identityTokenService.Object),
+                new TokenResponseBuilder(_accessTokenService.Object, tenantAccessor: SingleIssuer.Accessor),
+                new IdTokenResponseBuilder(_identityTokenService.Object, tenantAccessor: SingleIssuer.Accessor),
             ],
             consentConstraintEnforcer, tenantAccessor: SingleIssuer.Accessor);
     }

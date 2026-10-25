@@ -10,8 +10,8 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -22,26 +22,25 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="jwtCreator">Creator for issuing JWTs.</param>
 /// <param name="clientKeysProvider">Provider for client encryption keys.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ClientJwtFormatter(
     IJsonWebTokenCreator jwtCreator,
     IClientKeysProvider clientKeysProvider,
-    IAuthServiceKeysProvider serviceKeysProvider,
-    ITenantAccessor tenantAccessor) : IClientJwtFormatter
+    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
 {
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
     /// the token's header algorithm and - per the supplied <paramref name="encryption"/> policy - optionally
     /// encrypting it to the client's registered public key.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
     /// <param name="clientInfo">Information about the client to which the JWT is issued.</param>
     /// <param name="encryption">The encryption policy: which registered client metadata governs encryption, the
     /// content-encryption default, and whether encryption requires a registered key-management algorithm.</param>
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
-    public async Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
+    public async Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
     {
-        var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenantAccessor.CurrentTenant(), true)
+        var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
         // JARM section 2.2 / section 3 opt-in: when the policy requires a registered key-management algorithm and the client has

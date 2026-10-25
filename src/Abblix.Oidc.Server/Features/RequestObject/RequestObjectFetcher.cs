@@ -179,7 +179,7 @@ public partial class RequestObjectFetcher(
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
         // The type is judged below, where a refusal speaks the request object's error vocabulary
-        var result = await tokenValidator.ValidateAsync(requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
+        var result = await tokenValidator.ValidateAsync(tenantAccessor.CurrentTenant(), requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
 
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>

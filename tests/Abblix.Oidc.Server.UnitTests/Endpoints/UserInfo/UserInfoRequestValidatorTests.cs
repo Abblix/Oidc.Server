@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -24,7 +25,6 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Moq;
 using Xunit;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 
@@ -128,12 +128,12 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                "valid_token_123",
+                TestTenant.Matched, "valid_token_123",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(TestTenant.Matched, accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
@@ -169,12 +169,12 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                "valid_token_123",
+                TestTenant.Matched, "valid_token_123",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(TestTenant.Matched, accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
@@ -289,7 +289,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                "invalid_token",
+                TestTenant.Matched, "invalid_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(validationError);
 
@@ -315,7 +315,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                "id_token_value",
+                TestTenant.Matched, "id_token_value",
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
@@ -343,12 +343,12 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                "valid_token",
+                TestTenant.Matched, "valid_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(TestTenant.Matched, accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider
@@ -387,12 +387,12 @@ public class UserInfoRequestValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync("token_123", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<string, TokenTypePolicy, ValidationOptions>((_, _, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "token_123", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, string, TokenTypePolicy, ValidationOptions>((_, _, _, options) => capturedOptions = options))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
-            .Setup(s => s.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthenticateByAccessTokenAsync(TestTenant.Matched, accessToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(authSession, authContext));
 
         _clientInfoProvider

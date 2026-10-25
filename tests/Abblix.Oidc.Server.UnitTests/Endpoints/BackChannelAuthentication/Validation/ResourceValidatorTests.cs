@@ -32,7 +32,7 @@ public class ResourceValidatorTests
     public ResourceValidatorTests()
     {
         _resourceManager = new Mock<IResourceManager>(MockBehavior.Strict);
-        _validator = new ResourceValidator(_resourceManager.Object, new ResourceInference(SingleIssuer.Accessor), tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ResourceValidator(_resourceManager.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(Uri[]? resources = null, string[]? scopes = null)

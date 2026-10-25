@@ -45,25 +45,27 @@ public sealed class TenantScopeTests : IDisposable
     private IRevocationCutoffRegistry Cutoffs => _provider.GetRequiredService<IRevocationCutoffRegistry>();
 
     /// <summary>
-    /// A revocation made within a tenant's scope, with no request at all, lands in that tenant's space: the tenant
-    /// finds it, another tenant does not.
+    /// A revocation made for a tenant, with no request at all, lands in that tenant's space: the tenant finds it,
+    /// another tenant does not.
     /// </summary>
     [Fact]
-    public async Task AWorkOfOneTenantOutsideAnyRequest_KeepsToThatTenant()
+    public async Task ARevocationOfOneTenantOutsideAnyRequest_KeepsToThatTenant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        using (TenantScope.Enter(Acme))
-            await Revoker.RevokeSubjectAsync(Subject, cancellationToken: cancellationToken);
+        await Revoker.RevokeSubjectAsync(Acme, Subject, cancellationToken: cancellationToken);
 
         Assert.NotNull(await Cutoffs.GetCutoffAsync(Acme, RevocationScope.Subject, Subject, cancellationToken));
         Assert.Null(await Cutoffs.GetCutoffAsync(Globex, RevocationScope.Subject, Subject, cancellationToken));
     }
 
+    /// <summary>
+    /// Outside any request and any scope there is no tenant to serve, and asking for one is refused.
+    /// </summary>
     [Fact]
-    public async Task OutsideAnyRequestAndAnyScope_TheWorkIsRefused()
-        => await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Revoker.RevokeSubjectAsync(Subject, cancellationToken: TestContext.Current.CancellationToken));
+    public void OutsideAnyRequestAndAnyScope_TheTenantIsRefused()
+        => Assert.Throws<InvalidOperationException>(
+            () => _provider.GetRequiredService<ITenantAccessor>().CurrentTenant());
 
     /// <summary>
     /// A scope ends where it is disposed, giving back the tenant that was current before it - including an outer

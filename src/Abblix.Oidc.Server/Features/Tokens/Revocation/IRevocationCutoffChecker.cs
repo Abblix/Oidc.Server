@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -27,9 +28,10 @@ public interface IRevocationCutoffChecker
     /// <summary>
     /// The refusal a cutoff calls for on this token, or <c>null</c> when no cutoff reaches it.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="payload">The payload of a token that has already passed signature and lifetime checks.</param>
     /// <returns>A validation error when the token is refused, otherwise <c>null</c>.</returns>
-    Task<JwtValidationError?> CheckAsync(JsonWebTokenPayload payload);
+    Task<JwtValidationError?> CheckAsync(TenantDefinition tenant, JsonWebTokenPayload payload);
 
     /// <summary>
     /// Whether a cutoff refuses this authentication session, so nothing may mint against it.
@@ -46,10 +48,11 @@ public interface IRevocationCutoffChecker
     /// here for as long as the record is kept.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the check is for.</param>
     /// <param name="session">A session about to be used: one the authorization endpoint is considering
     /// reusing, or the one a grant presented at the token endpoint was authorized from.</param>
     /// <returns><c>true</c> when the session must not be used.</returns>
-    Task<bool> IsSessionRefusedAsync(AuthSession session);
+    Task<bool> IsSessionRefusedAsync(TenantDefinition tenant, AuthSession session);
 
     /// <summary>
     /// Whether a cutoff recorded against the end user at the grant's client refuses a grant authorized before it,
@@ -61,7 +64,8 @@ public interface IRevocationCutoffChecker
     /// the end user's other clients and in which they may consent to this client again. A grant carrying no such
     /// moment is measured against its session's authentication, which errs towards refusing it.
     /// </remarks>
+    /// <param name="tenant">The tenant the check is for.</param>
     /// <param name="grant">The grant a token request presents for redemption.</param>
     /// <returns><c>true</c> when the grant must not be redeemed.</returns>
-    Task<bool> IsGrantRefusedAtItsClientAsync(AuthorizedGrant grant);
+    Task<bool> IsGrantRefusedAtItsClientAsync(TenantDefinition tenant, AuthorizedGrant grant);
 }

@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -51,8 +52,8 @@ public class RegistrationAccessTokenServiceTests
     {
         JsonWebToken? captured = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => captured = t)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => captured = t)
             .ReturnsAsync("formatted-jwt");
 
         await _service.IssueTokenAsync(ClientId, IssuedAt, TimeSpan.FromDays(30), TokenId);

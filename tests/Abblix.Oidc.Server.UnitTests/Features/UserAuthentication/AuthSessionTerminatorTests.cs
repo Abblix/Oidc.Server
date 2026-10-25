@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Options;
@@ -30,8 +31,8 @@ public class AuthSessionTerminatorTests
     public AuthSessionTerminatorTests()
     {
         _tokenRevoker
-            .Setup(r => r.RevokeSessionAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>()))
-            .Callback((string sessionId, DateTimeOffset? _, CancellationToken _) => _calls.Add($"revoke {sessionId}"))
+            .Setup(r => r.RevokeSessionAsync(TestTenant.Matched, It.IsAny<string>(), null, It.IsAny<CancellationToken>()))
+            .Callback((TenantDefinition _, string sessionId, DateTimeOffset? _, CancellationToken _) => _calls.Add($"revoke {sessionId}"))
             .Returns(Task.CompletedTask);
         _notifier
             .Setup(n => n.NotifyClientsAsync(It.IsAny<string>(), It.IsAny<string>()))
@@ -39,7 +40,7 @@ public class AuthSessionTerminatorTests
             .ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
     }
 
-    private AuthSessionTerminator Terminator => new(_tokenRevoker.Object, _notifier.Object, Options.Create(_options));
+    private AuthSessionTerminator Terminator => new(_tokenRevoker.Object, _notifier.Object, Options.Create(_options), tenantAccessor: SingleIssuer.Accessor);
 
     [Fact]
     public async Task Revokes_the_session_tokens_before_any_client_is_told_when_the_deployment_asks()

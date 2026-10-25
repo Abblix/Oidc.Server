@@ -74,8 +74,9 @@ public class LogoutTokenAsSecurityEventTests
         JsonWebToken? produced = null;
         jwtFormatter
             .Setup(formatter => formatter.FormatAsync(
+                TestTenant.Matched,
                 It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => produced = token)
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => produced = token)
             .ReturnsAsync("encoded.logout.token");
 
         var service = new LogoutTokenService(
@@ -84,9 +85,9 @@ public class LogoutTokenAsSecurityEventTests
             subjectTypeConverter.Object,
             jwtFormatter.Object,
             tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()), tenantAccessor: SingleIssuer.Accessor);
+            Options.Create(new OidcOptions()));
 
-        await service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         Assert.NotNull(produced);
         return produced;

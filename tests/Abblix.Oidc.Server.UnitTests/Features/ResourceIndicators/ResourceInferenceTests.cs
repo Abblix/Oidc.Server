@@ -9,6 +9,7 @@
 using System;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -24,8 +25,7 @@ public class ResourceInferenceTests
     private static readonly Uri Orders = new("https://orders.example.com");
     private static readonly Uri Billing = new("https://billing.example.com");
 
-    private static ResourceInference Inference(bool infer) => new(SingleIssuer.AccessorOf(Options.Create(
-        new TestIssuer
+    private static TenantDefinition Tenant(bool infer) => new TestIssuer
         {
             InferResourceFromScope = infer,
             Resources =
@@ -33,7 +33,7 @@ public class ResourceInferenceTests
                 new ResourceDefinition(Orders, new ScopeDefinition(OrdersRead), new ScopeDefinition(Shared)),
                 new ResourceDefinition(Billing, new ScopeDefinition(BillingRead), new ScopeDefinition(Shared)),
             ],
-        })));
+        }.ToTenant();
 
     /// <summary>
     /// The scopes refer to the one resource that declares one of them, whatever else they ask for.
@@ -41,7 +41,7 @@ public class ResourceInferenceTests
     [Fact]
     public void ScopesReferringToOneResource_InferIt()
     {
-        Assert.True(Inference(infer: true).TryInfer([Scopes.OpenId, OrdersRead], out var resource, out _));
+        Assert.True(ResourceInference.TryInfer(Tenant(infer: true), [Scopes.OpenId, OrdersRead], out var resource, out _));
         Assert.Equal(Orders, resource);
     }
 
@@ -51,7 +51,7 @@ public class ResourceInferenceTests
     [Fact]
     public void ScopesNoResourceDeclares_InferNothing()
     {
-        Assert.True(Inference(infer: true).TryInfer([Scopes.OpenId, Scopes.Profile], out var resource, out _));
+        Assert.True(ResourceInference.TryInfer(Tenant(infer: true), [Scopes.OpenId, Scopes.Profile], out var resource, out _));
         Assert.Null(resource);
     }
 
@@ -64,7 +64,7 @@ public class ResourceInferenceTests
     [InlineData(Shared, Shared)]
     public void ScopesReferringToSeveralResources_AreRefused(string first, string second)
     {
-        Assert.False(Inference(infer: true).TryInfer([first, second], out var resource, out var errorDescription));
+        Assert.False(ResourceInference.TryInfer(Tenant(infer: true), [first, second], out var resource, out var errorDescription));
         Assert.Null(resource);
         Assert.NotNull(errorDescription);
     }
@@ -77,7 +77,7 @@ public class ResourceInferenceTests
     [InlineData(Shared)]
     public void InferenceOff_InfersNothing(string scope)
     {
-        Assert.True(Inference(infer: false).TryInfer([scope], out var resource, out _));
+        Assert.True(ResourceInference.TryInfer(Tenant(infer: false), [scope], out var resource, out _));
         Assert.Null(resource);
     }
 }

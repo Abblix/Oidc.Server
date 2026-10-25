@@ -85,7 +85,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
         var tokenIds = Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "jti");
         var serviceFormatter = new Mock<IAuthServiceJwtFormatter>();
         serviceFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("token");
         var session = new AuthSession("subject", "session", clock.GetUtcNow(), "local");
         AuthorizationContext Context(string clientId) => new(clientId, ["openid"], null);
@@ -100,14 +100,14 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
                     SingleIssuer.LicensedCatalog,
-                    new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>(), tenantAccessor: SingleIssuer.Accessor),
-                    ScopeClaims.Of(), tenantAccessor: SingleIssuer.Accessor);
-                return clientId => access.CreateAccessTokenAsync(session, Context(clientId), client, grantId: null, null);
+                    new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
+                    ScopeClaims.Of());
+                return clientId => access.CreateAccessTokenAsync(SingleIssuer.Tenant, session, Context(clientId), client, grantId: null, null);
 
             case IdentityToken:
                 var clientFormatter = new Mock<IClientJwtFormatter>();
                 clientFormatter
-                    .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+                    .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
                     .ReturnsAsync("token");
                 var claims = new Mock<IUserClaimsProvider>();
                 claims
@@ -118,8 +118,9 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                         It.IsAny<ClientInfo>()))
                     .ReturnsAsync(new JsonObject());
                 var identity = new IdentityTokenService(
-                    SingleIssuer.Accessor, SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object, options);
+                    SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object, options);
                 return clientId => identity.CreateIdentityTokenAsync(
+                    SingleIssuer.Tenant,
                     session, Context(clientId), client, includeUserClaims: false, authorizationCode: null, accessToken: null);
 
             case RefreshToken:
@@ -128,13 +129,11 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     tokenIds,
                     serviceFormatter.Object,
                     Mock.Of<ITokenRegistry>(),
-                    new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>(), tenantAccessor: SingleIssuer.Accessor),
-                    new RefreshTokenRotationPolicy(SingleIssuer.Accessor),
+                    new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>()),
                     new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
-                    SingleIssuer.LicensedCatalog,
-                    SingleIssuer.Accessor);
-                return clientId => refresh.CreateRefreshTokenAsync(session, Context(clientId), client, null, "grant");
+                    SingleIssuer.LicensedCatalog);
+                return clientId => refresh.CreateRefreshTokenAsync(SingleIssuer.Tenant, session, Context(clientId), client, null, "grant");
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "No such token in this test.");

@@ -60,7 +60,7 @@ public class ClientJwtFormatterTests
         _formatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeysProvider.Object,
-            _serviceKeysProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+            _serviceKeysProvider.Object);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
@@ -98,7 +98,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _formatter.FormatAsync(token, _clientInfo, UserInfoPolicy(_clientInfo));
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
 
         // Assert
         Assert.Same(_signingKeyRS256, capturedSigningKey);
@@ -135,7 +135,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Same(_clientEncryptionKey, capturedEncryptionKey);
@@ -171,7 +171,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Null(capturedEncryptionKey);
@@ -204,7 +204,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        var result = await _formatter.FormatAsync(token, _clientInfo, UserInfoPolicy(_clientInfo));
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
 
         // Assert
         Assert.Equal(EncodedJwt, result);
@@ -247,7 +247,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        var result = await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Equal(EncodedJwt, result);
@@ -291,7 +291,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        var result = await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Equal(EncodedJwt, result);
@@ -325,6 +325,6 @@ public class ClientJwtFormatterTests
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _formatter.FormatAsync(token, _clientInfo, UserInfoPolicy(_clientInfo)));
+            await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo)));
     }
 }

@@ -10,8 +10,8 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -23,17 +23,16 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
 	ITenantCatalog catalog,
-	IAuthServiceKeysProvider serviceKeysProvider,
-	ITenantAccessor tenantAccessor) : IAuthServiceJwtValidator
+	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
 	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="jwt">The JWT string to validate.</param>
 	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
@@ -41,6 +40,7 @@ public class AuthServiceJwtValidator(
 	/// A task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.
 	/// </returns>
 	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
+		TenantDefinition tenant,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
@@ -51,10 +51,10 @@ public class AuthServiceJwtValidator(
 			{
 				Options = options,
 				TokenTypes = tokenTypes,
-				ValidateIssuer = ValidateIssuerAsync,
-				ValidateAudience = ValidateAudienceAsync,
-				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenantAccessor.CurrentTenant()),
-				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenantAccessor.CurrentTenant(), true),
+				ValidateIssuer = issuer => ValidateIssuerAsync(tenant, issuer),
+				ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
+				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
+				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
 				// No profile tolerance here, and the absence is a decision. These are tokens this
 				// server issued and reads back, so the freshness a profile bounds is not the
@@ -68,7 +68,7 @@ public class AuthServiceJwtValidator(
 		// would be judged against no records at all, at every endpoint that reads it
 		if (result.TryGetSuccess(out var token) &&
 		    JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
-		    !RefreshTokenTenant.Names(token.Payload, TenantKey.PartitionOf(tenantAccessor.CurrentTenant())))
+		    !RefreshTokenTenant.Names(token.Payload, TenantKey.PartitionOf(tenant)))
 		{
 			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
 		}
@@ -79,14 +79,15 @@ public class AuthServiceJwtValidator(
 	/// <summary>
 	/// Validates the issuer of the JWT against the expected issuer.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="issuer">The issuer value to validate.</param>
 	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
-	private Task<bool> ValidateIssuerAsync(string issuer)
+	private Task<bool> ValidateIssuerAsync(TenantDefinition tenant, string issuer)
 	{
-		var result = issuer == tenantAccessor.CurrentTenant().Issuer.OriginalString;
+		var result = issuer == tenant.Issuer.OriginalString;
 		if (result)
 		{
-			LicenseChecker.CheckIssuer(issuer, tenantAccessor.CurrentTenant(), catalog);
+			LicenseChecker.CheckIssuer(issuer, tenant, catalog);
 		}
 
 		return Task.FromResult(result);
@@ -95,6 +96,7 @@ public class AuthServiceJwtValidator(
 	/// <summary>
 	/// Validates the audience of the JWT by checking whether it names this service or any known client.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="audiences">A collection of audience values to validate.</param>
 	/// <returns>A task that yields true if any of the audience values are valid, otherwise false.</returns>
 	/// <remarks>
@@ -111,9 +113,9 @@ public class AuthServiceJwtValidator(
 	/// A token minted for a named resource names that resource, so it is not valid here either - which is what
 	/// keeps a token issued for somebody else's API from opening this service's own endpoints.
 	/// </remarks>
-	private Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
+	private static Task<bool> ValidateAudienceAsync(TenantDefinition tenant, IEnumerable<string> audiences)
 	{
-		var issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString;
+		var issuer = tenant.Issuer.OriginalString;
 		return Task.FromResult(audiences.Contains(issuer, StringComparer.Ordinal));
 	}
 }

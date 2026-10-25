@@ -56,7 +56,7 @@ public partial class BackChannelAuthenticationTests
         var now = ClockOf(host).GetUtcNow();
         var sessionBegan = now.AddHours(-1);
         await RevokerOf(host).RevokeSubjectAsync(
-            LoginHint,
+            TestTenant.Of(host.Services), LoginHint,
             cutoffAfterTheSession ? now : sessionBegan.AddHours(-1),
             TestContext.Current.CancellationToken);
 
@@ -88,7 +88,7 @@ public partial class BackChannelAuthenticationTests
         var now = ClockOf(host).GetUtcNow();
         var cutoff = now.AddMinutes(-30);
         await RevokerOf(host).RevokeSubjectAtClientAsync(
-            LoginHint, ciba.ClientId, cutoff, TestContext.Current.CancellationToken);
+            TestTenant.Of(host.Services), LoginHint, ciba.ClientId, cutoff, TestContext.Current.CancellationToken);
 
         // The session predates the cutoff in both cases, so what decides is the approval moment alone: the host's
         // own when it set one, the completion's otherwise.
@@ -243,7 +243,7 @@ public partial class BackChannelAuthenticationTests
     }
 
     private static ITokenRevoker RevokerOf(WebApplicationFactory<Program> host)
-        => TestTenant.RevokerOf(host.Services);
+        => host.Services.GetRequiredService<ITokenRevoker>();
 
     private static TimeProvider ClockOf(WebApplicationFactory<Program> host)
         => host.Services.GetRequiredService<TimeProvider>();

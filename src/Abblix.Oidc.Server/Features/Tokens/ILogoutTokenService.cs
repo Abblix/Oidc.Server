@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -25,6 +26,7 @@ public interface ILogoutTokenService
     /// This token is sent to clients to initiate the back-channel logout process, enabling them to clean up
     /// user sessions in accordance with the OpenID Connect back-channel logout specification.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">Details about the client application that will receive the logout token. This includes
     ///     the client's identifier and other relevant configuration settings that may affect the token generation process.
     /// </param>
@@ -35,5 +37,5 @@ public interface ILogoutTokenService
     /// <returns>A task that returns a <see cref="JsonWebToken"/>.
     /// This token is specifically formatted to conform to the OpenID Connect back-channel logout specification,
     /// containing claims such as 'sub', 'sid', and 'events' to indicate the logout event to the client.</returns>
-    Task<EncodedJsonWebToken> CreateLogoutTokenAsync(ClientInfo clientInfo, LogoutContext logoutContext);
+    Task<EncodedJsonWebToken> CreateLogoutTokenAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext);
 }

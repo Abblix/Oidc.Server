@@ -17,9 +17,8 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// Validates the resources requested in a device authorization request.
 /// </summary>
 /// <param name="resourceManager">The service for managing and validating resources.</param>
-/// <param name="inference">Infers the resource a request naming none is for from its scopes.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ResourceValidator(IResourceManager resourceManager, ResourceInference inference, ITenantAccessor tenantAccessor)
+public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor tenantAccessor)
     : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
@@ -33,7 +32,7 @@ public class ResourceValidator(IResourceManager resourceManager, ResourceInferen
 
         if (requested is not { Length: > 0 })
         {
-            if (!inference.TryInfer(request.Scope ?? [], out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenantAccessor.CurrentTenant(), request.Scope ?? [], out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
             if (inferred is null)
