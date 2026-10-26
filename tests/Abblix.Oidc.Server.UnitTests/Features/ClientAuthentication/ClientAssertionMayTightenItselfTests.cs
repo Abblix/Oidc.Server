@@ -24,6 +24,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using System.Linq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
@@ -250,13 +251,17 @@ public class ClientAssertionMayTightenItselfTests
 
         var token = CreateAssertion(issuedAt, expiresAt, notBefore);
 
-        // The real validator drives these callbacks, and the assertion path depends on what they
-        // leave behind: the issuer callback is what resolves the client into the validation context.
+        // The real validator drives these callbacks, signing keys first and the issuer after, and the
+        // assertion path depends on what they leave behind: resolving the keys is what finds the client
+        // and records it in the validation context.
         tokenValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(
                 async (_, parameters) =>
                 {
+                    if (parameters.ResolveIssuerSigningKeys != null)
+                        await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                     if (parameters.ValidateIssuer != null)
                         await parameters.ValidateIssuer(ClientId);
 

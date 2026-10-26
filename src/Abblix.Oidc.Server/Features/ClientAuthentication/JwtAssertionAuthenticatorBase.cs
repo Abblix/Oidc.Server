@@ -64,8 +64,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
     /// <summary>
     /// The control bundle the tenant's default profile mandates, for a derived authenticator
-    /// building its own validation parameters. Read from the same tenant this class validates
-    /// against, so the two cannot disagree.
+    /// building its own validation parameters. Pass the tenant <see cref="ValidateJwtAsync"/> was
+    /// handed: <see cref="TryAuthenticateClientAsync"/> judges the timestamps and the audience against
+    /// that same tenant, and only that argument keeps the two in step.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     protected static SecurityProfileRequirements DefaultProfileRequirementsOf(TenantDefinition tenant)
@@ -77,9 +78,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// it is validating, so its profile is not known until the validation has finished.
     /// </summary>
     /// <remarks>
-    /// The first pass ran under the deployment's own window, which is the widest any client can be
-    /// given - a deployment-wide profile is a floor and a client may only tighten it. So this
-    /// narrows and never widens.
+    /// The first pass ran under the window of the tenant's default profile, which is the widest any
+    /// client can be given - the tenant's profile is a floor and a client may only tighten it. So
+    /// this narrows and never widens.
     ///
     /// Placed before the identifier is reserved, because this path never gives a reservation back:
     /// a refusal after it would burn the assertion's own identifier on a request this check was

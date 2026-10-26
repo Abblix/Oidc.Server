@@ -79,8 +79,8 @@ public partial class ClientSecretJwtAuthenticator(
                 // so the base class judges the type after validation
                 TokenTypes = TokenTypePolicy.CheckedByCaller,
 
-                // The tolerance belongs to the profile this deployment is held to, ceiling
-                // included - RFC 7523 Section 3 names no ceiling of its own.
+                // The tolerance belongs to the tenant's default profile, ceiling included -
+                // RFC 7523 Section 3 names no ceiling of its own.
                 ClockSkew = DefaultProfileRequirementsOf(tenant).ClockSkewOrDefault(),
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),

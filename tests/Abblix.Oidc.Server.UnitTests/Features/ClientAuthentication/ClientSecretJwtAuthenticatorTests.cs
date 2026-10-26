@@ -208,16 +208,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -400,16 +400,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -453,16 +453,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -507,16 +507,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
