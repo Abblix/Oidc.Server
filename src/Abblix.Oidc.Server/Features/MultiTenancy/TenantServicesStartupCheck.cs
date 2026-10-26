@@ -132,14 +132,15 @@ internal sealed class TenantServicesStartupCheck(
         {
             return $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.SigningKeySource)} gives one key " +
                    "for every tenant, so each tenant's security events would be signed alike. " +
-                   $"Leave it unset and register {nameof(TenantSecurityEventTokenSigner)} as the " +
-                   $"{nameof(ISecurityEventTokenSigner)}; " + SharedSignalsTransmitter;
+                   $"Leave it unset and call {nameof(TenantSecurityEventsExtensions.AddTenantSecurityEventTokenSigner)}() " +
+                   "on what AddOidcServices() returns; " + SharedSignalsTransmitter;
         }
 
         return SignerOf(serviceProvider) is null or TenantSecurityEventTokenSigner
             ? null
             : $"{nameof(ISecurityEventTokenSigner)} is the host's own, which signs every tenant's security events " +
-              $"alike. Register {nameof(TenantSecurityEventTokenSigner)} instead; " + SharedSignalsTransmitter;
+              $"alike. Call {nameof(TenantSecurityEventsExtensions.AddTenantSecurityEventTokenSigner)}() on what " +
+              "AddOidcServices() returns instead; " + SharedSignalsTransmitter;
     }
 
     /// <summary>

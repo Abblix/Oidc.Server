@@ -268,8 +268,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         IStreamStore? streams = null,
         ILoggerProvider? logs = null,
         Action<IOidcServerBuilder>? declare = null,
-        bool multipleStreamsPerReceiver = false,
-        SignallingTenantAccessor? tenants = null)
+        bool multipleStreamsPerReceiver = false)
     {
         await TestLicense.Loaded;
 
@@ -296,11 +295,6 @@ public sealed partial class SharedSignalsTenantReleaseTests
             builder.Services.Replace(ServiceDescriptor.Singleton(streams));
 
         builder.Services.AddSingleton<ITenantStore>(store);
-        if (tenants is not null)
-        {
-            builder.Services.Replace(ServiceDescriptor.Singleton<ITenantAccessor>(provider
-                => tenants.Over(new HttpContextTenantAccessor(provider.GetRequiredService<IHttpContextAccessor>()))));
-        }
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
         server.AddSharedSignals();

@@ -50,11 +50,8 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
     /// <inheritdoc />
     public async Task StartedAsync(CancellationToken cancellationToken)
     {
-        if (serviceProvider.GetRequiredService<IStreamStore>() is TenantConfiguredStreamStore store &&
-            serviceProvider.GetService<TenantConfiguredStreams>() is { } declared)
-        {
-            Refuse(await DeclarationFailuresAsync(store, declared, cancellationToken));
-        }
+        if (serviceProvider.GetService<TenantConfiguredStreams>() is { } declared)
+            Refuse(await DeclarationFailuresAsync(declared, cancellationToken));
     }
 
     private static void Refuse(List<string> failures)
@@ -75,9 +72,10 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
     private List<string> Failures()
     {
         var failures = new List<string>();
-        Require<IStreamStore, TenantConfiguredStreamStore>(failures);
-
-        Require<ITransmitterIdentity, TenantTransmitterIdentity>(failures);
+        // Resolved where no tenant is served, the server's registrations answer with what serves no tenant; a part a
+        // later registration replaced answers as itself, and would serve every tenant alike
+        Require<IStreamStore, NoTenantStreamStore>(failures);
+        Require<ITransmitterIdentity, NoTenantTransmitterIdentity>(failures);
         Require<IPushDeliverySweep, TenantPushDeliverySweep>(failures);
 
         var transmitter = serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
@@ -106,11 +104,11 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
     }
 
     private async Task<List<string>> DeclarationFailuresAsync(
-        TenantConfiguredStreamStore store,
         TenantConfiguredStreams declared,
         CancellationToken cancellationToken)
     {
         var catalog = serviceProvider.GetRequiredService<ITenantCatalog>();
+        var transmitters = serviceProvider.GetRequiredService<TenantTransmitters>();
         var onlySettings = serviceProvider.GetRequiredService<ITenantStore>() is OptionsTenantStore;
 
         var failures = new List<string>();
@@ -128,10 +126,9 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
                 continue;
             }
 
-            using var scope = TenantScope.Enter(tenant);
             try
             {
-                store.ForCurrentTenant();
+                transmitters.For(tenant);
             }
             catch (InvalidOperationException exception)
             {

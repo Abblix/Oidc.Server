@@ -18,12 +18,12 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <remarks>
 /// A stream is stored under its receiver's identifier prefixed with the tenant's space, which names the tenant and
 /// its generation, and handed back without it. So one tenant's receiver never finds another's stream, a listing
-/// returns only the current tenant's streams, and a tenant created again under the identifier of one removed takes
+/// returns only this tenant's streams, and a tenant created again under the identifier of one removed takes
 /// over none of them.
 /// </remarks>
 /// <param name="inner">The store every tenant shares.</param>
-/// <param name="tenantAccessor">Names the tenant of the current request or scope.</param>
-public sealed class TenantStreamStore(IStreamStore inner, ITenantAccessor tenantAccessor) : IStreamStore
+/// <param name="tenant">The tenant whose streams these are.</param>
+public sealed class TenantStreamStore(IStreamStore inner, TenantDefinition tenant) : IStreamStore
 {
     /// <inheritdoc />
     public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
@@ -64,7 +64,7 @@ public sealed class TenantStreamStore(IStreamStore inner, ITenantAccessor tenant
     public Task<bool> DeleteAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
         => inner.DeleteAsync(Own(receiverId), streamId, cancellationToken);
 
-    private string Own(string receiverId) => TenantKey.Of(tenantAccessor.CurrentTenant(), receiverId);
+    private string Own(string receiverId) => TenantKey.Of(tenant, receiverId);
 
     private StreamState Owned(StreamState stream) => stream with { ReceiverId = Own(stream.ReceiverId) };
 

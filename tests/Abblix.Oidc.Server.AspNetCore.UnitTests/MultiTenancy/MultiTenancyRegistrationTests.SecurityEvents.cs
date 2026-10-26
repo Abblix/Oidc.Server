@@ -58,7 +58,7 @@ public partial class MultiTenancyRegistrationTests
     }
 
     private static void UseTenantSigner(IServiceCollection services)
-        => services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
+        => new OidcServerBuilder(services).AddTenantSecurityEventTokenSigner();
 
     /// <summary>
     /// One signing key configured for security events signs every tenant's events alike, so it refuses the start.
@@ -85,7 +85,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = SigningEvents(null, services =>
             services.Replace(ServiceDescriptor.Singleton(Mock.Of<ISecurityEventTokenSigner>())));
 
-        Assert.Contains(nameof(TenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantSecurityEventsExtensions.AddTenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public partial class MultiTenancyRegistrationTests
         using var provider = SigningEvents(null, services =>
             services.Replace(ServiceDescriptor.Scoped(_ => Mock.Of<ISecurityEventTokenSigner>())));
 
-        Assert.Contains(nameof(TenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
+        Assert.Contains(nameof(TenantSecurityEventsExtensions.AddTenantSecurityEventTokenSigner), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -143,20 +143,19 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// The tenants' signer signs a token with a key of the tenant serving the request, so two tenants sign with
-    /// different keys.
+    /// The tenants' signer, resolved where a tenant is served, signs a token with a key of that tenant, so two tenants
+    /// sign with different keys.
     /// </summary>
     [Fact]
     public async Task TheTenantsSigner_SignsWithTheKeyOfTheTenantServingTheRequest()
     {
         using var provider = SigningEvents(null, UseTenantSigner);
-        var signer = provider.GetRequiredService<ISecurityEventTokenSigner>();
         var tenants = provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants;
 
         async Task<string?> KeyIdAtAsync(TenantDefinition tenant)
         {
             EnterTenant(provider, tenant);
-            var signed = await signer.SignAsync(
+            var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>().SignAsync(
                 new SecurityEventToken(new JsonWebToken()),
                 TestContext.Current.CancellationToken);
             var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
