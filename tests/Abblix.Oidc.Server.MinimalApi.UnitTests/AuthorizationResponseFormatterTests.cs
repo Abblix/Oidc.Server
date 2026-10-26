@@ -83,7 +83,8 @@ public class AuthorizationResponseFormatterTests
     }
 
     /// <summary>
-    /// The session management cookie is asked for as the session the response was issued under is kept.
+    /// The session management cookie is asked for as the session the response was issued under is kept, and for the
+    /// tenant serving the request.
     /// </summary>
     [Fact]
     public async Task TheSessionManagementCookie_IsAskedForAsTheSessionIsKept()
@@ -100,10 +101,11 @@ public class AuthorizationResponseFormatterTests
             SessionPersistence = persistence,
         };
 
+        var served = PagesOf(IssuerPages);
         await HttpResultRunner.RunAsync(
-            await Formatter(PagesOf(IssuerPages), cookies).FormatResponseAsync(request, success));
+            await Formatter(served, cookies).FormatResponseAsync(request, success));
 
-        Assert.Equal([persistence], cookies.Asked);
+        Assert.Equal([(served.Id, persistence)], cookies.Asked);
     }
 
     /// <summary>
@@ -160,29 +162,29 @@ public class AuthorizationResponseFormatterTests
     /// <summary>Session management that is on, and notes how each session cookie it hands out is kept.</summary>
     private sealed class AsksForTheSessionCookie : ISessionManagementService
     {
-        public List<SessionPersistence> Asked { get; } = [];
+        public List<(string TenantId, SessionPersistence Persistence)> Asked { get; } = [];
 
         public bool Enabled => true;
 
-        public Cookie GetSessionCookie(SessionPersistence persistence)
+        public Cookie GetSessionCookie(TenantDefinition tenant, SessionPersistence persistence)
         {
-            Asked.Add(persistence);
+            Asked.Add((tenant.Id, persistence));
             return new Cookie("session", new Abblix.Oidc.Server.Common.CookieOptions());
         }
 
         public string GetSessionState(AuthorizationRequest request, string sessionId) => sessionId;
 
-        public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant) => throw new NotSupportedException();
     }
 
     private sealed class NoSessionManagement : ISessionManagementService
     {
         public bool Enabled => false;
-        public Cookie GetSessionCookie(Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence persistence) => throw new NotSupportedException();
+        public Cookie GetSessionCookie(TenantDefinition tenant, Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence persistence) => throw new NotSupportedException();
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
 
-        public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant) => throw new NotSupportedException();
     }
 
     private sealed class NoParameters : IParametersProvider

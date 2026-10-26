@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.SharedSignals.Transmitter;
 
 
 namespace Abblix.DocSamples.Samples;
@@ -20,11 +20,10 @@ namespace Abblix.DocSamples.Samples;
 /// </remarks>
 internal static class TenantScopeSample
 {
-    internal static async Task EndSessionAsync(
+    internal static async Task DispatchAsync(
         ITenantCatalog catalog,
-        IAuthSessionTerminator sessionTerminator,
-        string sessionId,
-        string subject,
+        EventDispatcher dispatcher,
+        SecurityEventDescriptor descriptor,
         CancellationToken cancellationToken)
     {
         // <sample>
@@ -32,7 +31,7 @@ internal static class TenantScopeSample
             ?? throw new InvalidOperationException("No tenant is registered under the id acme.");
 
         using (TenantScope.Enter(tenant))
-            await sessionTerminator.TerminateAsync(sessionId, subject);
+            await dispatcher.DispatchAsync(descriptor, cancellationToken);
         // </sample>
     }
 }

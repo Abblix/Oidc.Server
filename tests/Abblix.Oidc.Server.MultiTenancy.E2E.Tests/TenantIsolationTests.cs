@@ -151,12 +151,13 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         _app.MapOidcEndpoints();
 
         // The host's page the user enters the code on; the tenant comes from the path it is reached under
-        _app.MapPost("/device", async (HttpContext context, IUserCodeVerificationService verification) =>
+        _app.MapPost("/device", async (
+            HttpContext context, IUserCodeVerificationService verification, ITenantAccessor tenantAccessor) =>
         {
             var userCode = (await context.Request.ReadFormAsync())[DeviceAuthorizationResponse.Parameters.UserCode]
                 .ToString();
 
-            if (await verification.VerifyAsync(userCode) is not ValidUserCode valid)
+            if (await verification.VerifyAsync(tenantAccessor.CurrentTenant(), userCode) is not ValidUserCode valid)
                 return Results.BadRequest();
 
             var grant = new AuthorizedGrant(
@@ -167,7 +168,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
                     "local"),
                 new AuthorizationContext(valid.ClientId, valid.Scope, null, valid.Resources));
 
-            return await verification.ApproveAsync(userCode, grant) ? Results.Ok() : Results.Conflict();
+            return await verification.ApproveAsync(tenantAccessor.CurrentTenant(), userCode, grant) ? Results.Ok() : Results.Conflict();
         });
 
         await _app.StartAsync(TestContext.Current.CancellationToken);

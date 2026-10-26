@@ -116,7 +116,7 @@ public class UserCodeVerificationServiceRateLimitTests
                 options),
             new UserCodeNormalizer(options),
             requestInfo.Object,
-            new FakeTimeProvider(_now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(_now));
     }
 
     private DeviceAuthorizationRequest PendingCode() =>
@@ -137,10 +137,10 @@ public class UserCodeVerificationServiceRateLimitTests
         for (var i = 0; i < 100; i++)
         {
             var guessing = ServiceOver(null, address: "203.0.113." + (i % 250 + 1));
-            await guessing.VerifyAsync("9999" + i.ToString("0000"));
+            await guessing.VerifyAsync(SingleIssuer.Tenant, "9999" + i.ToString("0000"));
         }
 
-        var result = await ServiceOver(PendingCode(), address: "198.51.100.23").VerifyAsync(TheCode);
+        var result = await ServiceOver(PendingCode(), address: "198.51.100.23").VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
         Assert.Equal(TimeSpan.FromSeconds(40), limited.RetryAfter);
@@ -167,10 +167,10 @@ public class UserCodeVerificationServiceRateLimitTests
         used.Status = DeviceAuthorizationStatus.Authorized;
         var service = ServiceOver(used, configure: options => options.MaxFailuresBeforeBackoff = 2);
 
-        await service.VerifyAsync(TheCode);
-        await service.VerifyAsync(TheCode);
+        await service.VerifyAsync(SingleIssuer.Tenant, TheCode);
+        await service.VerifyAsync(SingleIssuer.Tenant, TheCode);
 
-        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(TheCode));
+        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -188,9 +188,9 @@ public class UserCodeVerificationServiceRateLimitTests
         void SmallCap(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 3;
 
         for (var i = 0; i < 3; i++)
-            await ServiceOver(null, configure: SmallCap).VerifyAsync("9999000" + i);
+            await ServiceOver(null, configure: SmallCap).VerifyAsync(SingleIssuer.Tenant, "9999000" + i);
 
-        var result = await ServiceOver(PendingCode(), configure: SmallCap).VerifyAsync(TheCode);
+        var result = await ServiceOver(PendingCode(), configure: SmallCap).VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
         Assert.Equal(TimeSpan.FromSeconds(40), limited.RetryAfter);
@@ -206,10 +206,10 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
-        await ServiceOver(null, address: Address, configure: OneAttempt).VerifyAsync("99990000");
+        await ServiceOver(null, address: Address, configure: OneAttempt).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
         var elsewhere = await ServiceOver(PendingCode(), address: "198.51.100.23", configure: OneAttempt)
-            .VerifyAsync(TheCode);
+            .VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         Assert.IsType<ValidUserCode>(elsewhere);
     }
@@ -222,10 +222,10 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
-        await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync("99990000");
+        await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
         var next = await ServiceOver(PendingCode(), address: null, configure: OneAttempt)
-            .VerifyAsync(TheCode);
+            .VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         Assert.IsType<TooManyUserCodeAttempts>(next);
     }
@@ -239,10 +239,10 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         void OneOfTheBudget(DeviceAuthorizationOptions options) => options.MaxFailedAttemptsPerWindow = 1;
 
-        await ServiceOver(null, address: null, configure: OneOfTheBudget).VerifyAsync("99990000");
+        await ServiceOver(null, address: null, configure: OneOfTheBudget).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
         var visible = await ServiceOver(PendingCode(), address: Address, configure: OneOfTheBudget)
-            .VerifyAsync(TheCode);
+            .VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         Assert.IsType<TooManyUserCodeAttempts>(visible);
     }
@@ -262,10 +262,10 @@ public class UserCodeVerificationServiceRateLimitTests
         }
 
         for (var i = 0; i < 4; i++)
-            await ServiceOver(null, address: null, configure: SmallBudget).VerifyAsync("9999000" + i);
+            await ServiceOver(null, address: null, configure: SmallBudget).VerifyAsync(SingleIssuer.Tenant, "9999000" + i);
 
         var visible = await ServiceOver(PendingCode(), address: Address, configure: SmallBudget)
-            .VerifyAsync(TheCode);
+            .VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         Assert.IsType<ValidUserCode>(visible);
     }
@@ -280,10 +280,10 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
-        await ServiceOver(null, address: $"::ffff:{Address}", configure: OneAttempt).VerifyAsync("99990000");
+        await ServiceOver(null, address: $"::ffff:{Address}", configure: OneAttempt).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
         var result = await ServiceOver(PendingCode(), address: Address, configure: OneAttempt)
-            .VerifyAsync(TheCode);
+            .VerifyAsync(SingleIssuer.Tenant, TheCode);
 
         Assert.IsType<TooManyUserCodeAttempts>(result);
     }
@@ -305,9 +305,9 @@ public class UserCodeVerificationServiceRateLimitTests
         var service = ServiceOver(used);
 
         for (var i = 0; i < 5; i++)
-            await service.VerifyAsync(TheCode);
+            await service.VerifyAsync(SingleIssuer.Tenant, TheCode);
 
-        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(TheCode));
+        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -323,11 +323,11 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         var guessing = ServiceOver(null);
         for (var i = 0; i < 10; i++)
-            Assert.IsType<InvalidUserCode>(await guessing.VerifyAsync(TheCode));
+            Assert.IsType<InvalidUserCode>(await guessing.VerifyAsync(SingleIssuer.Tenant, TheCode));
 
         var issued = ServiceOver(PendingCode());
 
-        Assert.IsType<ValidUserCode>(await issued.VerifyAsync(TheCode));
+        Assert.IsType<ValidUserCode>(await issued.VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -347,12 +347,12 @@ public class UserCodeVerificationServiceRateLimitTests
         for (var i = 0; i < 10; i++)
         {
             if (approve)
-                Assert.False(await guessing.ApproveAsync(TheCode, grant));
+                Assert.False(await guessing.ApproveAsync(SingleIssuer.Tenant, TheCode, grant));
             else
-                Assert.False(await guessing.DenyAsync(TheCode));
+                Assert.False(await guessing.DenyAsync(SingleIssuer.Tenant, TheCode));
         }
 
-        Assert.IsType<ValidUserCode>(await ServiceOver(PendingCode()).VerifyAsync(TheCode));
+        Assert.IsType<ValidUserCode>(await ServiceOver(PendingCode()).VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -372,7 +372,7 @@ public class UserCodeVerificationServiceRateLimitTests
         for (var i = 0; i < 5; i++)
             await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
 
-        Assert.IsType<InvalidUserCode>(await ServiceOver(PendingCode()).VerifyAsync("1234-5678"));
+        Assert.IsType<InvalidUserCode>(await ServiceOver(PendingCode()).VerifyAsync(SingleIssuer.Tenant, "1234-5678"));
     }
 
     /// <summary>
@@ -389,8 +389,8 @@ public class UserCodeVerificationServiceRateLimitTests
             new AuthorizationContext("a-client", ["openid"], null));
 
         Assert.True(approve
-            ? await service.ApproveAsync("1234-5678", grant)
-            : await service.DenyAsync("1234-5678"));
+            ? await service.ApproveAsync(SingleIssuer.Tenant, "1234-5678", grant)
+            : await service.DenyAsync(SingleIssuer.Tenant, "1234-5678"));
     }
 
     /// <summary>
@@ -409,8 +409,8 @@ public class UserCodeVerificationServiceRateLimitTests
             new AuthorizationContext("a-client", ["openid"], null));
 
         Assert.False(approve
-            ? await service.ApproveAsync(TheCode, grant)
-            : await service.DenyAsync(TheCode));
+            ? await service.ApproveAsync(SingleIssuer.Tenant, TheCode, grant)
+            : await service.DenyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -435,7 +435,7 @@ public class UserCodeVerificationServiceRateLimitTests
         await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
 
         Assert.IsType<ValidUserCode>(
-            await ServiceOver(PendingCode(), configure: PauseAtThree).VerifyAsync(TheCode));
+            await ServiceOver(PendingCode(), configure: PauseAtThree).VerifyAsync(SingleIssuer.Tenant, TheCode));
 
         await limiter.RecordFailureAsync(SingleIssuer.Tenant, TheCode, Address);
 
@@ -459,7 +459,7 @@ public class UserCodeVerificationServiceRateLimitTests
         for (var i = 0; i < 100; i++)
         {
             var guessing = ServiceOver(null, address: "203.0.113." + (i % 250 + 1));
-            Assert.IsType<InvalidUserCode>(await guessing.VerifyAsync("9999" + i.ToString("0000")));
+            Assert.IsType<InvalidUserCode>(await guessing.VerifyAsync(SingleIssuer.Tenant, "9999" + i.ToString("0000")));
         }
 
         // A real, pending code from an address that has spent nothing of its own is refused too: the
@@ -467,7 +467,7 @@ public class UserCodeVerificationServiceRateLimitTests
         // the value that was typed.
         var issued = ServiceOver(PendingCode(), address: "198.51.100.23");
 
-        Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(TheCode));
+        Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -489,7 +489,7 @@ public class UserCodeVerificationServiceRateLimitTests
         for (var i = 0; i < 100; i++)
         {
             var guessing = ServiceOver(null, address: "203.0.113." + (i % 250 + 1));
-            await guessing.VerifyAsync("9999" + i.ToString("0000"));
+            await guessing.VerifyAsync(SingleIssuer.Tenant, "9999" + i.ToString("0000"));
         }
 
         var service = ServiceOver(PendingCode());
@@ -498,8 +498,8 @@ public class UserCodeVerificationServiceRateLimitTests
             new AuthSession("a-user", "a-session", _now, "device"),
             new AuthorizationContext("a-client", ["openid"], null));
 
-        Assert.False(await service.ApproveAsync(TheCode, grant));
-        Assert.False(await service.DenyAsync(TheCode));
+        Assert.False(await service.ApproveAsync(SingleIssuer.Tenant, TheCode, grant));
+        Assert.False(await service.DenyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -522,18 +522,18 @@ public class UserCodeVerificationServiceRateLimitTests
         {
             var guessing = ServiceOver(null, address: "203.0.113." + (i % 250 + 1));
             if (i % 2 == 0)
-                await guessing.ApproveAsync("9999" + i.ToString("0000"), grant);
+                await guessing.ApproveAsync(SingleIssuer.Tenant, "9999" + i.ToString("0000"), grant);
             else
-                await guessing.DenyAsync("9999" + i.ToString("0000"));
+                await guessing.DenyAsync(SingleIssuer.Tenant, "9999" + i.ToString("0000"));
         }
 
         // One more through verification spends it, which can only happen if the ninety-nine were counted.
         var last = ServiceOver(null, address: "198.51.100.1");
-        await last.VerifyAsync("88888888");
+        await last.VerifyAsync(SingleIssuer.Tenant, "88888888");
 
         var issued = ServiceOver(PendingCode(), address: "198.51.100.23");
 
-        Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(TheCode));
+        Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 
     /// <summary>
@@ -567,9 +567,9 @@ public class UserCodeVerificationServiceRateLimitTests
         for (var i = 0; i < 5; i++)
         {
             if (approve)
-                await service.ApproveAsync(TheCode, grant);
+                await service.ApproveAsync(SingleIssuer.Tenant, TheCode, grant);
             else
-                await service.DenyAsync(TheCode);
+                await service.DenyAsync(SingleIssuer.Tenant, TheCode);
         }
 
         var limiter = new UserCodeRateLimiter(
@@ -599,10 +599,10 @@ public class UserCodeVerificationServiceRateLimitTests
         var service = ServiceOver(used);
 
         for (var i = 0; i < 5; i++)
-            Assert.IsType<UserCodeAlreadyUsed>(await service.VerifyAsync(TheCode));
+            Assert.IsType<UserCodeAlreadyUsed>(await service.VerifyAsync(SingleIssuer.Tenant, TheCode));
 
         // The sixth attempt meets the allowance rather than the status, so the answer changes: the
         // service does not look the code up at all once its attempts are spent.
-        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(TheCode));
+        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(SingleIssuer.Tenant, TheCode));
     }
 }

@@ -66,7 +66,7 @@ public class EndSessionRequestProcessorTests
                     _clientInfoProvider.Object,
                     _logoutNotifier.Object,
                     SingleIssuer.LicensedCatalog),
-                Options.Create(_options), tenantAccessor: SingleIssuer.Accessor),
+                Options.Create(_options)),
             _confirmationStore.Object);
     }
 

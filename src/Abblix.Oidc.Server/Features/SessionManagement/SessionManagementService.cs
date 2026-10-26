@@ -29,12 +29,10 @@ namespace Abblix.Oidc.Server.Features.SessionManagement;
 /// to check and maintain the session state between the client and the server.
 /// </summary>
 /// <param name="options">The options for configuring the OpenID Connect session management service.</param>
-/// <param name="tenantAccessor">Names the tenant whose session cookie is read and written.</param>
 /// <param name="requestInfoProvider">The provider for accessing request-related information, such as whether
 /// the current request is over HTTPS and the request's base path.</param>
 public class SessionManagementService(
     IOptionsSnapshot<OidcOptions> options,
-    ITenantAccessor tenantAccessor,
     IRequestInfoProvider requestInfoProvider) : ISessionManagementService
 {
     private const string CookieNamePlaceHolder = "\"{{cookieName}}\"";
@@ -44,8 +42,8 @@ public class SessionManagementService(
     /// would otherwise overwrite the session the others' check-session pages read. A tenant's id holds only
     /// characters a cookie name may hold.
     /// </summary>
-    private string CheckSessionCookieName
-        => $"{options.Value.CheckSessionCookie.Name}.{TenantKey.IdOf(tenantAccessor.CurrentTenant())}";
+    private string CheckSessionCookieNameOf(TenantDefinition tenant)
+        => $"{options.Value.CheckSessionCookie.Name}.{TenantKey.IdOf(tenant)}";
 
     /// <summary>
     /// Indicates whether session management functionality is enabled based on the configured endpoints.
@@ -66,13 +64,13 @@ public class SessionManagementService(
     ///     <item><c>Secure</c> - Set based on the current request's HTTPS status (required when SameSite=None)</item>
     /// </list>
     /// </remarks>
-    public Cookie GetSessionCookie(SessionPersistence persistence)
+    public Cookie GetSessionCookie(TenantDefinition tenant, SessionPersistence persistence)
     {
         var cookieOptions = options.Value.CheckSessionCookie;
         var path = cookieOptions.Path;
 
         return new Cookie(
-            CheckSessionCookieName,
+            CheckSessionCookieNameOf(tenant),
             new()
             {
                 HttpOnly = false,
@@ -112,7 +110,7 @@ public class SessionManagementService(
     /// </summary>
     /// <returns>A task that returns a <see cref="CheckSessionResponse"/>
     /// containing the HTML content for the check session iframe and the name of the session management cookie.</returns>
-    public async Task<CheckSessionResponse> GetCheckSessionResponseAsync()
+    public async Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant)
     {
         var type = typeof(SessionManagementService);
         var name = $"{type.Namespace}.Resources.checkSession.html";
@@ -122,7 +120,7 @@ public class SessionManagementService(
         using (var reader = new StreamReader(stream, Encoding.UTF8))
             htmlTemplate = await reader.ReadToEndAsync();
 
-        var cookieName = CheckSessionCookieName;
+        var cookieName = CheckSessionCookieNameOf(tenant);
         var htmlContent = htmlTemplate.Replace(
             CookieNamePlaceHolder,
             JavaScriptStringEncode(cookieName, true));

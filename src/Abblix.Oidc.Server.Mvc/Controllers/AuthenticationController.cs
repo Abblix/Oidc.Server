@@ -151,6 +151,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for the check session operation.</param>
     /// <param name="formatter">The formatter used to generate a response suitable for session checking
     /// within an iframe.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <returns>A task that returns an action result for
     /// the check session response.</returns>
     /// <remarks>
@@ -169,9 +170,10 @@ public sealed class AuthenticationController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
-        [FromServices] ICheckSessionResponseFormatter formatter)
+        [FromServices] ICheckSessionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
-        var response = await handler.HandleAsync();
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
         return await formatter.FormatResponseAsync(response);
     }
 }

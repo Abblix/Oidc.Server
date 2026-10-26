@@ -11,19 +11,20 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Runs work of one tenant outside a request resolved to it - completing a back-channel authentication from a
-/// push provider's callback, ending a session from a message consumer.
+/// Runs work of one tenant outside a request resolved to it, for a service that takes no tenant of its own - a
+/// security event dispatched from a message consumer, for one.
 /// </summary>
 /// <remarks>
 /// The tenant accessor answers with the tenant of the innermost scope entered here and, outside any, with the tenant
 /// the request was resolved to; entered within a request, a scope takes precedence over it. A service reading the
-/// tenant from the accessor therefore serves the tenant entered here. The scope flows across awaits and ends when disposed:
+/// tenant from the accessor therefore serves the tenant entered here, while a service whose method takes the tenant
+/// is handed the definition and needs no scope. The scope flows across awaits and ends when disposed:
 /// <code>
 /// var tenant = await catalog.FindByIdAsync("acme", cancellationToken)
 ///     ?? throw new InvalidOperationException("No tenant is registered under the id acme.");
 ///
 /// using (TenantScope.Enter(tenant))
-///     await sessionTerminator.TerminateAsync(sessionId, subject);
+///     await dispatcher.DispatchAsync(descriptor, cancellationToken);
 /// </code>
 /// </remarks>
 public sealed class TenantScope : IDisposable

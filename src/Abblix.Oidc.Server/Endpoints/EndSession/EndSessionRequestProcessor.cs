@@ -83,7 +83,7 @@ public partial class EndSessionRequestProcessor(
 
 		await authSessionService.SignOutAsync();
 
-		var context = await authSessionTerminator.TerminateAsync(sessionId, subjectId);
+		var context = await authSessionTerminator.TerminateAsync(tenant, sessionId, subjectId);
 
 		LogUserLoggedOut(subjectId, sessionId);
 

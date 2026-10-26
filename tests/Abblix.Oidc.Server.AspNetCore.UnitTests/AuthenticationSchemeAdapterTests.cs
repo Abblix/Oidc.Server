@@ -41,9 +41,10 @@ public class AuthenticationSchemeAdapterTests
 
 		var terminator = new Mock<IAuthSessionTerminator>(MockBehavior.Strict);
 		terminator
-			.Setup(t => t.TerminateAsync(It.IsAny<string>(), It.IsAny<string>()))
-			.Callback((string sessionId, string subject) => _calls.Add($"terminate {sessionId} {subject}"))
-			.ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
+			.Setup(t => t.TerminateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>()))
+			.Callback((TenantDefinition tenant, string sessionId, string subject)
+				=> _calls.Add($"terminate {tenant.Id} {sessionId} {subject}"))
+			.ReturnsAsync((TenantDefinition _, string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
 
 		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, _clock, Scheme);
 	}
@@ -163,7 +164,7 @@ public class AuthenticationSchemeAdapterTests
 		Assert.Equal("bob-session", result.Session.SessionId);
 		var ended = Assert.Single(result.EndedSessions);
 		Assert.Equal(("alice", "alice-session"), (ended.Subject, ended.SessionId));
-		Assert.Equal(["terminate alice-session alice"], _calls);
+		Assert.Equal([$"terminate {TestTenantAccess.Main} alice-session alice"], _calls);
 		NextRequest();
 		Assert.Equal("bob-session", (await _adapter.AuthenticateAsync())!.SessionId);
 	}
@@ -242,7 +243,7 @@ public class AuthenticationSchemeAdapterTests
 		var result = await _adapter.SignInAsync(Session() with { Subject = "carol", SessionId = "carol-session" });
 
 		Assert.Equal("bob-session", Assert.Single(result.EndedSessions).SessionId);
-		Assert.Equal(["terminate bob-session bob"], _calls);
+		Assert.Equal([$"terminate {TestTenantAccess.Main} bob-session bob"], _calls);
 	}
 
 	/// <summary>
@@ -403,7 +404,7 @@ public class AuthenticationSchemeAdapterTests
 		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
 
 		Assert.Equal("alice-session", Assert.Single(result.EndedSessions).SessionId);
-		Assert.Equal(["terminate alice-session alice"], _calls);
+		Assert.Equal([$"terminate {TestTenantAccess.Main} alice-session alice"], _calls);
 	}
 
 	/// <summary>

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
@@ -22,9 +23,13 @@ namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 /// Decorates <see cref="IEndSessionResponseFormatter"/> to delete the session-management cookie when a logout ended
 /// the session and the deployment serves that cookie, so the browser's logged-in state is cleared with it.
 /// </summary>
+/// <param name="inner">The End Session response formatter decorated.</param>
+/// <param name="sessionManagementService">Supplies the session-management cookie.</param>
+/// <param name="tenantAccessor">Names the tenant whose session cookie is cleared.</param>
 public class EndSessionResponseFormatterDecorator(
     IEndSessionResponseFormatter inner,
-    ISessionManagementService sessionManagementService) : IEndSessionResponseFormatter
+    ISessionManagementService sessionManagementService,
+    ITenantAccessor tenantAccessor) : IEndSessionResponseFormatter
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(
@@ -39,7 +44,7 @@ public class EndSessionResponseFormatterDecorator(
         if (sessionManagementService.Enabled && response.TryGetSuccess(out var succeeded) && succeeded is EndSessionSuccess)
         {
             // Written only to be removed, so it is given no expiry
-            var cookie = sessionManagementService.GetSessionCookie(SessionPersistence.BrowserSession);
+            var cookie = sessionManagementService.GetSessionCookie(tenantAccessor.CurrentTenant(), SessionPersistence.BrowserSession);
             result = result.WithDeleteCookie(cookie.Name, cookie.Options.ConvertOptions());
         }
 
