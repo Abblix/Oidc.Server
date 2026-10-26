@@ -75,7 +75,7 @@ internal sealed partial class BackChannelGrantRedeemer(
         if (RefuseBeforeRedemption(yardstick, clientInfo) is { } early)
             return early;
 
-        var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
+        var result = await processor.ProcessAuthenticatedRequestAsync(tenantAccessor.CurrentTenant(), authenticationRequestId, request);
         if (result.TryGetFailure(out var error))
             return error;
 

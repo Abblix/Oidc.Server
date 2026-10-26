@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 
@@ -35,6 +36,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// <code>
 /// public class MyUserDeviceAuthenticationHandler : IUserDeviceAuthenticationHandler
 /// {
+///     private readonly ITenantCatalog _tenants;
 ///     private readonly IBackChannelRequestStorage _storage;
 ///     private readonly IAuthenticationCompletionHandler _completion;
 ///     private readonly ISessionIdGenerator _sessionIdGenerator;
@@ -42,6 +44,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     private readonly TimeProvider _clock;
 ///
 ///     public async Task&lt;Result&lt;AuthSession, OidcError&gt;&gt; InitiateAuthenticationAsync(
+///         TenantDefinition tenant,
 ///         ValidBackChannelAuthenticationRequest request)
 ///     {
 ///         // Extract user hint and send authentication request to their device
@@ -52,8 +55,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         // has to reach one of them: completion refuses an authentication at any other level.
 ///         var requiredLevels = request.RequiredAuthContextClassRefs;
 ///
-///         // Send push notification to user's device
-///         await _pushService.SendAuthRequestAsync(userIdentifier, bindingMessage, requiredLevels);
+///         // Send push notification to user's device. The tenant id travels with it, because the answer
+///         // arrives outside any request to this server, where nothing else names the tenant.
+///         await _pushService.SendAuthRequestAsync(tenant.Id, userIdentifier, bindingMessage, requiredLevels);
 ///
 ///         // Return pending - authentication completes asynchronously
 ///         // User will approve/deny on their device
@@ -61,10 +65,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     }
 ///
 ///     // Called when user approves on their device
-///     public async Task OnUserApprovedAsync(string authReqId, string userId, string authenticatedLevel)
+///     public async Task OnUserApprovedAsync(string tenantId, string authReqId, string userId, string authenticatedLevel)
 ///     {
+///         var tenant = await _tenants.FindByIdAsync(tenantId, CancellationToken.None);
+///         if (tenant == null) return;
+///
 ///         // Retrieve the stored authentication request
-///         var storedRequest = await _storage.TryGetAsync(authReqId);
+///         var storedRequest = await _storage.TryGetAsync(tenant, authReqId);
 ///         if (storedRequest == null) return;
 ///
 ///         // Create authenticated session, carrying the level the device interaction actually reached
@@ -92,18 +99,22 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         // Completion selects the mode-specific handler from the client's registered delivery mode
 ///         // (PollModeCompletionHandler, PingModeCompletionHandler or PushModeCompletionHandler).
 ///         await _completion.CompleteAsync(
+///             tenant,
 ///             authReqId,
 ///             authenticated,
 ///             TimeSpan.FromMinutes(5));
 ///     }
 ///
 ///     // Called when user denies on their device
-///     public async Task OnUserDeniedAsync(string authReqId)
+///     public async Task OnUserDeniedAsync(string tenantId, string authReqId)
 ///     {
+///         var tenant = await _tenants.FindByIdAsync(tenantId, CancellationToken.None);
+///         if (tenant == null) return;
+///
 ///         // Denial tells the client the way its delivery mode learns anything: a poll client reads
 ///         // access_denied (and a long poll is woken), a ping client is told to come and read it, a push
 ///         // client is sent the error. Writing Denied into storage directly would reach none of them.
-///         await _completion.DenyAsync(authReqId, TimeSpan.FromMinutes(5));
+///         await _completion.DenyAsync(tenant, authReqId, TimeSpan.FromMinutes(5));
 ///     }
 /// }
 /// </code>
@@ -184,10 +195,11 @@ public interface IUserDeviceAuthenticationHandler
     /// This may involve sending a notification to the user's device, starting an out-of-band
     /// authentication process, or performing other steps required to authenticate the user asynchronously.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated backchannel authentication request containing user and client information
     /// required to initiate the authentication process.</param>
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation to initiate the authentication process.
     /// </returns>
-    Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request);
+    Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(TenantDefinition tenant, ValidBackChannelAuthenticationRequest request);
 }

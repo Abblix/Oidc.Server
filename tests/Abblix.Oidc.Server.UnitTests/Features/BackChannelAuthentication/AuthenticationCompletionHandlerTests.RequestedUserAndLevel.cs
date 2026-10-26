@@ -63,6 +63,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(request);
 
         await CreatePushModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
@@ -98,6 +99,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePingModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PingClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -133,6 +135,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
@@ -163,6 +166,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(expected, request.Status);
@@ -196,6 +200,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, answered, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, answered.Status);
@@ -223,6 +228,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -253,6 +259,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, answered, PollClient(), _expiresIn);
 
         Assert.NotNull(written);
@@ -293,6 +300,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, answered, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, answered.Status);
@@ -315,6 +323,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, answered, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, answered.Status);
@@ -350,6 +359,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(true);
 
         await CreatePingModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, answered, PingClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, answered.Status);
@@ -386,6 +396,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, answered, PollClient(), _expiresIn);
 
         Assert.NotNull(written);

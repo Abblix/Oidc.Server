@@ -78,11 +78,12 @@ internal static class BackChannelEndpoints
         BackChannelAuthenticationRequest authenticationRequest,
         ClientRequest clientRequest,
         IBackChannelAuthenticationHandler handler,
-        IBackChannelAuthenticationResponseFormatter formatter)
+        IBackChannelAuthenticationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreAuthenticationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthenticationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthenticationRequest, coreClientRequest, response);
     }
 

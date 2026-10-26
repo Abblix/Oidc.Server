@@ -90,6 +90,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// <param name="formatter">
     /// Service that formats the response to the client, based on the result of the backchannel authentication request.
     /// </param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authenticationRequest">
     /// The backchannel authentication request containing user-related authentication parameters.</param>
     /// <param name="clientRequest">
@@ -104,12 +105,13 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,
         [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] BackChannelAuthenticationRequest authenticationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreAuthenticationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthenticationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthenticationRequest, coreClientRequest, response);
     }
 

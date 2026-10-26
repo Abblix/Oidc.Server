@@ -86,7 +86,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new BackChannelAuthenticationValidationContext(
                     new BackChannelAuthenticationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
-                var error = await new BackChannelResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
+                var error = await new BackChannelResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
 

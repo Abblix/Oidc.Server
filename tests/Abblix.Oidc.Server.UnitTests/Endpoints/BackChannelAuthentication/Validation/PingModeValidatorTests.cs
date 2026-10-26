@@ -48,7 +48,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -73,7 +73,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -102,7 +102,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -131,7 +131,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -163,7 +163,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -195,7 +195,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -226,7 +226,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

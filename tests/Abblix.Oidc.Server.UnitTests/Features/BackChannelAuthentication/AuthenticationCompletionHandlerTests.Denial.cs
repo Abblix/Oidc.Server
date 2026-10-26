@@ -42,9 +42,9 @@ public partial class AuthenticationCompletionHandlerTests
 
         var handler = new PollModeCompletionHandler(
             Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            TimeProvider.System, notifier.Object, tenantAccessor: SingleIssuer.Accessor);
+            TimeProvider.System, notifier.Object);
 
-        await handler.DenyAuthenticationAsync(AuthReqId, _expiresIn);
+        await handler.DenyAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, stored.Status);
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, _expiresIn), Times.Once);
@@ -74,7 +74,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Callback(() => order.Add("pinged"))
             .ReturnsAsync(true);
 
-        await CreatePingModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn);
+        await CreatePingModeHandler().DenyAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, stored.Status);
 
@@ -102,7 +102,7 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(stored);
         NotificationsAreAccepted();
 
-        await CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn);
+        await CreatePushModeHandler().DenyAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
@@ -121,7 +121,7 @@ public partial class AuthenticationCompletionHandlerTests
         StoredRecordReads(already);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => CreatePollModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn));
+            () => CreatePollModeHandler().DenyAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, _expiresIn));
 
         _storage.Verify(
             s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
@@ -141,7 +141,7 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => CreatePushModeHandler().DenyAuthenticationAsync(AuthReqId, _expiresIn));
+            () => CreatePushModeHandler().DenyAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, _expiresIn));
 
         _notificationService.VerifyNoOtherCalls();
     }

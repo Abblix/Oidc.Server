@@ -80,6 +80,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
@@ -100,6 +101,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -120,6 +122,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -141,6 +144,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
@@ -162,6 +166,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -199,6 +204,7 @@ public partial class AuthenticationCompletionHandlerTests
         var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
 
         await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(1, policy.GrantedCalls);
@@ -231,7 +237,7 @@ public partial class AuthenticationCompletionHandlerTests
         var policy = StubAuthorizationDetailsPolicy.Throwing("the entry lost its amount");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(policy)
-            .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+            .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn));
 
         _tokenRequestProcessor.VerifyNoOtherCalls();
         VerifyPushErrorSent(ErrorCodes.TransactionFailed);
@@ -268,6 +274,7 @@ public partial class AuthenticationCompletionHandlerTests
         var policy = StubAuthorizationDetailsPolicy.Capping("instructedAmount", "100");
 
         await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(1, policy.GrantedCalls);

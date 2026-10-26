@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Common;
 
@@ -24,7 +25,7 @@ public class BackChannelAuthorizationDetailsValidator(
     IAuthorizationDetailsPolicy policy) : IBackChannelAuthenticationContextValidator
 {
     /// <inheritdoc/>
-    public async Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
     {
         // Whether the request carried any, read before the call: the policy is handed this very
         // array, and a validator that narrows by editing in place empties it as it answers.

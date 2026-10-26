@@ -45,7 +45,7 @@ public class PingModeGrantProcessorTests
         _request = new BackChannelAuthenticationRequest(new AuthorizedGrant(session, context), fixedTime.AddMinutes(5));
 
         _storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
-        _processor = new PingModeGrantProcessor(_storage.Object, tenantAccessor: SingleIssuer.Accessor);
+        _processor = new PingModeGrantProcessor(_storage.Object);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class PingModeGrantProcessorTests
     {
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId)).ReturnsAsync(_request);
 
-        var result = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
+        var result = await _processor.ProcessAuthenticatedRequestAsync(SingleIssuer.Tenant, AuthRequestId, _request);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(_request.AuthorizedGrant, grant);
@@ -69,8 +69,8 @@ public class PingModeGrantProcessorTests
             .ReturnsAsync(_request)
             .ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
-        var first = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
-        var second = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
+        var first = await _processor.ProcessAuthenticatedRequestAsync(SingleIssuer.Tenant, AuthRequestId, _request);
+        var second = await _processor.ProcessAuthenticatedRequestAsync(SingleIssuer.Tenant, AuthRequestId, _request);
 
         Assert.True(first.TryGetSuccess(out _));
         Assert.True(second.TryGetFailure(out var error));

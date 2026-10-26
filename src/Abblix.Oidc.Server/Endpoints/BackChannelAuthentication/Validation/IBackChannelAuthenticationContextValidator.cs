@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -23,10 +24,11 @@ public interface IBackChannelAuthenticationContextValidator
     /// This method checks the context of the request, including client information and requested parameters,
     /// to ensure compliance with security and protocol requirements.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The context of the backchannel authentication request that needs to be validated.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation. The task result contains
     /// a <see cref="OidcError"/> if validation fails, or null if the context is valid.
     /// </returns>
-    Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context);
+    Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context);
 }

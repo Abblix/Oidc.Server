@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -21,9 +22,10 @@ public class PushModeValidator : IBackChannelAuthenticationContextValidator
     /// Validates push mode specific requirements: backchannel_client_notification_endpoint must be
     /// present and use HTTPS.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing request and client information.</param>
     /// <returns>An error if validation fails, null if successful.</returns>
-    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
     {
         // Only validate if client is configured for push mode
         if (context.ClientInfo.BackChannelTokenDeliveryMode != BackchannelTokenDeliveryModes.Push)

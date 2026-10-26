@@ -125,8 +125,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         IBackChannelRequestStorage storage,
         StubAuthorizationDetailsPolicy? policy = null) : IKeyedServiceProvider
     {
-        private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage, tenantAccessor: SingleIssuer.Accessor);
-        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage, tenantAccessor: SingleIssuer.Accessor);
+        private readonly IBackChannelGrantProcessor _pollProcessor = new PollModeGrantProcessor(storage);
+        private readonly IBackChannelGrantProcessor _pingProcessor = new PingModeGrantProcessor(storage);
         private readonly IBackChannelGrantProcessor _pushProcessor = new PushModeGrantProcessor();
 
         private readonly BackChannelGrantRedeemer _redeemer = new(

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 
@@ -33,6 +34,7 @@ internal sealed class MyDeviceAuthHandler : IUserDeviceAuthenticationHandler
 {
     /// <inheritdoc />
     public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+        TenantDefinition tenant,
         ValidBackChannelAuthenticationRequest request)
     {
         // A body the compiler accepts and nothing calls. What the sample documents is the REGISTRATION

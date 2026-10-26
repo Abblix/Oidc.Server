@@ -49,6 +49,7 @@ public partial class AuthenticationCompletionHandlerTests
         NotificationsAreAccepted();
 
         await CreatePushModeHandler(cutoffs: Cutoffs(sessionRefused, grantRefused)).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         _tokenRequestProcessor.VerifyNoOtherCalls();
@@ -93,6 +94,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(true);
 
         await CreatePushModeHandler(cutoffs: cutoffs.Object).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(hostSetIt ? hostMoment : ApprovedAt, asked?.AuthorizedAt);
@@ -123,7 +125,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
             () => CreatePushModeHandler(logger: logger.Object, cutoffs: cutoffs.Object)
-                .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+                .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn));
 
         // The store's own fault, not one the handler made up: it is what the host has to diagnose the outage by.
         Assert.Same(fault, thrown);

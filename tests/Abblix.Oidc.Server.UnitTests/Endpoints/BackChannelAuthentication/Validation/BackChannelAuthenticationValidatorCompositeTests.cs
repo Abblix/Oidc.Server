@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
@@ -53,11 +54,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var validator2 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator3.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new BackChannelAuthenticationValidatorComposite([
@@ -69,13 +70,13 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
-        validator1.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(context), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
     }
 
     /// <summary>
@@ -92,7 +93,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var validator2 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
         var composite = new BackChannelAuthenticationValidatorComposite([
@@ -104,14 +105,14 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Same(error, result);
-        validator1.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Never);
-        validator3.Verify(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Never);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Never);
+        validator3.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Never);
     }
 
     /// <summary>
@@ -128,9 +129,9 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var validator2 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
         var composite = new BackChannelAuthenticationValidatorComposite([
@@ -142,14 +143,14 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Same(error, result);
-        validator1.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Never);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Never);
     }
 
     /// <summary>
@@ -166,11 +167,11 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var validator2 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator3.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
         var composite = new BackChannelAuthenticationValidatorComposite([
@@ -182,14 +183,14 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Same(error, result);
-        validator1.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(context), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(context), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
     }
 
     /// <summary>
@@ -204,7 +205,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -219,18 +220,18 @@ public class BackChannelAuthenticationValidatorCompositeTests
     {
         // Arrange
         var validator = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
-        validator.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new BackChannelAuthenticationValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
-        validator.Verify(v => v.ValidateAsync(context), Times.Once);
+        validator.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
     }
 
     /// <summary>
@@ -244,19 +245,19 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var error = new OidcError(ErrorCodes.UnauthorizedClient, "Validator failed");
 
         var validator = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
-        validator.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
+        validator.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .ReturnsAsync(error);
 
         var composite = new BackChannelAuthenticationValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act
-        var result = await composite.ValidateAsync(context);
+        var result = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Same(error, result);
-        validator.Verify(v => v.ValidateAsync(context), Times.Once);
+        validator.Verify(v => v.ValidateAsync(TestTenant.Matched, context), Times.Once);
     }
 
     /// <summary>
@@ -275,14 +276,14 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var validator2 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
-            .Callback(new Action<BackChannelAuthenticationValidationContext>(ctx => context1 = ctx))
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
+            .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) => context1 = ctx))
             .ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
-            .Callback(new Action<BackChannelAuthenticationValidationContext>(ctx => context2 = ctx))
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
+            .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) => context2 = ctx))
             .ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
-            .Callback(new Action<BackChannelAuthenticationValidationContext>(ctx => context3 = ctx))
+        validator3.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
+            .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) => context3 = ctx))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new BackChannelAuthenticationValidatorComposite([
@@ -294,7 +295,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(context1);
@@ -319,14 +320,14 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var validator2 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IBackChannelAuthenticationContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
-            .Callback(new Action<BackChannelAuthenticationValidationContext>(_ => executionOrder.Add(1)))
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
+            .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, _) => executionOrder.Add(1)))
             .ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
-            .Callback(new Action<BackChannelAuthenticationValidationContext>(_ => executionOrder.Add(2)))
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
+            .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, _) => executionOrder.Add(2)))
             .ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<BackChannelAuthenticationValidationContext>()))
-            .Callback(new Action<BackChannelAuthenticationValidationContext>(_ => executionOrder.Add(3)))
+        validator3.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
+            .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, _) => executionOrder.Add(3)))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new BackChannelAuthenticationValidatorComposite([
@@ -338,7 +339,7 @@ public class BackChannelAuthenticationValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal(new[] { 1, 2, 3 }, executionOrder);

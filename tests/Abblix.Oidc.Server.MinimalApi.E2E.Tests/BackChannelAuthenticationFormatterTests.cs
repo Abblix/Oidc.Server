@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -239,6 +240,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
     private sealed class RefusingUserDeviceHandler(OidcError refusal) : IUserDeviceAuthenticationHandler
     {
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+            TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)
             => Task.FromResult<Result<AuthSession, OidcError>>(refusal);
     }

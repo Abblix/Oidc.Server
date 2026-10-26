@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -33,9 +34,11 @@ public class BackChannelAuthenticationHandler(
     /// Runs the fetch-validate-process pipeline for a CIBA request and returns the resulting success
     /// payload or an <see cref="OidcError"/> from the first failing stage.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The parsed CIBA authentication request as received on the wire.</param>
     /// <param name="clientRequest">Transport metadata used for client authentication and validation.</param>
     public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
@@ -49,7 +52,7 @@ public class BackChannelAuthenticationHandler(
             return new OidcError(error.Error, error.ErrorDescription);
         }
 
-        var validationResult = await validator.ValidateAsync(request, clientRequest);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, request, clientRequest);
+        return await validationResult.BindAsync(valid => processor.ProcessAsync(tenant, valid));
     }
 }

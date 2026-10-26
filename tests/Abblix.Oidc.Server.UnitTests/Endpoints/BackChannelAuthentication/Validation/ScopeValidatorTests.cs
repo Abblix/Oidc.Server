@@ -32,7 +32,7 @@ public class ScopeValidatorTests
     public ScopeValidatorTests()
     {
         _scopeManager = new Mock<IScopeManager>(MockBehavior.Strict);
-        _validator = new ScopeValidator(_scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ScopeValidator(_scopeManager.Object);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(
@@ -80,7 +80,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: [TestConstants.DefaultScope]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -101,7 +101,7 @@ public class ScopeValidatorTests
             offlineAccess: OfflineAccess.Disabled);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -141,7 +141,7 @@ public class ScopeValidatorTests
             offlineAccess: OfflineAccess.ConsentRequired);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -168,7 +168,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: ["unknown_scope"]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -215,7 +215,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: [TestConstants.DefaultScope, "profile", "email"]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -259,7 +259,7 @@ public class ScopeValidatorTests
             resources: [resourceDefinition]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -288,7 +288,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: [TestConstants.DefaultScope]);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(context.Scope);
@@ -325,7 +325,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: [TestConstants.DefaultScope, "unknown", "profile"]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -345,7 +345,7 @@ public class ScopeValidatorTests
             offlineAccess: OfflineAccess.Disabled);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

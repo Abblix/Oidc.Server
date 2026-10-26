@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// endpoint the same way a poll client does, and the long-poll gate does not read the delivery mode - so
 /// one that polls before its notification arrives waits, and is woken from here.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
-/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
@@ -41,10 +40,9 @@ public partial class PingModeCompletionHandler(
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     TimeProvider clock,
-    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier = null)
     : AuthenticationCompletionHandler(
-        logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor, statusNotifier)
+        logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
@@ -57,18 +55,20 @@ public partial class PingModeCompletionHandler(
     /// when the request would have expired anyway. Nothing is sent where the client registered nowhere to
     /// send it; the denial is still there for a poll.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request refused.</param>
     /// <param name="request">The request as it is written back, carrying where the client is notified.</param>
     /// <param name="refusal">Why; a ping carries only the identifier, and the poll that follows reads
     /// access_denied.</param>
     /// <param name="expiresIn">How long the denied request stays readable.</param>
     protected override async Task RefuseAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal,
         TimeSpan expiresIn)
     {
-        await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+        await DenyRequestAsync(tenant, authenticationRequestId, request, expiresIn);
 
         if (ValidateNotificationConfiguration(
                 request.ClientNotificationEndpoint,
@@ -89,11 +89,13 @@ public partial class PingModeCompletionHandler(
     /// Handles ping mode delivery by storing the authenticated request and sending a notification to the client.
     /// The client will poll the token endpoint after receiving the notification.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for validation.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     protected override async Task HandleDeliveryAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
@@ -106,11 +108,11 @@ public partial class PingModeCompletionHandler(
             clientInfo.ClientId,
             authenticationRequestId))
         {
-            await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+            await DenyRequestAsync(tenant, authenticationRequestId, request, expiresIn);
             return;
         }
 
-        await StoreAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(tenant, authenticationRequestId, request, expiresIn);
 
         LogSendingPingNotification(FingerprintOf(authenticationRequestId));
 

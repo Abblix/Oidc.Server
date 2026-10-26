@@ -43,6 +43,7 @@ public static class Enrolment
 
         new("M:Abblix.Oidc.Server.Features.BackChannelAuthentication.UserDeviceAuthenticationHandlerStub"
             + ".InitiateAuthenticationAsync("
+            + "Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition,"
             + "Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces"
             + ".ValidBackChannelAuthenticationRequest)", 0, "BackChannelHandler.cs"),
 

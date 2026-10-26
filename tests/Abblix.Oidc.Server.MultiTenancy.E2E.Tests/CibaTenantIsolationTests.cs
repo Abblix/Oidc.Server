@@ -152,10 +152,14 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
 
     /// <summary>
     /// Completes <paramref name="authenticationRequestId"/> as the host does when the end user approves on their
-    /// device: reads the stored request inside <paramref name="readIn"/>'s scope and hands it to the completion
-    /// handler inside <paramref name="completeIn"/>'s scope, or outside any scope when that is null.
+    /// device: reads the stored request at <paramref name="readIn"/> and hands it to the completion handler at
+    /// <paramref name="completeAt"/>, while the ambient scope names <paramref name="servedIn"/>.
     /// </summary>
-    private async Task CompleteAsync(string authenticationRequestId, TenantDefinition readIn, TenantDefinition? completeIn)
+    private async Task CompleteAsync(
+        string authenticationRequestId,
+        TenantDefinition readIn,
+        TenantDefinition completeAt,
+        TenantDefinition servedIn)
     {
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest completed;
         using (TenantScope.Enter(readIn))
@@ -174,10 +178,10 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
             completed.Status = BackChannelAuthenticationStatus.Authenticated;
         }
 
-        using var scope = completeIn is null ? null : TenantScope.Enter(completeIn);
+        using var scope = TenantScope.Enter(servedIn);
         using var completing = _app.Services.CreateScope();
         await completing.ServiceProvider.GetRequiredService<IAuthenticationCompletionHandler>()
-            .CompleteAsync(authenticationRequestId, completed, TimeSpan.FromMinutes(5));
+            .CompleteAsync(completeAt, authenticationRequestId, completed, TimeSpan.FromMinutes(5));
     }
 
     private async Task<TenantDefinition> TenantAsync(string id)
@@ -185,24 +189,23 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
             .FindByIdAsync(id, TestContext.Current.CancellationToken))!;
 
     /// <summary>
-    /// A request started at one tenant and completed by the host inside the other tenant's scope, or outside any
-    /// scope, is refused and delivered nowhere; completed inside its own tenant's scope it reaches that tenant's
-    /// client alone, pushed as that client takes it rather than as the other tenant's client of the same id would.
+    /// A request started at one tenant and completed by the host at the other tenant is refused and delivered
+    /// nowhere, even inside its own tenant's scope; completed at its own tenant it reaches that tenant's client
+    /// alone, even inside the other tenant's scope, pushed as that client takes it rather than as the other
+    /// tenant's client of the same id would.
     /// </summary>
     [Fact]
-    public async Task ARequestOfOneTenant_IsCompletedOnlyInItsScope_AndReachesItsClientAlone()
+    public async Task ARequestOfOneTenant_IsCompletedOnlyAtItsTenant_AndReachesItsClientAlone()
     {
         var acme = await TenantAsync("acme");
         var globex = await TenantAsync("globex");
         var authenticationRequestId = await InitiateAtAsync(Acme);
 
         await Assert.ThrowsAnyAsync<InvalidOperationException>(
-            () => CompleteAsync(authenticationRequestId, acme, globex));
-        await Assert.ThrowsAnyAsync<InvalidOperationException>(
-            () => CompleteAsync(authenticationRequestId, acme, null));
+            () => CompleteAsync(authenticationRequestId, acme, completeAt: globex, servedIn: acme));
         Assert.Empty(_deliveries.Received);
 
-        await CompleteAsync(authenticationRequestId, acme, acme);
+        await CompleteAsync(authenticationRequestId, acme, completeAt: acme, servedIn: globex);
 
         var delivery = Assert.Single(_deliveries.Received);
         Assert.Equal(NotificationEndpointOf("acme"), delivery.Endpoint);
@@ -216,6 +219,7 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
     private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
     {
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+            TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)
             => Task.FromResult<Result<AuthSession, OidcError>>(new AuthSession(
                 request.Model.LoginHint!, Guid.NewGuid().ToString("N"), clock.GetUtcNow(), "local"));

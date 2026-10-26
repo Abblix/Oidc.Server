@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -24,12 +25,13 @@ public class BackChannelAuthenticationValidatorComposite(IBackChannelAuthenticat
     /// Asynchronously validates a <see cref="BackChannelAuthenticationValidationContext"/>.
     /// Iterates through each validation step, returning the first encountered error, if any.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The backchannel authentication validation context to be validated.</param>
     /// <returns>
     /// A task that represents the asynchronous validation operation.
     /// The task result contains a <see cref="OidcError"/>
     /// if a validation error is found, or null if validation succeeds.
     /// </returns>
-    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
-        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(tenant, context));
 }
