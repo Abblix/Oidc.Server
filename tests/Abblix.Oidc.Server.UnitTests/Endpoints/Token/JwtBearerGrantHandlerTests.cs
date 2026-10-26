@@ -447,6 +447,37 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
+	/// The trust the assertion's validation asks for, whether its issuer is trusted and which keys verify it, is asked
+	/// at the tenant the grant is requested at.
+	/// </summary>
+	[Fact]
+	public async Task JwtValidation_AsksTheIssuersTrustAtTheServingTenant()
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		ValidationParameters? capturedParams = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
+		mocks.IssuerProvider.Setup(p => p.IsTrustedIssuerAsync(TestTenant.Matched, Issuer)).ReturnsAsync(true);
+		mocks.IssuerProvider
+			.Setup(p => p.GetSigningKeysAsync(TestTenant.Matched, Issuer))
+			.Returns(AsyncEnumerable.Empty<JsonWebKey>());
+		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
+
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		var parameters = capturedParams.NotNull(nameof(capturedParams));
+
+		Assert.True(await parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer))(Issuer));
+		Assert.Empty(await parameters.ResolveIssuerSigningKeys
+			.NotNull(nameof(parameters.ResolveIssuerSigningKeys))(Issuer)
+			.ToArrayAsync(TestContext.Current.CancellationToken));
+		mocks.IssuerProvider.Verify(p => p.IsTrustedIssuerAsync(TestTenant.Matched, Issuer), Times.Once);
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(TestTenant.Matched, Issuer), Times.Once);
+	}
+
+	/// <summary>
 	/// The tolerance an unprofiled client's assertion is validated with is the one the serving tenant's profile
 	/// supplies, so a FAPI 2.0 tenant does not validate it with the looser default of a tenant without a profile.
 	/// </summary>
@@ -652,7 +683,7 @@ public class JwtBearerGrantHandlerTests
 			.Returns(options);
 
 		issuerProvider
-			.Setup(p => p.GetTrustedIssuerAsync(It.IsAny<string>()))
+			.Setup(p => p.GetTrustedIssuerAsync(TestTenant.Matched, It.IsAny<string>()))
 			.ReturnsAsync((TrustedIssuer?)null);
 
 		requestInfoProvider
@@ -1261,7 +1292,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		issuerProvider
-			.Setup(p => p.GetTrustedIssuerAsync(issuer))
+			.Setup(p => p.GetTrustedIssuerAsync(TestTenant.Matched, issuer))
 			.ReturnsAsync(trustedIssuer);
 
 		issuerProvider

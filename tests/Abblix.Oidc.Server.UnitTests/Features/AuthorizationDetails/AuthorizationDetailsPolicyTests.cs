@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -573,32 +574,28 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(requested.TryGetSuccess(out _));
         Assert.True(granted.TryGetSuccess(out _));
+
+        // And refused when the policy is handed another tenant, which is what makes the cases above mean anything
+        var elsewhere = await composite.ApplyAsync(new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, Raw(), TestClient, TestContext.Current.CancellationToken);
+        Assert.True(elsewhere.TryGetFailure(out _));
     }
 
     /// <summary>
-    /// Accepts an entry only when asked at the tenant the test serves, so a policy asking at another tenant is refused.
+    /// The policy stand-in the grant and validator tests share refuses at a tenant the tests do not serve, which is what
+    /// lets those tests notice a caller handing over the wrong tenant.
     /// </summary>
-    private sealed class ServedTenantOnlyValidator : IAuthorizationDetailValidator
+    [Fact]
+    public async Task TheSharedPolicyStandIn_RefusesAtATenantTheTestsDoNotServe()
     {
-        public string Type => "payment_initiation";
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var stub = StubAuthorizationDetailsPolicy.Accepting;
 
-        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
-            TenantDefinition tenant,
-            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
-            => Task.FromResult(AtTheServedTenant(tenant, detail));
-
-        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
-            TenantDefinition tenant,
-            AuthorizationDetail detail,
-            IReadOnlyList<AuthorizationDetail> requested,
-            ClientInfo client,
-            CancellationToken token)
-            => Task.FromResult(AtTheServedTenant(tenant, detail));
-
-        private static Result<AuthorizationDetail, OidcError> AtTheServedTenant(TenantDefinition tenant, AuthorizationDetail detail)
-            => tenant.Id == SingleIssuer.Tenant.Id
-                ? detail
-                : new OidcError(ErrorCodes.InvalidAuthorizationDetails, "asked at a tenant the test does not serve");
+        Assert.True((await stub.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken))
+            .TryGetSuccess(out _));
+        Assert.True((await stub.ApplyAsync(
+                new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") },
+                raw, TestClient, TestContext.Current.CancellationToken))
+            .TryGetFailure(out _));
     }
 
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)

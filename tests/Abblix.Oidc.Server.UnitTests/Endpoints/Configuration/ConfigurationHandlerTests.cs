@@ -35,6 +35,8 @@ public class ConfigurationHandlerTests
         scopesAndClaims.Setup(p => p.ScopesSupported(TestTenant.Matched)).Returns(["openid", "orders"]);
         scopesAndClaims.Setup(p => p.ClaimsSupported(TestTenant.Matched)).Returns(["sub", "order_id"]);
         scopesAndClaims.Setup(p => p.SubjectTypesSupported(TestTenant.Matched)).Returns(["public", "pairwise"]);
+        var acr = new Mock<IAcrMetadataProvider>();
+        acr.Setup(p => p.AcrValuesSupported(TestTenant.Matched)).Returns(["urn:example:acr:strong"]);
 
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
@@ -50,7 +52,7 @@ public class ConfigurationHandlerTests
             scopesAndClaims.Object,
             Mock.Of<IJwtAlgorithmsProvider>(),
             [],
-            Mock.Of<IAcrMetadataProvider>(),
+            acr.Object,
             Mock.Of<IAuthorizationDetailsMetadataProvider>());
 
         var document = await handler.HandleAsync(SingleIssuer.Tenant);
@@ -59,5 +61,6 @@ public class ConfigurationHandlerTests
         Assert.Equal(["openid", "orders"], document.ScopesSupported);
         Assert.Equal(["sub", "order_id"], document.ClaimsSupported);
         Assert.Equal(["public", "pairwise"], document.SubjectTypesSupported);
+        Assert.Equal(["urn:example:acr:strong"], document.AcrValuesSupported);
     }
 }

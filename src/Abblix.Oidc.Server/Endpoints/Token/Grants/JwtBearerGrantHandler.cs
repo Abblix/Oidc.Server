@@ -92,7 +92,7 @@ public partial class JwtBearerGrantHandler(
 	{
 		return ValidateAssertionParameter(request, clientInfo)
 			.BindAsync(assertion => ValidateJwtAsync(tenant, assertion, clientInfo))
-			.BindAsync(jwt => ValidateSubjectAsync(jwt, clientInfo))
+			.BindAsync(jwt => ValidateSubjectAsync(tenant, jwt, clientInfo))
 			.Bind(ctx => _assertionPolicy.ValidateExpiration(ctx, clientInfo))
 			.Bind(ctx => _assertionPolicy.ValidateAlgorithm(ctx, clientInfo))
 			.Bind(ctx => _assertionPolicy.ValidateTokenType(ctx, clientInfo))
@@ -143,9 +143,9 @@ public partial class JwtBearerGrantHandler(
 				// RFC 7523 defines no type for an assertion grant, so the assertion policy judges it after
 				// validation, against the deployment's list or, without one, against the other kinds of token
 				TokenTypes = TokenTypePolicy.CheckedByCaller,
-				ValidateIssuer = ValidateIssuer,
+				ValidateIssuer = issuer => ValidateIssuer(tenant, issuer),
 				ValidateAudience = _audienceValidator.ValidateAsync,
-				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
+				ResolveIssuerSigningKeys = issuer => issuerProvider.GetSigningKeysAsync(tenant, issuer),
 				// The tolerance belongs to the profile this CLIENT is held to, ceiling included -
 				// RFC 7523 Section 3 names no ceiling of its own.
 				ClockSkew = _assertionPolicy.ResolveClockSkew(tenant, clientInfo),
@@ -165,7 +165,7 @@ public partial class JwtBearerGrantHandler(
 	/// Validates the subject claim is present and retrieves trusted issuer configuration.
 	/// </summary>
 	private async Task<Result<JwtBearerValidationContext, OidcError>> ValidateSubjectAsync(
-		JsonWebToken jwt, ClientInfo clientInfo)
+		TenantDefinition tenant, JsonWebToken jwt, ClientInfo clientInfo)
 	{
 		var subject = jwt.Payload.Subject;
 		if (string.IsNullOrWhiteSpace(subject))
@@ -175,7 +175,7 @@ public partial class JwtBearerGrantHandler(
 		}
 
 		var issuer = jwt.Payload.Issuer ?? "unknown";
-		var trustedIssuer = await issuerProvider.GetTrustedIssuerAsync(issuer);
+		var trustedIssuer = await issuerProvider.GetTrustedIssuerAsync(tenant, issuer);
 
 		return new JwtBearerValidationContext(jwt, subject, issuer, trustedIssuer);
 	}
@@ -259,13 +259,14 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Validates that the JWT issuer is from a trusted identity provider per RFC 7523 Section 3.
 	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer claim from the JWT.</param>
 	/// <returns>
 	/// A task that completes with true if the issuer is trusted for JWT Bearer grants; otherwise, false.
 	/// </returns>
-	private async Task<bool> ValidateIssuer(string issuer)
+	private async Task<bool> ValidateIssuer(TenantDefinition tenant, string issuer)
 	{
-		var isTrusted = await issuerProvider.IsTrustedIssuerAsync(issuer);
+		var isTrusted = await issuerProvider.IsTrustedIssuerAsync(tenant, issuer);
 		if (!isTrusted)
 		{
 			LogIssuerNotTrusted(issuer);

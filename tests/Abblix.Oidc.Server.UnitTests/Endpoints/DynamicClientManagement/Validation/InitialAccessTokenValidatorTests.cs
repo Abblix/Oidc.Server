@@ -184,7 +184,7 @@ public class InitialAccessTokenValidatorTests
             .ReturnsAsync(token);
 
         _revocationProvider
-            .Setup(r => r.IsRevokedAsync("registration-portal"))
+            .Setup(r => r.IsRevokedAsync(TestTenant.Matched, "registration-portal"))
             .ReturnsAsync(true);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -205,7 +205,7 @@ public class InitialAccessTokenValidatorTests
             .ReturnsAsync(token);
 
         _revocationProvider
-            .Setup(r => r.IsRevokedAsync("registration-portal"))
+            .Setup(r => r.IsRevokedAsync(TestTenant.Matched, "registration-portal"))
             .ReturnsAsync(false);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -230,7 +230,7 @@ public class InitialAccessTokenValidatorTests
             .ReturnsAsync(token);
 
         _revocationProvider
-            .Setup(r => r.IsRevokedAsync("registration-portal"))
+            .Setup(r => r.IsRevokedAsync(TestTenant.Matched, "registration-portal"))
             .ReturnsAsync(false);
 
         await _validator.ValidateAsync(SingleIssuer.Tenant, context);

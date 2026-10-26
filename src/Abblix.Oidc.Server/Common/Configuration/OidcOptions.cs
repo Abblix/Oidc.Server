@@ -395,12 +395,16 @@ public record OidcOptions
 	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
-	/// The set of revoked initial access token identifiers (JWT subject claims).
-	/// Tokens whose subject appears in this set will be rejected during client registration.
-	/// For production use with large or dynamic revocation lists, replace
-	/// <see cref="Endpoints.DynamicClientManagement.Interfaces.IInitialAccessTokenRevocationProvider"/>
-	/// with a database- or cache-backed implementation.
+	/// No longer read: the revoked subjects are each tenant's,
+	/// <see cref="Features.MultiTenancy.TenantDefinition.RevokedInitialAccessTokenSubjects"/>.
 	/// </summary>
+	/// <remarks>
+	/// Kept so that a deployment still listing subjects here does not start, rather than starting with every
+	/// token it revoked accepted again.
+	/// </remarks>
+	[Obsolete("Declare the revoked subjects on the tenant, TenantDefinition.RevokedInitialAccessTokenSubjects.")]
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("Info Code Smell", "S1133",
+		Justification = "Kept on purpose: a deployment still listing subjects here is refused at startup instead of ignored.")]
 	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
 
 	/// <summary>

@@ -117,7 +117,7 @@ public sealed class ConfigurationHandler(
 		BackChannelUserCodeParameterSupported =
 			cibaCompletionHandler is null ? null : options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 
-		AcrValuesSupported = acrMetadata.AcrValuesSupported,
+		AcrValuesSupported = acrMetadata.AcrValuesSupported(tenant),
 
 		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
 

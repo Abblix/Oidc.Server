@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -211,32 +212,9 @@ public class GrantedRevalidationTests
         Assert.Null(await policy.RefuseAsync(
             SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
             TestContext.Current.CancellationToken));
-    }
-
-    /// <summary>
-    /// Accepts an entry only when asked at the tenant the test serves, so a policy asking at another tenant is refused.
-    /// </summary>
-    private sealed class ServedTenantOnlyValidator : IAuthorizationDetailValidator
-    {
-        public string Type => PaymentType;
-
-        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
-            TenantDefinition tenant,
-            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
-            => Task.FromResult(AtTheServedTenant(tenant, detail));
-
-        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
-            TenantDefinition tenant,
-            AuthorizationDetail detail,
-            IReadOnlyList<AuthorizationDetail> requested,
-            ClientInfo client,
-            CancellationToken token)
-            => Task.FromResult(AtTheServedTenant(tenant, detail));
-
-        private static Result<AuthorizationDetail, OidcError> AtTheServedTenant(TenantDefinition tenant, AuthorizationDetail detail)
-            => tenant.Id == SingleIssuer.Tenant.Id
-                ? detail
-                : new OidcError(ErrorCodes.InvalidAuthorizationDetails, "asked at a tenant the test does not serve");
+        Assert.NotNull(await policy.RefuseAsync(
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
     }
 
     private static IAuthorizationDetailsPolicy PolicyWith<TValidator>()

@@ -197,6 +197,13 @@ public sealed class TenantDefinition
     public CustodianHeldKeys? CustodianKeys { get; init; }
 
     /// <summary>
+    /// The subjects of this tenant's initial access tokens that are revoked: a token naming one is refused at client
+    /// registration. Each tenant keeps its own, so revoking a subject at one tenant leaves a token of the same subject
+    /// another tenant issued alone.
+    /// </summary>
+    public IReadOnlyCollection<string> RevokedInitialAccessTokenSubjects { get; init; } = [];
+
+    /// <summary>
     /// The scheme, host and port this tenant's mutual-TLS endpoint aliases (RFC 8705 section 5) are served at. The
     /// aliases keep the tenant's issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
     /// the address therefore carries no path of its own.

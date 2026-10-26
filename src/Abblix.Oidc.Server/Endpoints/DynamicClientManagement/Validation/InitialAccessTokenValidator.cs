@@ -68,7 +68,7 @@ public class InitialAccessTokenValidator(
         if (string.IsNullOrEmpty(subject))
             return new OidcError(ErrorCodes.InvalidToken, "Token subject is missing");
 
-        if (await revocationProvider.IsRevokedAsync(subject))
+        if (await revocationProvider.IsRevokedAsync(tenant, subject))
             return new OidcError(ErrorCodes.InvalidToken, "The access token has been revoked");
 
         return null;
