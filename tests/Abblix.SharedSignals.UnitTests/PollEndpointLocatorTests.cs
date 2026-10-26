@@ -26,7 +26,7 @@ public sealed class PollEndpointLocatorTests
     [Fact]
     public void WithNeitherSource_NothingIsOffered()
     {
-        var locator = new PollEndpointLocator(BareOptions());
+        var locator = LocatorOf(BareOptions());
 
         Assert.False(locator.IsOffered);
         Assert.Null(locator.Of("s-1"));
@@ -35,8 +35,8 @@ public sealed class PollEndpointLocatorTests
     [Fact]
     public void WithAMappedRoute_TheMappedAddressIsUsed()
     {
-        var locator = new PollEndpointLocator(BareOptions());
-        locator.ServedAt(streamId => new Uri($"{Issuer}/ssf/poll/{streamId}"));
+        var locator = LocatorOf(BareOptions());
+        _routes.ServePollAt((_, streamId) => new Uri($"{Issuer}/ssf/poll/{streamId}"));
 
         Assert.True(locator.IsOffered);
         Assert.Equal(new Uri($"{Issuer}/ssf/poll/s-1"), locator.Of("s-1"));
@@ -55,7 +55,7 @@ public sealed class PollEndpointLocatorTests
     [Fact]
     public void WithAHostsOwnAddressAndNoMapping_PollIsStillOffered()
     {
-        var locator = new PollEndpointLocator(BareOptions() with
+        var locator = LocatorOf(BareOptions() with
         {
             PollEndpointFactory = streamId => new Uri($"https://gateway.example/pull/{streamId}"),
         });
@@ -76,11 +76,11 @@ public sealed class PollEndpointLocatorTests
     [Fact]
     public void AHostsOwnAddress_WinsOverTheMappedOne()
     {
-        var locator = new PollEndpointLocator(BareOptions() with
+        var locator = LocatorOf(BareOptions() with
         {
             PollEndpointFactory = streamId => new Uri($"https://gateway.example/pull/{streamId}"),
         });
-        locator.ServedAt(streamId => new Uri($"{Issuer}/ssf/poll/{streamId}"));
+        _routes.ServePollAt((_, streamId) => new Uri($"{Issuer}/ssf/poll/{streamId}"));
 
         Assert.Equal(new Uri("https://gateway.example/pull/s-1"), locator.Of("s-1"));
     }
@@ -93,14 +93,18 @@ public sealed class PollEndpointLocatorTests
     [Fact]
     public void ASecondMapping_IsRefused()
     {
-        var locator = new PollEndpointLocator(BareOptions());
-        locator.ServedAt(streamId => new Uri($"{Issuer}/ssf/poll/{streamId}"));
+        _routes.ServePollAt((_, streamId) => new Uri($"{Issuer}/ssf/poll/{streamId}"));
 
         var refusal = Assert.Throws<InvalidOperationException>(
-            () => locator.ServedAt(streamId => new Uri($"{Issuer}/other/poll/{streamId}")));
+            () => _routes.ServePollAt((_, streamId) => new Uri($"{Issuer}/other/poll/{streamId}")));
 
         Assert.Contains("already mapped", refusal.Message);
     }
+
+    private readonly TransmitterRoutes _routes = new();
+
+    private PollEndpointLocator LocatorOf(SharedSignalsTransmitterOptions options)
+        => new(options, _routes, new OptionsTransmitterIdentity(options));
 
     private static SharedSignalsTransmitterOptions BareOptions() => new() { Issuer = Issuer };
 }

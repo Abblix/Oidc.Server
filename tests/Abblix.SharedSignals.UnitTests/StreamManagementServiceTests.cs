@@ -613,5 +613,6 @@ public class StreamManagementServiceTests
     /// does not - the row that refuses a poll create on a push-only transmitter. A host that maps the
     /// endpoints has the address declared by the mapping instead, which is covered end to end.
     /// </summary>
-    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options)
+        => new(options, new TransmitterRoutes(), new OptionsTransmitterIdentity(options));
 }

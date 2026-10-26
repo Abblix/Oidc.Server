@@ -290,5 +290,6 @@ public class StreamAddressAtRegistrationTests
     /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the
     /// endpoints instead has it declared by the mapping, which is covered end to end.
     /// </summary>
-    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options)
+        => new(options, new TransmitterRoutes(), new OptionsTransmitterIdentity(options));
 }

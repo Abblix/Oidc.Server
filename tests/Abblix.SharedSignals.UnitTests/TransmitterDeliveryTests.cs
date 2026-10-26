@@ -602,5 +602,6 @@ public class TransmitterDeliveryTests
     /// the service it builds offers no poll delivery - which is what these rows are about, since they
     /// exercise push.
     /// </summary>
-    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options)
+        => new(options, new TransmitterRoutes(), new OptionsTransmitterIdentity(options));
 }
